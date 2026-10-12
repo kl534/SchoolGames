@@ -4,7 +4,8 @@ import type { Random } from '../random';
 export type FactVisual =
   | { kind: 'add'; a: number; b: number }
   | { kind: 'subtract'; a: number; b: number }
-  | { kind: 'multiply'; a: number; b: number };
+  | { kind: 'multiply'; a: number; b: number }
+  | { kind: 'divide'; a: number; b: number };
 
 /** One thing to learn: a prompt with a single correct answer. Answers are text, so words work too. */
 export interface Fact {
