@@ -1,9 +1,12 @@
-import { createProgressStore, recordAnswer, recordBest, type Player } from './progress';
+import {
+  createProgressStore,
+  recordAnswer,
+  recordBest,
+  timerSecondsFor,
+  type Player,
+} from './progress';
 import { chooseRoundFacts, KICKS_PER_ROUND } from './round';
 import { getTopic, type Fact, type Topic } from './topics';
-
-/** Seconds the player gets to answer each question. */
-export const TIMER_SECONDS = 5;
 
 export interface GameParams {
   topicId: string | null;
@@ -22,11 +25,12 @@ export function gameUrl(href: string, topicId: string): string {
 export interface GameSession {
   gameId: string;
   topic: Topic;
-  timerSeconds: number;
   /** Null when nobody picked a player; nothing is saved then. */
   player: Player | null;
   /** Facts for a new round, weighted toward the player's weak spots. */
   chooseFacts(count?: number): Fact[];
+  /** Seconds to answer this fact now, from its current streak; 15 when nobody is playing. */
+  timerSecondsFor(fact: Fact): number;
   /** Saves one answer to the player's fact history. */
   recordAnswer(fact: Fact, correct: boolean): void;
   /** Saves the round's stars; true when it's a new best. */
@@ -50,10 +54,11 @@ export function startGameSession(
   return {
     gameId,
     topic,
-    timerSeconds: TIMER_SECONDS,
     player,
     chooseFacts: (count = KICKS_PER_ROUND) =>
       chooseRoundFacts(topic.facts, progress.facts[topic.id], count),
+    timerSecondsFor: (fact) =>
+      timerSecondsFor(player ? progress.facts[topic.id]?.[fact.id] : undefined),
     recordAnswer(fact, correct) {
       recordAnswer(progress, topic.id, fact.id, correct);
       save();

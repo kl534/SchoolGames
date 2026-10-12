@@ -36,7 +36,7 @@ tests/                Unit tests (including a check of every game folder)
 
 1. **Who's playing?** Kids pick or add a profile (name and emoji). Profiles and progress stay in the browser's localStorage on that device.
 2. **Pick a topic**, e.g. Addition 1–10, Subtraction 1–10, or a single times table. Each topic card shows how many of its facts the player has learned.
-3. **Pick a game.** The topic page lists every game with the player's best stars. Every question has a 5-second clock. Games open with `?topic=<id>`.
+3. **Pick a game.** The topic page lists every game with the player's best stars. Every question has a clock: 15 seconds for a new or just-missed fact, 10 after one correct answer in a row, 5 after two or more. Games open with `?topic=<id>`.
 4. **Lesson.** The round's facts appear one card at a time with counting dots and are read aloud. Kids can skip to the game.
 5. **Play.** 10 questions, each read aloud. A missed fact is shown and spoken with its answer, then comes back 3 turns later. Facts the player often misses are picked more often in later rounds.
 6. **Results.** Stars (9+ right = 3, 7+ = 2, 5+ = 1), facts to practise, and buttons for Play again, Other games, or All topics.
@@ -73,7 +73,7 @@ Wrong answers come from the other items in the topic, or you can supply a `distr
    - `createPointerInput(element, { onTap, onSwipe, onDrag })` handles touch and mouse.
    - `createBackButton()` and `createPauseOverlay()` add the back-to-menu link and a pause dialog.
    - `createAssetLoader(onProgress)` loads GLTF models, textures and audio; `createProgressBar()` shows progress.
-   - `startGameSession(gameId)` reads the topic and current player (the 5-second clock is always on) from the URL. `chooseFacts()`, `recordAnswer()` and `recordStars()` save progress.
+   - `startGameSession(gameId)` reads the topic and current player from the URL. `chooseFacts()`, `recordAnswer()` and `recordStars()` save progress, and `timerSecondsFor(fact)` gives the seconds allowed for a question (15, 10 or 5 by the fact's streak).
    - `showLesson()`, `createRound()`, `answerOptions()`, `showResults()`, `speak()`/`sfx` and `createMuteButton()` cover the learning loop. `src/games/penalty-kick/main.ts` is the reference.
 5. Run `npm run dev`. The game appears on the menu automatically; no menu or config edits are needed. `npm test` checks the manifest and folder layout.
 

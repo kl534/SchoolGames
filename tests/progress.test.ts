@@ -7,6 +7,7 @@ import {
   factWeight,
   recordAnswer,
   recordBest,
+  timerSecondsFor,
 } from '../src/shared/progress';
 import { memoryStore } from '../src/shared/storage';
 
@@ -28,6 +29,26 @@ describe('factWeight', () => {
     expect(factWeight(missed)).toBeGreaterThan(factWeight(undefined));
     expect(factWeight(undefined)).toBeGreaterThan(factWeight(mastered));
     expect(factWeight(mastered)).toBeGreaterThan(0);
+  });
+});
+
+describe('timerSecondsFor', () => {
+  const withStreak = (streak: number) => ({ correct: streak, wrong: 0, streak, lastSeen: 0 });
+
+  it('gives 15, 10 then 5 seconds as the streak grows', () => {
+    expect(timerSecondsFor(undefined)).toBe(15);
+    expect(timerSecondsFor(withStreak(0))).toBe(15);
+    expect(timerSecondsFor(withStreak(1))).toBe(10);
+    expect(timerSecondsFor(withStreak(2))).toBe(5);
+    expect(timerSecondsFor(withStreak(5))).toBe(5);
+  });
+
+  it('goes back to 15 seconds after a miss', () => {
+    const p = emptyProgress();
+    for (let i = 0; i < 4; i++) recordAnswer(p, 't', 'f', true);
+    expect(timerSecondsFor(p.facts.t.f)).toBe(5);
+    recordAnswer(p, 't', 'f', false);
+    expect(timerSecondsFor(p.facts.t.f)).toBe(15);
   });
 });
 
