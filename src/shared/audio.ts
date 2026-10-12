@@ -25,20 +25,59 @@ export function onMuteChange(listener: (muted: boolean) => void): () => void {
 const synth = (): SpeechSynthesis | undefined =>
   typeof speechSynthesis === 'undefined' ? undefined : speechSynthesis;
 
+/** Neural voices: Edge "Online (Natural)", Apple "(Enhanced)"/"(Premium)", etc. */
+const NATURAL = /natural|neural|premium|enhanced|online/i;
+/** Chrome's Google voices are streamed and far smoother than the OS defaults. */
+const GOOGLE = /google/i;
+/** Apple's better built-in voices, used when no enhanced voice is installed. */
+const DECENT = /\b(samantha|ava|allison|alex|susan|tom|karen|daniel|moira|tessa|serena)\b/i;
+/** eSpeak and Apple's novelty or formant voices sound robotic; never pick them. */
+const ROBOTIC =
+  /espeak|\b(albert|bad news|bahh|bells|boing|bubbles|cellos|deranged|good news|hysterical|jester|organ|superstar|trinoids|whisper|wobble|zarvox|fred|junior|kathy|ralph|princess|bruce|agnes|vicki|eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley)\b/i;
+
+type VoiceInfo = Pick<SpeechSynthesisVoice, 'name' | 'lang' | 'default'>;
+
+function voiceScore(v: VoiceInfo): number {
+  const lang = v.lang.replace('_', '-').toLowerCase();
+  if (!lang.startsWith('en') || ROBOTIC.test(v.name)) return -Infinity;
+  let score = 0;
+  if (NATURAL.test(v.name)) score += 100;
+  if (GOOGLE.test(v.name)) score += 60;
+  if (DECENT.test(v.name)) score += 20;
+  if (lang === 'en-us') score += 5;
+  else if (lang === 'en-gb' || lang === 'en-au') score += 3;
+  if (v.default) score += 1;
+  return score;
+}
+
+/** The most natural-sounding English voice, or null if there is none. */
+export function bestVoice<V extends VoiceInfo>(voices: readonly V[]): V | null {
+  let best: V | null = null;
+  let bestScore = -Infinity;
+  for (const v of voices) {
+    const score = voiceScore(v);
+    if (score > bestScore) {
+      best = v;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
 let voice: SpeechSynthesisVoice | null | undefined;
 
 function pickVoice(s: SpeechSynthesis): SpeechSynthesisVoice | null {
   if (voice !== undefined) return voice;
   const voices = s.getVoices();
   if (voices.length === 0) return null; // Not loaded yet; try again next time.
-  const english = voices.filter((v) => v.lang.toLowerCase().startsWith('en'));
-  voice =
-    english.find((v) => v.lang === 'en-US' && v.localService) ??
-    english.find((v) => v.lang === 'en-US') ??
-    english[0] ??
-    null;
+  voice = bestVoice(voices);
   return voice;
 }
+
+// Browsers load voices asynchronously (online voices can arrive late), so re-pick when they change.
+synth()?.addEventListener?.('voiceschanged', () => {
+  voice = undefined;
+});
 
 /** Rough speaking time, used when the browser never fires `end`. */
 const estimateMs = (text: string) => Math.min(800 + text.length * 80, 8000);
