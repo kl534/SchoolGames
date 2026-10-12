@@ -47,14 +47,14 @@ describe('recordBest', () => {
 });
 
 describe('countMastered', () => {
-  it('counts facts never missed, or right twice in a row since the last miss', () => {
+  it('counts facts answered correctly at least three times', () => {
     const p = emptyProgress();
-    recordAnswer(p, 't', 'a', true);
-    recordAnswer(p, 't', 'b', false);
+    for (let i = 0; i < 3; i++) recordAnswer(p, 't', 'a', true);
     recordAnswer(p, 't', 'b', true);
+    recordAnswer(p, 't', 'b', true);
+    // Misses do not undo earlier correct answers.
     recordAnswer(p, 't', 'c', false);
-    recordAnswer(p, 't', 'c', true);
-    recordAnswer(p, 't', 'c', true);
+    for (let i = 0; i < 3; i++) recordAnswer(p, 't', 'c', true);
     expect(countMastered(p, 't', ['a', 'b', 'c', 'd'])).toBe(2);
   });
 });

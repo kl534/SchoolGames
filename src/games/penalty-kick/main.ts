@@ -321,13 +321,12 @@ function run(session: GameSession): void {
     goalie.reset();
 
     clockRunning = false;
-    clockBar.hidden = session.timerSeconds === 0;
     setClock(1);
     positionAnswers();
 
     // The shot clock starts once the question has been read out.
     speak(current.spokenPrompt ?? current.prompt, () => {
-      if (turn !== thisTurn || phase !== 'aiming' || session.timerSeconds === 0) return;
+      if (turn !== thisTurn || phase !== 'aiming') return;
       clockLeft = session.timerSeconds;
       lastTick = Math.ceil(clockLeft);
       clockRunning = true;

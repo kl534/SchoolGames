@@ -5,16 +5,11 @@ import {
   MAX_NAME_LENGTH,
   countMastered,
   createProgressStore,
-  getSetting,
-  setSetting,
   type Player,
   type PlayerProgress,
 } from '../shared/progress';
 import { gameUrl } from '../shared/session';
 import { getTopic, groupBySubject, type Topic } from '../shared/topics';
-
-/** Seconds per kick when "Beat the clock" is on. */
-const TIMER_SECONDS = 5;
 
 const store = createProgressStore();
 const base = import.meta.env.BASE_URL;
@@ -225,7 +220,6 @@ function renderTopic(
   progress: PlayerProgress,
 ): void {
   const games = discoverGames();
-  let timerOn = getSetting('timer') === '1';
 
   const grid = el('main', 'grid');
   const cards = games.map((game) => {
@@ -233,32 +227,12 @@ function renderTopic(
     grid.appendChild(card);
     return { game, card };
   });
-  const updateLinks = () => {
-    for (const { game, card } of cards) {
-      card.href = gameUrl(game.href, topic.id, timerOn ? TIMER_SECONDS : 0);
-    }
-  };
-  updateLinks();
+  for (const { game, card } of cards) card.href = gameUrl(game.href, topic.id);
   if (games.length === 0) grid.appendChild(el('p', undefined, 'No games yet.'));
-
-  const toggle = el('label', 'toggle');
-  const checkbox = el('input');
-  checkbox.type = 'checkbox';
-  checkbox.checked = timerOn;
-  checkbox.addEventListener('change', () => {
-    timerOn = checkbox.checked;
-    setSetting('timer', timerOn ? '1' : '0');
-    updateLinks();
-  });
-  toggle.append(
-    checkbox,
-    el('span', 'switch-track'),
-    el('span', undefined, `⏱ Beat the clock (${TIMER_SECONDS} seconds per question)`),
-  );
 
   const ids = topic.facts.map((f) => f.id);
   const intro = el('div', 'topic-intro');
-  intro.append(masteryBar(countMastered(progress, topic.id, ids), ids.length), toggle);
+  intro.append(masteryBar(countMastered(progress, topic.id, ids), ids.length));
 
   root.replaceChildren(
     header(topic.title, 'Pick a game', player, link(base, 'back-link', '← Topics')),
