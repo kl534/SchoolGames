@@ -16,7 +16,7 @@ Mobile/tablet-first browser 3D games (TypeScript, Vite multi-page, three.js, can
 ## Add a game
 
 1. Copy `src/games/penalty-kick/` to `src/games/<new-id>/` (id is lowercase kebab-case).
-2. Edit `game.json` (`id` must equal the folder name; `title`, `description` required; `thumbnail` file name and `tags` optional) and the page `<title>` in `index.html`.
+2. Edit `game.json` (`id` must equal the folder name; `title`, `description` required; `thumbnail` file name and `tags` optional; the menu card shows the thumbnail at 16:9, so replace the copied `thumbnail.svg` with a small picture of your game) and the page `<title>` in `index.html`.
 3. Build the game in `main.ts` using `createScene`, `createPointerInput`, `createBackButton`/`createPauseOverlay`/`createMuteButton`, and `createAssetLoader`.
 4. Learning loop: `startGameSession(id)` (redirect to `menuUrl()` if it returns null) → `session.chooseFacts()` → `showLesson()` → per turn `answerOptions()`, `speak(fact.spokenPrompt)`, `session.recordAnswer()` → `createRound()` handles retries → `showResults()` with `session.recordStars(starsFor(...))`. Honour `session.timerSeconds` (start the clock after the prompt is read).
 5. `npm test` validates every manifest and folder layout.

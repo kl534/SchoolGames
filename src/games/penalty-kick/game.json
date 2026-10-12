@@ -2,5 +2,6 @@
   "id": "penalty-kick",
   "title": "Penalty Kick",
   "description": "Kick the ball at the right answer to beat the keeper.",
+  "thumbnail": "thumbnail.svg",
   "tags": ["sports", "3d"]
 }
