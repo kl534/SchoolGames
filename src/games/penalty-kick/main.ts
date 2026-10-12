@@ -12,6 +12,7 @@ import {
 } from 'three';
 import { Body, Material, Sphere, Vec3, World } from 'cannon-es';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
+import { onPress } from '../../shared/input';
 import { showLesson } from '../../shared/lesson';
 import { showResults } from '../../shared/results';
 import { createRound, starsFor, type Round } from '../../shared/round';
@@ -491,7 +492,11 @@ function run(session: GameSession): void {
       startTurn();
     }
   };
-  answers.forEach((button, i) => button.addEventListener('click', () => onAnswerTap(i)));
+  answers.forEach((button, i) => {
+    onPress(button, () => onAnswerTap(i));
+    // A touch press doesn't count as a user gesture for iOS audio; the release does.
+    button.addEventListener('pointerup', unlockAudio);
+  });
   hear.addEventListener('click', () => {
     unlockAudio();
     if (fact) speak(fact.spokenPrompt ?? fact.prompt);

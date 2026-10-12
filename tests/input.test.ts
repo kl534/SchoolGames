@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyGesture } from '../src/shared/input';
+import { classifyGesture, onPress } from '../src/shared/input';
 
 describe('classifyGesture', () => {
   it('classifies a short quick press as a tap', () => {
@@ -39,5 +39,45 @@ describe('classifyGesture', () => {
     expect(classifyGesture(20, 0, 100, { tapMaxDistance: 30, tapMaxDuration: 300 }).kind).toBe(
       'tap',
     );
+  });
+});
+
+describe('onPress', () => {
+  const event = (type: string, props: Record<string, unknown>) =>
+    Object.assign(new Event(type), props);
+
+  const setup = () => {
+    const target = new EventTarget();
+    let presses = 0;
+    const off = onPress(target as HTMLElement, () => presses++);
+    return { target, off, presses: () => presses };
+  };
+
+  it('fires on primary pointer down, not on the click that follows', () => {
+    const { target, presses } = setup();
+    target.dispatchEvent(event('pointerdown', { isPrimary: true, button: 0 }));
+    target.dispatchEvent(event('click', { detail: 1 }));
+    expect(presses()).toBe(1);
+  });
+
+  it('ignores secondary pointers and other mouse buttons', () => {
+    const { target, presses } = setup();
+    target.dispatchEvent(event('pointerdown', { isPrimary: false, button: 0 }));
+    target.dispatchEvent(event('pointerdown', { isPrimary: true, button: 2 }));
+    expect(presses()).toBe(0);
+  });
+
+  it('fires on keyboard activation', () => {
+    const { target, presses } = setup();
+    target.dispatchEvent(event('click', { detail: 0 }));
+    expect(presses()).toBe(1);
+  });
+
+  it('stops after cleanup', () => {
+    const { target, off, presses } = setup();
+    off();
+    target.dispatchEvent(event('pointerdown', { isPrimary: true, button: 0 }));
+    target.dispatchEvent(event('click', { detail: 0 }));
+    expect(presses()).toBe(0);
   });
 });
