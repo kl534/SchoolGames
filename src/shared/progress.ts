@@ -24,17 +24,16 @@ export interface PlayerProgress {
 
 export const AVATARS = ['🦊', '🐼', '🐯', '🐸', '🐙', '🦄', '🐶', '🐱', '🐵', '🦁', '🐧', '🐢'];
 export const MAX_NAME_LENGTH = 20;
-/** After a miss, a fact needs this many correct answers in a row to count as learned again. */
-export const MASTERED_STREAK = 2;
+/** A fact counts as learned once it has been answered correctly this many times. */
+export const MASTERED_CORRECT = 3;
 
 export function emptyProgress(): PlayerProgress {
   return { facts: {}, best: {} };
 }
 
-/** Learned: right every time so far, or right enough times in a row since the last miss. */
+/** Learned: answered correctly at least `MASTERED_CORRECT` times. */
 export function isMastered(stat: FactStat | undefined): boolean {
-  if (!stat) return false;
-  return stat.wrong === 0 ? stat.correct > 0 : stat.streak >= MASTERED_STREAK;
+  return (stat?.correct ?? 0) >= MASTERED_CORRECT;
 }
 
 /**
@@ -148,7 +147,7 @@ export function createProgressStore(store: KeyValueStore = deviceStore()): Progr
   };
 }
 
-/** Device-wide preferences such as mute and the shot clock. */
+/** Device-wide preferences such as mute. */
 export function getSetting(key: string, store: KeyValueStore = deviceStore()): string | null {
   return store.getItem(`sg:setting:${key}`);
 }
