@@ -27,7 +27,7 @@ function dotGrid(count: number, cols: number, size: number, dotClass = ''): HTML
   return grid;
 }
 
-/** Dots to count: two groups to add, some crossed out to subtract, or rows to multiply. */
+/** Dots to count: two groups to add, some crossed out to subtract, rows to multiply, or the same rows to divide. */
 export function renderVisual(visual: FactVisual): HTMLElement {
   const wrap = el('div', 'sg-visual');
   wrap.setAttribute('aria-hidden', 'true');
@@ -38,6 +38,11 @@ export function renderVisual(visual: FactVisual): HTMLElement {
     const grid = dotGrid(a, 5, 22);
     [...grid.children].slice(a - b).forEach((dot) => dot.classList.add('gone'));
     wrap.append(grid);
+  } else if (kind === 'divide') {
+    // a dots in rows of b, so the number of rows is the answer.
+    wrap.append(
+      dotGrid(a, b, Math.max(10, Math.min(24, Math.floor(240 / Math.max(a / b, b)))), 'b'),
+    );
   } else {
     // a rows of b dots ("a groups of b").
     const size = Math.max(10, Math.min(24, Math.floor(240 / Math.max(a, b))));

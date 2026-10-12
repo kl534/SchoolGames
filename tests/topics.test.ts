@@ -58,11 +58,22 @@ describe('built-in topics', () => {
     }
   });
 
+  it('has one topic per divisor, mirroring the times tables', () => {
+    for (let n = 1; n <= 10; n++) {
+      const topic = getTopic(`divide-by-${n}`)!;
+      expect(topic.facts.map((f) => f.answer)).toEqual(
+        Array.from({ length: 10 }, (_, i) => String(i + 1)),
+      );
+      expect(topic.facts[1].statement).toBe(`${2 * n} ÷ ${n} = 2`);
+    }
+  });
+
   it('groups by subject in order', () => {
     expect(groupBySubject().map((g) => g.subject)).toEqual([
       'Addition',
       'Subtraction',
       'Multiplication',
+      'Division',
     ]);
   });
 
@@ -81,6 +92,19 @@ describe('mathFact', () => {
       statement: '3 × 4 = 12',
       spokenPrompt: 'What is 3 times 4?',
       spokenStatement: '3 times 4 equals 12',
+    });
+  });
+});
+
+describe('mathFact divide', () => {
+  it('builds prompt, statement and speech', () => {
+    expect(mathFact('divide', 12, 3)).toMatchObject({
+      id: '12/3',
+      prompt: '12 ÷ 3 = ?',
+      answer: '4',
+      statement: '12 ÷ 3 = 4',
+      spokenPrompt: 'What is 12 divided by 3?',
+      spokenStatement: '12 divided by 3 equals 4',
     });
   });
 });

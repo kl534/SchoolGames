@@ -3,9 +3,19 @@ import type { Fact, FactVisual, Topic } from './types';
 
 type Operation = FactVisual['kind'];
 
-const SYMBOL: Record<Operation, string> = { add: '+', subtract: '−', multiply: '×' };
-const WORD: Record<Operation, string> = { add: 'plus', subtract: 'minus', multiply: 'times' };
-const ID_SYMBOL: Record<Operation, string> = { add: '+', subtract: '-', multiply: 'x' };
+const SYMBOL: Record<Operation, string> = { add: '+', subtract: '−', multiply: '×', divide: '÷' };
+const WORD: Record<Operation, string> = {
+  add: 'plus',
+  subtract: 'minus',
+  multiply: 'times',
+  divide: 'divided by',
+};
+const ID_SYMBOL: Record<Operation, string> = {
+  add: '+',
+  subtract: '-',
+  multiply: 'x',
+  divide: '/',
+};
 
 const range = (from: number, to: number): number[] =>
   Array.from({ length: to - from + 1 }, (_, i) => from + i);
@@ -13,6 +23,7 @@ const range = (from: number, to: number): number[] =>
 function compute(kind: Operation, a: number, b: number): number {
   if (kind === 'add') return a + b;
   if (kind === 'subtract') return a - b;
+  if (kind === 'divide') return a / b;
   return a * b;
 }
 
@@ -63,7 +74,9 @@ function mathDistractors(fact: Fact, count: number, random: Random): string[] {
       ? [...near, Math.abs(a - b)]
       : kind === 'subtract'
         ? [...near, a + b]
-        : [answer - a, answer + a, answer - b, answer + b, a + b, ...near.slice(0, 2)];
+        : kind === 'divide'
+          ? [b, a - b, a + b, ...near]
+          : [answer - a, answer + a, answer - b, answer + b, a + b, ...near.slice(0, 2)];
   // Every answer in these topics is at least 1, so 0 would be an obvious wrong choice.
   return numericDistractors(answer, candidates, count, random, 1);
 }
@@ -95,4 +108,14 @@ const timesTables: Topic[] = range(1, 10).map((table) => ({
   distractors: mathDistractors,
 }));
 
-export const MATH_TOPICS: Topic[] = [addition, subtraction, ...timesTables];
+// Each table is the times table run backwards: 1 × n up to 10 × n, divided by n.
+const divisionTables: Topic[] = range(1, 10).map((divisor) => ({
+  id: `divide-by-${divisor}`,
+  title: `Divide by ${divisor}`,
+  subject: 'Division',
+  description: `${divisor} ÷ ${divisor} up to ${divisor * 10} ÷ ${divisor}.`,
+  facts: range(1, 10).map((n) => mathFact('divide', n * divisor, divisor)),
+  distractors: mathDistractors,
+}));
+
+export const MATH_TOPICS: Topic[] = [addition, subtraction, ...timesTables, ...divisionTables];
