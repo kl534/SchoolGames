@@ -27,8 +27,8 @@ const GAME_ID = 'penalty-kick';
 const GRAVITY = 9.82;
 const BALL_RADIUS = 0.2;
 const GOALIE_Z = 0.5;
-/** The ball counts as reaching the keeper when its centre passes this z. */
-const CONTACT_Z = GOALIE_Z + 0.3;
+/** Saves happen when the ball's centre reaches this z, just in front of the keeper. */
+const CONTACT_Z = GOALIE_Z + 0.35;
 const CAMERA_Y = 1.6;
 const CAMERA_Z = 11;
 const LOOK_Y = 1.5;
@@ -166,6 +166,9 @@ function run(session: GameSession): void {
   let turn = 0;
   let save = false;
   let timedOut = false;
+  /** The keeper has caught the ball and is holding it. */
+  let caught = false;
+  const held = new Vector3();
   let clockLeft = 0;
   let clockRunning = false;
   let lastTick = 0;
@@ -224,6 +227,7 @@ function run(session: GameSession): void {
     ballBody.quaternion.set(0, 0, 0, 1);
     ballBody.position.set(0, BALL_RADIUS, ballSpotZ);
     ballBody.linearDamping = 0.5;
+    caught = false;
   };
 
   /** Fits the goal to the screen and keeps the ball in view, for any aspect ratio. */
@@ -333,14 +337,29 @@ function run(session: GameSession): void {
     });
   };
 
-  /** Launches the ball so it reaches `target` after `time` seconds; the keeper reacts. */
-  const kick = (target: Vector3, time: number, saved: boolean) => {
+  /** Launch velocity to reach `target` after `time` s, and where and when it meets the keeper. */
+  const trajectory = (target: Vector3, time: number) => {
     const p0 = ballBody.position;
     const v = new Vec3(
       (target.x - p0.x) / time,
       (target.y - p0.y) / time + 0.5 * GRAVITY * time,
       (target.z - p0.z) / time,
     );
+    const tc = (time * (p0.z - CONTACT_Z)) / (p0.z - target.z);
+    const contact = new Vector3(
+      p0.x + v.x * tc,
+      p0.y + v.y * tc - 0.5 * GRAVITY * tc * tc,
+      CONTACT_Z,
+    );
+    return { v, tc, contact };
+  };
+
+  /** Launches the ball so it reaches `target` after `time` seconds; the keeper reacts. */
+  const kick = (target: Vector3, time: number, saved: boolean) => {
+    // Lift the ball off the grass first: friction on the spinning ball would bend the
+    // shot away from the path the keeper is diving for.
+    ballBody.position.y += 0.02;
+    const { v, tc, contact } = trajectory(target, time);
     ballBody.linearDamping = 0;
     ballBody.velocity.copy(v);
     ballBody.angularVelocity.set(-v.z * 2, 0, v.x);
@@ -348,18 +367,16 @@ function run(session: GameSession): void {
     sfx.kick();
     save = saved;
 
-    // Where the ball crosses the keeper's line.
-    const tc = (time * (p0.z - CONTACT_Z)) / (p0.z - target.z);
-    const contactX = p0.x + v.x * tc;
-    const contactY = p0.y + v.y * tc - 0.5 * GRAVITY * tc * tc;
     const diveTime = tc - REACTION_TIME;
     if (saved) {
-      goalie.diveTo(contactX, contactY, diveTime, REACTION_TIME);
+      // Gloves arrive behind the ball exactly as it gets there.
+      goalie.diveTo(contact, diveTime, { delay: REACTION_TIME, hold: timedOut });
     } else {
-      // Guess wrong: dive to a corner on the other side.
-      const decoys = CORNERS.filter((c) => Math.sign(c.x) !== Math.sign(contactX || 1));
+      // Guess wrong: dive for a corner on the other side.
+      const decoys = CORNERS.filter((c) => Math.sign(c.x) !== Math.sign(contact.x || 1));
       const decoy = decoys[Math.floor(Math.random() * decoys.length)];
-      goalie.diveTo(decoy.x, decoy.y, diveTime + 0.05, REACTION_TIME);
+      const fake = trajectory(new Vector3(decoy.x, decoy.y, NET_AIM_Z), time).contact;
+      goalie.diveTo(fake, diveTime + 0.05, { delay: REACTION_TIME });
     }
   };
 
@@ -483,22 +500,31 @@ function run(session: GameSession): void {
       if (clockLeft <= 0) timeUp();
     }
 
+    goalie.update(delta, elapsed);
     world.step(1 / 60, delta, 5);
 
     if (phase === 'shot') {
       const { position, velocity } = ballBody;
       if (save && position.z <= CONTACT_Z) {
-        // Parried back out (or caught, if the clock ran out).
-        velocity.set(
-          timedOut ? 0 : velocity.x * 0.2 + (Math.random() - 0.5) * 2,
-          timedOut ? 0.5 : 2.5 + Math.random(),
-          timedOut ? 0.5 : 4,
-        );
-        ballBody.linearDamping = 0.3;
+        // Put the ball back where it met the gloves, then catch it or parry it away.
+        const back = (CONTACT_Z - position.z) / Math.min(velocity.z, -1e-3);
+        position.vadd(velocity.scale(back), position);
+        if (timedOut) {
+          caught = true;
+        } else {
+          velocity.set(velocity.x * 0.2 + (Math.random() - 0.5) * 2, 2.5 + Math.random(), 4);
+          ballBody.linearDamping = 0.3;
+        }
         resolve(false);
       } else if (!save && position.z < -0.25) {
         resolve(true);
       }
+    }
+    if (caught) {
+      goalie.ballPosition(held);
+      ballBody.position.set(held.x, held.y, held.z);
+      ballBody.velocity.setZero();
+      ballBody.angularVelocity.setZero();
     }
 
     ball.position.set(ballBody.position.x, ballBody.position.y, ballBody.position.z);
@@ -511,8 +537,6 @@ function run(session: GameSession): void {
     const height = Math.max(ballBody.position.y - BALL_RADIUS, 0);
     shadow.position.set(ballBody.position.x, 0.008, ballBody.position.z);
     shadow.scale.setScalar(Math.max(0.4, 1 - height * 0.25));
-
-    goalie.update(delta, elapsed);
   });
 
   layout();
