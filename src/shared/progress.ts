@@ -27,6 +27,12 @@ export const MAX_NAME_LENGTH = 20;
 /** A fact counts as learned once it has been answered correctly this many times. */
 export const MASTERED_CORRECT = 3;
 
+/**
+ * Seconds to answer a fact, indexed by its current streak; longer streaks get less time.
+ * The last entry applies to every streak beyond the list.
+ */
+export const TIMER_SECONDS_BY_STREAK = [15, 10, 5];
+
 export function emptyProgress(): PlayerProgress {
   return { facts: {}, best: {} };
 }
@@ -34,6 +40,12 @@ export function emptyProgress(): PlayerProgress {
 /** Learned: answered correctly at least `MASTERED_CORRECT` times. */
 export function isMastered(stat: FactStat | undefined): boolean {
   return (stat?.correct ?? 0) >= MASTERED_CORRECT;
+}
+
+/** Seconds the player gets to answer a fact: 15 when new or just missed, then 10, then 5. */
+export function timerSecondsFor(stat: FactStat | undefined): number {
+  const last = TIMER_SECONDS_BY_STREAK.length - 1;
+  return TIMER_SECONDS_BY_STREAK[Math.min(stat?.streak ?? 0, last)];
 }
 
 /**

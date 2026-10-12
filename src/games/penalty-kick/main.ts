@@ -173,6 +173,8 @@ function run(session: GameSession): void {
   let caught = false;
   const held = new Vector3();
   let clockLeft = 0;
+  /** Seconds this question started with, for the ring's fill. */
+  let clockTotal = 1;
   let clockRunning = false;
   let lastTick = 0;
   let ballSpotZ = 7;
@@ -342,7 +344,8 @@ function run(session: GameSession): void {
     // The shot clock starts once the question has been read out.
     speak(current.spokenPrompt ?? current.prompt, () => {
       if (turn !== thisTurn || phase !== 'aiming') return;
-      clockLeft = session.timerSeconds;
+      clockTotal = session.timerSecondsFor(current);
+      clockLeft = clockTotal;
       lastTick = Math.ceil(clockLeft);
       clockRunning = true;
     });
@@ -521,7 +524,7 @@ function run(session: GameSession): void {
 
     if (phase === 'aiming' && clockRunning) {
       clockLeft -= delta;
-      setClock(clockLeft / session.timerSeconds);
+      setClock(clockLeft / clockTotal);
       const seconds = Math.ceil(clockLeft);
       if (seconds < lastTick && seconds > 0 && seconds <= 3) sfx.tick();
       lastTick = seconds;
