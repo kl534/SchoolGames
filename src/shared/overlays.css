@@ -1,0 +1,203 @@
+/* Shared styles for learning overlays (lesson cards, results). */
+
+.sg-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(max(12px, env(safe-area-inset-top)) + 60px) 16px
+    max(16px, env(safe-area-inset-bottom));
+  background: rgba(15, 18, 32, 0.82);
+  color: #f2f4ff;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  overflow-y: auto;
+}
+
+.sg-overlay[hidden] {
+  display: none;
+}
+
+.sg-card {
+  width: min(560px, 100%);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  border-radius: 24px;
+  background: #1a1f36;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  text-align: center;
+}
+
+.sg-card h1,
+.sg-card h2,
+.sg-card p {
+  margin: 0;
+}
+
+.sg-card h1 {
+  font-size: clamp(26px, 6vw, 36px);
+}
+
+.sg-muted {
+  color: #9aa3c7;
+}
+
+.sg-statement {
+  font-size: clamp(40px, 11vw, 72px);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+}
+
+.sg-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.sg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 48px;
+  min-height: 56px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 28px;
+  background: #2b3358;
+  color: #fff;
+  font:
+    700 18px system-ui,
+    sans-serif;
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sg-btn:active {
+  transform: scale(0.97);
+}
+
+.sg-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.sg-btn:focus-visible {
+  outline: 3px solid #4cc38a;
+  outline-offset: 2px;
+}
+
+.sg-btn-primary {
+  background: #4cc38a;
+  color: #0f1220;
+  font-size: 20px;
+  min-width: 160px;
+}
+
+.sg-progress-text {
+  font-weight: 700;
+  color: #9aa3c7;
+}
+
+/* Counting pictures */
+
+.sg-visual {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 60px;
+}
+
+.sg-visual-sign {
+  font-size: 32px;
+  font-weight: 800;
+}
+
+.sg-dots {
+  --dot: 24px;
+  display: grid;
+  grid-template-columns: repeat(var(--cols), var(--dot));
+  gap: calc(var(--dot) / 4);
+}
+
+.sg-dot {
+  width: var(--dot);
+  height: var(--dot);
+  border-radius: 50%;
+  background: #5aa9ff;
+}
+
+.sg-dot.b {
+  background: #ffa94d;
+}
+
+.sg-dot.gone {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px #ff6b6b;
+  position: relative;
+}
+
+.sg-dot.gone::after {
+  content: '';
+  position: absolute;
+  inset: 45% -10%;
+  background: #ff6b6b;
+  transform: rotate(-45deg);
+  border-radius: 2px;
+}
+
+/* Results */
+
+.sg-stars {
+  font-size: clamp(48px, 14vw, 72px);
+  letter-spacing: 0.08em;
+  line-height: 1;
+}
+
+.sg-star-off {
+  opacity: 0.2;
+  filter: grayscale(1);
+}
+
+.sg-missed {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sg-missed li {
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.sg-badge {
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: #ffd43b;
+  color: #0f1220;
+  font-weight: 800;
+}

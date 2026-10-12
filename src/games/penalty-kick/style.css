@@ -1,0 +1,233 @@
+.pk-hud {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 24px);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  color: #fff;
+  pointer-events: none;
+}
+
+/* Leave room for the menu, sound and pause buttons on narrow screens. */
+@media (max-width: 640px) {
+  .pk-hud {
+    top: calc(max(12px, env(safe-area-inset-top)) + 60px);
+  }
+}
+
+.pk-problem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 22px;
+  border-radius: 20px;
+  background: rgba(15, 18, 32, 0.8);
+  pointer-events: auto;
+}
+
+.pk-problem-text {
+  font-size: clamp(30px, 8vmin, 60px);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.pk-hear {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.pk-clock {
+  width: 100%;
+  height: 10px;
+  border-radius: 5px;
+  background: rgba(15, 18, 32, 0.6);
+  overflow: hidden;
+}
+
+.pk-hud[hidden],
+.pk-kicks[hidden],
+.pk-answer[hidden],
+.pk-clock[hidden],
+.pk-banner-detail[hidden] {
+  display: none;
+}
+
+.pk-clock-fill {
+  height: 100%;
+  width: 100%;
+  background: #ffd43b;
+  transform-origin: left;
+}
+
+.pk-clock.urgent .pk-clock-fill {
+  background: #ff6b6b;
+}
+
+.pk-kicks {
+  position: fixed;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  left: 50%;
+  z-index: 10;
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 16px;
+  background: rgba(15, 18, 32, 0.6);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.pk-kick {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.pk-kick.current {
+  box-shadow: 0 0 0 3px #fff;
+}
+
+.pk-kick.goal {
+  background: #51cf66;
+}
+
+.pk-kick.miss {
+  background: #ff6b6b;
+}
+
+.pk-answer {
+  position: fixed;
+  z-index: 10;
+  left: 0;
+  top: 0;
+  min-width: 88px;
+  height: 64px;
+  padding: 0 16px;
+  border: 4px solid #fff;
+  border-radius: 18px;
+  background: rgba(28, 126, 214, 0.92);
+  color: #fff;
+  font:
+    800 32px system-ui,
+    sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  transition:
+    background 0.15s,
+    opacity 0.2s;
+}
+
+.pk-answer:active {
+  scale: 0.95;
+}
+
+.pk-answer:focus-visible {
+  outline: 4px solid #ffd43b;
+  outline-offset: 2px;
+}
+
+.pk-answer:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.pk-answer.chosen {
+  opacity: 1;
+}
+
+.pk-answer.right {
+  opacity: 1;
+  background: #2f9e44;
+}
+
+.pk-answer.wrong {
+  opacity: 1;
+  background: #e03131;
+}
+
+.pk-banner {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 32px;
+  border-radius: 24px;
+  background: rgba(15, 18, 32, 0.85);
+  color: #fff;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: pk-pop 0.35s ease-out;
+}
+
+.pk-banner[hidden] {
+  display: none;
+}
+
+.pk-banner-title {
+  font-size: clamp(40px, 12vmin, 88px);
+  font-weight: 900;
+}
+
+.pk-banner.goal .pk-banner-title {
+  color: #8ce99a;
+}
+
+.pk-banner.miss .pk-banner-title {
+  color: #ffa8a8;
+}
+
+.pk-banner-detail {
+  font-size: clamp(26px, 7vmin, 48px);
+  font-weight: 800;
+}
+
+@keyframes pk-pop {
+  from {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pk-banner {
+    animation: none;
+  }
+}

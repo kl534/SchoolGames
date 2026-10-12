@@ -24,11 +24,39 @@ Set `BASE_PATH` to build for a sub-path, e.g. `BASE_PATH=/schoolgames/ npm run b
 ```
 index.html            Game menu page
 src/menu/             Menu UI; builds cards from game manifests
-src/shared/           scene, input, ui, assets, manifest helpers
+src/shared/           scene, input, ui, assets, manifest helpers, plus the learning layer:
+                      topics/ (fact sets), progress (players + per-fact stats), round,
+                      session (URL params), lesson, results, audio (speech + sound effects)
 src/games/<id>/       One folder per game: index.html, main.ts, game.json
 tests/                Unit tests (including a check of every game folder)
 .github/workflows/    ci.yml and deploy.yml
 ```
+
+## How it works
+
+1. **Who's playing?** Kids pick or add a profile (name and emoji). Profiles and progress stay in the browser's localStorage on that device.
+2. **Pick a topic**, e.g. Addition 1–10, Subtraction 1–10, or a single times table. Each topic card shows how many of its facts the player has learned.
+3. **Pick a game.** The topic page lists every game with the player's best stars and a "Beat the clock" toggle (5 seconds per question). Games open with `?topic=<id>` and, when the clock is on, `&timer=5`.
+4. **Lesson.** The round's facts appear one card at a time with counting dots and are read aloud. Kids can skip to the game.
+5. **Play.** 10 questions, each read aloud. A missed fact is shown and spoken with its answer, then comes back 3 turns later. Facts the player often misses are picked more often in later rounds.
+6. **Results.** Stars (9+ right = 3, 7+ = 2, 5+ = 1), facts to practise, and buttons for Play again, Other games, or All topics.
+
+### Add a topic
+
+Topics live in `src/shared/topics/`. Add one to `TOPICS` in `index.ts`. Generate math facts the way `math.ts` does, or use `listTopic` for anything with text answers:
+
+```ts
+listTopic(
+  { id: 'sight-words-1', title: 'Sight words 1', subject: 'Reading', description: 'Common words.' },
+  [
+    { prompt: '🔊', spokenPrompt: 'the', answer: 'the' },
+    { prompt: '🔊', spokenPrompt: 'said', answer: 'said' },
+    // ...
+  ],
+);
+```
+
+Wrong answers come from the other items in the topic, or you can supply a `distractors` function. Progress is saved by topic and fact id, so don't rename them once they've shipped.
 
 ## How to add a new game
 
@@ -45,6 +73,8 @@ tests/                Unit tests (including a check of every game folder)
    - `createPointerInput(element, { onTap, onSwipe, onDrag })` handles touch and mouse.
    - `createBackButton()` and `createPauseOverlay()` add the back-to-menu link and a pause dialog.
    - `createAssetLoader(onProgress)` loads GLTF models, textures and audio; `createProgressBar()` shows progress.
+   - `startGameSession(gameId)` reads the topic, timer and current player from the URL. `chooseFacts()`, `recordAnswer()` and `recordStars()` save progress.
+   - `showLesson()`, `createRound()`, `answerOptions()`, `showResults()`, `speak()`/`sfx` and `createMuteButton()` cover the learning loop. `src/games/penalty-kick/main.ts` is the reference.
 5. Run `npm run dev`. The game appears on the menu automatically; no menu or config edits are needed. `npm test` checks the manifest and folder layout.
 
 ## Deploys

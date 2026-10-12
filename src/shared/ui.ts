@@ -1,6 +1,13 @@
+import { isMuted, onMuteChange, setMuted } from './audio';
+
 /** URL of the game menu (site root under the configured base path). */
 export function menuUrl(): string {
   return import.meta.env.BASE_URL;
+}
+
+/** Menu page listing the games for one topic. */
+export function topicMenuUrl(topicId: string): string {
+  return `${menuUrl()}?${new URLSearchParams({ topic: topicId })}`;
 }
 
 const BUTTON_STYLE = [
@@ -62,9 +69,8 @@ export function createPauseOverlay(options: PauseOverlayOptions = {}): PauseOver
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
   overlay.setAttribute('aria-label', 'Game paused');
-  overlay.hidden = true;
   overlay.style.cssText =
-    'position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:rgba(15,18,32,0.85);color:#fff;font-family:system-ui,sans-serif';
+    'position:fixed;inset:0;z-index:30;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:rgba(15,18,32,0.85);color:#fff;font-family:system-ui,sans-serif';
 
   const heading = document.createElement('h2');
   heading.textContent = 'Paused';
@@ -79,7 +85,8 @@ export function createPauseOverlay(options: PauseOverlayOptions = {}): PauseOver
   const set = (value: boolean) => {
     if (paused === value) return;
     paused = value;
-    overlay.hidden = !value;
+    // Inline display would override the `hidden` attribute, so toggle display directly.
+    overlay.style.display = value ? 'flex' : 'none';
     if (value) {
       resume.focus();
       options.onPause?.();
@@ -108,6 +115,32 @@ export function createPauseOverlay(options: PauseOverlayOptions = {}): PauseOver
       window.removeEventListener('keydown', onKey);
       pauseButton.remove();
       overlay.remove();
+    },
+  };
+}
+
+/** Speaker toggle (top-right, left of the pause button) for speech and sound effects. */
+export function createMuteButton(container: HTMLElement = document.body): {
+  element: HTMLButtonElement;
+  dispose(): void;
+} {
+  const button = makeButton('');
+  button.style.cssText +=
+    ';position:fixed;top:max(12px,env(safe-area-inset-top));right:calc(max(12px,env(safe-area-inset-right)) + 64px);z-index:20';
+  const render = (muted: boolean) => {
+    button.textContent = muted ? '🔇' : '🔊';
+    button.setAttribute('aria-label', muted ? 'Turn sound on' : 'Turn sound off');
+    button.setAttribute('aria-pressed', String(muted));
+  };
+  render(isMuted());
+  button.addEventListener('click', () => setMuted(!isMuted()));
+  const unsubscribe = onMuteChange(render);
+  container.appendChild(button);
+  return {
+    element: button,
+    dispose() {
+      unsubscribe();
+      button.remove();
     },
   };
 }
