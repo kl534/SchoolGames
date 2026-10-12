@@ -50,6 +50,27 @@ export function classifyGesture(
   };
 }
 
+/**
+ * Runs `handler` as soon as a button is pressed, rather than on `click`. A click is lost
+ * when the finger slides (the browser turns it into a pan) or lifts just off the edge,
+ * which young players do a lot. Enter/Space still work. Returns a cleanup function.
+ */
+export function onPress(element: HTMLElement, handler: () => void): () => void {
+  const onDown = (e: PointerEvent) => {
+    if (e.isPrimary && e.button === 0) handler();
+  };
+  // Keyboard activation fires a click with detail 0; pointer clicks were handled on press.
+  const onClick = (e: MouseEvent) => {
+    if (e.detail === 0) handler();
+  };
+  element.addEventListener('pointerdown', onDown);
+  element.addEventListener('click', onClick);
+  return () => {
+    element.removeEventListener('pointerdown', onDown);
+    element.removeEventListener('click', onClick);
+  };
+}
+
 export interface DragState {
   x: number;
   y: number;
