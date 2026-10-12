@@ -140,7 +140,7 @@
     opacity 0.2s;
 }
 
-.pk-answer:active {
+.pk-answer:active:not([aria-disabled='true']) {
   scale: 0.95;
 }
 
@@ -149,7 +149,7 @@
   outline-offset: 2px;
 }
 
-.pk-answer:disabled {
+.pk-answer[aria-disabled='true'] {
   cursor: default;
   opacity: 0.45;
 }

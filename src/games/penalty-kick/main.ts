@@ -48,6 +48,8 @@ const NET_AIM_Z = -0.6;
 
 const ANSWER_HEIGHT = 64;
 const ANSWER_GAP = 12;
+/** Seconds a result stays up before a tap can skip to the next question. */
+const SKIP_AFTER = 0.6;
 
 type Phase = 'lesson' | 'aiming' | 'shot' | 'result' | 'done';
 
@@ -173,11 +175,19 @@ function run(session: GameSession): void {
   let clockRunning = false;
   let lastTick = 0;
   let ballSpotZ = 7;
+  /** Game time at which the current result was shown. */
+  let resultAt = 0;
 
   // Delayed actions run on game time so pausing freezes them too.
   let gameTime = 0;
   let pending: { at: number; fn: () => void }[] = [];
   const after = (seconds: number, fn: () => void) => pending.push({ at: gameTime + seconds, fn });
+
+  /**
+   * Dims the answers while a kick plays out. They are not `disabled`, so a tap in that window
+   * still reaches `onAnswerTap` instead of being swallowed.
+   */
+  const lockAnswers = () => answers.forEach((b) => b.setAttribute('aria-disabled', 'true'));
 
   const setPlayVisible = (visible: boolean) => {
     hud.hidden = !visible;
@@ -314,7 +324,7 @@ function run(session: GameSession): void {
       button.hidden = text === undefined;
       button.textContent = text ?? '';
       button.setAttribute('aria-label', `Answer ${text ?? ''}`);
-      button.disabled = false;
+      button.removeAttribute('aria-disabled');
       button.className = 'pk-answer';
     });
     problemText.textContent = current.prompt;
@@ -382,13 +392,17 @@ function run(session: GameSession): void {
 
   const shoot = (index: number) => {
     if (phase !== 'aiming' || !fact || options[index] === undefined) return;
-    unlockAudio();
-    stopSpeaking();
+    try {
+      unlockAudio();
+      stopSpeaking();
+    } catch {
+      // Audio trouble must never stop the shot.
+    }
     phase = 'shot';
     clockRunning = false;
     chosen = index;
     timedOut = false;
-    answers.forEach((b) => (b.disabled = true));
+    lockAnswers();
     answers[index].classList.add('chosen');
     renderKicks();
     const correct = options[index] === fact.answer;
@@ -400,7 +414,7 @@ function run(session: GameSession): void {
     phase = 'shot';
     clockRunning = false;
     timedOut = true;
-    answers.forEach((b) => (b.disabled = true));
+    lockAnswers();
     renderKicks();
     // A weak roll straight at the keeper.
     kick(new Vector3(0, BALL_RADIUS + 0.1, GOALIE_Z), 1.1, true);
@@ -410,6 +424,7 @@ function run(session: GameSession): void {
     if (!fact) return;
     const current = fact;
     phase = 'result';
+    resultAt = gameTime;
     round.record(goal);
     session.recordAnswer(current, goal);
     renderKicks();
@@ -468,7 +483,15 @@ function run(session: GameSession): void {
   };
 
   // ---------- Input ----------
-  answers.forEach((button, i) => button.addEventListener('click', () => shoot(i)));
+  /** A tap while a result is showing skips ahead, so it never feels ignored. */
+  const onAnswerTap = (index: number) => {
+    if (phase === 'aiming') shoot(index);
+    else if (phase === 'result' && gameTime - resultAt >= SKIP_AFTER) {
+      stopSpeaking();
+      startTurn();
+    }
+  };
+  answers.forEach((button, i) => button.addEventListener('click', () => onAnswerTap(i)));
   hear.addEventListener('click', () => {
     unlockAudio();
     if (fact) speak(fact.spokenPrompt ?? fact.prompt);
