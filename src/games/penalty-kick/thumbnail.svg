@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" font-family="system-ui, sans-serif" font-weight="700">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6fb7f2"/>
+      <stop offset="1" stop-color="#cfe8ff"/>
+    </linearGradient>
+    <pattern id="net" width="14" height="14" patternUnits="userSpaceOnUse">
+      <path d="M0 0H14M0 0V14" stroke="#fff" stroke-opacity=".45" stroke-width="1.5" fill="none"/>
+    </pattern>
+    <radialGradient id="ball" cx=".35" cy=".3" r=".8">
+      <stop offset="0" stop-color="#fff"/>
+      <stop offset="1" stop-color="#cfd4dc"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="640" height="360" fill="url(#sky)"/>
+  <rect y="120" width="640" height="240" fill="#348f41"/>
+  <path d="M0 120H640V160H0Z M0 214H640V270H0Z M0 340H640V360H0Z" fill="#3a9d48"/>
+  <path d="M120 360L228 150H412L520 360" fill="none" stroke="#fff" stroke-opacity=".6" stroke-width="4"/>
+
+  <!-- Goal: net, then frame -->
+  <rect x="150" y="48" width="340" height="104" fill="#1b2a3a" fill-opacity=".55"/>
+  <rect x="150" y="48" width="340" height="104" fill="url(#net)"/>
+  <path d="M150 152V48H490V152" fill="none" stroke="#fff" stroke-width="9" stroke-linejoin="round"/>
+
+  <!-- Keeper, mid-dive towards one corner -->
+  <g transform="translate(250 110) rotate(-14)">
+    <ellipse cx="0" cy="44" rx="34" ry="6" fill="#000" fill-opacity=".25" transform="rotate(14)"/>
+    <rect x="-16" y="-16" width="32" height="40" rx="8" fill="#7b4fe0"/>
+    <rect x="-16" y="20" width="32" height="14" rx="4" fill="#1f2a44"/>
+    <rect x="-14" y="32" width="10" height="20" rx="4" fill="#fff"/>
+    <rect x="4" y="32" width="10" height="20" rx="4" fill="#fff"/>
+    <path d="M-12 -8L-46 -36M12 -8L46 -36" stroke="#7b4fe0" stroke-width="14" stroke-linecap="round"/>
+    <circle cx="-52" cy="-41" r="9" fill="#58e06f"/>
+    <circle cx="52" cy="-41" r="9" fill="#58e06f"/>
+    <circle cx="0" cy="-32" r="14" fill="#c68642"/>
+    <path d="M-14 -34a14 12 0 0 1 28 0c-6-5-22-5-28 0Z" fill="#2b1a10"/>
+  </g>
+
+  <!-- Answer boards -->
+  <g text-anchor="middle" font-size="22" fill="#fff">
+    <rect x="46" y="188" width="92" height="48" rx="8" fill="#1c7ed6"/>
+    <text x="92" y="221">12</text>
+    <rect x="148" y="188" width="92" height="48" rx="8" fill="#f59f00"/>
+    <text x="194" y="221">15</text>
+    <rect x="250" y="188" width="92" height="48" rx="8" fill="#37b24d"/>
+    <text x="296" y="221">18</text>
+    <rect x="352" y="188" width="92" height="48" rx="8" fill="#7048e8"/>
+    <text x="398" y="221">21</text>
+    <rect x="454" y="188" width="92" height="48" rx="8" fill="#e03131"/>
+    <text x="500" y="221">24</text>
+  </g>
+
+  <!-- Question and ball -->
+  <rect x="190" y="5" width="260" height="36" rx="18" fill="#1b2240" fill-opacity=".85"/>
+  <text x="320" y="31" text-anchor="middle" font-size="22" fill="#fff">3 × 5 = ?</text>
+  <ellipse cx="320" cy="326" rx="26" ry="6" fill="#000" fill-opacity=".25"/>
+  <circle cx="320" cy="304" r="24" fill="url(#ball)" stroke="#9aa1ad" stroke-width="1.5"/>
+  <path d="M320 292l11 8-4 13h-14l-4-13Z" fill="#1b2240"/>
+</svg>
