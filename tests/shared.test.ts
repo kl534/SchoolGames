@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { toProgress } from '../src/shared/assets';
 import { clampPixelRatio } from '../src/shared/scene';
 import { bestVoice } from '../src/shared/audio';
+import { resultsSummary, type ResultsOptions } from '../src/shared/results';
 
 describe('toProgress', () => {
   it('returns a fraction', () => {
@@ -51,5 +52,58 @@ describe('bestVoice', () => {
     const english = v('English United States', 'en_US');
     expect(bestVoice([french, english])).toBe(english);
     expect(bestVoice([french])).toBeNull();
+  });
+});
+
+describe('resultsSummary', () => {
+  const base: ResultsOptions = {
+    topicId: 't',
+    correct: 7,
+    total: 10,
+    stars: 2,
+    newBest: true,
+    missed: [],
+    playerName: 'Ava',
+    onPlayAgain: () => {},
+  };
+
+  it('is unchanged for a stars game: stars, the star badge, the usual button', () => {
+    expect(resultsSummary(base)).toEqual({
+      heading: 'Great job, Ava!',
+      score: null,
+      highScore: null,
+      badge: 'New best!',
+      right: '7 out of 10 right',
+      showStars: true,
+      playAgainLabel: 'Play again ⚽',
+    });
+  });
+
+  it('gives no star badge for zero stars or a repeat', () => {
+    expect(resultsSummary({ ...base, stars: 0 }).badge).toBeNull();
+    expect(resultsSummary({ ...base, newBest: false }).badge).toBeNull();
+  });
+
+  it('shows the score and high score, and no stars, when there is a score', () => {
+    const s = resultsSummary({ ...base, score: 2400, highScore: 2400, newHighScore: false });
+    expect(s.showStars).toBe(false);
+    expect(s.score).toBe((2400).toLocaleString());
+    expect(s.highScore).toBe(`High score: ${(2400).toLocaleString()}`);
+    expect(s.right).toBe('7 out of 10 right');
+    // The stars game's badge never shows in score mode.
+    expect(s.badge).toBeNull();
+  });
+
+  it('badges a new high score', () => {
+    expect(
+      resultsSummary({ ...base, score: 3100, highScore: 3100, newHighScore: true }).badge,
+    ).toBe('New high score!');
+  });
+
+  it('shows a score of zero, and uses a custom play again label', () => {
+    const s = resultsSummary({ ...base, score: 0, playAgainLabel: 'Fly again 🚀' });
+    expect(s.score).toBe('0');
+    expect(s.highScore).toBeNull();
+    expect(s.playAgainLabel).toBe('Fly again 🚀');
   });
 });

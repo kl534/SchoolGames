@@ -7,6 +7,7 @@ import {
   factWeight,
   recordAnswer,
   recordBest,
+  recordHighScore,
   timerSecondsFor,
 } from '../src/shared/progress';
 import { memoryStore } from '../src/shared/storage';
@@ -67,6 +68,28 @@ describe('recordBest', () => {
   });
 });
 
+describe('recordHighScore', () => {
+  it('only stores scores above zero that beat the previous one', () => {
+    const p = emptyProgress();
+    expect(recordHighScore(p, 't', 'g', 0)).toBe(false);
+    expect(p.highScores).toEqual({});
+    expect(recordHighScore(p, 't', 'g', 400)).toBe(true);
+    expect(recordHighScore(p, 't', 'g', 400)).toBe(false);
+    expect(recordHighScore(p, 't', 'g', 150)).toBe(false);
+    expect(recordHighScore(p, 't', 'g', 2400)).toBe(true);
+    expect(p.highScores.t.g).toBe(2400);
+  });
+
+  it('keeps topics and games apart, and leaves stars alone', () => {
+    const p = emptyProgress();
+    recordHighScore(p, 't1', 'g', 100);
+    recordHighScore(p, 't2', 'g', 200);
+    recordHighScore(p, 't1', 'h', 300);
+    expect(p.highScores).toEqual({ t1: { g: 100, h: 300 }, t2: { g: 200 } });
+    expect(p.best).toEqual({});
+  });
+});
+
 describe('countMastered', () => {
   it('counts facts answered correctly at least three times', () => {
     const p = emptyProgress();
@@ -98,6 +121,23 @@ describe('createProgressStore', () => {
     expect(store.listPlayers()).toEqual([]);
     expect(store.currentPlayer()).toBeNull();
     expect(store.load(ava.id)).toEqual(emptyProgress());
+  });
+
+  it('loads progress saved before high scores existed', () => {
+    const raw = memoryStore();
+    const store = createProgressStore(raw);
+    const old = {
+      facts: { t: { f: { correct: 1, wrong: 0, streak: 1, lastSeen: 5 } } },
+      best: { t: { g: 2 } },
+    };
+    raw.setItem('sg:progress:p1', JSON.stringify(old));
+    const loaded = store.load('p1');
+    expect(loaded.highScores).toEqual({});
+    expect(loaded.facts).toEqual(old.facts);
+    expect(loaded.best).toEqual(old.best);
+    recordHighScore(loaded, 't', 'g', 90);
+    store.save('p1', loaded);
+    expect(store.load('p1').highScores).toEqual({ t: { g: 90 } });
   });
 
   it('keeps players separate', () => {

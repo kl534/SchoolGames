@@ -1,0 +1,539 @@
+.ar-hud,
+.ar-shields,
+.ar-score,
+.ar-answers,
+.ar-banner,
+.ar-count {
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  color: #fff;
+}
+
+/* The question, its clock and (for a boss) the boss's health, centred at the top. */
+.ar-hud {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  max-width: calc(100vw - 300px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* Leave room for the menu, sound and pause buttons, and the shields and score, on narrow screens. */
+@media (max-width: 640px) {
+  .ar-hud {
+    top: calc(max(12px, env(safe-area-inset-top)) + 116px);
+    max-width: calc(100vw - 24px);
+  }
+}
+
+.ar-hud[hidden],
+.ar-answers[hidden],
+.ar-answer[hidden],
+.ar-banner[hidden],
+.ar-banner-detail[hidden],
+.ar-boss[hidden],
+.ar-mult[hidden],
+.ar-count[hidden] {
+  display: none;
+}
+
+.ar-problem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 22px;
+  border-radius: 20px;
+  background: rgba(22, 14, 64, 0.82);
+  border: 2px solid rgba(124, 108, 255, 0.55);
+  pointer-events: auto;
+}
+
+.ar-problem-text {
+  font-size: clamp(28px, 7vmin, 56px);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.ar-hear {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.ar-clock {
+  width: 100%;
+  min-width: 200px;
+  height: 10px;
+  border-radius: 5px;
+  background: rgba(22, 14, 64, 0.65);
+  overflow: hidden;
+}
+
+.ar-clock-fill {
+  height: 100%;
+  width: 100%;
+  background: #5cf2b0;
+  transform-origin: left;
+}
+
+.ar-clock.urgent .ar-clock-fill {
+  background: #ff6b6b;
+}
+
+.ar-boss {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+  padding: 3px;
+  border-radius: 9px;
+  background: rgba(22, 14, 64, 0.65);
+}
+
+.ar-boss-seg {
+  flex: 1;
+  height: 12px;
+  border-radius: 6px;
+  background: #ff4fa0;
+  box-shadow: 0 0 10px rgba(255, 79, 160, 0.7);
+  transition:
+    background 0.25s,
+    box-shadow 0.25s;
+}
+
+.ar-boss-seg.lost {
+  background: #3a2a62;
+  box-shadow: none;
+}
+
+/* Shields left, under the menu button. */
+.ar-shields {
+  position: fixed;
+  top: calc(max(12px, env(safe-area-inset-top)) + 58px);
+  left: max(12px, env(safe-area-inset-left));
+  z-index: 10;
+  display: flex;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  background: rgba(22, 14, 64, 0.7);
+  pointer-events: none;
+}
+
+.ar-shield {
+  display: block;
+  width: 26px;
+  height: 30px;
+  color: #5ad0ff;
+  filter: drop-shadow(0 0 6px rgba(90, 208, 255, 0.7));
+}
+
+.ar-shield svg,
+.ar-shield-fly svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.ar-shield.lost {
+  opacity: 0.25;
+  filter: grayscale(1);
+}
+
+.ar-shield-fly {
+  position: fixed;
+  z-index: 25;
+  width: 26px;
+  height: 30px;
+  color: #5ad0ff;
+  pointer-events: none;
+  animation: ar-fly 1s ease-out forwards;
+}
+
+@keyframes ar-fly {
+  0% {
+    transform: translateY(0) scale(1) rotate(0);
+    opacity: 1;
+  }
+  30% {
+    transform: translateY(-40px) scale(1.7) rotate(-15deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-150px) scale(2.2) rotate(40deg);
+    opacity: 0;
+  }
+}
+
+/* Score, streak badge and the best score, under the sound and pause buttons. */
+.ar-score {
+  position: fixed;
+  top: calc(max(12px, env(safe-area-inset-top)) + 58px);
+  right: max(12px, env(safe-area-inset-right));
+  z-index: 10;
+  min-width: 96px;
+  padding: 4px 12px 5px;
+  border-radius: 16px;
+  background: rgba(22, 14, 64, 0.7);
+  text-align: right;
+  pointer-events: none;
+}
+
+.ar-score-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ar-score-value {
+  font-size: clamp(26px, 6.5vmin, 36px);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  color: #ffe066;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+}
+
+.ar-score-value.on {
+  animation: ar-score 0.3s ease-out;
+}
+
+@keyframes ar-score {
+  0% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.ar-mult {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #ff9f1c;
+  color: #1a0f3d;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.ar-best {
+  font-size: 13px;
+  font-weight: 700;
+  color: #b9b2ff;
+}
+
+/* The four answers along the bottom: two rows of two on a narrow phone. */
+.ar-answers {
+  position: fixed;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 50%;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  width: min(760px, calc(100vw - 24px));
+  transform: translateX(-50%);
+}
+
+@media (max-width: 560px) {
+  .ar-answers {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.ar-answer {
+  min-width: 0;
+  height: 72px;
+  padding: 0 8px;
+  border: 3px solid #8f80ff;
+  border-radius: 20px;
+  background: linear-gradient(#3a2a9a, #241a70);
+  color: #fff;
+  font:
+    800 clamp(28px, 6.5vmin, 40px) system-ui,
+    sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 6px 18px rgba(8, 4, 40, 0.5);
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    opacity 0.3s;
+}
+
+@media (max-height: 460px) {
+  .ar-answer {
+    height: 64px;
+  }
+}
+
+.ar-answer:active:not([aria-disabled='true']) {
+  scale: 0.96;
+}
+
+.ar-answer:focus-visible {
+  outline: 4px solid #ffd43b;
+  outline-offset: 2px;
+}
+
+.ar-answer[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.ar-answer.chosen {
+  opacity: 1;
+  border-color: #fff;
+}
+
+.ar-answer.right {
+  opacity: 1;
+  border-color: #1b6b2b;
+  background: #5cf2b0;
+  color: #0c3a1d;
+  box-shadow:
+    0 0 0 5px rgba(92, 242, 176, 0.5),
+    0 0 26px 8px rgba(92, 242, 176, 0.7);
+}
+
+.ar-answer.wrong {
+  opacity: 1;
+  border-color: #8c1d1d;
+  background: #ff8787;
+  color: #4a0c0c;
+}
+
+.ar-answer.gone {
+  opacity: 0.25;
+}
+
+/* Big messages in the clear space between the question and the answers. */
+.ar-banner {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: min(92vw, 680px);
+  padding: 12px 28px;
+  border-radius: 24px;
+  background: rgba(22, 14, 64, 0.88);
+  border: 2px solid rgba(124, 108, 255, 0.55);
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: ar-pop 0.35s ease-out;
+}
+
+.ar-banner-title {
+  font-size: clamp(32px, 9vmin, 68px);
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.ar-banner.hit .ar-banner-title {
+  color: #ffe066;
+}
+
+.ar-banner.miss .ar-banner-title,
+.ar-banner.out .ar-banner-title {
+  color: #ffa8a8;
+}
+
+.ar-banner.warn {
+  background: rgba(120, 10, 40, 0.88);
+  border-color: #ff6b6b;
+  animation:
+    ar-pop 0.35s ease-out,
+    ar-blink 0.45s steps(2) infinite;
+}
+
+.ar-banner.warn .ar-banner-title {
+  color: #ffe066;
+}
+
+.ar-banner-detail {
+  font-size: clamp(26px, 7vmin, 48px);
+  font-weight: 800;
+}
+
+@keyframes ar-pop {
+  from {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes ar-blink {
+  50% {
+    border-color: #ffe066;
+  }
+}
+
+/* 3, 2, 1, Go! */
+.ar-count {
+  position: fixed;
+  left: 50%;
+  top: 38%;
+  z-index: 12;
+  font-size: clamp(90px, 26vmin, 200px);
+  font-weight: 900;
+  color: #ffe066;
+  text-shadow:
+    0 6px 0 rgba(0, 0, 0, 0.3),
+    0 0 40px rgba(255, 224, 102, 0.6);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.ar-count.on {
+  animation: ar-count 0.7s ease-out;
+}
+
+@keyframes ar-count {
+  from {
+    transform: translate(-50%, -50%) scale(1.8);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Points floating up from where they were scored. */
+.ar-pop {
+  position: fixed;
+  z-index: 14;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  font-size: clamp(26px, 6.5vmin, 42px);
+  font-weight: 900;
+  white-space: nowrap;
+  text-shadow:
+    0 3px 0 rgba(0, 0, 0, 0.45),
+    0 0 12px rgba(0, 0, 0, 0.5);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: ar-rise 1.3s ease-out forwards;
+}
+
+.ar-pop.good {
+  color: #ffe066;
+}
+
+.ar-pop.bad {
+  color: #ff8787;
+}
+
+.ar-pop.plain {
+  color: #fff;
+}
+
+@keyframes ar-rise {
+  0% {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0;
+  }
+  15% {
+    transform: translate(-50%, -80%) scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -260%) scale(1);
+    opacity: 0;
+  }
+}
+
+/* A red flash and cracked shield glass when the shields take a hit. */
+.ar-flash,
+.ar-crack {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ar-flash {
+  background: radial-gradient(ellipse at center, rgba(255, 40, 40, 0) 30%, rgba(255, 40, 40, 0.65));
+}
+
+.ar-flash.on {
+  animation: ar-flash 0.7s ease-out;
+}
+
+.ar-crack {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(90, 208, 255, 0) 45%,
+    rgba(90, 208, 255, 0.4)
+  );
+}
+
+.ar-crack svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 3px rgba(90, 208, 255, 0.9));
+}
+
+.ar-crack.on {
+  animation: ar-flash 1.6s ease-out;
+}
+
+@keyframes ar-flash {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ar-banner,
+  .ar-banner.warn,
+  .ar-count.on,
+  .ar-pop {
+    animation: none;
+  }
+
+  .ar-shield-fly {
+    animation: none;
+    opacity: 0;
+  }
+}

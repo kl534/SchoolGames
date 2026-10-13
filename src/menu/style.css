@@ -235,6 +235,11 @@ h2.subject {
   letter-spacing: 0.1em;
 }
 
+.best.score {
+  letter-spacing: 0;
+  font-weight: 700;
+}
+
 .topic-intro {
   display: flex;
   flex-wrap: wrap;

@@ -1,0 +1,8 @@
+{
+  "id": "asteroid-run",
+  "title": "Asteroid Run",
+  "description": "Fly through the asteroid field and blast the asteroid with the right answer before it hits you.",
+  "thumbnail": "thumbnail.svg",
+  "tags": ["space", "action", "3d"],
+  "scoring": "score"
+}

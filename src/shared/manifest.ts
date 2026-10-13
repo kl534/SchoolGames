@@ -5,6 +5,8 @@ export interface GameManifest {
   /** File name of an image inside the game's folder. */
   thumbnail?: string;
   tags?: string[];
+  /** How the menu shows progress: 'stars' (the default) or a 'score' with a high score. */
+  scoring?: 'stars' | 'score';
 }
 
 const ID_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -29,6 +31,9 @@ export function validateManifest(value: unknown): string[] {
   }
   if (m.tags !== undefined && !(Array.isArray(m.tags) && m.tags.every(isNonEmptyString))) {
     errors.push('tags must be an array of non-empty strings when present');
+  }
+  if (m.scoring !== undefined && m.scoring !== 'stars' && m.scoring !== 'score') {
+    errors.push("scoring must be 'stars' or 'score' when present");
   }
   return errors;
 }

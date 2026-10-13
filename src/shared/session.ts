@@ -2,6 +2,7 @@ import {
   createProgressStore,
   recordAnswer,
   recordBest,
+  recordHighScore,
   timerSecondsFor,
   type Player,
 } from './progress';
@@ -35,6 +36,10 @@ export interface GameSession {
   recordAnswer(fact: Fact, correct: boolean): void;
   /** Saves the round's stars; true when it's a new best. */
   recordStars(stars: number): boolean;
+  /** The player's high score for this topic and game; 0 when there isn't one yet. */
+  highScore(): number;
+  /** Saves a run's score; true when it beats the high score (and is above zero). */
+  recordScore(score: number): boolean;
 }
 
 /** Sets up a game page from its URL. Returns null when the topic is missing or unknown. */
@@ -48,7 +53,7 @@ export function startGameSession(
 
   const store = createProgressStore();
   const player = store.currentPlayer();
-  const progress = player ? store.load(player.id) : { facts: {}, best: {} };
+  const progress = player ? store.load(player.id) : { facts: {}, best: {}, highScores: {} };
   const save = () => player && store.save(player.id, progress);
 
   return {
@@ -65,6 +70,12 @@ export function startGameSession(
     },
     recordStars(stars) {
       const isBest = recordBest(progress, topic.id, gameId, stars);
+      save();
+      return isBest;
+    },
+    highScore: () => progress.highScores[topic.id]?.[gameId] ?? 0,
+    recordScore(score) {
+      const isBest = recordHighScore(progress, topic.id, gameId, score);
       save();
       return isBest;
     },
