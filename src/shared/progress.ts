@@ -20,6 +20,8 @@ export interface PlayerProgress {
   facts: Record<string, Record<string, FactStat>>;
   /** topicId -> gameId -> best stars (0-3) */
   best: Record<string, Record<string, number>>;
+  /** topicId -> gameId -> high score, for games that score in points instead of stars. */
+  highScores: Record<string, Record<string, number>>;
 }
 
 export const AVATARS = ['🦊', '🐼', '🐯', '🐸', '🐙', '🦄', '🐶', '🐱', '🐵', '🦁', '🐧', '🐢'];
@@ -34,7 +36,7 @@ export const MASTERED_CORRECT = 3;
 export const TIMER_SECONDS_BY_STREAK = [15, 10, 5];
 
 export function emptyProgress(): PlayerProgress {
-  return { facts: {}, best: {} };
+  return { facts: {}, best: {}, highScores: {} };
 }
 
 /** Learned: answered correctly at least `MASTERED_CORRECT` times. */
@@ -89,6 +91,18 @@ export function recordBest(
   const topic = (progress.best[topicId] ??= {});
   if (stars <= (topic[gameId] ?? -1)) return false;
   topic[gameId] = stars;
+  return true;
+}
+
+/** Stores the score if it is above zero and beats the previous high score; true for a new one. */
+export function recordHighScore(
+  progress: PlayerProgress,
+  topicId: string,
+  gameId: string,
+  score: number,
+): boolean {
+  if (score <= 0 || score <= (progress.highScores[topicId]?.[gameId] ?? 0)) return false;
+  (progress.highScores[topicId] ??= {})[gameId] = score;
   return true;
 }
 
@@ -151,7 +165,8 @@ export function createProgressStore(store: KeyValueStore = deviceStore()): Progr
     },
     load(playerId) {
       const data = readJson<Partial<PlayerProgress>>(store, progressKey(playerId), {});
-      return { facts: data.facts ?? {}, best: data.best ?? {} };
+      // Progress saved before high scores existed has no `highScores`.
+      return { facts: data.facts ?? {}, best: data.best ?? {}, highScores: data.highScores ?? {} };
     },
     save(playerId, progress) {
       writeJson(store, progressKey(playerId), progress);

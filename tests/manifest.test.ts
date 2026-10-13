@@ -28,6 +28,15 @@ describe('validateManifest', () => {
     expect(isGameManifest({ id: 'a', title: 't' })).toBe(false);
   });
 
+  it("accepts a scoring of 'stars' or 'score'", () => {
+    expect(isGameManifest({ ...valid, scoring: 'stars' })).toBe(true);
+    expect(isGameManifest({ ...valid, scoring: 'score' })).toBe(true);
+  });
+
+  it.each(['points', '', 'Score', 3, null])('rejects bad scoring %p', (scoring) => {
+    expect(validateManifest({ ...valid, scoring })).toEqual([expect.stringMatching(/scoring/)]);
+  });
+
   it('rejects bad thumbnail and tags', () => {
     expect(isGameManifest({ ...valid, thumbnail: 3 })).toBe(false);
     expect(isGameManifest({ ...valid, tags: 'x' })).toBe(false);

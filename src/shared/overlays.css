@@ -171,6 +171,13 @@
   line-height: 1;
 }
 
+.sg-score {
+  font-size: clamp(56px, 16vw, 88px);
+  font-weight: 900;
+  line-height: 1;
+  color: #ffd43b;
+}
+
 .sg-star-off {
   opacity: 0.2;
   filter: grayscale(1);

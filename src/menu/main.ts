@@ -189,7 +189,11 @@ function renderTopics(root: HTMLElement, player: Player, progress: PlayerProgres
 
 // ---------- Games for one topic ----------
 
-function gameCard(game: GameEntry, stars: number | undefined): HTMLAnchorElement {
+function gameCard(
+  game: GameEntry,
+  stars: number | undefined,
+  highScore: number | undefined,
+): HTMLAnchorElement {
   const card = link(game.href, 'card');
   const thumb = el('div', 'thumb');
   if (game.thumbnailUrl) {
@@ -204,7 +208,12 @@ function gameCard(game: GameEntry, stars: number | undefined): HTMLAnchorElement
   }
   const body = el('div', 'body');
   body.append(el('h3', undefined, game.title), el('p', undefined, game.description));
-  if (stars !== undefined) {
+  if (game.scoring === 'score') {
+    // Games scored in points show their high score, once there is one, instead of stars.
+    if (highScore !== undefined) {
+      body.appendChild(el('p', 'best score', `High score: ${highScore.toLocaleString()}`));
+    }
+  } else if (stars !== undefined) {
     const best = el('p', 'best', `Best: ${starsText(stars)}`);
     best.setAttribute('aria-label', `Best: ${stars} of 3 stars`);
     body.appendChild(best);
@@ -223,7 +232,11 @@ function renderTopic(
 
   const grid = el('main', 'grid');
   const cards = games.map((game) => {
-    const card = gameCard(game, progress.best[topic.id]?.[game.id]);
+    const card = gameCard(
+      game,
+      progress.best[topic.id]?.[game.id],
+      progress.highScores[topic.id]?.[game.id],
+    );
     grid.appendChild(card);
     return { game, card };
   });

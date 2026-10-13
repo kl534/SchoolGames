@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" font-family="system-ui, sans-serif" font-weight="800">
+  <defs>
+    <radialGradient id="nebula" cx=".62" cy=".42" r=".75">
+      <stop offset="0" stop-color="#ff4fa0" stop-opacity=".75"/>
+      <stop offset=".45" stop-color="#6a3dd8" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#0d0a2e" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="teal" cx=".15" cy=".85" r=".55">
+      <stop offset="0" stop-color="#2fd5c8" stop-opacity=".5"/>
+      <stop offset="1" stop-color="#2fd5c8" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="rock" cx=".35" cy=".3" r=".85">
+      <stop offset="0" stop-color="#d9735a"/>
+      <stop offset="1" stop-color="#6e2a22"/>
+    </radialGradient>
+    <radialGradient id="blast" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#fff6c4"/>
+      <stop offset=".5" stop-color="#ffcf33" stop-opacity=".9"/>
+      <stop offset="1" stop-color="#ff7a1a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="640" height="360" fill="#0d0a2e"/>
+  <rect width="640" height="360" fill="url(#nebula)"/>
+  <rect width="640" height="360" fill="url(#teal)"/>
+
+  <!-- Stars and speed streaks -->
+  <g fill="#fff">
+    <circle cx="40" cy="40" r="2"/><circle cx="120" cy="90" r="1.5"/><circle cx="200" cy="30" r="2"/>
+    <circle cx="300" cy="70" r="1.5"/><circle cx="380" cy="28" r="2"/><circle cx="470" cy="60" r="1.5"/>
+    <circle cx="560" cy="34" r="2"/><circle cx="610" cy="110" r="1.5"/><circle cx="90" cy="180" r="1.5"/>
+    <circle cx="610" cy="250" r="2"/><circle cx="520" cy="320" r="1.5"/><circle cx="260" cy="330" r="2"/>
+  </g>
+  <g stroke="#cfe4ff" stroke-width="2.5" stroke-linecap="round" opacity=".7">
+    <path d="M30 120 14 150M590 190 612 236M60 290 40 330M560 90 548 112M610 300 630 340"/>
+  </g>
+
+  <!-- Ringed planet -->
+  <circle cx="110" cy="92" r="42" fill="#f2a65a"/>
+  <path d="M72 80q38 -14 76 4M70 98q40 -10 80 6" stroke="#ffe3b8" stroke-width="7" fill="none" opacity=".7"/>
+  <ellipse cx="110" cy="96" rx="78" ry="14" fill="none" stroke="#ffd9a8" stroke-width="5" transform="rotate(-16 110 96)" opacity=".8"/>
+
+  <!-- Asteroid with glowing cracks -->
+  <path d="M352 96 420 70 490 92 520 150 506 214 446 248 376 236 330 180Z" fill="url(#rock)"/>
+  <path d="M370 130 410 150 400 190 430 214M440 100 450 140 490 160M410 150 450 140" stroke="#ffb347" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <circle cx="426" cy="160" r="94" fill="none" stroke="#59ffb5" stroke-width="4" stroke-dasharray="14 10" opacity=".85"/>
+
+  <!-- Lasers from the wing tips -->
+  <g stroke-linecap="round">
+    <path d="M42 314 372 182" stroke="#4dffb0" stroke-width="12" opacity=".35"/>
+    <path d="M42 314 372 182" stroke="#fff" stroke-width="4"/>
+    <path d="M278 314 380 198" stroke="#4dffb0" stroke-width="12" opacity=".35"/>
+    <path d="M278 314 380 198" stroke="#fff" stroke-width="4"/>
+  </g>
+  <circle cx="376" cy="190" r="34" fill="url(#blast)"/>
+
+  <!-- The ship, seen from behind -->
+  <g transform="translate(160 300)">
+    <path d="M-120 18 -34 -26 -10 -4 -26 28Z" fill="#2f8bff"/>
+    <path d="M120 18 34 -26 10 -4 26 28Z" fill="#2f8bff"/>
+    <path d="M-112 14 -40 -20 -34 -12 -108 24Z" fill="#ffd43b"/>
+    <path d="M112 14 40 -20 34 -12 108 24Z" fill="#ffd43b"/>
+    <path d="M0 -58 28 -2 22 36 -22 36 -28 -2Z" fill="#f4f7ff"/>
+    <path d="M0 -58 12 -34 -12 -34Z" fill="#ff5a4a"/>
+    <path d="M-12 -30 12 -30 16 -8 -16 -8Z" fill="#7fe3ff"/>
+    <path d="M-5 -44 5 -44 4 -66 -4 -66Z" fill="#ff5a4a" transform="translate(0 28)"/>
+    <rect x="-34" y="26" width="26" height="22" rx="6" fill="#3b4060"/>
+    <rect x="8" y="26" width="26" height="22" rx="6" fill="#3b4060"/>
+    <path d="M-34 48h26l-13 34Z M8 48h26l-13 34Z" fill="#ff9a3c"/>
+    <path d="M-27 48h12l-6 20Z M15 48h12l-6 20Z" fill="#fff2c0"/>
+    <circle cx="-118" cy="18" r="6" fill="#ffe066"/>
+    <circle cx="118" cy="18" r="6" fill="#ffe066"/>
+  </g>
+</svg>

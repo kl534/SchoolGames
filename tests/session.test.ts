@@ -64,3 +64,40 @@ describe('timerSecondsFor', () => {
     expect(session.timerSecondsFor(fact)).toBe(15);
   });
 });
+
+describe('high score', () => {
+  const topic = TOPICS[0];
+  const search = `?topic=${topic.id}`;
+
+  it('starts at zero, and only a better score counts as a new one', () => {
+    const store = createProgressStore();
+    store.setCurrentPlayer(store.addPlayer('Scorer', AVATARS[0]).id);
+    const session = startGameSession('score-game', search);
+    if (!session) throw new Error('topic not found');
+    expect(session.highScore()).toBe(0);
+    expect(session.recordScore(0)).toBe(false);
+    expect(session.recordScore(500)).toBe(true);
+    expect(session.recordScore(300)).toBe(false);
+    expect(session.highScore()).toBe(500);
+  });
+
+  it('is saved for the player and found by the next session', () => {
+    const store = createProgressStore();
+    store.setCurrentPlayer(store.addPlayer('Saver', AVATARS[1]).id);
+    startGameSession('score-game', search)?.recordScore(1200);
+    expect(startGameSession('score-game', search)?.highScore()).toBe(1200);
+    // Another game keeps its own score.
+    expect(startGameSession('other-game', search)?.highScore()).toBe(0);
+  });
+
+  it('counts for a guest while the page is open, but is not saved', () => {
+    createProgressStore().setCurrentPlayer(null);
+    const session = startGameSession('score-game', search);
+    if (!session) throw new Error('topic not found');
+    expect(session.player).toBeNull();
+    expect(session.recordScore(700)).toBe(true);
+    expect(session.highScore()).toBe(700);
+    expect(session.recordScore(600)).toBe(false);
+    expect(startGameSession('score-game', search)?.highScore()).toBe(0);
+  });
+});

@@ -277,4 +277,36 @@ export const sfx = {
     }),
   /** A silly zombie groan. */
   groan: () => play((ctx, t) => moan(ctx, t, 0.9, 0.22)),
+  /** A laser bolt: a quick high "pew" sliding down. */
+  laser: () =>
+    play((ctx, t) => {
+      tone(ctx, 'sawtooth', 1800, 260, t, 0.22, 0.16);
+      tone(ctx, 'square', 900, 130, t, 0.18, 0.08);
+    }),
+  /** The ship's shield taking a hit: an electric zap over a heavy thud. */
+  shieldHit: () =>
+    play((ctx, t) => {
+      noise(ctx, 'bandpass', 4200, 600, t, 0.35, 0.6);
+      tone(ctx, 'sawtooth', 220, 60, t, 0.3, 0.3);
+      tone(ctx, 'sine', 110, 35, t, 0.45, 0.9);
+    }),
+  /** A crystal pickup: a short, bright rising arpeggio. */
+  chime: () =>
+    play((ctx, t) => {
+      [784, 988, 1319, 1568].forEach((f, i) => tone(ctx, 'sine', f, f, t + i * 0.055, 0.2, 0.2));
+    }),
+  /** A boss warning: a two-tone siren, high-low, twice. */
+  alarm: () =>
+    play((ctx, t) => {
+      for (let i = 0; i < 4; i++) {
+        const f = i % 2 === 0 ? 880 : 620;
+        tone(ctx, 'square', f, f, t + i * 0.28, 0.26, 0.12);
+      }
+    }),
+  /** A small crash: a bump into a space rock. */
+  bump: () =>
+    play((ctx, t) => {
+      noise(ctx, 'lowpass', 1800, 200, t, 0.3, 0.7);
+      tone(ctx, 'sine', 150, 50, t, 0.25, 0.6);
+    }),
 };
