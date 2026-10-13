@@ -23,6 +23,7 @@ import { createEffects } from './effects';
 import { buildField, HORIZON_COLOR } from './field';
 import {
   BARRICADE_Z,
+  BREAK_Z,
   END_Z,
   fitView,
   CAMERA,
@@ -44,7 +45,7 @@ import {
   zombieProgress,
 } from './rules';
 import { createThrower } from './thrower';
-import { createZombie, ZOMBIE_LOOKS } from './zombie';
+import { createZombie, ZOMBIE_LOOKS, type Zombie } from './zombie';
 
 const GAME_ID = 'zombie-blast';
 
@@ -58,8 +59,12 @@ const ARRIVE_TIME = 2.2;
 const RUN_SPEED = 11;
 /** Zombies that have run this far back are hidden in the mist. */
 const GONE_Z = -23;
-/** How long the survivors take to scramble away before the next wave. */
-const LEAVE_TIME = 1.5;
+/** How fast zombies charge through the barricade, in world units per second. */
+const CHARGE_SPEED = 7;
+/** Longest random wait before a zombie joins the charge, in seconds. */
+const CHARGE_STAGGER = 0.25;
+/** Pause after the last zombie is through, before the next wave or the end banner. */
+const BREAK_GAP = 0.9;
 
 const SIGN_HEIGHT = 64;
 const SIGN_GAP = 6;
@@ -70,7 +75,7 @@ const STATUS_HEIGHT = 64;
 /** Seconds a result stays up before a tap can skip to the next question. */
 const SKIP_AFTER = 0.6;
 
-type Phase = 'lesson' | 'aiming' | 'throw' | 'result' | 'leaving' | 'ending' | 'done';
+type Phase = 'lesson' | 'aiming' | 'throw' | 'result' | 'breaking' | 'ending' | 'done';
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -175,6 +180,9 @@ function run(session: GameSession): void {
   let resultAt = 0;
   /** The other zombies have already run off, so the next wave can follow straight away. */
   let survivorsGone = false;
+  /** Per zombie while the barricade is being smashed: seconds until it sets off, and its progress. */
+  const charge = zombies.map(() => ({ delay: 0, smashed: false, through: false }));
+  let breakQueued = false;
   let flight: { from: Vector3; to: Vector3; t: number; arc: number } | null = null;
 
   // Delayed actions run on game time so pausing freezes them too.
@@ -311,6 +319,7 @@ function run(session: GameSession): void {
 
   // ---------- Round flow ----------
   const startRound = () => {
+    field.repairFence();
     const facts = session.chooseFacts();
     round = createRound(facts);
     phase = 'lesson';
@@ -332,6 +341,7 @@ function run(session: GameSession): void {
 
   const startTurn = () => {
     pending = [];
+    field.repairFence();
     fact = round.current();
     if (!fact) {
       finishRound();
@@ -509,19 +519,27 @@ function run(session: GameSession): void {
   const advance = () => {
     stopSpeaking();
     pending = [];
-    if (outOfBrains(brains)) {
-      endRound();
-      return;
-    }
     if (survivorsGone) {
       startTurn();
       return;
     }
-    phase = 'leaving';
+    // A miss: the zombies charge and smash through the barricade.
+    phase = 'breaking';
+    breakQueued = false;
     banner.hidden = true;
     signs.forEach((button) => button.classList.add('gone'));
-    zombies.forEach((zombie) => zombie.setMode('run'));
-    after(LEAVE_TIME, startTurn);
+    thrower.react('cower');
+    zombies.forEach((_, i) => {
+      charge[i].delay = Math.random() * CHARGE_STAGGER;
+      charge[i].smashed = false;
+      charge[i].through = false;
+    });
+  };
+
+  /** The zombies are through the barricade: on to the next wave, or the end if brains ran out. */
+  const afterBreak = () => {
+    if (outOfBrains(brains)) endRound();
+    else startTurn();
   };
 
   /** The zombies swarm the barricade, the kid is out of brains, and the round is over. */
@@ -529,7 +547,10 @@ function run(session: GameSession): void {
     phase = 'ending';
     signs.forEach((button) => button.classList.add('gone'));
     showBanner('The zombies got your brains!', '', 'out', 'kid');
-    zombies.forEach((zombie) => zombie.object.visible && zombie.setMode('walk'));
+    // Zombies already through the barricade stay where they are.
+    zombies.forEach((zombie, i) => {
+      if (zombie.object.visible && zs[i] < END_Z) zombie.setMode('walk');
+    });
     thrower.react('cower');
     const thisTurn = turn;
     let spoken = false;
@@ -624,6 +645,35 @@ function run(session: GameSession): void {
   window.addEventListener('keydown', onKey);
 
   // ---------- Loop ----------
+  /**
+   * Runs one zombie at the kid after a miss: it smashes the barricade as it reaches it, carries on
+   * through, then waves its arms. Once the last one is through, a short pause leads to what's next.
+   */
+  const chargeThrough = (zombie: Zombie, i: number, delta: number) => {
+    const c = charge[i];
+    if (c.through) return;
+    if (c.delay > 0) {
+      c.delay -= delta;
+      return;
+    }
+    zombie.setMode('charge');
+    zs[i] = Math.min(zs[i] + CHARGE_SPEED * delta, BREAK_Z);
+    if (!c.smashed && zs[i] >= END_Z) {
+      c.smashed = true;
+      field.smashFence(laneX(i, BARRICADE_Z, lane));
+      sfx.crash();
+    }
+    if (zs[i] < BREAK_Z) return;
+    c.through = true;
+    zombie.setMode('lean');
+    const allThrough = zombies.every((z, j) => !z.object.visible || charge[j].through);
+    if (allThrough && !breakQueued) {
+      breakQueued = true;
+      const thisTurn = turn;
+      after(BREAK_GAP, () => turn === thisTurn && phase === 'breaking' && afterBreak());
+    }
+  };
+
   /** Moves each zombie along its path for the current phase and picks its animation. */
   const moveZombies = (delta: number) => {
     const arriving = phase === 'aiming' && arriveTime < ARRIVE_TIME;
@@ -641,10 +691,12 @@ function run(session: GameSession): void {
           zs[i] = START_Z;
           zombie.setMode('sway');
         }
+      } else if (phase === 'breaking') {
+        if (zombie.object.visible) chargeThrough(zombie, i, delta);
       } else if (zombie.mode === 'run') {
         zs[i] = Math.max(zs[i] - RUN_SPEED * delta, SPAWN_Z - 8);
         if (zs[i] <= GONE_Z) zombie.object.visible = false;
-      } else if (phase === 'ending' && zombie.object.visible) {
+      } else if (phase === 'ending' && zombie.object.visible && zs[i] < END_Z) {
         zs[i] = Math.min(zs[i] + 4 * delta, END_Z);
         zombie.setMode(zs[i] >= END_Z ? 'lean' : 'walk');
       }
@@ -688,7 +740,7 @@ function run(session: GameSession): void {
     moveZombies(delta);
     thrower.update(delta, elapsed);
     effects.update(delta);
-    field.update(elapsed);
+    field.update(elapsed, delta);
 
     if (flight) {
       flight.t += delta;

@@ -269,6 +269,12 @@ export const sfx = {
       noise(ctx, 'highpass', 3500, 1800, t, 0.8, 0.35);
       tone(ctx, 'triangle', 700, 160, t, 0.7, 0.15);
     }),
+  /** Wood splintering and a heavy thump as a zombie smashes through the fence. */
+  crash: () =>
+    play((ctx, t) => {
+      noise(ctx, 'lowpass', 3200, 300, t, 0.45, 0.9);
+      tone(ctx, 'sine', 120, 38, t, 0.4, 0.9);
+    }),
   /** A silly zombie groan. */
   groan: () => play((ctx, t) => moan(ctx, t, 0.9, 0.22)),
 };

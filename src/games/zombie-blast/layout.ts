@@ -7,6 +7,8 @@ export const LANES = 4;
 export const BARRICADE_Z = 0;
 /** Zombies that reach the barricade stop here, leaning over it. */
 export const END_Z = -0.6;
+/** Zombies that smash through the barricade end up this far past it, close to the kid. */
+export const BREAK_Z = 0.7;
 /** Where they sway in place while the question is read. */
 export const START_Z = -4.5;
 /** Where they come out of the mist. */

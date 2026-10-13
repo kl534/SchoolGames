@@ -9,6 +9,7 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   SphereGeometry,
+  TorusGeometry,
   Vector3,
   type BufferGeometry,
   type Material,
@@ -17,10 +18,13 @@ import {
 import { createBomb } from './bomb';
 
 const HIP_Y = 0.5;
-const SHOULDER_Y = 0.42;
+/** Shoulders, relative to the torso's pivot at the hips (world height about 0.86). */
+const SHOULDER_Y = 0.36;
 const UPPER_ARM = 0.2;
 const FOREARM = 0.18;
-const HEAD_Y = 0.78;
+/** The big head sits clear above the torso: its centre is at this world height. */
+const HEAD_Y = 1.12;
+const HEAD_RADIUS = 0.22;
 /** Seconds from the start of the throw to the bomb leaving the hand. */
 export const RELEASE_TIME = 0.32;
 const WINDUP_TIME = 0.2;
@@ -92,19 +96,55 @@ export function createThrower(): Thrower {
   // Torso twists and leans for the throw.
   const torso = joint(body, 0, HIP_Y);
   torso.rotation.order = 'YXZ';
-  mesh(new CapsuleGeometry(0.17, 0.2, 6, 16), hoodie, torso, 0, 0.22).scale.set(1.2, 1, 0.9);
-  mesh(new BoxGeometry(0.32, 0.38, 0.14), pack, torso, 0, 0.28, 0.2);
-  mesh(new SphereGeometry(0.12, 12, 8), hoodie, torso, 0, 0.43, 0.12).scale.set(1.2, 0.8, 0.8);
+  // A short, chubby torso (top at about 0.92) with a small backpack that stays below the neck.
+  mesh(new CapsuleGeometry(0.16, 0.1, 6, 16), hoodie, torso, 0, 0.2).scale.set(1.2, 1, 0.9);
+  mesh(new BoxGeometry(0.3, 0.3, 0.12), pack, torso, 0, 0.2, 0.2);
+  mesh(new BoxGeometry(0.2, 0.1, 0.05), pack, torso, 0, 0.1, 0.27);
+  // The hood is rolled into a collar around the base of the neck.
+  const collar = mesh(new TorusGeometry(0.1, 0.045, 8, 20), hoodie, torso, 0, 0.42, 0.02);
+  collar.rotation.x = Math.PI / 2;
+  collar.scale.set(1.15, 1.1, 1);
+  mesh(new CylinderGeometry(0.06, 0.065, 0.12, 10), skin, torso, 0, 0.45, 0);
 
+  // Big round head, brown hair over the back and sides, ears, and a red cap on backwards.
   const head = joint(torso, 0, HEAD_Y - HIP_Y);
-  mesh(new SphereGeometry(0.2, 22, 16), skin, head);
-  mesh(new SphereGeometry(0.205, 22, 12, 0, Math.PI * 2, 0, 1.55), hair, head, 0, 0.0, 0.015);
-  mesh(new SphereGeometry(0.21, 22, 12, 0, Math.PI * 2, 0, 1.15), cap, head, 0, 0.03, 0.0);
-  mesh(new BoxGeometry(0.26, 0.02, 0.2), cap, head, 0, 0.0, -0.26);
+  mesh(new SphereGeometry(HEAD_RADIUS, 24, 18), skin, head);
+  // Sphere azimuth 0 to π runs round the back (+z) from one side to the other.
+  mesh(
+    new SphereGeometry(HEAD_RADIUS + 0.012, 24, 16, -0.45, Math.PI + 0.9, 0.85, 1.45),
+    hair,
+    head,
+  );
   for (const side of [-1, 1]) {
-    mesh(new SphereGeometry(0.045, 10, 8), skin, head, side * 0.2, -0.02, 0).scale.set(0.6, 1, 0.9);
+    mesh(
+      new SphereGeometry(0.05, 10, 8),
+      skin,
+      head,
+      side * (HEAD_RADIUS + 0.005),
+      -0.02,
+      0.02,
+    ).scale.set(0.55, 1, 0.9);
   }
-  mesh(new CylinderGeometry(0.05, 0.055, 0.06, 10), skin, head, 0, -0.2, 0);
+  mesh(
+    new SphereGeometry(HEAD_RADIUS + 0.018, 24, 12, 0, Math.PI * 2, 0, 1.25),
+    cap,
+    head,
+    0,
+    0.03,
+    0,
+  ).scale.set(1, 0.95, 1);
+  mesh(new SphereGeometry(0.03, 8, 6), cap, head, 0, HEAD_RADIUS + 0.035, 0);
+  // The brim points back at the camera.
+  const brim = mesh(
+    new CylinderGeometry(0.19, 0.19, 0.025, 20, 1, false, -Math.PI / 2, Math.PI),
+    cap,
+    head,
+    0,
+    0.07,
+    0.1,
+  );
+  brim.scale.set(1.15, 1, 1.2);
+  brim.rotation.x = 0.18;
 
   // Left arm hangs relaxed; the right one throws.
   const leftShoulder = joint(torso, -0.23, SHOULDER_Y);
@@ -208,6 +248,7 @@ export function createThrower(): Thrower {
       onRelease = callback;
     },
     react(reaction) {
+      if (mode === reaction) return;
       mode = reaction;
       t = 0;
       // Whatever is left in the hand gets dropped.
