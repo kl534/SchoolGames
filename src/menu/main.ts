@@ -184,7 +184,7 @@ function renderTopics(root: HTMLElement, player: Player, progress: PlayerProgres
     section.appendChild(grid);
     main.appendChild(section);
   }
-  root.replaceChildren(header('School Games', 'What do you want to practise?', player), main);
+  root.replaceChildren(header('School Games', 'What do you want to practice?', player), main);
 }
 
 // ---------- Games for one topic ----------

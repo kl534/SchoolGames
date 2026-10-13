@@ -39,7 +39,7 @@ tests/                Unit tests (including a check of every game folder)
 3. **Pick a game.** The topic page lists every game with the player's best stars. Every question has a clock: 15 seconds for a new or just-missed fact, 10 after one correct answer in a row, 5 after two or more. Games open with `?topic=<id>`.
 4. **Lesson.** The round's facts appear one card at a time with counting dots and are read aloud. Kids can skip to the game.
 5. **Play.** 10 questions, each read aloud. A missed fact is shown and spoken with its answer, then comes back 3 turns later. Facts the player often misses are picked more often in later rounds.
-6. **Results.** Stars (9+ right = 3, 7+ = 2, 5+ = 1), facts to practise, and buttons for Play again, Other games, or All topics.
+6. **Results.** Stars (9+ right = 3, 7+ = 2, 5+ = 1), facts to practice, and buttons for Play again, Other games, or All topics.
 
 ### Add a topic
 
