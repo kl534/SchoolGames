@@ -183,6 +183,58 @@ function crowd(ctx: AudioContext, start: number, duration: number): void {
   source.start(start);
 }
 
+/** A burst of filtered noise whose filter sweeps from `from` to `to` Hz while it fades out. */
+function noise(
+  ctx: AudioContext,
+  type: BiquadFilterType,
+  from: number,
+  to: number,
+  start: number,
+  duration: number,
+  volume: number,
+): void {
+  const length = Math.floor(ctx.sampleRate * duration);
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  const filter = ctx.createBiquadFilter();
+  filter.type = type;
+  filter.frequency.setValueAtTime(from, start);
+  filter.frequency.exponentialRampToValueAtTime(to, start + duration);
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(volume, start);
+  gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+  source.connect(filter).connect(gain).connect(ctx.destination);
+  source.start(start);
+}
+
+/** A low, wobbly moan: a sawtooth sliding down with a slow vibrato. */
+function moan(ctx: AudioContext, start: number, duration: number, volume: number): void {
+  const osc = ctx.createOscillator();
+  const vibrato = ctx.createOscillator();
+  const depth = ctx.createGain();
+  const filter = ctx.createBiquadFilter();
+  const gain = ctx.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(130, start);
+  osc.frequency.exponentialRampToValueAtTime(70, start + duration);
+  vibrato.frequency.value = 7;
+  depth.gain.value = 9;
+  filter.type = 'lowpass';
+  filter.frequency.value = 600;
+  gain.gain.setValueAtTime(0.001, start);
+  gain.gain.exponentialRampToValueAtTime(volume, start + 0.12);
+  gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+  vibrato.connect(depth).connect(osc.frequency);
+  osc.connect(filter).connect(gain).connect(ctx.destination);
+  osc.start(start);
+  vibrato.start(start);
+  osc.stop(start + duration + 0.02);
+  vibrato.stop(start + duration + 0.02);
+}
+
 function play(fn: (ctx: AudioContext, now: number) => void): void {
   if (muted) return;
   const ctx = audioContext();
@@ -203,4 +255,20 @@ export const sfx = {
       tone(ctx, 'triangle', 330, 220, t + 0.25, 0.45, 0.3);
     }),
   tick: () => play((ctx, t) => tone(ctx, 'square', 1200, 1200, t, 0.05, 0.08)),
+  /** A thrown object whistling through the air. */
+  whoosh: () => play((ctx, t) => noise(ctx, 'bandpass', 500, 2600, t, 0.3, 0.5)),
+  /** A cartoon explosion: a rumbling noise burst over a deep thump. */
+  boom: () =>
+    play((ctx, t) => {
+      noise(ctx, 'lowpass', 2400, 110, t, 0.9, 1);
+      tone(ctx, 'sine', 140, 32, t, 0.6, 0.9);
+    }),
+  /** A dud: a hiss and a sad slide down. */
+  fizz: () =>
+    play((ctx, t) => {
+      noise(ctx, 'highpass', 3500, 1800, t, 0.8, 0.35);
+      tone(ctx, 'triangle', 700, 160, t, 0.7, 0.15);
+    }),
+  /** A silly zombie groan. */
+  groan: () => play((ctx, t) => moan(ctx, t, 0.9, 0.22)),
 };

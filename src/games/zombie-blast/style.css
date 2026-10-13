@@ -1,0 +1,366 @@
+.zb-hud {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 24px);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  color: #fff;
+  pointer-events: none;
+}
+
+/* Leave room for the menu, sound and pause buttons on narrow screens. */
+@media (max-width: 640px) {
+  .zb-hud {
+    top: calc(max(12px, env(safe-area-inset-top)) + 60px);
+  }
+}
+
+.zb-problem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 22px;
+  border-radius: 20px;
+  background: rgba(47, 24, 84, 0.85);
+  pointer-events: auto;
+}
+
+.zb-problem-text {
+  font-size: clamp(30px, 8vmin, 60px);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.zb-hear {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.zb-clock {
+  width: 100%;
+  height: 10px;
+  border-radius: 5px;
+  background: rgba(47, 24, 84, 0.6);
+  overflow: hidden;
+}
+
+.zb-hud[hidden],
+.zb-status[hidden],
+.zb-sign[hidden],
+.zb-clock[hidden],
+.zb-banner-detail[hidden] {
+  display: none;
+}
+
+.zb-clock-fill {
+  height: 100%;
+  width: 100%;
+  background: #8ce99a;
+  transform-origin: left;
+}
+
+.zb-clock.urgent .zb-clock-fill {
+  background: #ff6b6b;
+}
+
+/* Brains left, then one dot per question. */
+.zb-status {
+  position: fixed;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  left: 50%;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 14px;
+  border-radius: 16px;
+  background: rgba(47, 24, 84, 0.75);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.zb-brains {
+  display: flex;
+  gap: 4px;
+}
+
+.zb-brain {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.zb-brain.lost {
+  opacity: 0.25;
+  filter: grayscale(1);
+}
+
+.zb-brain-fly {
+  position: fixed;
+  z-index: 25;
+  font-size: 26px;
+  line-height: 1;
+  pointer-events: none;
+  animation: zb-fly 1s ease-out forwards;
+}
+
+@keyframes zb-fly {
+  0% {
+    transform: translateY(0) scale(1) rotate(0);
+    opacity: 1;
+  }
+  30% {
+    transform: translateY(-40px) scale(1.7) rotate(-15deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-150px) scale(2.2) rotate(40deg);
+    opacity: 0;
+  }
+}
+
+.zb-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.zb-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.zb-dot.current {
+  box-shadow: 0 0 0 3px #fff;
+}
+
+.zb-dot.hit {
+  background: #51cf66;
+}
+
+.zb-dot.miss {
+  background: #ff6b6b;
+}
+
+/* On wide screens the kid fills the bottom middle, so the status moves to the corner. */
+@media (min-width: 641px) {
+  .zb-status {
+    left: max(12px, env(safe-area-inset-left));
+    transform: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .zb-status {
+    gap: 10px;
+    padding: 6px 10px;
+  }
+
+  .zb-brain {
+    font-size: 22px;
+  }
+
+  .zb-dots {
+    gap: 4px;
+  }
+
+  .zb-dot {
+    width: 11px;
+    height: 11px;
+  }
+
+  .zb-dot.current {
+    box-shadow: 0 0 0 2px #fff;
+  }
+}
+
+/* A wooden sign hanging over a zombie's head; placed every frame by positionSigns. */
+.zb-sign {
+  position: fixed;
+  z-index: 10;
+  left: 0;
+  top: 0;
+  min-width: 64px;
+  height: 64px;
+  padding: 0 12px;
+  border: 4px solid #7a4a1d;
+  border-radius: 16px;
+  background: #fff1cc;
+  color: #3b2410;
+  font:
+    800 30px system-ui,
+    sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 6px 16px rgba(40, 10, 60, 0.4);
+  opacity: var(--fade, 1);
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+/* The little post that points down at the zombie. */
+.zb-sign::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -14px;
+  width: 0;
+  height: 0;
+  margin-left: -8px;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 10px solid #7a4a1d;
+}
+
+.zb-sign:active:not([aria-disabled='true']) {
+  scale: 0.95;
+}
+
+.zb-sign:focus-visible {
+  outline: 4px solid #ffd43b;
+  outline-offset: 2px;
+}
+
+.zb-sign[aria-disabled='true'] {
+  cursor: default;
+  opacity: calc(var(--fade, 1) * 0.6);
+}
+
+.zb-sign.chosen {
+  opacity: var(--fade, 1);
+}
+
+.zb-sign.right {
+  opacity: var(--fade, 1);
+  border-color: #1b6b2b;
+  background: #8ce99a;
+  box-shadow:
+    0 0 0 6px rgba(140, 233, 154, 0.55),
+    0 0 28px 8px rgba(140, 233, 154, 0.8);
+}
+
+.zb-sign.right::after {
+  border-top-color: #1b6b2b;
+}
+
+.zb-sign.wrong {
+  opacity: var(--fade, 1);
+  border-color: #8c1d1d;
+  background: #ff8787;
+}
+
+.zb-sign.wrong::after {
+  border-top-color: #8c1d1d;
+}
+
+.zb-sign.gone {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+
+@media (max-width: 480px) {
+  .zb-sign {
+    padding: 0 8px;
+    font-size: 26px;
+  }
+}
+
+.zb-banner {
+  position: fixed;
+  left: 50%;
+  top: 56%;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: min(92vw, 680px);
+  padding: 12px 28px;
+  border-radius: 24px;
+  background: rgba(47, 24, 84, 0.88);
+  color: #fff;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: zb-pop 0.35s ease-out;
+}
+
+.zb-banner[hidden] {
+  display: none;
+}
+
+.zb-banner-title {
+  font-size: clamp(36px, 11vmin, 80px);
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.zb-banner.hit .zb-banner-title {
+  color: #ffd43b;
+}
+
+.zb-banner.miss .zb-banner-title,
+.zb-banner.out .zb-banner-title {
+  color: #ffa8a8;
+}
+
+.zb-banner.out .zb-banner-title {
+  font-size: clamp(30px, 8vmin, 60px);
+}
+
+.zb-banner-detail {
+  font-size: clamp(26px, 7vmin, 48px);
+  font-weight: 800;
+}
+
+@keyframes zb-pop {
+  from {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zb-banner {
+    animation: none;
+  }
+
+  .zb-brain-fly {
+    animation: none;
+    opacity: 0;
+  }
+}

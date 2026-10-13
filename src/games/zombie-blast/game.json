@@ -1,0 +1,7 @@
+{
+  "id": "zombie-blast",
+  "title": "Zombie Blast",
+  "description": "Throw a bomb at the zombie holding the right answer before they reach you.",
+  "thumbnail": "thumbnail.svg",
+  "tags": ["action", "3d"]
+}
