@@ -25,7 +25,7 @@ function link(label: string, href: string, className = 'sg-btn'): HTMLAnchorElem
   return a;
 }
 
-/** End-of-round screen: stars, score, facts to practise, and what to do next. */
+/** End-of-round screen: stars, score, facts to practice, and what to do next. */
 export function showResults(options: ResultsOptions): { dispose(): void } {
   const container = options.container ?? document.body;
   const overlay = document.createElement('div');
@@ -66,7 +66,7 @@ export function showResults(options: ResultsOptions): { dispose(): void } {
   if (options.missed.length > 0) {
     const label = document.createElement('p');
     label.className = 'sg-muted';
-    label.textContent = 'Keep practising:';
+    label.textContent = 'Keep practicing:';
     const list = document.createElement('ul');
     list.className = 'sg-missed';
     for (const fact of options.missed) {
