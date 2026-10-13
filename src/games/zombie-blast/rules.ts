@@ -60,3 +60,52 @@ export function bombPosition(
     z: from.z + (to.z - from.z) * s,
   };
 }
+
+/** Gravity pulling smashed fence planks down, in world units per second squared. */
+export const FENCE_GRAVITY = 9.8;
+
+/** Indices of the plank centres `xs` within `reach` of `x`: the planks a zombie in that lane smashes. */
+export function planksInReach(xs: readonly number[], x: number, reach: number): number[] {
+  const hit: number[] = [];
+  xs.forEach((plankX, i) => {
+    if (Math.abs(plankX - x) <= reach) hit.push(i);
+  });
+  return hit;
+}
+
+/** Seconds a body launched from height `y` with upward speed `vy` takes to drop to `floor`. */
+export function fallTime(y: number, vy: number, floor: number, gravity = FENCE_GRAVITY): number {
+  const height = Math.max(y - floor, 0);
+  return (vy + Math.sqrt(vy * vy + 2 * gravity * height)) / gravity;
+}
+
+/**
+ * Where a smashed plank is `t` seconds after it left the fence: a ballistic arc from `from` with
+ * `velocity`, which stops where it first reaches the `floor` instead of sinking into it.
+ */
+export function plankFlight(
+  from: Point3,
+  velocity: Point3,
+  t: number,
+  floor: number,
+  gravity = FENCE_GRAVITY,
+  out: Point3 = { x: 0, y: 0, z: 0 },
+): Point3 {
+  const s = Math.min(Math.max(t, 0), fallTime(from.y, velocity.y, floor, gravity));
+  out.x = from.x + velocity.x * s;
+  out.y = Math.max(floor, from.y + velocity.y * s - 0.5 * gravity * s * s);
+  out.z = from.z + velocity.z * s;
+  return out;
+}
+
+/** Eases to 1 with a little overshoot on the way, for fence pieces popping back into place. */
+export function easeOutBack(t: number, overshoot = 1.70158): number {
+  const u = clamp01(t) - 1;
+  return 1 + (overshoot + 1) * u ** 3 + overshoot * u ** 2;
+}
+
+/** The same angle wrapped into -π..π, so blending back to zero never takes the long way round. */
+export function wrapAngle(angle: number): number {
+  const turn = Math.PI * 2;
+  return angle - Math.round(angle / turn) * turn;
+}

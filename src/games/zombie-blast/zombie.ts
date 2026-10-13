@@ -40,6 +40,8 @@ export type ZombieMode =
   | 'walk'
   /** Turned round and fleeing, arms in the air. */
   | 'run'
+  /** Charging at the player, arms reaching, to smash through the barricade. */
+  | 'charge'
   /** Stopped dead in whatever pose it was in. */
   | 'freeze'
   /** Knocked up by a bomb, landing flat on its back with dizzy stars. */
@@ -288,20 +290,22 @@ export function createZombie(initialLook: ZombieLook = ZOMBIE_LOOKS[0]): Zombie 
 
   const pose = (delta: number) => {
     modeTime += delta;
-    const speed = mode === 'run' ? 12 : mode === 'walk' ? 6.5 : mode === 'lean' ? 9 : 2.2;
+    const speed =
+      mode === 'run' || mode === 'charge' ? 12 : mode === 'walk' ? 6.5 : mode === 'lean' ? 9 : 2.2;
     phase += delta * speed;
     const s = Math.sin(phase);
     const c = Math.cos(phase);
     neutral();
 
-    if (mode === 'walk' || mode === 'run') {
-      const amp = mode === 'run' ? 0.9 : 0.5;
-      body.position.y = Math.abs(c) * (mode === 'run' ? 0.12 : 0.06);
-      body.rotation.z = s * (mode === 'run' ? 0.1 : 0.12);
+    if (mode === 'walk' || mode === 'run' || mode === 'charge') {
+      const sprint = mode !== 'walk';
+      const amp = sprint ? 0.9 : 0.5;
+      body.position.y = Math.abs(c) * (sprint ? 0.12 : 0.06);
+      body.rotation.z = s * (mode === 'charge' ? 0.07 : sprint ? 0.1 : 0.12);
       legs.forEach(({ hip, knee, side }) => {
         const p = phase + (side > 0 ? 0 : Math.PI);
         hip.rotation.x = Math.sin(p) * amp;
-        knee.rotation.x = Math.max(0, -Math.sin(p + 0.8)) * (mode === 'run' ? 1.3 : 0.7);
+        knee.rotation.x = Math.max(0, -Math.sin(p + 0.8)) * (sprint ? 1.3 : 0.7);
       });
       head.rotation.z = Math.sin(phase * 0.5 + 1) * 0.2;
       if (mode === 'run') {
@@ -311,6 +315,15 @@ export function createZombie(initialLook: ZombieLook = ZOMBIE_LOOKS[0]): Zombie 
           elbow.rotation.x = -0.3;
         });
         mouth.scale.set(1.1, 1.1, 0.4);
+      } else if (mode === 'charge') {
+        // Facing the player, leaning in with both arms reaching and grabbing.
+        torso.rotation.x = 0.5;
+        head.rotation.x = -0.3;
+        arms.forEach(({ shoulder, elbow, side }) => {
+          shoulder.rotation.set(-1.65 + Math.sin(phase * 1.3 + side * 1.6) * 0.22, 0, side * 0.1);
+          elbow.rotation.x = -0.35 + Math.sin(phase * 2.6 + side) * 0.2;
+        });
+        mouth.scale.set(1.25, 1.5, 0.5);
       } else {
         arms.forEach(({ shoulder, side }) => {
           shoulder.rotation.x = -1.45 + Math.sin(phase * 2 + side) * 0.1;

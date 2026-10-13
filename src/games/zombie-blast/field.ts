@@ -20,9 +20,19 @@ import {
   ShapeGeometry,
   SphereGeometry,
   SRGBColorSpace,
+  type Object3D,
   type Scene,
 } from 'three';
 import { BARRICADE_Z, LANES, laneX } from './layout';
+import {
+  easeOutBack,
+  fallTime,
+  FENCE_GRAVITY,
+  planksInReach,
+  plankFlight,
+  wrapAngle,
+  type Point3,
+} from './rules';
 
 /** The colour of the sky at the horizon; the mist at the far end matches it. */
 export const HORIZON_COLOR = 0xf7b58f;
@@ -184,26 +194,106 @@ function pumpkin(): Group {
   return group;
 }
 
-function barricade(): Group {
+/** A position and rotation a fence piece can be sent back to. */
+interface Pose {
+  x: number;
+  y: number;
+  z: number;
+  rx: number;
+  ry: number;
+  rz: number;
+}
+
+/** A plank or post that can be knocked about and then pops back into place. */
+interface Piece {
+  object: Object3D;
+  home: Pose;
+  /** Where it was when the repair began. */
+  from: Pose;
+  state: 'home' | 'moving' | 'repairing';
+  /** Seconds since it was smashed, or since the repair began. */
+  t: number;
+}
+
+interface Plank extends Piece {
+  velocity: Point3;
+  spin: Point3;
+  /** Seconds in the air, and the rotation it lands with. */
+  airTime: number;
+  landed: Point3;
+}
+
+interface Post extends Piece {
+  /** Sideways lean it falls with, in radians. */
+  side: number;
+}
+
+/** Planks within this of a lane's centre are smashed when a zombie goes through it. */
+const SMASH_REACH = 1.1;
+/** Posts within this of a lane's centre fall over. */
+const POST_REACH = 0.8;
+/** Planks come to rest this high, lying on the grass. */
+const PLANK_FLOOR = 0.06;
+/** Seconds a landed plank takes to settle flat. */
+const SETTLE_TIME = 0.15;
+const TIP_TIME = 0.3;
+const TIP_ANGLE = 1.3;
+const REPAIR_TIME = 0.3;
+
+const homePose = (object: Object3D): Pose => ({
+  x: object.position.x,
+  y: object.position.y,
+  z: object.position.z,
+  rx: object.rotation.x,
+  ry: object.rotation.y,
+  rz: object.rotation.z,
+});
+
+const blank = (): Pose => ({ x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 });
+
+export interface Fence {
+  object: Group;
+  smash(x: number): void;
+  repair(): void;
+  update(delta: number): void;
+}
+
+/** A row of posts and nailed planks that zombies can smash through and that mend themselves. */
+export function barricade(): Fence {
   const group = new Group();
   const rand = seeded(7);
   const woods = [0xb7773f, 0xc98a4b, 0x9c6532, 0xd09b5c].map(
     (color) => new MeshStandardMaterial({ color, roughness: 0.9 }),
   );
   const nail = new MeshStandardMaterial({ color: 0x8b8f9c, roughness: 0.4, metalness: 0.6 });
+  const nailGeometry = new SphereGeometry(0.03, 6, 4);
   const spacing = 1.5;
   const count = 13;
+  const planks: Plank[] = [];
+  const posts: Post[] = [];
   for (let i = 0; i < count; i++) {
     const x = (i - (count - 1) / 2) * spacing;
     const height = 0.85 + rand() * 0.2;
+    // Each post is a pivot at ground level, so it tips over about its base.
+    const pivot = new Group();
+    pivot.position.set(x, 0, 0);
+    pivot.rotation.z = (rand() - 0.5) * 0.08;
+    group.add(pivot);
     const post = new Mesh(new BoxGeometry(0.24, height, 0.24), woods[2]);
-    post.position.set(x, height / 2, 0);
-    post.rotation.z = (rand() - 0.5) * 0.08;
-    group.add(post);
+    post.position.y = height / 2;
+    pivot.add(post);
     const point = new Mesh(new ConeGeometry(0.17, 0.2, 4), woods[2]);
-    point.position.set(x, height + 0.08, 0);
+    point.position.y = height + 0.08;
     point.rotation.y = Math.PI / 4;
-    group.add(point);
+    pivot.add(point);
+    posts.push({
+      object: pivot,
+      home: homePose(pivot),
+      from: blank(),
+      state: 'home',
+      t: 0,
+      side: 0,
+    });
     if (i < count - 1) {
       for (const [row, y] of [0.22, 0.46, 0.7].entries()) {
         const plank = new Mesh(
@@ -214,22 +304,136 @@ function barricade(): Group {
         plank.rotation.z = (rand() - 0.5) * 0.1;
         group.add(plank);
         for (const dx of [-0.6, 0.6]) {
-          const head = new Mesh(new SphereGeometry(0.03, 6, 4), nail);
-          head.position.set(plank.position.x + dx, plank.position.y, 0.2);
-          group.add(head);
+          const head = new Mesh(nailGeometry, nail);
+          head.position.set(dx, 0, 0.06);
+          plank.add(head);
         }
+        planks.push({
+          object: plank,
+          home: homePose(plank),
+          from: blank(),
+          state: 'home',
+          t: 0,
+          velocity: { x: 0, y: 0, z: 0 },
+          spin: { x: 0, y: 0, z: 0 },
+          airTime: 0,
+          landed: { x: 0, y: 0, z: 0 },
+        });
       }
     }
   }
   group.position.z = BARRICADE_Z;
-  return group;
+
+  const plankXs = planks.map((p) => p.home.x);
+  const scratch: Point3 = { x: 0, y: 0, z: 0 };
+
+  const startRepair = (piece: Piece) => {
+    const { object, from } = piece;
+    from.x = object.position.x;
+    from.y = object.position.y;
+    from.z = object.position.z;
+    from.rx = wrapAngle(object.rotation.x);
+    from.ry = wrapAngle(object.rotation.y);
+    from.rz = wrapAngle(object.rotation.z);
+    piece.state = 'repairing';
+    piece.t = 0;
+  };
+
+  /** Eases the piece back to its home pose with a little overshoot. */
+  const stepRepair = (piece: Piece, delta: number) => {
+    piece.t += delta;
+    const { object, from, home } = piece;
+    const done = piece.t >= REPAIR_TIME;
+    const k = done ? 1 : easeOutBack(piece.t / REPAIR_TIME);
+    object.position.set(
+      from.x + (home.x - from.x) * k,
+      from.y + (home.y - from.y) * k,
+      from.z + (home.z - from.z) * k,
+    );
+    object.rotation.set(
+      from.rx + (home.rx - from.rx) * k,
+      from.ry + (home.ry - from.ry) * k,
+      from.rz + (home.rz - from.rz) * k,
+    );
+    if (done) piece.state = 'home';
+  };
+
+  const stepPlank = (plank: Plank, delta: number) => {
+    plank.t += delta;
+    const { home, spin, landed, airTime } = plank;
+    const p = plankFlight(home, plank.velocity, plank.t, PLANK_FLOOR, FENCE_GRAVITY, scratch);
+    plank.object.position.set(p.x, p.y, p.z);
+    const air = Math.min(plank.t, airTime);
+    // Tumbling in the air, then dropping flat on the grass once it lands.
+    const settle = easeOutBack((plank.t - airTime) / SETTLE_TIME, 0.8);
+    const flatX = landed.x >= 0 ? Math.PI / 2 : -Math.PI / 2;
+    plank.object.rotation.set(
+      plank.t < airTime ? home.rx + spin.x * air : landed.x + (flatX - landed.x) * settle,
+      plank.t < airTime ? home.ry + spin.y * air : landed.y * (1 - settle),
+      home.rz + spin.z * air,
+    );
+  };
+
+  const stepPost = (post: Post, delta: number) => {
+    post.t += delta;
+    const k = Math.min(post.t / TIP_TIME, 1);
+    const fall = k * k;
+    post.object.rotation.set(post.home.rx + TIP_ANGLE * fall, 0, post.home.rz + post.side * fall);
+  };
+
+  return {
+    object: group,
+    smash(x) {
+      for (const i of planksInReach(plankXs, x, SMASH_REACH)) {
+        const plank = planks[i];
+        if (plank.state !== 'home') continue;
+        // Flung towards the kid, spinning.
+        const { velocity, spin, home } = plank;
+        velocity.x = (Math.random() - 0.5) * 3;
+        velocity.y = 2.5 + Math.random() * 1.5;
+        velocity.z = 1.5 + Math.random() * 1.5;
+        spin.x = (Math.random() - 0.5) * 12;
+        spin.y = (Math.random() - 0.5) * 6;
+        spin.z = (Math.random() - 0.5) * 12;
+        plank.airTime = fallTime(home.y, velocity.y, PLANK_FLOOR);
+        plank.landed.x = wrapAngle(home.rx + spin.x * plank.airTime);
+        plank.landed.y = wrapAngle(home.ry + spin.y * plank.airTime);
+        plank.landed.z = home.rz + spin.z * plank.airTime;
+        plank.state = 'moving';
+        plank.t = 0;
+      }
+      for (const post of posts) {
+        if (post.state !== 'home' || Math.abs(post.home.x - x) > POST_REACH) continue;
+        post.side = (Math.random() - 0.5) * 0.3;
+        post.state = 'moving';
+        post.t = 0;
+      }
+    },
+    repair() {
+      for (const piece of [...planks, ...posts]) if (piece.state !== 'home') startRepair(piece);
+    },
+    update(delta) {
+      for (const plank of planks) {
+        if (plank.state === 'moving') stepPlank(plank, delta);
+        else if (plank.state === 'repairing') stepRepair(plank, delta);
+      }
+      for (const post of posts) {
+        if (post.state === 'moving') stepPost(post, delta);
+        else if (post.state === 'repairing') stepRepair(post, delta);
+      }
+    },
+  };
 }
 
 export interface Field {
   /** Moves the graveyard clear of the zombies' lanes, which depend on the screen shape. */
   layout(lane: number): void;
-  /** Drifts the mist and flaps the bats. */
-  update(elapsed: number): void;
+  /** A zombie smashes through the barricade at this x: the planks there fly off and posts tip. */
+  smashFence(x: number): void;
+  /** Mends the barricade, every plank and post popping back into place. */
+  repairFence(): void;
+  /** Drifts the mist, flaps the bats and moves any broken fence. */
+  update(elapsed: number, delta: number): void;
 }
 
 /** Room to leave around the outer zombies, including their stretched-out arms. */
@@ -294,7 +498,8 @@ export function buildField(scene: Scene): Field {
   lawn.position.z = -150;
   scene.add(lawn);
 
-  scene.add(barricade());
+  const fence = barricade();
+  scene.add(fence.object);
 
   // Goofy graveyard along both sides. Positions are fixed so every game looks the same; how far
   // out each one stands is set in `layout`, so none ever hides a zombie.
@@ -380,7 +585,10 @@ export function buildField(scene: Scene): Field {
         object.position.set(side * (edge + gap), 0, z);
       }
     },
-    update(elapsed) {
+    smashFence: (x) => fence.smash(x),
+    repairFence: () => fence.repair(),
+    update(elapsed, delta) {
+      fence.update(delta);
       for (const puff of puffs) {
         puff.mesh.position.x = puff.x + Math.sin(elapsed * puff.speed + puff.x) * 1.2;
       }

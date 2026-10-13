@@ -1,8 +1,10 @@
-import { PerspectiveCamera, Raycaster, Vector3 } from 'three';
+import { Box3, PerspectiveCamera, Raycaster, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { createEffects } from '../src/games/zombie-blast/effects';
 import {
   CAMERA,
+  BARRICADE_Z,
+  BREAK_Z,
   END_Z,
   fitView,
   LANES,
@@ -17,10 +19,16 @@ import {
   arcHeightFor,
   bombPosition,
   BRAINS,
+  easeOutBack,
+  fallTime,
   loseBrain,
   outOfBrains,
+  plankFlight,
+  planksInReach,
+  wrapAngle,
   zombieProgress,
 } from '../src/games/zombie-blast/rules';
+import { barricade } from '../src/games/zombie-blast/field';
 import { createThrower, RELEASE_TIME } from '../src/games/zombie-blast/thrower';
 import { createZombie } from '../src/games/zombie-blast/zombie';
 import { seededRandom } from '../src/shared/random';
@@ -353,5 +361,95 @@ describe('effects', () => {
     expect(effects.object.children.length).toBeGreaterThan(10);
     for (let i = 0; i < 100; i++) effects.update(0.05);
     expect(effects.object.children).toHaveLength(0);
+  });
+});
+
+describe('fence breaking', () => {
+  it('picks the planks within reach of a lane', () => {
+    const xs = [-2.25, -0.75, 0.75, 2.25];
+    expect(planksInReach(xs, 0.4, 0.9)).toEqual([2]);
+    expect(planksInReach(xs, 2.7, 0.9)).toEqual([3]);
+    expect(planksInReach(xs, 9, 0.9)).toEqual([]);
+  });
+
+  it('flies a plank up and over, then leaves it on the grass where it landed', () => {
+    const from = { x: 1, y: 0.5, z: 0.14 };
+    const v = { x: 1.2, y: 3, z: 2 };
+    expect(plankFlight(from, v, 0, 0.06)).toEqual(from);
+    const up = plankFlight(from, v, 0.3, 0.06);
+    expect(up.y).toBeGreaterThan(from.y);
+    expect(up.z).toBeGreaterThan(from.z);
+    const land = fallTime(from.y, v.y, 0.06);
+    const landed = plankFlight(from, v, land, 0.06);
+    expect(landed.y).toBeCloseTo(0.06, 6);
+    // After landing it neither sinks nor slides.
+    const later = plankFlight(from, v, land + 2, 0.06);
+    expect(later).toEqual(landed);
+    expect(landed.z).toBeCloseTo(from.z + v.z * land, 6);
+  });
+
+  it('writes into the point it is given', () => {
+    const out = { x: 0, y: 0, z: 0 };
+    const p = plankFlight({ x: 0, y: 1, z: 0 }, { x: 1, y: 1, z: 1 }, 0.1, 0.06, 9.8, out);
+    expect(p).toBe(out);
+    expect(out.x).toBeCloseTo(0.1, 6);
+  });
+
+  it('pops back with a little overshoot and ends exactly home', () => {
+    expect(easeOutBack(0)).toBeCloseTo(0, 6);
+    expect(easeOutBack(1)).toBeCloseTo(1, 6);
+    expect(Math.max(...[0.5, 0.6, 0.7, 0.8].map((t) => easeOutBack(t)))).toBeGreaterThan(1);
+  });
+
+  it('wraps angles so blending back never spins the long way', () => {
+    expect(wrapAngle(Math.PI * 2 + 0.2)).toBeCloseTo(0.2, 6);
+    expect(wrapAngle(-Math.PI * 2 - 0.2)).toBeCloseTo(-0.2, 6);
+  });
+
+  it('smashes a lane open, then mends it', () => {
+    const fence = barricade();
+    const planks = fence.object.children.filter((c) => c.position.z > 0);
+    const before = planks.map((p) => p.position.clone());
+    expect(planks).toHaveLength(36);
+    fence.smash(0.4);
+    for (let i = 0; i < 60; i++) fence.update(1 / 60);
+    const moved = planks.filter((p, i) => p.position.distanceTo(before[i]) > 0.5);
+    // One column of three planks is gone, the rest stay put.
+    expect(moved).toHaveLength(3);
+    expect(Math.min(...moved.map((p) => p.position.z))).toBeGreaterThan(BARRICADE_Z);
+    fence.repair();
+    for (let i = 0; i < 60; i++) fence.update(1 / 60);
+    planks.forEach((p, i) => expect(p.position.distanceTo(before[i])).toBeLessThan(1e-6));
+  });
+
+  it('puts the end of the break beyond the barricade and short of the kid', () => {
+    expect(BREAK_Z).toBeGreaterThan(END_Z);
+    expect(BREAK_Z).toBeLessThan(1.5);
+  });
+});
+
+describe('charging zombie', () => {
+  it('faces the player rather than turning away', () => {
+    const zombie = createZombie();
+    zombie.setMode('charge');
+    for (let i = 0; i < 30; i++) zombie.update(0.03);
+    expect(Math.cos(zombie.object.rotation.y)).toBeGreaterThan(0.99);
+  });
+});
+
+describe('thrower head', () => {
+  it('has a head sitting clear above the torso and a pack below the neck', () => {
+    const kid = createThrower();
+    kid.update(0.016, 0);
+    kid.object.updateMatrixWorld(true);
+    let top = 0;
+    kid.object.traverse((o) => {
+      if ('geometry' in o) {
+        const box = new Box3().setFromObject(o);
+        top = Math.max(top, box.max.y);
+      }
+    });
+    expect(top).toBeGreaterThan(1.3);
+    expect(top).toBeLessThan(1.5);
   });
 });
