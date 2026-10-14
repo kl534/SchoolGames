@@ -22,6 +22,8 @@ export interface PlayerProgress {
   best: Record<string, Record<string, number>>;
   /** topicId -> gameId -> high score, for games that score in points instead of stars. */
   highScores: Record<string, Record<string, number>>;
+  /** How many My Level levels the player has opened; it never goes down. */
+  levelsOpen?: number;
 }
 
 export const AVATARS = ['🦊', '🐼', '🐯', '🐸', '🐙', '🦄', '🐶', '🐱', '🐵', '🦁', '🐧', '🐢'];
@@ -165,8 +167,14 @@ export function createProgressStore(store: KeyValueStore = deviceStore()): Progr
     },
     load(playerId) {
       const data = readJson<Partial<PlayerProgress>>(store, progressKey(playerId), {});
-      // Progress saved before high scores existed has no `highScores`.
-      return { facts: data.facts ?? {}, best: data.best ?? {}, highScores: data.highScores ?? {} };
+      // Progress saved before high scores existed has no `highScores`; before My Level, no `levelsOpen`.
+      const progress: PlayerProgress = {
+        facts: data.facts ?? {},
+        best: data.best ?? {},
+        highScores: data.highScores ?? {},
+      };
+      if (typeof data.levelsOpen === 'number') progress.levelsOpen = data.levelsOpen;
+      return progress;
     },
     save(playerId, progress) {
       writeJson(store, progressKey(playerId), progress);

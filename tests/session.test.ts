@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { AVATARS, createProgressStore } from '../src/shared/progress';
+import { MY_LEVEL_ID } from '../src/shared/levels';
 import { gameUrl, parseGameParams, startGameSession } from '../src/shared/session';
-import { TOPICS } from '../src/shared/topics';
+import { answerOptions, TOPICS } from '../src/shared/topics';
 
 describe('parseGameParams', () => {
   it('reads the topic', () => {
@@ -99,5 +100,69 @@ describe('high score', () => {
     expect(session.highScore()).toBe(700);
     expect(session.recordScore(600)).toBe(false);
     expect(startGameSession('score-game', search)?.highScore()).toBe(0);
+  });
+});
+
+describe('My Level session', () => {
+  const search = `?topic=${MY_LEVEL_ID}`;
+
+  const start = (name: string | null) => {
+    const store = createProgressStore();
+    if (name) store.setCurrentPlayer(store.addPlayer(name, AVATARS[0]).id);
+    else store.setCurrentPlayer(null);
+    const session = startGameSession('level-game', search);
+    if (!session) throw new Error('My Level not found');
+    return session;
+  };
+
+  it('starts, and only a real topic or my-level does', () => {
+    expect(start('Leveler').topic.id).toBe(MY_LEVEL_ID);
+    expect(startGameSession('level-game', '?topic=nope')).toBeNull();
+  });
+
+  it('describes the current level', () => {
+    expect(start('Describer').topic.description).toBe('Level 1 of 12: Sums to 10');
+  });
+
+  it("saves answers under the fact's own topic and the level count with them", () => {
+    const session = start('Answerer');
+    const [fact] = session.chooseFacts();
+    session.recordAnswer(fact, true);
+    const store = createProgressStore();
+    const saved = store.load(store.currentPlayer()!.id);
+    expect(saved.facts['addition-1-10'][fact.id].correct).toBe(1);
+    expect(saved.facts[MY_LEVEL_ID]).toBeUndefined();
+    expect(saved.levelsOpen).toBe(1);
+    expect(session.timerSecondsFor(fact)).toBe(10);
+  });
+
+  it('keeps stars and high scores under my-level', () => {
+    const session = start('Scorer2');
+    expect(session.recordStars(2)).toBe(true);
+    expect(session.recordScore(900)).toBe(true);
+    const store = createProgressStore();
+    const saved = store.load(store.currentPlayer()!.id);
+    expect(saved.best[MY_LEVEL_ID]).toEqual({ 'level-game': 2 });
+    expect(saved.highScores[MY_LEVEL_ID]).toEqual({ 'level-game': 900 });
+    expect(startGameSession('level-game', search)?.highScore()).toBe(900);
+  });
+
+  it('gives four distinct answers including the right one for every kind of fact', () => {
+    const session = start('Chooser');
+    for (const fact of session.topic.facts) {
+      const options = answerOptions(session.topic, fact, 4);
+      expect(options).toHaveLength(4);
+      expect(new Set(options).size).toBe(4);
+      expect(options).toContain(fact.answer);
+    }
+  });
+
+  it('works without a player, in memory only', () => {
+    const session = start(null);
+    expect(session.player).toBeNull();
+    const [fact] = session.chooseFacts();
+    session.recordAnswer(fact, true);
+    expect(session.timerSecondsFor(fact)).toBe(15);
+    expect(session.chooseFacts(10)).toHaveLength(10);
   });
 });
