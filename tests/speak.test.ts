@@ -18,9 +18,13 @@ class FakeSource {
 }
 
 const sources: FakeSource[] = [];
+const contexts: FakeAudioContext[] = [];
 
 class FakeAudioContext {
   state = 'running';
+  constructor() {
+    contexts.push(this);
+  }
   destination = {};
   decodeAudioData = vi.fn(async () => ({ duration: 0.5 }));
   createBufferSource() {
@@ -37,6 +41,7 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 10));
 beforeEach(() => {
   vi.resetModules();
   sources.length = 0;
+  contexts.length = 0;
   spoken.length = 0;
   vi.stubGlobal('AudioContext', FakeAudioContext);
   vi.stubGlobal('SpeechSynthesisUtterance', class {});
@@ -104,5 +109,33 @@ describe('speak', () => {
     await flush();
     expect(sources).toHaveLength(0);
     expect(onEnd).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('unlockAudio', () => {
+  it('resumes audio that Safari has interrupted', async () => {
+    const { unlockAudio } = await import('../src/shared/audio');
+    unlockAudio();
+    const [ctx] = contexts;
+    if (!ctx) throw new Error('no AudioContext');
+    ctx.state = 'interrupted';
+    unlockAudio();
+    expect(ctx.resume).toHaveBeenCalledTimes(1);
+  });
+
+  it('wakes the browser voice on the first tap only', async () => {
+    const { unlockAudio } = await import('../src/shared/audio');
+    unlockAudio();
+    unlockAudio();
+    unlockAudio();
+    expect(spoken).toHaveLength(1);
+  });
+
+  it('leaves the iOS audio session alone', async () => {
+    const audioSession = { type: 'auto' };
+    vi.stubGlobal('navigator', { audioSession });
+    const { unlockAudio } = await import('../src/shared/audio');
+    unlockAudio();
+    expect(audioSession.type).toBe('auto');
   });
 });
