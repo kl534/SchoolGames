@@ -89,9 +89,8 @@ export function showResults(options: ResultsOptions): { dispose(): void } {
   heading.textContent = summary.heading;
 
   const right = document.createElement('p');
+  right.className = 'sg-right';
   right.textContent = summary.right;
-  right.style.fontSize = '22px';
-  right.style.fontWeight = '700';
 
   const badge = summary.badge ? document.createElement('span') : null;
   if (badge) {
@@ -143,7 +142,7 @@ export function showResults(options: ResultsOptions): { dispose(): void } {
 
   const again = button(summary.playAgainLabel, 'sg-btn sg-btn-primary');
   const row = document.createElement('div');
-  row.className = 'sg-row';
+  row.className = 'sg-row sg-actions';
   row.append(
     again,
     link('Other games', topicMenuUrl(options.topicId)),
@@ -158,6 +157,7 @@ export function showResults(options: ResultsOptions): { dispose(): void } {
     dispose();
     options.onPlayAgain();
   });
-  again.focus();
+  // Without scrolling: on a short screen that would hide the heading.
+  again.focus({ preventScroll: true });
   return { dispose };
 }
