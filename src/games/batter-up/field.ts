@@ -79,7 +79,6 @@ export interface BoardInfo {
   outs: number;
   strikes: number;
   batter: number;
-  batters: number;
 }
 
 export interface Field {
@@ -375,10 +374,10 @@ export function buildField(scene: Scene): Field {
       g.stroke();
     });
     g.fillStyle = '#ffe066';
-    g.fillText(`${Math.min(info.batter, info.batters)} / ${info.batters}`, 472, 232);
+    g.fillText(String(info.batter), 472, 232);
     boardTexture.needsUpdate = true;
   };
-  setBoard({ runs: 0, outs: 0, strikes: 0, batter: 1, batters: 9 });
+  setBoard({ runs: 0, outs: 0, strikes: 0, batter: 1 });
 
   return {
     setBoard,

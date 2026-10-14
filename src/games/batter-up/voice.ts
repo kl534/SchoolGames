@@ -3,7 +3,7 @@ import {
   endSpeech,
   finalSpeech,
   hitSpeech,
-  MAX_BATTERS,
+  MAX_SPOKEN_RUNS,
   PLAY_BALL,
   strikeCall,
   type Hit,
@@ -14,7 +14,8 @@ export const VOICE_LINES: string[] = [
   PLAY_BALL,
   ...[1, 2, 3].flatMap((n) => [true, false].map((called) => strikeCall(n, called).spoken)),
   ...(Object.keys(BASES_FOR) as Hit[]).map(hitSpeech),
-  ...Array.from({ length: MAX_BATTERS + 1 }, (_, runs) => runs).flatMap((runs) => [
+  // One more than the most, which stands for every bigger score ("more than 20 runs").
+  ...Array.from({ length: MAX_SPOKEN_RUNS + 2 }, (_, runs) => runs).flatMap((runs) => [
     endSpeech(true, runs),
     endSpeech(false, runs),
     finalSpeech(runs),
