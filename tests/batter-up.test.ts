@@ -40,6 +40,7 @@ import {
   type Vec,
 } from '../src/games/batter-up/flight';
 import {
+  callInPanel,
   centreShift,
   fireworksAim,
   fireworksFit,
@@ -704,6 +705,25 @@ describe('the view of a hit', () => {
     const settled = { ...look };
     keepBoardClear(ball, cam, look, fit.fov, 844, 390, band);
     expect(look).toEqual(settled);
+  });
+});
+
+describe("the umpire's call on screen", () => {
+  it('goes in the question panel on tall and narrow screens, and beside the plate on wide ones', () => {
+    for (const [w, h] of [
+      [360, 740],
+      [390, 844],
+      [768, 1024],
+    ]) {
+      expect(callInPanel(w, h)).toBe(true);
+    }
+    for (const [w, h] of [
+      [844, 390],
+      [1024, 768],
+      [1366, 1024],
+    ]) {
+      expect(callInPanel(w, h)).toBe(false);
+    }
   });
 });
 

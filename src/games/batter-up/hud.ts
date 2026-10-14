@@ -1,3 +1,5 @@
+import { callInPanel } from './layout';
+
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   className: string,
@@ -95,6 +97,8 @@ export interface Hud {
     place?: 'centre' | 'top' | 'aside',
   ): void;
   hideBanner(): void;
+  /** True while a call is shown inside the question panel (on a tall screen) and not as a card. */
+  callInPanel(): boolean;
   /** Floats a short message up from a spot on the screen. */
   pop(text: string, x: number, y: number, kind?: 'good' | 'bad' | 'plain'): void;
   readonly buttons: HTMLButtonElement[];
@@ -141,8 +145,30 @@ export function createHud(): Hud {
   banner.hidden = true;
 
   let options: string[] = [];
+  let questionText = '';
+  let inPanel = false;
   hudBox.hidden = true;
   answers.hidden = true;
+
+  /** Puts the question back in the panel after it has shown a call. */
+  const restoreQuestion = () => {
+    if (!inPanel) return;
+    inPanel = false;
+    hudBox.classList.remove('calling');
+    problemText.textContent = questionText;
+    hear.setAttribute('aria-label', 'Hear the question');
+  };
+
+  /** Shows an umpire's call in the question panel: the call, and the fact under it. */
+  const callInQuestion = (title: string, detail: string) => {
+    banner.hidden = true;
+    inPanel = true;
+    hudBox.classList.add('calling');
+    problemText.replaceChildren();
+    el('span', 'bu-call-title', problemText).textContent = title;
+    el('span', 'bu-call-statement', problemText).textContent = detail;
+    hear.setAttribute('aria-label', 'Hear the answer');
+  };
 
   const replay = (node: HTMLElement) => {
     node.classList.remove('on');
@@ -159,7 +185,11 @@ export function createHud(): Hud {
       buttons.forEach((b, i) => (b.hidden = options[i] === undefined));
     },
     setQuestion(text) {
+      questionText = text;
+      inPanel = false;
+      hudBox.classList.remove('calling');
       problemText.textContent = text;
+      hear.setAttribute('aria-label', 'Hear the question');
     },
     setOptions(next) {
       options = next;
@@ -207,6 +237,13 @@ export function createHud(): Hud {
       replay(runsValue);
     },
     showBanner(title, detail, kind, place = 'centre') {
+      const inQuestion = callInPanel(window.innerWidth, window.innerHeight);
+      if (place === 'aside' && inQuestion && !hudBox.hidden) {
+        // On a tall screen any card would sit on the field, so the call goes in the question.
+        callInQuestion(title, detail);
+        return;
+      }
+      restoreQuestion();
       bannerTitle.textContent = title;
       bannerDetail.textContent = detail;
       bannerDetail.hidden = !detail;
@@ -224,9 +261,9 @@ export function createHud(): Hud {
       const top = hudBox.hidden ? 130 : hudBox.getBoundingClientRect().bottom + 8;
       const bottom = answers.hidden ? viewH - 20 : answers.getBoundingClientRect().top - 8;
       if (place === 'aside') {
-        // Keep the plate clear: on a wide screen the call goes to one side, and on a tall one it
-        // sits just under the question.
-        if (viewW > 640 && viewW > viewH * 1.2) {
+        // Keep the plate clear: on a wide screen the call goes to one side. (On a tall one it
+        // goes in the question panel, above; this is only for when there is no panel.)
+        if (!inQuestion) {
           banner.style.left = `${Math.round(viewW * 0.76)}px`;
           banner.style.top = `${Math.min(Math.max((top + bottom) / 2, top + half), bottom - half)}px`;
         } else {
@@ -239,6 +276,10 @@ export function createHud(): Hud {
     },
     hideBanner() {
       banner.hidden = true;
+      restoreQuestion();
+    },
+    callInPanel() {
+      return inPanel;
     },
     pop(text, x, y, kind = 'plain') {
       const node = el('div', `bu-pop ${kind}`, document.body);

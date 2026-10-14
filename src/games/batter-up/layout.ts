@@ -46,6 +46,15 @@ export function playBand(width: number, height: number): PlayBand {
   return { top: width <= 640 ? 236 : 100, bottom: height - (width <= 560 ? 160 : 84) };
 }
 
+/**
+ * Whether the umpire's call goes in the question panel rather than on a card beside the plate.
+ * A wide screen has room at the side of the field for a card; on a tall or narrow one any card
+ * would sit on the pitcher or the plate.
+ */
+export function callInPanel(width: number, height: number): boolean {
+  return !(width > 640 && width > height * 1.2);
+}
+
 /** Where the scorebug ends when it can't be measured (it sits under the Menu button). */
 const BUG_BOTTOM = 142;
 /** Space kept between the scorebug and a view of the field. */

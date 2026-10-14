@@ -193,6 +193,10 @@ function run(session: GameSession): void {
   let runTime = 0;
   /** The batter at the plate was just struck out. */
   let struckOut = false;
+  /** Replays of the fact the player asked for during a result; the next pitch waits for them. */
+  let replaying = 0;
+  /** Moves on from a result if everything it was waiting for is done. */
+  let resultDone: (() => void) | null = null;
 
   // The camera.
   let camMode: CamMode = 'home';
@@ -504,8 +508,11 @@ function run(session: GameSession): void {
     let spoken = false;
     let shownLongEnough = false;
     const next = () => {
-      if (spoken && shownLongEnough && turn === thisTurn && phase === 'result') advance();
+      if (spoken && shownLongEnough && !replaying && turn === thisTurn && phase === 'result') {
+        advance();
+      }
     };
+    resultDone = next;
     speak(call.spoken, () => {
       if (turn !== thisTurn || phase !== 'result') return;
       speak(current.spokenStatement ?? current.statement, () => {
@@ -802,6 +809,7 @@ function run(session: GameSession): void {
     turn++;
     speechToken++;
     struckOut = false;
+    replaying = 0;
     stopSpeaking();
     feed = createFactFeed(() => session.chooseFacts());
     state = newGame();
@@ -873,7 +881,17 @@ function run(session: GameSession): void {
   });
   hud.hear.addEventListener('click', () => {
     unlockAudio();
-    if (fact) {
+    if (fact && hud.callInPanel()) {
+      // The call has taken the question's place: the button says the fact again.
+      const current = fact;
+      const thisTurn = turn;
+      replaying++;
+      speechToken++;
+      speak(current.spokenStatement ?? current.statement, () => {
+        replaying--;
+        if (turn === thisTurn) resultDone?.();
+      });
+    } else if (fact) {
       const token = ++speechToken;
       const thisTurn = turn;
       speak(fact.spokenPrompt ?? fact.prompt, () => {
