@@ -145,8 +145,12 @@
   pointer-events: none;
 }
 
-/* Leave room for the menu, sound and pause buttons and the scorebug on narrow screens. */
-@media (max-width: 640px) {
+/*
+ * Leave room for the menu, sound and pause buttons and the scorebug on a narrow phone held
+ * upright. A phone on its side is wide enough for them to sit side by side (see the compact
+ * block below), so this is for tall screens only. layout.ts (hudLayout) mirrors these queries.
+ */
+@media (max-width: 640px) and (max-aspect-ratio: 6/5) {
   .bu-hud {
     top: calc(max(12px, env(safe-area-inset-top)) + 58px + 86px);
     max-width: calc(100vw - 24px);
@@ -242,7 +246,7 @@
   transform: translateX(-50%);
 }
 
-@media (max-width: 560px) {
+@media (max-width: 560px) and (max-aspect-ratio: 6/5) {
   .bu-answers {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -271,7 +275,7 @@
     opacity 0.3s;
 }
 
-@media (max-width: 560px), (max-height: 460px) {
+@media (max-width: 560px) and (max-aspect-ratio: 6/5), (max-height: 460px) {
   .bu-answer {
     height: 64px;
   }
@@ -430,6 +434,103 @@
   100% {
     transform: translate(-50%, -260%) scale(1);
     opacity: 0;
+  }
+}
+
+/*
+ * A phone on its side (568x320, 640x360, 667x375): little height, so everything shrinks to leave
+ * the field most of the screen. Tap targets stay at least 48px. layout.ts (hudLayout) mirrors
+ * this query.
+ */
+@media (max-height: 380px) and (min-aspect-ratio: 6/5) {
+  .bu-bug {
+    top: calc(max(12px, env(safe-area-inset-top)) + 58px);
+    gap: 6px;
+    padding: 3px 9px 3px 4px;
+    border-width: 1.5px;
+    border-radius: 12px;
+  }
+
+  .bu-diamond {
+    width: 36px;
+    height: 36px;
+  }
+
+  .bu-bug-text {
+    gap: 0;
+    font-size: 12px;
+    line-height: 1.15;
+  }
+
+  .bu-row {
+    gap: 4px;
+  }
+
+  .bu-label,
+  .bu-best {
+    font-size: 10px;
+  }
+
+  .bu-runs {
+    font-size: 17px;
+  }
+
+  .bu-best {
+    padding-left: 6px;
+  }
+
+  .bu-dots {
+    gap: 3px;
+  }
+
+  .bu-dot {
+    width: 9px;
+    height: 9px;
+    border-width: 1.5px;
+  }
+
+  .bu-hud {
+    top: max(6px, env(safe-area-inset-top));
+    gap: 3px;
+    max-width: calc(100vw - 260px);
+  }
+
+  .bu-problem {
+    gap: 8px;
+    padding: 0 4px 0 16px;
+    border-radius: 16px;
+  }
+
+  .bu-problem-text {
+    font-size: clamp(22px, 7vmin, 32px);
+  }
+
+  .bu-call-title {
+    font-size: clamp(18px, 5.4vmin, 26px);
+  }
+
+  .bu-hear {
+    width: 48px;
+    height: 48px;
+    font-size: 22px;
+  }
+
+  .bu-clock {
+    min-width: 160px;
+    height: 6px;
+    border-radius: 3px;
+  }
+
+  .bu-answers {
+    bottom: max(8px, env(safe-area-inset-bottom));
+    gap: 8px;
+  }
+
+  .bu-answer {
+    height: 56px;
+    border-width: 2px;
+    border-radius: 16px;
+    font-size: clamp(22px, 7vmin, 30px);
   }
 }
 

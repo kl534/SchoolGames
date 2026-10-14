@@ -38,25 +38,45 @@ export interface PlayBand {
 }
 
 /**
+ * How the HUD is arranged for a screen size. Mirrors the media queries in style.css:
+ * - `stacked`: a narrow phone held upright; the scorebug and question stack up the top and the
+ *   four answers wrap into two rows.
+ * - `compact`: a short landscape phone; a smaller scorebug, question and answers, so that the
+ *   field keeps most of the screen.
+ * - `standard`: everything else.
+ */
+export type HudLayout = 'stacked' | 'compact' | 'standard';
+
+export function hudLayout(width: number, height: number): HudLayout {
+  const aspect = width / Math.max(height, 1);
+  if (width <= 640 && aspect <= 1.2) return 'stacked';
+  if (height <= 380 && aspect >= 1.2) return 'compact';
+  return 'standard';
+}
+
+/**
  * The part of the screen between the question at the top and the answers along the bottom, in
- * CSS pixels. Mirrors the HUD in style.css: on a narrow phone the scoreboard and question stack
- * up the top and the four answers wrap into two rows.
+ * CSS pixels, from the HUD's layout. `layout()` in main.ts measures the real thing; this is the
+ * same thing worked out, for tests and for before there is anything to measure.
  */
 export function playBand(width: number, height: number): PlayBand {
-  return { top: width <= 640 ? 236 : 100, bottom: height - (width <= 560 ? 160 : 84) };
+  const layout = hudLayout(width, height);
+  if (layout === 'stacked') return { top: 248, bottom: height - (width <= 560 ? 158 : 92) };
+  if (layout === 'compact') return { top: 76, bottom: height - 72 };
+  return { top: height >= 700 ? 115 : 104, bottom: height - (height <= 460 ? 84 : 92) };
 }
 
 /**
  * Whether the umpire's call goes in the question panel rather than on a card beside the plate.
- * A wide screen has room at the side of the field for a card; on a tall or narrow one any card
- * would sit on the pitcher or the plate.
+ * A wide, roomy screen has space at the side of the field for a card; on a tall, narrow or short
+ * one any card would sit on the pitcher or the plate.
  */
 export function callInPanel(width: number, height: number): boolean {
-  return !(width > 640 && width > height * 1.2);
+  return width <= 640 || width <= height * 1.2 || hudLayout(width, height) === 'compact';
 }
 
 /** Where the scorebug ends when it can't be measured (it sits under the Menu button). */
-const BUG_BOTTOM = 142;
+const BUG_BOTTOM: Record<HudLayout, number> = { stacked: 143, standard: 143, compact: 120 };
 /** Space kept between the scorebug and a view of the field. */
 const BAND_GAP = 8;
 /** Space left at the bottom while a hit plays, where the answers were. */
@@ -67,8 +87,11 @@ const BAND_FOOT = 12;
  * are hidden then, so only the scorebug is in the way: the view may use everything below it.
  * `bugBottom` is the scorebug's measured bottom edge (px from the top), when it is known.
  */
-export function hitBand(width: number, height: number, bugBottom: number = BUG_BOTTOM): PlayBand {
-  void width;
+export function hitBand(
+  width: number,
+  height: number,
+  bugBottom: number = BUG_BOTTOM[hudLayout(width, height)],
+): PlayBand {
   return { top: bugBottom + BAND_GAP, bottom: height - BAND_FOOT };
 }
 
@@ -108,11 +131,14 @@ function rowAt(fov: number, aspect: number, height: number, p: Vec): number {
  * between the question and the answers, and that there is room either side of the mound (the
  * infielders too, on a wide screen).
  */
-export function fitView(width: number, height: number): ViewFit {
+export function fitView(
+  width: number,
+  height: number,
+  band: PlayBand = playBand(width, height),
+): ViewFit {
   const w = Math.max(width, 1);
   const h = Math.max(height, 1);
   const aspect = w / h;
-  const band = playBand(w, h);
   const room = Math.max(band.bottom - band.top, 60) * 0.94;
   const bottomPoint = aspect > 1.2 ? BOTTOM_POINT_WIDE : BOTTOM_POINT;
   // Narrowest field of view that fits the pitcher-to-plate span in the band.
@@ -277,8 +303,9 @@ export function keepBoardClear(
   band: PlayBand,
 ): void {
   const at = (y: number) => boardBox(cam, { x: look.x, y, z: look.z }, fov, width, height, band);
+  const clearOfBand = (r: BoardBox) => r.top >= band.top;
   // Wholly in the band (and not cut by the side of the screen), or wholly out of the picture.
-  const inside = (r: BoardBox) => r.top >= band.top && r.left >= 0 && r.right <= width;
+  const inside = (r: BoardBox) => clearOfBand(r) && r.left >= 0 && r.right <= width;
   const gone = (r: BoardBox) => r.bottom <= -GONE_MARGIN || r.right <= 0 || r.left >= width;
   const original = at(look.y);
   if (inside(original) || gone(original)) return;
@@ -287,9 +314,9 @@ export function keepBoardClear(
     const row = project(ball, cam, { x: look.x, y, z: look.z }, fov, width, height).y + lift;
     return row >= band.top + BALL_MARGIN && row <= band.bottom - BALL_MARGIN;
   };
-  // Highest aim that puts the board off the top of the screen, found by bisection.
-  let downY: number | null = null;
-  if (gone(at(MIN_LOOK_Y))) {
+  // Highest aim, from `look.y` down to the floor, at which the board is gone off the top.
+  const tiltDown = (): number | null => {
+    if (!gone(at(MIN_LOOK_Y))) return null;
     let lo = MIN_LOOK_Y;
     let hi = look.y;
     for (let i = 0; i < 24; i++) {
@@ -297,21 +324,24 @@ export function keepBoardClear(
       if (gone(at(mid))) lo = mid;
       else hi = mid;
     }
-    downY = lo;
-  }
-  // Lowest aim that puts the board's top edge at the top of the band.
-  let upY: number | null = null;
-  let lo = look.y;
-  let hi = look.y + 40;
-  if (inside(at(hi))) {
+    return lo;
+  };
+  // Lowest aim, from `look.y` upwards, at which the board is back in the band.
+  const tiltUp = (test: (r: BoardBox) => boolean): number | null => {
+    let lo = look.y;
+    let hi = look.y + 40;
+    if (!test(at(hi))) return null;
     for (let i = 0; i < 24; i++) {
       const mid = (lo + hi) / 2;
-      if (inside(at(mid))) hi = mid;
+      if (test(at(mid))) hi = mid;
       else lo = mid;
     }
-    upY = hi;
-  }
-  const options = [downY, upY].filter((y): y is number => y !== null);
+    return hi;
+  };
+  let options = [tiltDown(), tiltUp(inside)].filter((y): y is number => y !== null);
+  // The board can be cut by the side of the screen whatever the tilt (the camera is looking
+  // well off to one side): then settle for it being clear of the scorebug.
+  if (!options.length) options = [tiltUp(clearOfBand)].filter((y): y is number => y !== null);
   const good = options.filter(ballOk);
   const pool = good.length ? good : options;
   if (!pool.length) return;

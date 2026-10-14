@@ -49,6 +49,7 @@ import {
   followGoal,
   hitBand,
   homeView,
+  hudLayout,
   keepBoardClear,
   playBand,
   project,
@@ -546,6 +547,51 @@ describe('the camera', () => {
     expect(Number.isFinite(fit.shift)).toBe(true);
   });
 
+  const SHORT: [number, number][] = [
+    [568, 320],
+    [640, 360],
+    [667, 375],
+    [844, 390],
+  ];
+
+  it('stacks the HUD only on a narrow screen held upright', () => {
+    expect(hudLayout(390, 844)).toBe('stacked');
+    expect(hudLayout(360, 640)).toBe('stacked');
+    expect(hudLayout(600, 900)).toBe('stacked');
+    // A phone on its side is as narrow, but it is wide: it must not get the upright layout.
+    for (const [w, h] of [
+      [568, 320],
+      [640, 360],
+      [667, 375],
+    ]) {
+      expect(hudLayout(w, h)).toBe('compact');
+    }
+    expect(hudLayout(844, 390)).toBe('standard');
+    expect(hudLayout(768, 1024)).toBe('standard');
+    expect(hudLayout(1366, 1024)).toBe('standard');
+  });
+
+  it.each(SHORT)('leaves a short landscape phone at least 150px of field at %ix%i', (w, h) => {
+    const band = playBand(w, h);
+    expect(band.bottom - band.top).toBeGreaterThanOrEqual(150);
+    const fit = fitView(w, h);
+    expect(fit.fov).toBeLessThanOrEqual(88);
+    // The pitcher's cap down to the umpire's waist fits inside the band.
+    const pitcher = rowOf(w, h, at(0, 3, -8.2));
+    const umpire = rowOf(w, h, at(1.3, 0.9, 3.4));
+    expect(pitcher.row).toBeGreaterThanOrEqual(band.top - 2);
+    expect(umpire.row).toBeLessThanOrEqual(band.bottom + 2);
+    expect(umpire.row - pitcher.row).toBeLessThanOrEqual(band.bottom - band.top);
+  });
+
+  it('takes a measured band over the worked-out one', () => {
+    const measured = { top: 120, bottom: 300 };
+    const fit = fitView(568, 320, measured);
+    // The field of view and shift are worked out for the band given.
+    expect(fit).not.toEqual(fitView(568, 320));
+    expect(Number.isFinite(fit.shift)).toBe(true);
+  });
+
   it('has room for the pitcher and the batter side by side on the narrowest phone', () => {
     const batter = rowOf(360, 640, at(-1.5, 1, 0));
     const ump = rowOf(360, 640, at(1.3, 1, 3.4));
@@ -680,8 +726,9 @@ describe('the view of a hit', () => {
               const bottom = Math.max(...spots.map((p) => p.y)) + lift;
               const left = Math.min(...spots.map((p) => p.x));
               const right = Math.max(...spots.map((p) => p.x));
-              // Wholly in the band with its sides on screen, or wholly out of the picture.
-              const inside = top >= band.top - 0.5 && left >= -0.5 && right <= w + 0.5;
+              // Wholly clear of the scorebug, or wholly out of the picture.
+              // (The side of the screen may cut it when the camera is looking well off to one side.)
+              const inside = top >= band.top - 0.5;
               const gone = bottom <= 0.5 || right <= 0.5 || left >= w - 0.5;
               expect(inside || gone).toBe(true);
             }
@@ -709,11 +756,14 @@ describe('the view of a hit', () => {
 });
 
 describe("the umpire's call on screen", () => {
-  it('goes in the question panel on tall and narrow screens, and beside the plate on wide ones', () => {
+  it('goes in the question panel on tall, narrow and short screens, and beside the plate on wide ones', () => {
     for (const [w, h] of [
       [360, 740],
       [390, 844],
       [768, 1024],
+      [568, 320],
+      [640, 360],
+      [667, 375],
     ]) {
       expect(callInPanel(w, h)).toBe(true);
     }

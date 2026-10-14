@@ -275,7 +275,9 @@ function run(session: GameSession): void {
     if (w === viewW && h === viewH) return;
     viewW = w;
     viewH = h;
-    fit = fitView(w, h);
+    const measured = hud.measureBand();
+    // A little air between the HUD and the field.
+    fit = fitView(w, h, { top: measured.top + 8, bottom: measured.bottom - 8 });
     home = homeView(w / Math.max(h, 1));
     camera.aspect = w / Math.max(h, 1);
     viewFov = fit.fov;
