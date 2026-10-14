@@ -323,9 +323,11 @@ export function buildField(scene: Scene): Field {
   ]);
   board.position.set(BOARD.x, BOARD.y, boardZ);
   scene.add(board);
+  // Posts from the ground up behind the board's lower edge.
+  const postHeight = BOARD.y - BOARD.height / 2 + 2;
   for (const x of [-7, 7]) {
-    const post = new Mesh(new BoxGeometry(0.8, 20, 0.8), std(0x3a3f4a));
-    post.position.set(x, 10, boardZ - 0.2);
+    const post = new Mesh(new BoxGeometry(0.8, postHeight, 0.8), std(0x3a3f4a));
+    post.position.set(x, postHeight / 2, boardZ - 0.2);
     scene.add(post);
   }
 

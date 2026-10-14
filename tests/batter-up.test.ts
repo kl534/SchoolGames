@@ -553,6 +553,31 @@ describe('the camera', () => {
     expect(Number.isFinite(fit.shift)).toBe(true);
   });
 
+  const BOARD_SCREENS: [number, number][] = [
+    [360, 640],
+    [360, 740],
+    [390, 844],
+    [412, 915],
+    [768, 1024],
+    [1024, 768],
+    [1366, 1024],
+    [844, 390],
+    [667, 375],
+    [640, 360],
+    [568, 320],
+  ];
+
+  it.each(BOARD_SCREENS)(
+    'keeps the whole scoreboard face off the top of the batting view at %ix%i',
+    (w, h) => {
+      const bottom = rowOf(w, h, at(BOARD.x, BOARD.y - BOARD.height / 2, BOARD.z)).row;
+      const top = rowOf(w, h, at(BOARD.x, BOARD.y + BOARD.height / 2, BOARD.z)).row;
+      // The bottom edge is above row 0, so no part of the face peeks out behind the buttons.
+      expect(bottom).toBeLessThan(-4);
+      expect(top).toBeLessThan(bottom);
+    },
+  );
+
   const SHORT: [number, number][] = [
     [568, 320],
     [640, 360],

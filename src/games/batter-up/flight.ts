@@ -74,16 +74,21 @@ export function wallRadius(theta: number): number {
   return WALL_POLE + (WALL_CENTRE - WALL_POLE) * (1 - t);
 }
 
-/** The scoreboard high above the stands in centre field: its middle and its size. */
+/**
+ * The scoreboard high above the stands in centre field: its middle and its size. It is high
+ * enough that, in the batting view, its face is wholly off the top of the screen on every phone
+ * and tablet (only its posts show, among the stands), so it never peeks out from behind the
+ * Menu and pause buttons.
+ */
 export const BOARD = {
   x: 0,
-  y: 23,
+  y: 42,
   z: -(WALL_CENTRE + 22),
   width: 20,
   height: 10,
 };
 /** Where the fireworks go off, above the scoreboard. */
-export const FIREWORKS_CENTRE: Vec = { x: 0, y: 34, z: -(WALL_CENTRE + 12) };
+export const FIREWORKS_CENTRE: Vec = { x: 0, y: 53, z: -(WALL_CENTRE + 12) };
 /** How far from where it goes off a firework's sparks reach (world units). */
 export const BURST_RADIUS = 13;
 
