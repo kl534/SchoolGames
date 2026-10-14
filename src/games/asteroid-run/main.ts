@@ -12,7 +12,7 @@ import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from 
 import { createAsteroid, type Asteroid } from './asteroid';
 import { buildBackdrop, FOG_COLOR } from './backdrop';
 import { createEffects } from './effects';
-import { createFactFeed, type FactFeed } from './feed';
+import { createFactFeed, type FactFeed } from '../../shared/feed';
 import {
   BOSS_LOCK_Z,
   cameraGoal,

@@ -1,0 +1,424 @@
+.bu-bug,
+.bu-hud,
+.bu-answers,
+.bu-banner {
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  color: #fff;
+}
+
+/* The scorebug: bases, runs, outs, strikes and which batter is up. Under the menu button. */
+.bu-bug {
+  position: fixed;
+  top: calc(max(12px, env(safe-area-inset-top)) + 58px);
+  left: max(12px, env(safe-area-inset-left));
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 6px;
+  border-radius: 16px;
+  background: rgba(12, 28, 56, 0.78);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  pointer-events: none;
+}
+
+.bu-diamond {
+  display: block;
+  flex: none;
+  width: 52px;
+  height: 52px;
+}
+
+.bu-base {
+  fill: rgba(0, 0, 0, 0.45);
+  stroke: #fff;
+  stroke-width: 2;
+  transition: fill 0.2s;
+}
+
+.bu-base.on {
+  fill: #ffd23f;
+}
+
+.bu-bug-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.bu-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.bu-label {
+  color: #a9c8f5;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.bu-runs {
+  font-size: 22px;
+  font-weight: 900;
+  color: #ffe066;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.bu-runs.on {
+  animation: bu-score 0.35s ease-out;
+}
+
+@keyframes bu-score {
+  0% {
+    transform: scale(1.6);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.bu-best {
+  margin-left: auto;
+  padding-left: 8px;
+  color: #a9c8f5;
+  font-size: 13px;
+}
+
+.bu-dots {
+  display: inline-flex;
+  gap: 4px;
+  align-self: center;
+}
+
+.bu-dot {
+  display: block;
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+}
+
+.bu-outs .bu-dot.on {
+  border-color: #ffd23f;
+  background: #ffd23f;
+}
+
+.bu-strikes {
+  margin-right: 2px;
+}
+
+.bu-strikes .bu-dot.on {
+  border-color: #ff6b6b;
+  background: #ff6b6b;
+}
+
+.bu-batter {
+  color: #fff;
+}
+
+/* The question and its clock, centred at the top. */
+.bu-hud {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  max-width: calc(100vw - 300px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* Leave room for the menu, sound and pause buttons and the scorebug on narrow screens. */
+@media (max-width: 640px) {
+  .bu-hud {
+    top: calc(max(12px, env(safe-area-inset-top)) + 58px + 86px);
+    max-width: calc(100vw - 24px);
+  }
+}
+
+.bu-hud[hidden],
+.bu-answers[hidden],
+.bu-answer[hidden],
+.bu-banner[hidden],
+.bu-banner-detail[hidden] {
+  display: none;
+}
+
+.bu-problem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 22px;
+  border-radius: 20px;
+  background: rgba(12, 28, 56, 0.85);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  pointer-events: auto;
+}
+
+.bu-problem-text {
+  font-size: clamp(28px, 7vmin, 56px);
+  font-weight: 800;
+  text-wrap: balance;
+}
+
+.bu-hear {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.bu-clock {
+  width: 100%;
+  min-width: 200px;
+  height: 10px;
+  border-radius: 5px;
+  background: rgba(12, 28, 56, 0.7);
+  overflow: hidden;
+}
+
+.bu-clock-fill {
+  height: 100%;
+  width: 100%;
+  background: #5cf2b0;
+  transform-origin: left;
+}
+
+.bu-clock.urgent .bu-clock-fill {
+  background: #ff6b6b;
+}
+
+/* The four answers along the bottom: two rows of two on a narrow phone. */
+.bu-answers {
+  position: fixed;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 50%;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  width: min(760px, calc(100vw - 24px));
+  transform: translateX(-50%);
+}
+
+@media (max-width: 560px) {
+  .bu-answers {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.bu-answer {
+  min-width: 0;
+  height: 72px;
+  padding: 0 8px;
+  border: 3px solid #9cc2ff;
+  border-radius: 20px;
+  background: linear-gradient(#2f66d0, #1c3f96);
+  color: #fff;
+  font:
+    800 clamp(26px, 6vmin, 40px) system-ui,
+    sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 6px 18px rgba(4, 12, 40, 0.5);
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    opacity 0.3s;
+}
+
+@media (max-width: 560px), (max-height: 460px) {
+  .bu-answer {
+    height: 64px;
+  }
+}
+
+.bu-answer:active:not([aria-disabled='true']) {
+  scale: 0.96;
+}
+
+.bu-answer:focus-visible {
+  outline: 4px solid #ffd43b;
+  outline-offset: 2px;
+}
+
+.bu-answer[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.bu-answer.chosen {
+  opacity: 1;
+  border-color: #fff;
+}
+
+.bu-answer.right {
+  opacity: 1;
+  border-color: #1b6b2b;
+  background: #5cf2b0;
+  color: #0c3a1d;
+  box-shadow:
+    0 0 0 5px rgba(92, 242, 176, 0.5),
+    0 0 26px 8px rgba(92, 242, 176, 0.7);
+}
+
+.bu-answer.wrong {
+  opacity: 1;
+  border-color: #8c1d1d;
+  background: #ff8787;
+  color: #4a0c0c;
+}
+
+.bu-answer.gone {
+  opacity: 0.25;
+}
+
+/* Big messages: the call on a pitch and the name of a hit. */
+.bu-banner {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: min(92vw, 680px);
+  padding: 12px 28px;
+  border-radius: 24px;
+  background: rgba(12, 28, 56, 0.88);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: bu-pop 0.35s ease-out;
+}
+
+.bu-banner-title {
+  font-size: clamp(30px, 8.5vmin, 64px);
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.bu-banner.hit {
+  background: rgba(120, 20, 30, 0.88);
+  border-color: #ffd23f;
+}
+
+.bu-banner.hit .bu-banner-title {
+  color: #ffe066;
+  text-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
+}
+
+.bu-banner.miss .bu-banner-title,
+.bu-banner.out .bu-banner-title {
+  color: #ffa8a8;
+}
+
+.bu-banner.info .bu-banner-title {
+  color: #ffe066;
+}
+
+.bu-banner-detail {
+  font-size: clamp(26px, 7vmin, 48px);
+  font-weight: 800;
+}
+
+.bu-banner.hit .bu-banner-detail {
+  font-size: clamp(24px, 6.5vmin, 42px);
+  color: #fff;
+}
+
+@keyframes bu-pop {
+  from {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Short messages floating up from a spot. */
+.bu-pop {
+  position: fixed;
+  z-index: 14;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  font-size: clamp(26px, 6.5vmin, 42px);
+  font-weight: 900;
+  white-space: nowrap;
+  text-shadow:
+    0 3px 0 rgba(0, 0, 0, 0.45),
+    0 0 12px rgba(0, 0, 0, 0.5);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: bu-rise 1.3s ease-out forwards;
+}
+
+.bu-pop.good {
+  color: #ffe066;
+}
+
+.bu-pop.bad {
+  color: #ff8787;
+}
+
+.bu-pop.plain {
+  color: #fff;
+}
+
+@keyframes bu-rise {
+  0% {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0;
+  }
+  15% {
+    transform: translate(-50%, -80%) scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -260%) scale(1);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bu-banner,
+  .bu-pop,
+  .bu-runs.on {
+    animation: none;
+  }
+}

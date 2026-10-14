@@ -164,7 +164,7 @@ function tone(
   osc.stop(start + duration + 0.02);
 }
 
-function crowd(ctx: AudioContext, start: number, duration: number): void {
+function crowd(ctx: AudioContext, start: number, duration: number, volume = 0.35): void {
   const length = Math.floor(ctx.sampleRate * duration);
   const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
   const data = buffer.getChannelData(0);
@@ -177,7 +177,7 @@ function crowd(ctx: AudioContext, start: number, duration: number): void {
   filter.Q.value = 0.7;
   const gain = ctx.createGain();
   gain.gain.setValueAtTime(0.001, start);
-  gain.gain.exponentialRampToValueAtTime(0.35, start + 0.15);
+  gain.gain.exponentialRampToValueAtTime(volume, start + 0.15);
   gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
   source.connect(filter).connect(gain).connect(ctx.destination);
   source.start(start);
@@ -302,6 +302,41 @@ export const sfx = {
         const f = i % 2 === 0 ? 880 : 620;
         tone(ctx, 'square', f, f, t + i * 0.28, 0.26, 0.12);
       }
+    }),
+  /** A bat cracking a ball: a sharp click over a short, woody thump. */
+  bat: () =>
+    play((ctx, t) => {
+      noise(ctx, 'bandpass', 3400, 1100, t, 0.09, 0.9);
+      tone(ctx, 'square', 1500, 320, t, 0.07, 0.22);
+      tone(ctx, 'sine', 230, 85, t, 0.15, 0.85);
+    }),
+  /** A ball slapping into a catcher's mitt: a dull pop. */
+  glove: () =>
+    play((ctx, t) => {
+      noise(ctx, 'lowpass', 1800, 260, t, 0.13, 0.9);
+      tone(ctx, 'sine', 180, 65, t, 0.16, 0.9);
+    }),
+  /** A crowd cheering for a hit. */
+  cheer: () =>
+    play((ctx, t) => {
+      crowd(ctx, t, 1.5, 0.45);
+      [392, 523, 659].forEach((f, i) => tone(ctx, 'triangle', f, f, t + i * 0.09, 0.2, 0.15));
+    }),
+  /** A big roar for a home run, with a fanfare on top. */
+  bigCheer: () =>
+    play((ctx, t) => {
+      crowd(ctx, t, 3.2, 0.7);
+      crowd(ctx, t + 0.25, 2.6, 0.5);
+      [523, 659, 784, 1047, 1319].forEach((f, i) =>
+        tone(ctx, 'triangle', f, f, t + i * 0.11, 0.3, 0.22),
+      );
+    }),
+  /** A firework bursting: a boom and a crackle. */
+  firework: () =>
+    play((ctx, t) => {
+      noise(ctx, 'lowpass', 1200, 140, t, 0.5, 0.7);
+      tone(ctx, 'sine', 130, 40, t, 0.4, 0.7);
+      noise(ctx, 'highpass', 5200, 2600, t + 0.12, 0.5, 0.22);
     }),
   /** A small crash: a bump into a space rock. */
   bump: () =>

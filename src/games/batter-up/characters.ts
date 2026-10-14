@@ -1,0 +1,735 @@
+import {
+  CylinderGeometry,
+  Group,
+  Mesh,
+  MeshBasicMaterial,
+  MeshStandardMaterial,
+  SphereGeometry,
+  TorusGeometry,
+  Vector3,
+  type Object3D,
+} from 'three';
+import { BALL_RADIUS, CONTACT, GLOVE, MOUND, MOUND_HEIGHT, type Vec } from './flight';
+import { createMover, type Mover } from './mover';
+import {
+  clamp01,
+  createAnimator,
+  createPerson,
+  easeInOut,
+  easeOut,
+  lerp,
+  type Person,
+  type Pose,
+} from './person';
+
+const NAVY = 0x1c2f6b;
+
+/** Seconds from the start of a swing to the bat meeting the ball. */
+export const SWING_CONTACT = 0.3;
+
+// ---------- The ball ----------
+
+export interface Ball {
+  /** Sits at the origin; its children move. */
+  object: Group;
+  /** Puts the ball (and its shadow on the ground) at a spot. */
+  place(p: Vec, scale?: number): void;
+  spin(delta: number, rate: number): void;
+  setVisible(visible: boolean): void;
+}
+
+export function createBall(): Ball {
+  const object = new Group();
+  const ball = new Group();
+  const white = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.45 });
+  const seam = new MeshStandardMaterial({ color: 0xd8262b, roughness: 0.6 });
+  ball.add(new Mesh(new SphereGeometry(BALL_RADIUS, 20, 14), white));
+  for (const side of [-1, 1]) {
+    const arc = new Mesh(new TorusGeometry(BALL_RADIUS * 0.8, 0.012, 6, 20, Math.PI * 1.2), seam);
+    arc.position.x = side * BALL_RADIUS * 0.58;
+    arc.rotation.y = Math.PI / 2;
+    arc.rotation.z = side * 0.4;
+    ball.add(arc);
+  }
+  const shadow = new Mesh(
+    new SphereGeometry(1, 14, 8),
+    new MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }),
+  );
+  shadow.scale.set(BALL_RADIUS * 1.3, 0.004, BALL_RADIUS * 1.3);
+  object.add(ball, shadow);
+  return {
+    object,
+    place(p, scale = 1) {
+      ball.position.set(p.x, p.y, p.z);
+      ball.scale.setScalar(scale);
+      const near = 1 / (1 + Math.max(p.y - BALL_RADIUS, 0) * 0.12);
+      shadow.position.set(p.x, 0.02, p.z);
+      shadow.scale.set(BALL_RADIUS * 1.4 * near * scale, 0.004, BALL_RADIUS * 1.4 * near * scale);
+    },
+    spin(delta, rate) {
+      ball.rotation.x += delta * rate;
+      ball.rotation.z += delta * rate * 0.4;
+    },
+    setVisible(visible) {
+      object.visible = visible;
+    },
+  };
+}
+
+/** Something that falls and lies about, then goes away. */
+export interface Prop {
+  object: Object3D;
+  /** Returns false once it should be removed. */
+  update(delta: number): boolean;
+}
+
+// ---------- The bat ----------
+
+function createBat(): Group {
+  const bat = new Group();
+  const wood = new MeshStandardMaterial({ color: 0xd9a35c, roughness: 0.55 });
+  const barrel = new Mesh(new CylinderGeometry(0.058, 0.02, 0.86, 14), wood);
+  barrel.position.y = 0.43;
+  const knob = new Mesh(new SphereGeometry(0.03, 10, 8), wood);
+  knob.position.y = -0.01;
+  const tape = new Mesh(
+    new CylinderGeometry(0.026, 0.024, 0.2, 10),
+    new MeshStandardMaterial({ color: 0x222831, roughness: 0.9 }),
+  );
+  tape.position.y = 0.1;
+  bat.add(barrel, knob, tape);
+  return bat;
+}
+
+// ---------- The pitcher ----------
+
+const WIND_TIME = 0.7;
+const THROW_RELEASE = 0.12;
+
+export interface Pitcher {
+  root: Group;
+  /** Rocks back and raises the front leg, then holds there. */
+  windUp(): void;
+  /** Throws; `onRelease` runs the moment the ball leaves the hand. */
+  release(onRelease: () => void): void;
+  /** Seconds the wind-up has been going. */
+  readonly windTime: number;
+  /** Back to standing ready. */
+  reset(): void;
+  /** Where the throwing hand is in the world. */
+  handPosition(out: Vector3): Vector3;
+  update(delta: number, elapsed: number): void;
+}
+
+export function createPitcher(): Pitcher {
+  const person = createPerson({
+    shirt: 0xf3f4f8,
+    pants: 0xaab3c4,
+    hatColor: NAVY,
+    hat: 'cap',
+    glove: 'left',
+    hair: 0x2b1a10,
+    skin: 0xc68642,
+  });
+  person.root.position.set(MOUND.x, MOUND_HEIGHT, MOUND.z);
+  const anim = createAnimator(person);
+  let mode: 'idle' | 'wind' | 'throw' | 'finish' = 'idle';
+  let t = 0;
+  let released = false;
+  let onRelease: (() => void) | undefined;
+
+  const idle = (pose: Pose, elapsed: number) => {
+    const sway = Math.sin(elapsed * 1.8);
+    pose.lean = 0.12;
+    pose.headPitch = 0.1;
+    pose.headYaw = Math.sin(elapsed * 0.7) * 0.08;
+    for (const [arm, side] of [
+      [pose.armL, 1],
+      [pose.armR, -1],
+    ] as const) {
+      arm.raise = 0.8 + sway * 0.03;
+      arm.bend = 1.35;
+      arm.out = -0.25 * side * side;
+    }
+    pose.legL.out = pose.legR.out = 0.14;
+    pose.legL.bend = pose.legR.bend = 0.15;
+  };
+
+  const windPose = (pose: Pose, w: number, elapsed: number) => {
+    const k = easeInOut(w);
+    const wobble = Math.sin(elapsed * 2.4) * 0.02 * k;
+    pose.lean = lerp(0.12, -0.14, k) + wobble;
+    pose.headPitch = lerp(0.1, 0.35, k);
+    pose.armL.raise = lerp(0.8, 2.5, k);
+    pose.armR.raise = lerp(0.8, 2.5, k);
+    pose.armL.bend = pose.armR.bend = lerp(1.35, 0.55, k);
+    pose.armL.out = pose.armR.out = lerp(-0.25, 0.1, k);
+    // The front leg (his left) comes up; the other bends to hold him.
+    pose.legL.raise = 1.45 * k;
+    pose.legL.bend = 1.55 * k;
+    pose.legL.out = 0.1;
+    pose.legR.bend = 0.25 * k;
+    pose.legR.out = 0.1;
+    pose.lift = -0.04 * k;
+  };
+
+  const throwPose = (pose: Pose, s: number) => {
+    // 0 to 0.12: the arm whips through to the release; then it follows through across the body.
+    const a = easeInOut(clamp01(s / THROW_RELEASE));
+    const b = easeOut(clamp01((s - THROW_RELEASE) / 0.32));
+    pose.lean = lerp(-0.14, 0.7, easeOut(clamp01(s / 0.28)));
+    pose.headPitch = lerp(0.35, -0.25, easeOut(clamp01(s / 0.3)));
+    pose.armR.raise = lerp(lerp(2.5, 2.05, a), 0.35, b);
+    pose.armR.bend = lerp(lerp(0.55, 0.12, a), 0.7, b);
+    pose.armR.out = lerp(0.1, -0.3, b);
+    pose.armL.raise = lerp(2.5, 0.9, easeOut(clamp01(s / 0.25)));
+    pose.armL.bend = lerp(0.55, 1.5, easeOut(clamp01(s / 0.25)));
+    pose.armL.out = lerp(0.1, 0.5, easeOut(clamp01(s / 0.25)));
+    const stride = easeOut(clamp01(s / 0.2));
+    pose.legL.raise = lerp(1.45, 0.55, stride);
+    pose.legL.bend = lerp(1.55, 0.3, stride);
+    pose.legR.raise = -0.35 * b;
+    pose.legR.bend = lerp(0.25, 0.9, b);
+    pose.legL.out = pose.legR.out = 0.1;
+    pose.lift = lerp(-0.04, -0.06, stride);
+  };
+
+  return {
+    root: person.root,
+    windUp() {
+      mode = 'wind';
+      t = 0;
+      released = false;
+      anim.transition(0.25);
+    },
+    release(callback) {
+      if (mode === 'throw') return;
+      onRelease = callback;
+      released = false;
+      mode = 'throw';
+      t = 0;
+      anim.transition(0.05);
+    },
+    get windTime() {
+      return mode === 'wind' ? t : 0;
+    },
+    reset() {
+      mode = 'idle';
+      t = 0;
+      onRelease = undefined;
+      anim.transition(0.3);
+    },
+    handPosition: (out) => person.handWorld('R', out),
+    update(delta, elapsed) {
+      t += delta;
+      if (mode === 'throw' && !released && t >= THROW_RELEASE) {
+        released = true;
+        const callback = onRelease;
+        onRelease = undefined;
+        callback?.();
+      }
+      if (mode === 'throw' && t > 0.6) {
+        mode = 'finish';
+        t = 0;
+      }
+      anim.step(delta, (pose) => {
+        if (mode === 'idle') idle(pose, elapsed);
+        else if (mode === 'wind') windPose(pose, t / WIND_TIME, elapsed);
+        else if (mode === 'throw') throwPose(pose, t);
+        else {
+          throwPose(pose, 0.6);
+          pose.lean += Math.sin(elapsed * 2) * 0.02;
+        }
+      });
+    },
+  };
+}
+
+// ---------- The catcher ----------
+
+export interface Catcher {
+  root: Group;
+  /** The glove snaps shut on the ball. */
+  pop(): void;
+  /** Where the mitt is. */
+  mittPosition(out: Vector3): Vector3;
+  update(delta: number, elapsed: number): void;
+}
+
+/** Slides a person sideways and back so a hand ends up under a given spot (ignoring height). */
+function alignHand(person: Person, side: 'L' | 'R', target: Vec): void {
+  const here = person.handWorld(side, new Vector3());
+  person.root.position.x += target.x - here.x;
+  person.root.position.z += target.z - here.z;
+  person.root.updateMatrixWorld(true);
+}
+
+export function createCatcher(): Catcher {
+  const person = createPerson({
+    shirt: NAVY,
+    pants: 0x2b3245,
+    hat: 'catcher',
+    hatColor: 0x23262e,
+    glove: 'left',
+    gloveColor: 0x6b3a18,
+    shoe: 0x23262e,
+  });
+  person.root.position.set(0, 0, 1.2);
+  person.root.rotation.y = Math.PI;
+  const anim = createAnimator(person);
+  let popT = 1;
+
+  const crouch = (pose: Pose, elapsed: number) => {
+    const bob = Math.sin(elapsed * 1.6) * 0.01;
+    pose.lift = -0.19 + bob;
+    pose.lean = 0.45;
+    pose.headPitch = 0.45;
+    pose.legL.raise = pose.legR.raise = 1.5;
+    pose.legL.bend = pose.legR.bend = 1.8;
+    pose.legL.out = pose.legR.out = 0.55;
+    // The mitt is held out in front, low for a pitch; he snaps it back a little on the catch.
+    const snap = popT < 0.25 ? Math.sin((popT / 0.25) * Math.PI) : 0;
+    pose.armL.raise = 1.4 + snap * 0.18;
+    pose.armL.bend = 0.5 - snap * 0.3;
+    pose.armL.out = 0.1;
+    pose.armR.raise = 0.75;
+    pose.armR.bend = 0.9;
+    pose.armR.out = 0.05;
+  };
+  // Settle the pose once so the mitt can be lined up with the ball's last stop.
+  anim.step(1, (pose) => crouch(pose, 0));
+  person.root.updateMatrixWorld(true);
+  alignHand(person, 'L', GLOVE);
+
+  return {
+    root: person.root,
+    pop() {
+      popT = 0;
+    },
+    mittPosition: (out) => person.handWorld('L', out),
+    update(delta, elapsed) {
+      popT += delta;
+      anim.step(delta, (pose) => crouch(pose, elapsed));
+    },
+  };
+}
+
+// ---------- The umpire ----------
+
+export interface Umpire {
+  root: Group;
+  /** Calls a strike: an arm up and a pump of the fist (a bigger one for strike three). */
+  callStrike(big: boolean): void;
+  reset(): void;
+  update(delta: number, elapsed: number): void;
+}
+
+export function createUmpire(): Umpire {
+  const person = createPerson({
+    shirt: 0x23262e,
+    pants: 0x6c7380,
+    hat: 'cap',
+    hatColor: 0x14161b,
+    shoe: 0x14161b,
+    hair: 0x3a2a1a,
+  });
+  person.root.position.set(1.3, 0, 3.4);
+  person.root.rotation.y = Math.PI;
+  const anim = createAnimator(person);
+  let call = -1;
+  let big = false;
+
+  const stand = (pose: Pose, elapsed: number) => {
+    pose.lean = 0.35;
+    pose.lift = -0.05;
+    pose.headPitch = 0.2;
+    pose.headYaw = Math.sin(elapsed * 0.6) * 0.05;
+    pose.legL.bend = pose.legR.bend = 0.3;
+    pose.legL.raise = pose.legR.raise = 0.25;
+    pose.legL.out = pose.legR.out = 0.15;
+    pose.armL.raise = pose.armR.raise = 0.5;
+    pose.armL.bend = pose.armR.bend = 0.5;
+  };
+
+  return {
+    root: person.root,
+    callStrike(isBig) {
+      call = 0;
+      big = isBig;
+      anim.transition(0.12);
+    },
+    reset() {
+      call = -1;
+      anim.transition(0.3);
+    },
+    update(delta, elapsed) {
+      if (call >= 0) call += delta;
+      anim.step(delta, (pose) => {
+        stand(pose, elapsed);
+        if (call < 0) return;
+        // The right arm (his right is -x in his own frame) goes up and pumps the fist.
+        const up = easeOut(clamp01(call / 0.18));
+        const pumps = big ? 3 : 1;
+        const pump = Math.abs(Math.sin(clamp01((call - 0.2) / 0.6) * Math.PI * pumps));
+        pose.lean = lerp(0.35, 0.05, up);
+        pose.headPitch = 0;
+        pose.armR.raise = lerp(0.5, 1.7, up) + (call > 0.2 ? pump * 0.35 : 0);
+        pose.armR.bend = lerp(0.5, 1.7, up) - (call > 0.2 ? pump * 0.7 : 0);
+        pose.armR.out = lerp(0, 0.5, up);
+      });
+    },
+  };
+}
+
+// ---------- The batter ----------
+
+/** Shirt and helmet colours for each batter in turn. */
+const BATTER_LOOKS: [number, number][] = [
+  [0xe8453c, 0xb02a24],
+  [0x2f8cff, 0x1a5fc0],
+  [0x32b868, 0x1d7d44],
+  [0xffa726, 0xc9741b],
+  [0x9b5de5, 0x6b3aae],
+  [0xf15bb5, 0xb23a84],
+  [0x00bbf9, 0x0383b3],
+  [0xfee440, 0xc2a817],
+  [0xff6b6b, 0xc24545],
+];
+
+export interface Batter {
+  mover: Mover;
+  person: Person;
+  /** Starts the swing; the bat meets the ball `SWING_CONTACT` seconds later. */
+  swing(): void;
+  /** Drops the bat where he stands. Returns the falling bat for the scene to keep. */
+  dropBat(): Prop | null;
+  /** Gives the next batter their own colours. */
+  setLook(index: number): void;
+  /** Stands dejected after a strike (or a strikeout), holding the bat low. */
+  slump(): void;
+  /** Back in the stance, ready for the next pitch. */
+  ready(): void;
+  /** Stands with a hop and arms in the air. */
+  cheer(): void;
+  /** Stands like a base runner, leaning to go. */
+  runnerStance(): void;
+}
+
+const PIVOT = { x: -0.15, y: 0.33, z: 0.27 };
+const SWEET = 0.68;
+const BAT_YAW = (130 * Math.PI) / 180;
+
+export function createBatter(): Batter {
+  const [shirt, hat] = BATTER_LOOKS[0];
+  const person = createPerson({
+    shirt,
+    pants: 0xf4f4f6,
+    hat: 'helmet',
+    hatColor: hat,
+    hair: 0x3a2312,
+  });
+  const mover = createMover(person);
+  const bat = createBat();
+  const pivot = new Group();
+  pivot.position.set(PIVOT.x, PIVOT.y, PIVOT.z);
+  pivot.rotation.order = 'YXZ';
+  pivot.add(bat);
+  person.torso.add(pivot);
+
+  type Mode = 'stance' | 'swing' | 'slump' | 'cheer' | 'runner';
+  let mode: Mode = 'stance';
+  let t = 0;
+  let batDropped = false;
+
+  /** The bat's heading in the torso's frame, and how far it is tipped from upright. */
+  const setBat = (heading: number, tilt: number, roll = 0) => {
+    pivot.rotation.set(tilt, heading, roll);
+  };
+
+  const holdBat = (pose: Pose) => {
+    pose.armR.raise = 1.15;
+    pose.armR.bend = 1.0;
+    pose.armR.out = -0.1;
+    pose.armL.raise = 1.15;
+    pose.armL.bend = 1.1;
+    pose.armL.out = -0.75;
+  };
+
+  const stance = (pose: Pose, elapsed: number) => {
+    const wiggle = Math.sin(elapsed * 3.1);
+    pose.lift = -0.06;
+    pose.lean = 0.12;
+    pose.twist = -0.1;
+    pose.legL.out = pose.legR.out = 0.28;
+    pose.legL.raise = pose.legR.raise = 0.2;
+    pose.legL.bend = pose.legR.bend = 0.4;
+    holdBat(pose);
+    // The head is turned to watch the pitcher over his shoulder.
+    pose.headYaw = 0.95;
+    setBat(-2.55 + wiggle * 0.05, 0.42 + wiggle * 0.03, 0.1);
+  };
+
+  /** The swing at `s` seconds in: load, swing through, follow through. */
+  const swingPose = (pose: Pose, s: number) => {
+    stance(pose, 0);
+    const load = easeInOut(clamp01(s / 0.17));
+    const through = easeInOut(clamp01((s - 0.17) / (SWING_CONTACT - 0.17)));
+    const follow = easeOut(clamp01((s - SWING_CONTACT) / 0.32));
+    pose.twist = lerp(-0.1, -0.4, load) + 0.9 * through + 0.6 * follow;
+    pose.lean = lerp(0.12, 0.2, load) - 0.15 * follow;
+    pose.headYaw = lerp(0.95, 0.5, through) - 0.4 * follow;
+    pose.legL.raise = lerp(0.2, 0.55, load) - 0.35 * through;
+    pose.armR.raise = 1.15 + 0.25 * through;
+    pose.armR.bend = 1.0 - 0.45 * through + 0.3 * follow;
+    pose.armL.raise = 1.15 + 0.2 * through;
+    pose.armL.out = -0.75 + 0.35 * through;
+    const heading = lerp(lerp(-2.55, -2.9, load), -1.2, through) + 2.1 * follow;
+    const tilt = lerp(lerp(0.42, 0.75, load), 1.4, through) - 0.5 * follow;
+    setBat(heading, tilt, lerp(0.1, 0, through));
+  };
+
+  const slumpPose = (pose: Pose, elapsed: number) => {
+    const k = easeOut(clamp01(t / 0.5));
+    pose.lift = -0.03 * k;
+    pose.lean = 0.35 * k;
+    pose.headPitch = -0.5 * k;
+    pose.headYaw = 0;
+    pose.armR.raise = 0.3;
+    pose.armL.raise = 0.2;
+    pose.armR.bend = 0.4;
+    pose.armL.bend = 0.3;
+    pose.twist = Math.sin(elapsed * 1.5) * 0.03;
+    setBat(-0.5, 2.9, 0);
+  };
+
+  const cheerPose = (pose: Pose) => {
+    const k = easeOut(clamp01(t / 0.25));
+    pose.lift = Math.abs(Math.sin(t * 9)) * 0.14 * k;
+    pose.armL.raise = pose.armR.raise = 2.7 * k;
+    pose.armL.out = pose.armR.out = 0.35 * k;
+    pose.armL.bend = pose.armR.bend = 0.2;
+    pose.headPitch = 0.3 * k;
+  };
+
+  const runnerPose = (pose: Pose, elapsed: number) => {
+    const sway = Math.sin(elapsed * 2.6);
+    pose.lift = -0.06;
+    pose.lean = 0.45;
+    pose.headPitch = 0.3;
+    pose.legL.out = pose.legR.out = 0.3;
+    pose.legL.raise = pose.legR.raise = 0.3;
+    pose.legL.bend = pose.legR.bend = 0.6;
+    pose.armL.raise = pose.armR.raise = 0.6 + sway * 0.1;
+    pose.armL.bend = pose.armR.bend = 1.0;
+  };
+
+  mover.idle = (pose, elapsed) => {
+    if (mode === 'swing') swingPose(pose, t);
+    else if (mode === 'slump') slumpPose(pose, elapsed);
+    else if (mode === 'cheer') cheerPose(pose);
+    else if (mode === 'runner') runnerPose(pose, elapsed);
+    else stance(pose, elapsed);
+  };
+
+  // Stand at the plate facing the pitcher side-on, then slide so the bat meets the ball exactly
+  // where the ball arrives.
+  const sweet = new Vector3();
+  mover.setYaw(BAT_YAW);
+  person.root.position.set(0, 0, 0);
+  const calibrate = () => {
+    const scratch: Pose = {
+      lift: 0,
+      lean: 0,
+      twist: 0,
+      headPitch: 0,
+      headYaw: 0,
+      armL: { raise: 0, out: 0, bend: 0 },
+      armR: { raise: 0, out: 0, bend: 0 },
+      legL: { raise: 0, out: 0, bend: 0 },
+      legR: { raise: 0, out: 0, bend: 0 },
+    };
+    swingPose(scratch, SWING_CONTACT);
+    person.apply(scratch);
+    person.root.updateMatrixWorld(true);
+    pivot.localToWorld(sweet.set(0, SWEET, 0));
+    person.root.position.x += CONTACT.x - sweet.x;
+    person.root.position.z += CONTACT.z - sweet.z;
+    person.root.updateMatrixWorld(true);
+    pivot.localToWorld(sweet.set(0, SWEET, 0));
+  };
+  calibrate();
+
+  const setMode = (next: Mode, blend = 0.12) => {
+    mode = next;
+    t = 0;
+    mover.anim.transition(blend);
+  };
+
+  // Keep the clock for swings and reactions.
+  const baseUpdate = mover.update;
+  mover.update = (delta, elapsed) => {
+    t += delta;
+    baseUpdate(delta, elapsed);
+  };
+
+  return {
+    mover,
+    person,
+    swing: () => setMode('swing', 0.1),
+    slump: () => setMode('slump', 0.25),
+    ready: () => setMode('stance', 0.2),
+    cheer: () => setMode('cheer', 0.15),
+    runnerStance: () => setMode('runner', 0.2),
+    dropBat() {
+      if (batDropped) return null;
+      batDropped = true;
+      const parent = person.root.parent;
+      if (!parent) return null;
+      parent.attach(bat);
+      let vy = 1.2;
+      const spin = new Vector3(3, 1, 5);
+      let age = 0;
+      let resting = false;
+      return {
+        object: bat,
+        update(delta) {
+          age += delta;
+          if (!resting) {
+            vy -= 14 * delta;
+            bat.position.y += vy * delta;
+            bat.rotation.x += spin.x * delta;
+            bat.rotation.y += spin.y * delta;
+            bat.rotation.z += spin.z * delta;
+            if (bat.position.y <= 0.05) {
+              bat.position.y = 0.05;
+              resting = true;
+              bat.rotation.set(Math.PI / 2, bat.rotation.y, 0.2);
+            }
+          }
+          return age < 3;
+        },
+      };
+    },
+    setLook(index) {
+      const [s, h] = BATTER_LOOKS[index % BATTER_LOOKS.length];
+      person.recolour(s, h);
+    },
+  };
+}
+
+// ---------- The fielders ----------
+
+export type FielderId = '1B' | '2B' | 'SS' | '3B' | 'LF' | 'CF' | 'RF';
+
+export const FIELDER_SPOTS: Record<FielderId, Vec> = {
+  '1B': { x: 9.6, y: 0, z: -9.6 },
+  '2B': { x: 4.2, y: 0, z: -14.8 },
+  SS: { x: -4.6, y: 0, z: -14.2 },
+  '3B': { x: -9.8, y: 0, z: -9.8 },
+  LF: { x: -14, y: 0, z: -22.5 },
+  CF: { x: 0, y: 0, z: -27 },
+  RF: { x: 14, y: 0, z: -22.5 },
+};
+
+export type FielderMode = 'ready' | 'scoop' | 'watch';
+
+export interface Fielder {
+  id: FielderId;
+  mover: Mover;
+  home: Vec;
+  /** Runs after a ball and fields it; `onArrive` runs when they get there. */
+  chase(target: Vec, speed: number, mode: FielderMode, onArrive?: () => void): void;
+  /** Jogs back to position. */
+  goHome(speed: number): void;
+  setMode(mode: FielderMode): void;
+  /** True when standing at their spot. */
+  atHome(): boolean;
+}
+
+export function createFielder(id: FielderId, index: number): Fielder {
+  const person = createPerson({
+    shirt: 0xe3e7ee,
+    pants: 0xcfd5e0,
+    hat: 'cap',
+    hatColor: id === 'LF' || id === 'CF' || id === 'RF' ? 0x2c6e49 : NAVY,
+    glove: 'left',
+    hair: index % 2 ? 0x2b1a10 : 0x6b4423,
+    skin: index % 3 === 0 ? 0xc68642 : 0xf1b48a,
+  });
+  const home = FIELDER_SPOTS[id];
+  const mover = createMover(person);
+  mover.place(home.x, home.z);
+  mover.setYaw(Math.atan2(-home.x, -home.z));
+  let mode: FielderMode = 'ready';
+  let t = 0;
+
+  mover.idle = (pose, elapsed) => {
+    const sway = Math.sin(elapsed * 1.9 + index * 1.7);
+    if (mode === 'ready') {
+      pose.lift = -0.07;
+      pose.lean = 0.3;
+      pose.headPitch = -0.1;
+      pose.legL.raise = pose.legR.raise = 0.35;
+      pose.legL.bend = pose.legR.bend = 0.7;
+      pose.legL.out = pose.legR.out = 0.2;
+      pose.armL.raise = 0.75 + sway * 0.04;
+      pose.armL.bend = 0.9;
+      pose.armL.out = 0.1;
+      pose.armR.raise = 0.3;
+      pose.armR.bend = 0.4;
+    } else if (mode === 'scoop') {
+      const k = easeOut(clamp01(t / 0.2));
+      pose.lift = -0.1 * k;
+      pose.lean = 0.9 * k;
+      pose.headPitch = -0.4 * k;
+      pose.legL.raise = pose.legR.raise = 0.5 * k;
+      pose.legL.bend = pose.legR.bend = 0.9 * k;
+      pose.armL.raise = 1.0 * k;
+      pose.armL.bend = 0.2;
+      pose.armR.raise = 0.8 * k;
+      pose.armR.bend = 0.3;
+    } else {
+      // Watching a ball sail out of the park, glove hanging.
+      const k = easeOut(clamp01(t / 0.3));
+      pose.lean = -0.1 * k;
+      pose.headPitch = 0.9 * k;
+      pose.armL.raise = 0.2;
+      pose.armR.raise = 0.1;
+    }
+  };
+
+  const baseUpdate = mover.update;
+  mover.update = (delta, elapsed) => {
+    t += delta;
+    baseUpdate(delta, elapsed);
+  };
+
+  const setMode = (next: FielderMode) => {
+    if (mode === next) return;
+    mode = next;
+    t = 0;
+    mover.anim.transition(0.15);
+  };
+
+  return {
+    id,
+    mover,
+    home,
+    setMode,
+    chase(target, speed, next, onArrive) {
+      setMode('ready');
+      mover.runTo([target], speed, () => {
+        setMode(next);
+        onArrive?.();
+      });
+    },
+    goHome(speed) {
+      setMode('ready');
+      mover.runTo([home], speed, () => mover.face({ x: 0, y: 0, z: 0 }));
+    },
+    atHome() {
+      const p = person.root.position;
+      return Math.hypot(p.x - home.x, p.z - home.z) < 0.05 && !mover.moving;
+    },
+  };
+}
