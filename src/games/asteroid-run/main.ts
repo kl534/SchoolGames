@@ -2,7 +2,7 @@ import './style.css';
 import { MathUtils, Vector3 } from 'three';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
 import { createPointerInput, onPress } from '../../shared/input';
-import { showLesson } from '../../shared/lesson';
+import { showPreview } from '../../shared/preview';
 import { showResults } from '../../shared/results';
 import { starsFor } from '../../shared/round';
 import { createScene } from '../../shared/scene';
@@ -55,7 +55,7 @@ const GAME_ID = 'asteroid-run';
 
 /** How fast the world streams past at the start, in world units per second. */
 const BASE_SPEED = 28;
-/** The slow drift behind the lesson and results screens. */
+/** The slow drift behind the preview and results screens. */
 const IDLE_SPEED = 7;
 /** Seconds a target takes to fly in to its lock distance (a boss takes a little longer). */
 const ARRIVE_TIME = 2;
@@ -76,7 +76,7 @@ const NEXT_GAP = 1.3;
 /** Pull the camera back this far when the ship blows up. */
 const PULL_BACK = 9;
 
-type Phase = 'lesson' | 'countdown' | 'idle' | 'aiming' | 'firing' | 'result' | 'ending' | 'done';
+type Phase = 'preview' | 'countdown' | 'idle' | 'aiming' | 'firing' | 'result' | 'ending' | 'done';
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -181,7 +181,7 @@ function run(session: GameSession): void {
   });
 
   // ---------- State ----------
-  let phase: Phase = 'lesson';
+  let phase: Phase = 'preview';
   let feed: FactFeed = createFactFeed(() => session.chooseFacts());
   let fact: Fact | undefined;
   let options: string[] = [];
@@ -368,7 +368,7 @@ function run(session: GameSession): void {
   };
 
   // ---------- Run flow ----------
-  const startRun = (withLesson: boolean) => {
+  const startRun = (withPreview: boolean) => {
     pending = [];
     turn++;
     feed = createFactFeed(() => session.chooseFacts());
@@ -401,12 +401,12 @@ function run(session: GameSession): void {
     renderBoss();
     setHudVisible(false);
     count.hidden = true;
-    if (!withLesson) {
+    if (!withPreview) {
       startCountdown();
       return;
     }
-    phase = 'lesson';
-    showLesson({ topic: session.topic, facts: feed.peek(10), onDone: startCountdown });
+    phase = 'preview';
+    showPreview({ topic: session.topic, facts: feed.peek(10), onDone: startCountdown });
   };
 
   /** 3, 2, 1, Go! and the run begins. */

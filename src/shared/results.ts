@@ -1,7 +1,7 @@
 import './overlays.css';
-import { button } from './lesson';
+import { button } from './preview';
 import type { Fact } from './topics';
-import { menuUrl, topicMenuUrl } from './ui';
+import { topicMenuUrl, topicsUrl } from './ui';
 
 export interface ResultsOptions {
   topicId: string;
@@ -146,7 +146,7 @@ export function showResults(options: ResultsOptions): { dispose(): void } {
   row.append(
     again,
     link('Other games', topicMenuUrl(options.topicId)),
-    link('All topics', menuUrl()),
+    link('All topics', topicsUrl()),
   );
   card.appendChild(row);
   overlay.appendChild(card);

@@ -8,8 +8,11 @@ import {
   type Player,
   type PlayerProgress,
 } from '../shared/progress';
+import { levelLabel, levelsOpen, MY_LEVEL_ID } from '../shared/levels';
 import { gameUrl } from '../shared/session';
 import { getTopic, groupBySubject, type Topic } from '../shared/topics';
+import { MATH_TOPICS } from '../shared/topics/math';
+import { topicsUrl } from '../shared/ui';
 
 const store = createProgressStore();
 const base = import.meta.env.BASE_URL;
@@ -154,7 +157,7 @@ function renderPlayers(root: HTMLElement): void {
   }
 
   draw();
-  const back = current ? link(base, 'back-link', '← Topics') : undefined;
+  const back = current ? link(base, 'back-link', '← My Level') : undefined;
   root.replaceChildren(
     header("Who's playing?", 'Tap your name to start', null, back),
     form,
@@ -184,10 +187,18 @@ function renderTopics(root: HTMLElement, player: Player, progress: PlayerProgres
     section.appendChild(grid);
     main.appendChild(section);
   }
-  root.replaceChildren(header('School Games', 'What do you want to practice?', player), main);
+  root.replaceChildren(
+    header(
+      'School Games',
+      'What do you want to practice?',
+      player,
+      link(base, 'back-link', '← My Level'),
+    ),
+    main,
+  );
 }
 
-// ---------- Games for one topic ----------
+// ---------- Games ----------
 
 function gameCard(
   game: GameEntry,
@@ -222,37 +233,85 @@ function gameCard(
   return card;
 }
 
-function renderTopic(
-  root: HTMLElement,
-  topic: Topic,
-  player: Player,
-  progress: PlayerProgress,
-): void {
+interface GamesPage {
+  /** The topic id games are opened with and progress is read under. */
+  topicId: string;
+  title: string;
+  subtitle: string;
+  mastered: number;
+  total: number;
+  back?: HTMLElement;
+  /** Shown between the mastery bar and the games. */
+  extra?: HTMLElement;
+}
+
+function renderGames(root: HTMLElement, player: Player, progress: PlayerProgress, page: GamesPage) {
   const games = discoverGames();
 
   const grid = el('main', 'grid');
   const cards = games.map((game) => {
     const card = gameCard(
       game,
-      progress.best[topic.id]?.[game.id],
-      progress.highScores[topic.id]?.[game.id],
+      progress.best[page.topicId]?.[game.id],
+      progress.highScores[page.topicId]?.[game.id],
     );
     grid.appendChild(card);
     return { game, card };
   });
-  for (const { game, card } of cards) card.href = gameUrl(game.href, topic.id);
+  for (const { game, card } of cards) card.href = gameUrl(game.href, page.topicId);
   if (games.length === 0) grid.appendChild(el('p', undefined, 'No games yet.'));
 
-  const ids = topic.facts.map((f) => f.id);
   const intro = el('div', 'topic-intro');
-  intro.append(masteryBar(countMastered(progress, topic.id, ids), ids.length));
+  intro.append(masteryBar(page.mastered, page.total));
 
   root.replaceChildren(
-    header(topic.title, 'Pick a game', player, link(base, 'back-link', '← Topics')),
+    header(page.title, page.subtitle, player, page.back),
     intro,
+    ...(page.extra ? [page.extra] : []),
     el('h2', 'subject', 'Games'),
     grid,
   );
+}
+
+// ---------- Games for one topic ----------
+
+function renderTopic(
+  root: HTMLElement,
+  topic: Topic,
+  player: Player,
+  progress: PlayerProgress,
+): void {
+  const ids = topic.facts.map((f) => f.id);
+  renderGames(root, player, progress, {
+    topicId: topic.id,
+    title: topic.title,
+    subtitle: 'Pick a game',
+    mastered: countMastered(progress, topic.id, ids),
+    total: ids.length,
+    back: link(topicsUrl(), 'back-link', '← Topics'),
+  });
+}
+
+// ---------- My Level (home) ----------
+
+function renderMyLevel(root: HTMLElement, player: Player, progress: PlayerProgress): void {
+  renderGames(root, player, progress, {
+    topicId: MY_LEVEL_ID,
+    title: 'My Level',
+    subtitle: levelLabel(levelsOpen(progress)),
+    mastered: MATH_TOPICS.reduce(
+      (sum, t) =>
+        sum +
+        countMastered(
+          progress,
+          t.id,
+          t.facts.map((f) => f.id),
+        ),
+      0,
+    ),
+    total: MATH_TOPICS.reduce((sum, t) => sum + t.facts.length, 0),
+    extra: link(topicsUrl(), 'text-button practice-link', 'Practice one topic →'),
+  });
 }
 
 function render(root: HTMLElement): void {
@@ -264,8 +323,9 @@ function render(root: HTMLElement): void {
   }
   const progress = store.load(player.id);
   const topic = getTopic(params.get('topic'));
-  if (topic) renderTopic(root, topic, player, progress);
-  else renderTopics(root, player, progress);
+  if (params.has('topics')) renderTopics(root, player, progress);
+  else if (topic) renderTopic(root, topic, player, progress);
+  else renderMyLevel(root, player, progress);
 }
 
 const root = document.getElementById('app');

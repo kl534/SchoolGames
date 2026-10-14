@@ -1,11 +1,20 @@
 import {
   createProgressStore,
+  emptyProgress,
   recordAnswer,
   recordBest,
   recordHighScore,
   timerSecondsFor,
   type Player,
 } from './progress';
+import {
+  chooseLevelFacts,
+  levelLabel,
+  levelsOpen,
+  MY_LEVEL_ID,
+  myLevelTopic,
+  topicOfFact,
+} from './levels';
 import { chooseRoundFacts, KICKS_PER_ROUND } from './round';
 import { getTopic, type Fact, type Topic } from './topics';
 
@@ -42,30 +51,42 @@ export interface GameSession {
   recordScore(score: number): boolean;
 }
 
-/** Sets up a game page from its URL. Returns null when the topic is missing or unknown. */
+/**
+ * Sets up a game page from its URL. Returns null when the topic is missing or unknown.
+ * `?topic=my-level` is mixed practice: facts come from every open level, answers are saved under
+ * each fact's own topic, and stars and high scores under `my-level`.
+ */
 export function startGameSession(
   gameId: string,
   search: string = location.search,
 ): GameSession | null {
   const params = parseGameParams(search);
-  const topic = getTopic(params.topicId);
-  if (!topic) return null;
+  const isMyLevel = params.topicId === MY_LEVEL_ID;
+  const realTopic = isMyLevel ? undefined : getTopic(params.topicId);
+  if (!isMyLevel && !realTopic) return null;
 
   const store = createProgressStore();
   const player = store.currentPlayer();
-  const progress = player ? store.load(player.id) : { facts: {}, best: {}, highScores: {} };
+  const progress = player ? store.load(player.id) : emptyProgress();
   const save = () => player && store.save(player.id, progress);
+  const topic = realTopic ?? myLevelTopic(() => levelLabel(levelsOpen(progress)));
+  /** Where a fact's answers are saved: its own topic, which for My Level is not `topic`. */
+  const statTopicId = (fact: Fact) => (isMyLevel ? topicOfFact(fact).id : topic.id);
 
   return {
     gameId,
     topic,
     player,
+    // My Level reads the live progress, so a refill picks up levels opened since the last one.
     chooseFacts: (count = KICKS_PER_ROUND) =>
-      chooseRoundFacts(topic.facts, progress.facts[topic.id], count),
+      isMyLevel
+        ? chooseLevelFacts(progress, count)
+        : chooseRoundFacts(topic.facts, progress.facts[topic.id], count),
     timerSecondsFor: (fact) =>
-      timerSecondsFor(player ? progress.facts[topic.id]?.[fact.id] : undefined),
+      timerSecondsFor(player ? progress.facts[statTopicId(fact)]?.[fact.id] : undefined),
     recordAnswer(fact, correct) {
-      recordAnswer(progress, topic.id, fact.id, correct);
+      recordAnswer(progress, statTopicId(fact), fact.id, correct);
+      if (isMyLevel) progress.levelsOpen = levelsOpen(progress);
       save();
     },
     recordStars(stars) {

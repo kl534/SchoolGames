@@ -254,6 +254,16 @@ h2.subject {
   margin: 0;
 }
 
+/* My Level's way into the topic list, under the mastery bar. */
+.practice-link {
+  display: flex;
+  justify-content: center;
+  max-width: 1100px;
+  margin: 0 auto 24px;
+  border: 2px solid #3a4166;
+  background: transparent;
+}
+
 /* ---------- Players ---------- */
 
 .players {

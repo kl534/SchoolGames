@@ -140,6 +140,17 @@ describe('createProgressStore', () => {
     expect(store.load('p1').highScores).toEqual({ t: { g: 90 } });
   });
 
+  it('loads progress saved before My Level, and keeps levelsOpen once it is saved', () => {
+    const raw = memoryStore();
+    const store = createProgressStore(raw);
+    raw.setItem('sg:progress:p1', JSON.stringify({ facts: {}, best: {}, highScores: {} }));
+    const loaded = store.load('p1');
+    expect(loaded.levelsOpen).toBeUndefined();
+    loaded.levelsOpen = 3;
+    store.save('p1', loaded);
+    expect(store.load('p1').levelsOpen).toBe(3);
+  });
+
   it('keeps players separate', () => {
     const store = createProgressStore(memoryStore());
     const a = store.addPlayer('A', AVATARS[0]);
