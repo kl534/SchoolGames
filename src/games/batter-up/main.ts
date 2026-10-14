@@ -280,10 +280,10 @@ function run(session: GameSession): void {
     };
   };
 
-  const layout = () => {
+  const layout = (force = false) => {
     const w = container.clientWidth;
     const h = container.clientHeight;
-    if (w === viewW && h === viewH) return;
+    if (!force && w === viewW && h === viewH) return;
     viewW = w;
     viewH = h;
     const measured = hud.measureBand();
@@ -390,6 +390,8 @@ function run(session: GameSession): void {
     dash = null;
     hud.setOptions(options);
     hud.setQuestion(fact.prompt);
+    // A long prompt may need to drop below the scorebug; then the view fits the new band.
+    if (hud.settleQuestion()) layout(true);
     hud.setClock(1);
     hud.hideQuestion(false);
     ball.setVisible(false);

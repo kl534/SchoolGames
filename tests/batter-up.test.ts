@@ -59,6 +59,10 @@ import {
   MIN_BALL_PX,
   playBand,
   project,
+  QUESTION_GAP,
+  QUESTION_SLACK,
+  questionTopBelowBug,
+  rectsOverlap,
 } from '../src/games/batter-up/layout';
 import { createMover } from '../src/games/batter-up/mover';
 import { createPerson, mixPose, neutralPose } from '../src/games/batter-up/person';
@@ -585,7 +589,7 @@ describe('the camera', () => {
     [844, 390],
   ];
 
-  it('stacks the HUD only on a narrow screen held upright', () => {
+  it('stacks the HUD on any screen held upright, phone or tablet', () => {
     expect(hudLayout(390, 844)).toBe('stacked');
     expect(hudLayout(360, 640)).toBe('stacked');
     expect(hudLayout(600, 900)).toBe('stacked');
@@ -598,8 +602,44 @@ describe('the camera', () => {
       expect(hudLayout(w, h)).toBe('compact');
     }
     expect(hudLayout(844, 390)).toBe('standard');
-    expect(hudLayout(768, 1024)).toBe('standard');
+    // A tablet held upright is wider than a phone but still tall: the question goes under the
+    // scorebug rather than at the top centre where it would sit on it.
+    expect(hudLayout(768, 1024)).toBe('stacked');
+    expect(hudLayout(1024, 1366)).toBe('stacked');
+    expect(hudLayout(1024, 768)).toBe('standard');
     expect(hudLayout(1366, 1024)).toBe('standard');
+  });
+
+  it.each([
+    [768, 1024],
+    [1024, 1366],
+  ])(
+    'leaves a portrait tablet plenty of field between the question and answers at %ix%i',
+    (w, h) => {
+      const band = playBand(w, h);
+      expect(band.bottom - band.top).toBeGreaterThanOrEqual(300);
+      const fit = fitView(w, h);
+      expect(fit.fov).toBeLessThanOrEqual(88);
+      expect(rowOf(w, h, at(0, 3, -8.2)).row).toBeGreaterThanOrEqual(band.top - 2);
+      expect(rowOf(w, h, at(0, 0, 0)).row).toBeLessThanOrEqual(band.bottom + 2);
+    },
+  );
+
+  it('moves a question that lands on the scorebug to just below it, and only then', () => {
+    const bug = { left: 12, top: 70, right: 309, bottom: 143 };
+    const clash = { left: 150, top: 12, right: 700, bottom: 110 };
+    const clear = { left: 330, top: 12, right: 700, bottom: 110 };
+    expect(rectsOverlap(clash, bug)).toBe(true);
+    expect(rectsOverlap(clear, bug)).toBe(false);
+    // Edges that only touch do not count.
+    expect(rectsOverlap({ left: 309, top: 70, right: 500, bottom: 143 }, bug)).toBe(false);
+    expect(questionTopBelowBug(clear, bug)).toBeNull();
+    // Just touching the scorebug's edge (as on an 844x390 phone) is left where it is.
+    const edge = { left: bug.right - QUESTION_SLACK + 1, top: 12, right: 540, bottom: 107 };
+    expect(rectsOverlap(edge, bug)).toBe(true);
+    expect(questionTopBelowBug(edge, bug)).toBeNull();
+    expect(questionTopBelowBug(clash, bug)).toBe(143 + QUESTION_GAP);
+    expect(QUESTION_GAP).toBe(8);
   });
 
   it.each(SHORT)('leaves a short landscape phone at least 150px of field at %ix%i', (w, h) => {

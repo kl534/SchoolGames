@@ -1,4 +1,4 @@
-import { callInPanel } from './layout';
+import { callInPanel, questionTopBelowBug } from './layout';
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -79,6 +79,12 @@ export interface Hud {
   /** Question, clock and answers. */
   hideQuestion(hidden: boolean): void;
   setQuestion(text: string): void;
+  /**
+   * Moves the question just below the scorebug if, as laid out now, it would sit on top of it
+   * (a long prompt on a middling screen, say), and back to its usual place if not. Returns
+   * whether it changed place, so the view can be fitted again.
+   */
+  settleQuestion(): boolean;
   setOptions(options: string[]): void;
   setClock(fraction: number): void;
   /** Dims the answers while a result plays out (they stay tappable to skip ahead). */
@@ -237,7 +243,22 @@ export function createHud(): Hud {
         `${info.runs} runs, ${info.outs} outs, ${info.strikes} strikes, batter ${info.batter} of ${info.batters}`,
       );
     },
+    settleQuestion() {
+      const wasBelow = hudBox.classList.contains('below-bug');
+      hudBox.classList.remove('below-bug');
+      hudBox.style.removeProperty('--bu-below-bug');
+      const wasHidden = hudBox.hidden;
+      hudBox.hidden = false;
+      const top = questionTopBelowBug(hudBox.getBoundingClientRect(), bug.getBoundingClientRect());
+      hudBox.hidden = wasHidden;
+      if (top !== null) {
+        hudBox.style.setProperty('--bu-below-bug', `${top}px`);
+        hudBox.classList.add('below-bug');
+      }
+      return (top !== null) !== wasBelow;
+    },
     measureBand() {
+      this.settleQuestion();
       const hidden = [hudBox.hidden, answers.hidden, ...buttons.map((b) => b.hidden)];
       hudBox.hidden = false;
       answers.hidden = false;

@@ -146,15 +146,21 @@
 }
 
 /*
- * Leave room for the menu, sound and pause buttons and the scorebug on a narrow phone held
- * upright. A phone on its side is wide enough for them to sit side by side (see the compact
- * block below), so this is for tall screens only. layout.ts (hudLayout) mirrors these queries.
+ * Leave room for the menu, sound and pause buttons and the scorebug on any screen held upright,
+ * phone or tablet. A phone on its side is wide enough for them to sit side by side (see the
+ * compact block below), so this is for tall screens only. layout.ts (hudLayout) mirrors these
+ * queries.
  */
-@media (max-width: 640px) and (max-aspect-ratio: 6/5) {
+@media (max-aspect-ratio: 6/5) {
   .bu-hud {
     top: calc(max(12px, env(safe-area-inset-top)) + 58px + 86px);
-    max-width: calc(100vw - 24px);
+    max-width: min(680px, calc(100vw - 24px));
   }
+}
+
+/* A safety net (see settleQuestion in hud.ts): the question dropped below the scorebug. */
+.bu-hud.below-bug {
+  top: var(--bu-below-bug, 156px);
 }
 
 .bu-hud[hidden],

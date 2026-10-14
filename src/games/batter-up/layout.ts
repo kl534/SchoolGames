@@ -39,8 +39,9 @@ export interface PlayBand {
 
 /**
  * How the HUD is arranged for a screen size. Mirrors the media queries in style.css:
- * - `stacked`: a narrow phone held upright; the scorebug and question stack up the top and the
- *   four answers wrap into two rows.
+ * - `stacked`: any screen held upright (taller than it is wide, or nearly square), phone or
+ *   tablet; the scorebug and question stack up the top. On a narrow phone the four answers also
+ *   wrap into two rows.
  * - `compact`: a short landscape phone; a smaller scorebug, question and answers, so that the
  *   field keeps most of the screen.
  * - `standard`: everything else.
@@ -49,7 +50,7 @@ export type HudLayout = 'stacked' | 'compact' | 'standard';
 
 export function hudLayout(width: number, height: number): HudLayout {
   const aspect = width / Math.max(height, 1);
-  if (width <= 640 && aspect <= 1.2) return 'stacked';
+  if (aspect <= 1.2) return 'stacked';
   if (height <= 380 && aspect >= 1.2) return 'compact';
   return 'standard';
 }
@@ -61,7 +62,9 @@ export function hudLayout(width: number, height: number): HudLayout {
  */
 export function playBand(width: number, height: number): PlayBand {
   const layout = hudLayout(width, height);
-  if (layout === 'stacked') return { top: 248, bottom: height - (width <= 560 ? 158 : 92) };
+  if (layout === 'stacked') {
+    return { top: width > 640 ? 262 : 248, bottom: height - (width <= 560 ? 158 : 92) };
+  }
   if (layout === 'compact') return { top: 76, bottom: height - 72 };
   return { top: height >= 700 ? 115 : 104, bottom: height - (height <= 460 ? 84 : 92) };
 }
@@ -258,6 +261,31 @@ export interface Rect {
   top: number;
   right: number;
   bottom: number;
+}
+
+/** Whether two screen rectangles overlap (touching edges do not count). */
+export function rectsOverlap(a: Rect, b: Rect): boolean {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+
+/** Space kept between the scorebug and a question moved down below it. */
+export const QUESTION_GAP = 8;
+/** How far the question may nudge into the scorebug's edge before it counts as a collision. */
+export const QUESTION_SLACK = 12;
+
+/**
+ * Where the question panel's top edge should be (px from the top) so that it does not sit on the
+ * scorebug: `null` when the two do not overlap (a few pixels of edge touching is left alone),
+ * otherwise just below the scorebug. A safety net for long prompts, whatever the screen.
+ */
+export function questionTopBelowBug(question: Rect, bug: Rect): number | null {
+  const core: Rect = {
+    left: bug.left + QUESTION_SLACK,
+    top: bug.top + QUESTION_SLACK,
+    right: bug.right - QUESTION_SLACK,
+    bottom: bug.bottom - QUESTION_SLACK,
+  };
+  return rectsOverlap(question, core) ? bug.bottom + QUESTION_GAP : null;
 }
 
 /** Room kept around each HUD piece. */
