@@ -1,5 +1,5 @@
-import { RETRY_GAP } from '../../shared/round';
-import type { Fact } from '../../shared/topics';
+import { RETRY_GAP } from './round';
+import type { Fact } from './topics';
 
 /** The feed tops itself up when fewer than this many facts are waiting. */
 export const MIN_QUEUED = 6;

@@ -6,6 +6,8 @@
   z-index: 15;
   display: flex;
   align-items: center;
+  /* A card taller than the screen starts at the top instead of being cut off at both ends. */
+  align-items: safe center;
   justify-content: center;
   padding: calc(max(12px, env(safe-area-inset-top)) + 60px) 16px
     max(16px, env(safe-area-inset-bottom));
@@ -25,7 +27,10 @@
 }
 
 .sg-card {
-  width: min(560px, 100%);
+  /* Border box, so that "100%" is the whole card and a tall one can be held to the screen. The
+     width is the old content width plus its padding. */
+  box-sizing: border-box;
+  width: min(608px, 100%);
   max-height: 100%;
   display: flex;
   flex-direction: column;
@@ -36,6 +41,8 @@
   background: #1a1f36;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
   text-align: center;
+  /* If it still does not fit, it scrolls inside itself. */
+  overflow-y: auto;
 }
 
 .sg-card h1,
@@ -178,6 +185,11 @@
   color: #ffd43b;
 }
 
+.sg-right {
+  font-size: 22px;
+  font-weight: 700;
+}
+
 .sg-star-off {
   opacity: 0.2;
   filter: grayscale(1);
@@ -207,4 +219,82 @@
   background: #ffd43b;
   color: #0f1220;
   font-weight: 800;
+}
+
+/*
+ * Short screens (a phone on its side): the card sits beside the Menu and the sound and pause
+ * buttons rather than under them, and everything shrinks so the card, heading to buttons, fits
+ * without scrolling at about 667x375 and up.
+ */
+@media (max-height: 460px) {
+  .sg-overlay {
+    padding: max(8px, env(safe-area-inset-top)) max(128px, env(safe-area-inset-right))
+      max(8px, env(safe-area-inset-bottom)) max(128px, env(safe-area-inset-left));
+  }
+
+  .sg-card {
+    gap: 6px;
+    padding: 12px 14px;
+    border-radius: 18px;
+  }
+
+  .sg-card h1 {
+    font-size: clamp(20px, 6.4vh, 26px);
+  }
+
+  /* Lesson cards: the fact stays on one line in the narrower card. */
+  .sg-statement {
+    font-size: clamp(30px, 11vh, 52px);
+  }
+
+  .sg-score {
+    font-size: clamp(32px, 10vh, 42px);
+  }
+
+  .sg-stars {
+    font-size: clamp(32px, 10vh, 42px);
+  }
+
+  .sg-right {
+    font-size: 18px;
+  }
+
+  .sg-badge {
+    padding: 3px 12px;
+    font-size: 14px;
+  }
+
+  .sg-missed {
+    gap: 6px;
+  }
+
+  .sg-missed li {
+    padding: 4px 10px;
+    border-radius: 10px;
+    font-size: 16px;
+  }
+
+  .sg-row {
+    gap: 8px;
+  }
+
+  .sg-btn {
+    min-height: 48px;
+    padding: 0 14px;
+    border-radius: 24px;
+    font-size: 16px;
+    white-space: nowrap;
+  }
+
+  .sg-btn-primary {
+    min-width: 0;
+    font-size: 17px;
+  }
+}
+
+/* Wide enough for it: the results buttons stay in one row. Narrower, they wrap and the card scrolls. */
+@media (max-height: 460px) and (min-width: 640px) {
+  .sg-actions {
+    flex-wrap: nowrap;
+  }
 }
