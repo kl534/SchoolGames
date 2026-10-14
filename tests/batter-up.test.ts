@@ -12,7 +12,14 @@ import {
   type FielderId,
 } from '../src/games/batter-up/characters';
 import { createEffects } from '../src/games/batter-up/effects';
-import { buildField } from '../src/games/batter-up/field';
+import {
+  BOARD_DOT_RADIUS,
+  BOARD_DOT_SPACING,
+  BOARD_DOT_STROKE,
+  BOARD_RIGHT_EDGE,
+  boardDotCentres,
+  buildField,
+} from '../src/games/batter-up/field';
 import {
   BALL_RADIUS,
   BASE_SIDE,
@@ -1072,6 +1079,23 @@ describe('the ballpark', () => {
     // Fireworks go off beyond the outfield wall and well above it.
     expect(field.fireworksCentre.z).toBeLessThan(-wallRadius(0));
     expect(field.fireworksCentre.y).toBeGreaterThan(15);
+  });
+
+  it('draws the outs dots inside the scoreboard border, lined up with the numbers', () => {
+    const centres = boardDotCentres();
+    expect(centres).toHaveLength(3);
+    const half = BOARD_DOT_RADIUS + BOARD_DOT_STROKE / 2;
+    // The last dot's outer edge sits on the numbers' right edge, inside the 504px border.
+    expect(centres[2] + half).toBeCloseTo(BOARD_RIGHT_EDGE, 6);
+    expect(centres[2] + half).toBeLessThan(504 - 3);
+    expect(centres[2]).toBeGreaterThan(455);
+    expect(centres[2]).toBeLessThan(461);
+    // The same spacing as before, and the dots do not touch each other.
+    expect(centres[1] - centres[0]).toBe(BOARD_DOT_SPACING);
+    expect(centres[2] - centres[1]).toBe(BOARD_DOT_SPACING);
+    expect(BOARD_DOT_SPACING).toBeGreaterThan(2 * half);
+    // Clear of the OUTS label (at x 40, four 40px capitals wide, at most 0.8em each).
+    expect(centres[0] - half).toBeGreaterThan(40 + 4 * 40 * 0.8);
   });
 
   it('bursts fireworks after the rocket has climbed, and clears them', () => {

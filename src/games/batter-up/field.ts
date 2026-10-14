@@ -61,6 +61,19 @@ function lcg(seed: number): () => number {
   };
 }
 
+/** Where the scoreboard's outs dots go on its 512px face: centres across, and the radius. */
+export const BOARD_DOT_RADIUS = 13;
+export const BOARD_DOT_STROKE = 3;
+export const BOARD_DOT_SPACING = 36;
+/** The right edge of the numbers on the face, which the last dot lines up with. */
+export const BOARD_RIGHT_EDGE = 472;
+
+/** Centre x of each of the three outs dots; the last one's outer edge is at `BOARD_RIGHT_EDGE`. */
+export function boardDotCentres(): number[] {
+  const last = BOARD_RIGHT_EDGE - BOARD_DOT_RADIUS - BOARD_DOT_STROKE / 2;
+  return [0, 1, 2].map((i) => last - (2 - i) * BOARD_DOT_SPACING);
+}
+
 export interface BoardInfo {
   runs: number;
   outs: number;
@@ -352,15 +365,15 @@ export function buildField(scene: Scene): Field {
     g.textAlign = 'right';
     g.fillStyle = '#ffe066';
     g.fillText(String(info.runs), 472, 135);
-    for (let i = 0; i < 3; i++) {
+    boardDotCentres().forEach((cx, i) => {
       g.beginPath();
-      g.arc(430 + i * 36 + 4, 172, 13, 0, Math.PI * 2);
+      g.arc(cx, 172, BOARD_DOT_RADIUS, 0, Math.PI * 2);
       g.fillStyle = i < info.outs ? '#ffe066' : '#2f6b4a';
       g.fill();
       g.strokeStyle = '#ffe066';
-      g.lineWidth = 3;
+      g.lineWidth = BOARD_DOT_STROKE;
       g.stroke();
-    }
+    });
     g.fillStyle = '#ffe066';
     g.fillText(`${Math.min(info.batter, info.batters)} / ${info.batters}`, 472, 232);
     boardTexture.needsUpdate = true;
