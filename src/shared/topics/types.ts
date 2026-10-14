@@ -1,6 +1,6 @@
 import type { Random } from '../random';
 
-/** Optional picture shown on lesson cards. */
+/** What kind of sum a math fact is, with its numbers. */
 export type FactVisual =
   | { kind: 'add'; a: number; b: number }
   | { kind: 'subtract'; a: number; b: number }
@@ -15,7 +15,7 @@ export interface Fact {
   prompt: string;
   /** The correct answer, e.g. '15' or 'said'. */
   answer: string;
-  /** The whole fact for lessons and reveals, e.g. '7 + 8 = 15'. */
+  /** The whole fact for the preview and reveals, e.g. '7 + 8 = 15'. */
   statement: string;
   /** Read aloud with the prompt; defaults to `prompt`. */
   spokenPrompt?: string;

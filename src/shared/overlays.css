@@ -1,4 +1,4 @@
-/* Shared styles for learning overlays (lesson cards, results). */
+/* Shared styles for learning overlays (the preview, results). */
 
 .sg-overlay {
   position: fixed;
@@ -59,13 +59,6 @@
   color: #9aa3c7;
 }
 
-.sg-statement {
-  font-size: clamp(40px, 11vw, 72px);
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  line-height: 1.1;
-}
-
 .sg-row {
   display: flex;
   flex-wrap: wrap;
@@ -116,58 +109,54 @@
   min-width: 160px;
 }
 
-.sg-progress-text {
-  font-weight: 700;
-  color: #9aa3c7;
-}
+/* Preview */
 
-/* Counting pictures */
-
-.sg-visual {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  min-height: 60px;
-}
-
-.sg-visual-sign {
-  font-size: 32px;
-  font-weight: 800;
-}
-
-.sg-dots {
-  --dot: 24px;
+/* The grid takes the spare height and scrolls, so the Start button below it is never cut off. */
+.sg-preview {
   display: grid;
-  grid-template-columns: repeat(var(--cols), var(--dot));
-  gap: calc(var(--dot) / 4);
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  width: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  /* Room for the focus ring of the chips at the edge. */
+  padding: 3px;
 }
 
-.sg-dot {
-  width: var(--dot);
-  height: var(--dot);
-  border-radius: 50%;
-  background: #5aa9ff;
+.sg-chip {
+  min-height: 48px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  font:
+    700 22px system-ui,
+    sans-serif;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.sg-dot.b {
-  background: #ffa94d;
+.sg-chip:active {
+  transform: scale(0.97);
 }
 
-.sg-dot.gone {
-  background: transparent;
-  box-shadow: inset 0 0 0 2px #ff6b6b;
-  position: relative;
+.sg-chip:focus-visible {
+  outline: 3px solid #4cc38a;
+  outline-offset: 2px;
 }
 
-.sg-dot.gone::after {
-  content: '';
-  position: absolute;
-  inset: 45% -10%;
-  background: #ff6b6b;
-  transform: rotate(-45deg);
-  border-radius: 2px;
+.sg-card > .sg-btn {
+  flex-shrink: 0;
+}
+
+/* Narrow phones: two columns, and room for "10 − 4 = 6" on one line. */
+@media (max-width: 420px) {
+  .sg-chip {
+    padding: 8px 4px;
+    font-size: 20px;
+  }
 }
 
 /* Results */
@@ -242,9 +231,20 @@
     font-size: clamp(20px, 6.4vh, 26px);
   }
 
-  /* Lesson cards: the fact stays on one line in the narrower card. */
-  .sg-statement {
-    font-size: clamp(30px, 11vh, 52px);
+  /* The heading already says what this is, and the chips need the height. */
+  .sg-preview-label {
+    display: none;
+  }
+
+  .sg-preview {
+    grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+    gap: 6px;
+  }
+
+  .sg-chip {
+    padding: 4px 6px;
+    border-radius: 12px;
+    font-size: 17px;
   }
 
   .sg-score {

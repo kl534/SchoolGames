@@ -3,7 +3,7 @@ import { MathUtils, Vector3, type Object3D } from 'three';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
 import { createFactFeed, type FactFeed } from '../../shared/feed';
 import { createPointerInput, onPress } from '../../shared/input';
-import { showLesson } from '../../shared/lesson';
+import { showPreview } from '../../shared/preview';
 import { showResults } from '../../shared/results';
 import { starsFor } from '../../shared/round';
 import { createScene } from '../../shared/scene';
@@ -97,7 +97,7 @@ const FIELD_SPEED = 9;
 const MISS_POINT: Vec = { x: 0.05, y: CONTACT.y + 0.42, z: CONTACT.z };
 
 type Phase =
-  | 'lesson'
+  | 'preview'
   | 'intro'
   | 'windup'
   | 'release'
@@ -154,7 +154,7 @@ function run(session: GameSession): void {
   });
 
   // ---------- State ----------
-  let phase: Phase = 'lesson';
+  let phase: Phase = 'preview';
   let feed: FactFeed = createFactFeed(() => session.chooseFacts());
   let state: GameState = newGame();
   /** What the scorebug shows; it lags the real state while a play is still happening. */
@@ -831,7 +831,7 @@ function run(session: GameSession): void {
   };
 
   // ---------- Run flow ----------
-  const startRun = (withLesson: boolean) => {
+  const startRun = (withPreview: boolean) => {
     pending = [];
     scenery = [];
     turn++;
@@ -874,12 +874,12 @@ function run(session: GameSession): void {
     refresh();
     hud.hideQuestion(true);
     hud.hideBanner();
-    if (!withLesson) {
+    if (!withPreview) {
       startIntro();
       return;
     }
-    phase = 'lesson';
-    showLesson({ topic: session.topic, facts: feed.peek(10), onDone: startIntro });
+    phase = 'preview';
+    showPreview({ topic: session.topic, facts: feed.peek(10), onDone: startIntro });
   };
 
   /** "Play ball!" and then the first pitch. */

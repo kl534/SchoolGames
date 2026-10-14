@@ -10,7 +10,7 @@ import {
 } from 'three';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
 import { createPointerInput, onPress } from '../../shared/input';
-import { showLesson } from '../../shared/lesson';
+import { showPreview } from '../../shared/preview';
 import { shuffle } from '../../shared/random';
 import { showResults } from '../../shared/results';
 import { createRound, starsFor, type Round } from '../../shared/round';
@@ -75,7 +75,7 @@ const STATUS_HEIGHT = 64;
 /** Seconds a result stays up before a tap can skip to the next question. */
 const SKIP_AFTER = 0.6;
 
-type Phase = 'lesson' | 'aiming' | 'throw' | 'result' | 'breaking' | 'ending' | 'done';
+type Phase = 'preview' | 'aiming' | 'throw' | 'result' | 'breaking' | 'ending' | 'done';
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -159,7 +159,7 @@ function run(session: GameSession): void {
   });
 
   // ---------- State ----------
-  let phase: Phase = 'lesson';
+  let phase: Phase = 'preview';
   let round: Round = createRound([]);
   let fact: Fact | undefined;
   let options: string[] = [];
@@ -322,14 +322,14 @@ function run(session: GameSession): void {
     field.repairFence();
     const facts = session.chooseFacts();
     round = createRound(facts);
-    phase = 'lesson';
+    phase = 'preview';
     options = [];
     brains = BRAINS;
     renderBrains();
     setPlayVisible(false);
     effects.clear();
     thrower.reset();
-    showLesson({
+    showPreview({
       topic: session.topic,
       facts,
       onDone: () => {

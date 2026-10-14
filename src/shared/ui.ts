@@ -5,6 +5,11 @@ export function menuUrl(): string {
   return import.meta.env.BASE_URL;
 }
 
+/** Menu page listing every topic, for practicing just one. */
+export function topicsUrl(): string {
+  return `${menuUrl()}?topics`;
+}
+
 /** Menu page listing the games for one topic. */
 export function topicMenuUrl(topicId: string): string {
   return `${menuUrl()}?${new URLSearchParams({ topic: topicId })}`;
