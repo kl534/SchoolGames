@@ -161,13 +161,13 @@ const SPECS: Record<Hit, Spec> = {
     air: 1.9,
     roll: 1.3,
   },
-  // Out of the park.
+  // Out of the park: a hard-hit drive that clears the wall, not a pop-up.
   homer: {
     angle: [4, 22],
     radius: [47, 50],
     stopAngle: [4, 22],
-    lift: [19, 22],
-    air: 2.7,
+    lift: [12, 14],
+    air: 2.3,
     roll: 0,
   },
 };

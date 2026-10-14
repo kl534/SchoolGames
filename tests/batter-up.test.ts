@@ -85,7 +85,6 @@ import {
   hitFor,
   hitLabel,
   hitSpeech,
-  MAX_BATTERS,
   MAX_OUTS,
   newGame,
   runsText,
@@ -265,31 +264,19 @@ describe('the count and the half-inning', () => {
     expect(applyHit(s, 'homer').state.runs).toBe(5);
   });
 
-  it('ends after nine batters, once the ninth has finished their turn', () => {
+  it('keeps going past nine batters while there are fewer than three outs', () => {
     let s = newGame();
-    for (let i = 1; i < MAX_BATTERS; i++) {
-      const result = applyHit(s, 'single');
-      s = result.state;
+    for (let i = 1; i <= 30; i++) {
+      s = applyHit(s, 'single').state;
       expect(s.over).toBe(false);
       expect(s.batter).toBe(i + 1);
     }
-    expect(s.batter).toBe(MAX_BATTERS);
-    const last = applyHit(s, 'single');
-    expect(last.state.over).toBe(true);
-    expect(last.state.batter).toBe(MAX_BATTERS);
-  });
-
-  it('counts the runs from nine singles in a row', () => {
-    let s = newGame();
-    while (!s.over) s = applyHit(s, 'single').state;
     // Everyone after the third batter pushes a runner home.
-    expect(s.runs).toBe(MAX_BATTERS - 3);
-  });
-
-  it('lets the ninth batter strike out without making a fourth out', () => {
-    let s: GameState = { ...newGame(), batter: MAX_BATTERS, outs: 1 };
+    expect(s.runs).toBe(30 - 3);
+    s = strikeOut(strikeOut(s));
+    expect(s.over).toBe(false);
     s = strikeOut(s);
-    expect(s).toMatchObject({ over: true, outs: 2, batter: MAX_BATTERS });
+    expect(s).toMatchObject({ over: true, outs: MAX_OUTS });
   });
 
   it('does not end early while there are outs to give and batters to come', () => {
@@ -1136,9 +1123,7 @@ describe('the ballpark', () => {
     const scene = new Scene();
     const field = buildField(scene);
     expect(scene.children.length).toBeGreaterThan(30);
-    expect(() =>
-      field.setBoard({ runs: 3, outs: 2, strikes: 1, batter: 5, batters: 9 }),
-    ).not.toThrow();
+    expect(() => field.setBoard({ runs: 3, outs: 2, strikes: 1, batter: 5 })).not.toThrow();
     // Fireworks go off beyond the outfield wall and well above it.
     expect(field.fireworksCentre.z).toBeLessThan(-wallRadius(0));
     expect(field.fireworksCentre.y).toBeGreaterThan(15);

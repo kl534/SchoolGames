@@ -72,5 +72,9 @@ describe('spoken score lines', () => {
     expect(endSpeech(false, 1)).toBe("That's the inning! 1 run scored.");
     expect(finalSpeech(1)).toBe('You scored 1 run!');
     expect(finalSpeech(0)).toBe('You scored 0 runs!');
+    // A score too big to have a clip is called by a fixed line.
+    expect(finalSpeech(20)).toBe('You scored 20 runs!');
+    expect(finalSpeech(21)).toBe('You scored more than 20 runs!');
+    expect(endSpeech(true, 400)).toBe('Three outs! More than 20 runs scored.');
   });
 });

@@ -71,7 +71,6 @@ import {
   hitFor,
   hitLabel,
   hitSpeech,
-  MAX_BATTERS,
   newGame,
   PLAY_BALL,
   runsText,
@@ -160,6 +159,8 @@ function run(session: GameSession): void {
   let phase: Phase = 'preview';
   let feed: FactFeed = createFactFeed(() => session.chooseFacts());
   let state: GameState = newGame();
+  /** The high score when this run began; the run saves its score as it goes. */
+  let bestAtStart = session.highScore();
   /** What the scorebug shows; it lags the real state while a play is still happening. */
   const shown = { runs: 0, strikes: 0, batter: 1, outs: 0 };
   let fact: Fact | undefined;
@@ -308,6 +309,22 @@ function run(session: GameSession): void {
     };
   };
 
+  // ---------- Saving ----------
+  /** Stars are only worth saving once there are enough answers to judge by. */
+  const MIN_ANSWERS_FOR_STARS = 10;
+  /**
+   * Saves how the run stands: the score as the high score, and the stars once there are enough
+   * answers. Each answer is saved by the session as it is given, so the player can quit at any
+   * moment and keep everything so far. Both are "best so far" records, so saving them again at
+   * the end, or on the next run, never takes anything away.
+   */
+  const saveProgress = () => {
+    session.recordScore(state.runs);
+    if (feed.answered >= MIN_ANSWERS_FOR_STARS) {
+      session.recordStars(starsFor(feed.correct, feed.answered));
+    }
+  };
+
   // ---------- HUD helpers ----------
   const refresh = () => {
     hud.renderBug({
@@ -316,7 +333,6 @@ function run(session: GameSession): void {
       outs: shown.outs,
       strikes: shown.strikes,
       batter: shown.batter,
-      batters: MAX_BATTERS,
       bases: state.bases,
     });
     field.setBoard({
@@ -324,7 +340,6 @@ function run(session: GameSession): void {
       outs: shown.outs,
       strikes: shown.strikes,
       batter: shown.batter,
-      batters: MAX_BATTERS,
     });
   };
 
@@ -519,6 +534,7 @@ function run(session: GameSession): void {
     const call = strikeCall(state.strikes + 1, called);
     const outcome = applyStrike(state);
     state = outcome.state;
+    saveProgress();
     struckOut = call.out;
     shown.strikes = call.out ? 3 : state.strikes;
     shown.outs = state.outs;
@@ -595,6 +611,7 @@ function run(session: GameSession): void {
     effects.crack(CONTACT);
     const outcome = applyHit(state, hit);
     state = outcome.state;
+    saveProgress();
     refresh();
     hud.markHit(chosen);
     // The question gives way to the view of the field.
@@ -813,7 +830,8 @@ function run(session: GameSession): void {
     const runs = state.runs;
     const stars = starsFor(feed.correct, feed.answered);
     session.recordStars(stars);
-    const newHighScore = session.recordScore(runs);
+    session.recordScore(runs);
+    const newHighScore = runs > bestAtStart;
     refresh();
     if (newHighScore) sfx.cheer();
     speak(finalSpeech(runs));
@@ -844,6 +862,7 @@ function run(session: GameSession): void {
     stopSpeaking();
     feed = createFactFeed(() => session.chooseFacts());
     state = newGame();
+    bestAtStart = session.highScore();
     shown.runs = shown.strikes = shown.outs = 0;
     shown.batter = 1;
     fact = undefined;

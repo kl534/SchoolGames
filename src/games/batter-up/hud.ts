@@ -69,7 +69,6 @@ export interface BugInfo {
   outs: number;
   strikes: number;
   batter: number;
-  batters: number;
   bases: readonly [boolean, boolean, boolean];
 }
 
@@ -236,11 +235,11 @@ export function createHud(): Hud {
       bestText.textContent = `Best ${info.best}`;
       setDots(outsValue, info.outs, 3);
       setDots(strikesValue, info.strikes, 3);
-      batterText.textContent = `Batter ${Math.min(info.batter, info.batters)} of ${info.batters}`;
+      batterText.textContent = `Batter ${info.batter}`;
       bases.forEach((base, i) => base.classList.toggle('on', info.bases[i]));
       bug.setAttribute(
         'aria-label',
-        `${info.runs} runs, ${info.outs} outs, ${info.strikes} strikes, batter ${info.batter} of ${info.batters}`,
+        `${info.runs} runs, ${info.outs} outs, ${info.strikes} strikes, batter ${info.batter}`,
       );
     },
     settleQuestion() {

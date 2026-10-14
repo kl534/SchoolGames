@@ -1,8 +1,12 @@
 /** Pure game rules, kept free of three.js and the DOM so they are easy to test. */
 
-/** One half-inning: it ends at this many outs, or once this many batters have batted. */
+/** The game is one long half-inning: it ends at this many outs, however many batters come up. */
 export const MAX_OUTS = 3;
-export const MAX_BATTERS = 9;
+/**
+ * Most runs the announcer reads out in full. Every count up to here is a recorded clip; a bigger
+ * score is called "more than" this, so the line stays one that can be recorded.
+ */
+export const MAX_SPOKEN_RUNS = 20;
 /** Strikes that put a batter out. */
 export const STRIKES_OUT = 3;
 
@@ -57,15 +61,22 @@ export function runsText(runs: number): string {
   return `+${runs} ${runs === 1 ? 'run' : 'runs'}!`;
 }
 
+/** "2 runs", or "more than 20 runs" for a score too big to have a recorded line. */
+function runsSpoken(runs: number): string {
+  if (runs > MAX_SPOKEN_RUNS) return `more than ${MAX_SPOKEN_RUNS} runs`;
+  return `${runs} ${runs === 1 ? 'run' : 'runs'}`;
+}
+
 /** What the announcer says when the half-inning ends, e.g. "Three outs! 2 runs scored." */
 export function endSpeech(threeOuts: boolean, runs: number): string {
   const title = threeOuts ? 'Three outs!' : "That's the inning!";
-  return `${title} ${runs} ${runs === 1 ? 'run' : 'runs'} scored.`;
+  const scored = runsSpoken(runs);
+  return `${title} ${scored[0].toUpperCase()}${scored.slice(1)} scored.`;
 }
 
 /** What the announcer says for the final score. */
 export function finalSpeech(runs: number): string {
-  return `You scored ${runs} ${runs === 1 ? 'run' : 'runs'}!`;
+  return `You scored ${runsSpoken(runs)}!`;
 }
 
 /** The announcer's first call. */
@@ -132,9 +143,9 @@ export interface Outcome {
   moves: Move[];
 }
 
-/** Ends the batter's turn: the next batter steps up, unless the half-inning is over. */
+/** Ends the batter's turn: the next batter steps up, unless that was the third out. */
 function nextBatter(state: GameState): GameState {
-  const over = state.outs >= MAX_OUTS || state.batter >= MAX_BATTERS;
+  const over = state.outs >= MAX_OUTS;
   return { ...state, strikes: 0, over, batter: over ? state.batter : state.batter + 1 };
 }
 
