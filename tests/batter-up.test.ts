@@ -91,11 +91,11 @@ describe('hit tiers', () => {
   it('is worth one to four bases, with names and speech', () => {
     expect(BASES_FOR).toEqual({ single: 1, double: 2, triple: 3, homer: 4 });
     expect(hitLabel('homer')).toBe('HOME RUN!');
-    expect(hitLabel('double')).toBe('DOUBLE IN THE GAP!');
+    expect(hitLabel('double')).toBe('DOUBLE!');
     expect(hitLabel('single')).toBe('SINGLE!');
     expect(hitLabel('triple')).toBe('TRIPLE!');
     expect(hitSpeech('homer')).toBe('Home run!');
-    expect(hitSpeech('double')).toBe('Double in the gap!');
+    expect(hitSpeech('double')).toBe('Double!');
   });
 
   it('says how many runs scored', () => {

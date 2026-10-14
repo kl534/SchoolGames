@@ -1,7 +1,7 @@
 {
   "id": "batter-up",
   "title": "Batter Up",
-  "description": "Answer fast to smash the pitch — singles, doubles in the gap, triples and home runs!",
+  "description": "Answer fast to smash the pitch — singles, doubles, triples and home runs!",
   "thumbnail": "thumbnail.svg",
   "tags": ["sports", "3d"],
   "scoring": "score"

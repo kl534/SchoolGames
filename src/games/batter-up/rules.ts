@@ -35,7 +35,7 @@ export function hitFor(fraction: number): Hit {
 export function hitLabel(hit: Hit): string {
   return {
     single: 'SINGLE!',
-    double: 'DOUBLE IN THE GAP!',
+    double: 'DOUBLE!',
     triple: 'TRIPLE!',
     homer: 'HOME RUN!',
   }[hit];
@@ -45,7 +45,7 @@ export function hitLabel(hit: Hit): string {
 export function hitSpeech(hit: Hit): string {
   return {
     single: 'Single!',
-    double: 'Double in the gap!',
+    double: 'Double!',
     triple: 'Triple!',
     homer: 'Home run!',
   }[hit];
