@@ -24,6 +24,8 @@ import {
 import {
   BASE_SPOTS,
   BASE_SIDE,
+  BOARD,
+  FIREWORKS_CENTRE,
   FOUL_ANGLE,
   MOUND,
   MOUND_HEIGHT,
@@ -310,8 +312,8 @@ export function buildField(scene: Scene): Field {
       : Object.assign(document.createElement('canvas'), { width: 512, height: 256 });
   const boardTexture = boardCanvas ? new CanvasTexture(boardCanvas) : null;
   if (boardTexture) boardTexture.colorSpace = SRGBColorSpace;
-  const boardZ = -(wallRadius(0) + 22);
-  const board = new Mesh(new BoxGeometry(20, 10, 0.8), [
+  const boardZ = BOARD.z;
+  const board = new Mesh(new BoxGeometry(BOARD.width, BOARD.height, 0.8), [
     std(0x22262e),
     std(0x22262e),
     std(0x22262e),
@@ -319,7 +321,7 @@ export function buildField(scene: Scene): Field {
     new MeshBasicMaterial({ map: boardTexture, color: boardTexture ? 0xffffff : 0x1c4d33 }),
     std(0x22262e),
   ]);
-  board.position.set(0, 23, boardZ);
+  board.position.set(BOARD.x, BOARD.y, boardZ);
   scene.add(board);
   for (const x of [-7, 7]) {
     const post = new Mesh(new BoxGeometry(0.8, 20, 0.8), std(0x3a3f4a));
@@ -365,6 +367,6 @@ export function buildField(scene: Scene): Field {
 
   return {
     setBoard,
-    fireworksCentre: { x: 0, y: 34, z: -(wallRadius(0) + 12) },
+    fireworksCentre: { ...FIREWORKS_CENTRE },
   };
 }

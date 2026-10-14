@@ -45,7 +45,18 @@ import {
   type Vec,
 } from './flight';
 import { createHud } from './hud';
-import { fitView, followGoal, homeView, type HomeView } from './layout';
+import {
+  centreShift,
+  fireworksAim,
+  fireworksFit,
+  fitView,
+  followGoal,
+  hitBand,
+  homeView,
+  keepBoardClear,
+  type HomeView,
+  type ViewFit,
+} from './layout';
 import {
   applyHit,
   applyStrike,
@@ -223,21 +234,50 @@ function run(session: GameSession): void {
   let viewW = 0;
   let viewH = 0;
 
+  /** The batting view's field of view and shift, for this screen. */
+  let fit: ViewFit = { fov: 60, shift: 0 };
+  /** What the camera uses now: it eases between the batting view and the views of a hit. */
+  let viewFov = 60;
+  let viewShift = 0;
+  /** The part of the screen a hit plays out in (the question is hidden), and its two framings. */
+  let hitFrame = {
+    band: hitBand(0, 0),
+    shift: 0,
+    fireworks: { fov: 60, shift: 0 } as ViewFit,
+  };
+
+  const applyView = () => {
+    camera.fov = viewFov;
+    camera.setViewOffset(viewW, viewH, 0, viewShift, viewW, viewH);
+    camera.updateProjectionMatrix();
+    effects.setScale(
+      (viewH * ctx.renderer.getPixelRatio()) / (2 * Math.tan((viewFov * Math.PI) / 360)),
+    );
+  };
+
+  /** Works out where a hit's view goes, from where the scorebug really is. */
+  const measureHit = () => {
+    const band = hitBand(viewW, viewH, hud.bugBottom());
+    hitFrame = {
+      band,
+      shift: centreShift(viewH, band),
+      fireworks: fireworksFit(viewW, viewH, fit.fov, band),
+    };
+  };
+
   const layout = () => {
     const w = container.clientWidth;
     const h = container.clientHeight;
     if (w === viewW && h === viewH) return;
     viewW = w;
     viewH = h;
-    const fit = fitView(w, h);
+    fit = fitView(w, h);
     home = homeView(w / Math.max(h, 1));
     camera.aspect = w / Math.max(h, 1);
-    camera.fov = fit.fov;
-    camera.setViewOffset(w, h, 0, fit.shift, w, h);
-    camera.updateProjectionMatrix();
-    effects.setScale(
-      (h * ctx.renderer.getPixelRatio()) / (2 * Math.tan((fit.fov * Math.PI) / 360)),
-    );
+    viewFov = fit.fov;
+    viewShift = fit.shift;
+    measureHit();
+    applyView();
   };
 
   const toScreen = (world: Vec) => {
@@ -517,6 +557,7 @@ function run(session: GameSession): void {
   /** The bat meets the ball. */
   const contact = (hit: Hit) => {
     sfx.bat();
+    measureHit();
     effects.crack(CONTACT);
     const outcome = applyHit(state, hit);
     state = outcome.state;
@@ -892,16 +933,19 @@ function run(session: GameSession): void {
     effects.update(delta);
 
     // --- The camera: behind the plate, or following the ball ---
+    let goalFov = fit.fov;
+    let goalShift = fit.shift;
     if (camMode === 'follow' && plan) {
-      const aim =
-        fireworksFrom === Infinity && plan.overWall && hitT >= plan.airTime * 0.78
-          ? {
-              x: field.fireworksCentre.x,
-              y: field.fireworksCentre.y + 8,
-              z: field.fireworksCentre.z + 20,
-            }
-          : ballPos;
-      followGoal(aim, goalPos, goalLook, home);
+      // Once the fireworks are up, the shot is of the scoreboard and the bursts.
+      const closing = fireworksFrom === Infinity && plan.overWall && hitT >= plan.airTime * 0.78;
+      followGoal(closing ? fireworksAim() : ballPos, goalPos, goalLook, home);
+      if (closing) {
+        goalFov = hitFrame.fireworks.fov;
+        goalShift = hitFrame.fireworks.shift;
+      } else {
+        goalShift = hitFrame.shift;
+        keepBoardClear(ballPos, goalPos, goalLook, fit.fov, viewW, viewH, hitFrame.band);
+      }
     } else {
       Object.assign(goalPos, home.cam);
       Object.assign(goalLook, home.look);
@@ -913,6 +957,16 @@ function run(session: GameSession): void {
     look.x = easeToward(look.x, goalLook.x, follow ? 3.5 : 3, delta);
     look.y = easeToward(look.y, goalLook.y, follow ? 3.5 : 3, delta);
     look.z = easeToward(look.z, goalLook.z, follow ? 3.5 : 3, delta);
+    // The picture slides and zooms along with the camera, and only while it still has to.
+    const settle = (now: number, goal: number, near: number) =>
+      Math.abs(goal - now) < near ? goal : easeToward(now, goal, 2.5, delta);
+    const nextShift = settle(viewShift, goalShift, 0.05);
+    const nextFov = settle(viewFov, goalFov, 0.02);
+    if (nextShift !== viewShift || nextFov !== viewFov) {
+      viewShift = nextShift;
+      viewFov = nextFov;
+      applyView();
+    }
     camera.position.set(cam.x + Math.sin(time * 0.5) * 0.03, cam.y, cam.z);
     camera.lookAt(look);
     camera.updateMatrixWorld();

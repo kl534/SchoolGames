@@ -18,12 +18,15 @@ import {
   BASE_SIDE,
   BASE_SPOTS,
   basePathPoint,
+  BOARD,
+  BURST_RADIUS,
   CHASERS,
   CONTACT,
   dashPosition,
   FOUL_ANGLE,
   fieldAngle,
   fieldPoint,
+  FIREWORKS_CENTRE,
   GLOVE,
   LAP,
   pickChasers,
@@ -36,7 +39,19 @@ import {
   wallRadius,
   type Vec,
 } from '../src/games/batter-up/flight';
-import { fitView, followGoal, homeView, playBand } from '../src/games/batter-up/layout';
+import {
+  centreShift,
+  fireworksAim,
+  fireworksFit,
+  fireworksPoints,
+  fitView,
+  followGoal,
+  hitBand,
+  homeView,
+  keepBoardClear,
+  playBand,
+  project,
+} from '../src/games/batter-up/layout';
 import { createMover } from '../src/games/batter-up/mover';
 import { createPerson, mixPose, neutralPose } from '../src/games/batter-up/person';
 import {
@@ -563,6 +578,132 @@ describe('the camera', () => {
     expect(homeView(2.2).cam.y).toBeLessThan(homeView(0.46).cam.y);
     expect(homeView(0.3)).toEqual(homeView(0.5));
     expect(homeView(5)).toEqual(homeView(2.5));
+  });
+});
+
+describe('the view of a hit', () => {
+  const SCREENS: [number, number][] = [
+    [390, 844],
+    [844, 390],
+    [568, 320],
+    [768, 1024],
+    [1366, 1024],
+  ];
+
+  it('keeps everything below the scorebug and leaves the foot of the screen to the field', () => {
+    expect(hitBand(390, 844, 150)).toEqual({ top: 158, bottom: 832 });
+    const guess = hitBand(390, 844);
+    expect(guess.top).toBeGreaterThan(100);
+    expect(guess.bottom).toBeGreaterThan(guess.top);
+    expect(centreShift(800, { top: 100, bottom: 700 })).toBe(0);
+    expect(centreShift(800, { top: 200, bottom: 700 })).toBe(-50);
+  });
+
+  it.each(SCREENS)(
+    'closes a home run on the whole scoreboard and the fireworks at %ix%i',
+    (w, h) => {
+      const fit = fitView(w, h);
+      const band = hitBand(w, h);
+      const shot = fireworksFit(w, h, fit.fov, band);
+      expect(shot.fov).toBeGreaterThanOrEqual(fit.fov);
+      // A little wider than the batting view, never a lurch to a fisheye.
+      expect(shot.fov).toBeLessThanOrEqual(fit.fov + 12);
+      const cam = at(0, 0, 0);
+      const look = at(0, 0, 0);
+      followGoal(fireworksAim(), cam, look, homeView(w / h));
+      // The scoreboard's four corners and the furthest the sparks reach either way.
+      const spots = [
+        ...[-1, 1].flatMap((sx) =>
+          [-1, 1].map((sy) =>
+            at(BOARD.x + (sx * BOARD.width) / 2, BOARD.y + (sy * BOARD.height) / 2, BOARD.z),
+          ),
+        ),
+        ...[-1, 1].flatMap((sx) =>
+          [-1, 1].map((sy) =>
+            at(
+              FIREWORKS_CENTRE.x + sx * BURST_RADIUS,
+              FIREWORKS_CENTRE.y + sy * BURST_RADIUS,
+              FIREWORKS_CENTRE.z,
+            ),
+          ),
+        ),
+      ];
+      expect(fireworksPoints()).toEqual(spots.slice(0, 4).concat(spots.slice(4)));
+      for (const p of spots) {
+        const screen = project(p, cam, look, shot.fov, w, h);
+        const row = screen.y - shot.shift;
+        expect(row).toBeGreaterThanOrEqual(band.top);
+        expect(row).toBeLessThanOrEqual(band.bottom);
+        expect(screen.x).toBeGreaterThanOrEqual(0);
+        expect(screen.x).toBeLessThanOrEqual(w);
+      }
+    },
+  );
+
+  const HITS = ['single', 'double', 'triple'] as const;
+  it.each(SCREENS)(
+    'never leaves the scoreboard half behind the scorebug on a single, double or triple at %ix%i',
+    (w, h) => {
+      const fit = fitView(w, h);
+      const band = hitBand(w, h);
+      const home = homeView(w / h);
+      const lift = (band.top + band.bottom) / 2 - h / 2;
+      for (const hit of HITS) {
+        for (const side of [-1, 1] as const) {
+          for (const roll of [0, 0.5, 1]) {
+            const plan = planHit(hit, side, roll, roll);
+            const ball = at(0, 0, 0);
+            const cam = at(0, 0, 0);
+            const look = at(0, 0, 0);
+            for (let t = 0; t <= plan.duration + 0.5; t += 0.1) {
+              plan.position(t, ball);
+              followGoal(ball, cam, look, home);
+              keepBoardClear(ball, cam, look, fit.fov, w, h, band);
+              const spots = [-1, 1].flatMap((sx) =>
+                [-1, 1].map((sy) =>
+                  project(
+                    at(
+                      BOARD.x + (sx * BOARD.width) / 2,
+                      BOARD.y + (sy * BOARD.height) / 2,
+                      BOARD.z,
+                    ),
+                    cam,
+                    look,
+                    fit.fov,
+                    w,
+                    h,
+                  ),
+                ),
+              );
+              const top = Math.min(...spots.map((p) => p.y)) + lift;
+              const bottom = Math.max(...spots.map((p) => p.y)) + lift;
+              const left = Math.min(...spots.map((p) => p.x));
+              const right = Math.max(...spots.map((p) => p.x));
+              // Wholly in the band with its sides on screen, or wholly out of the picture.
+              const inside = top >= band.top - 0.5 && left >= -0.5 && right <= w + 0.5;
+              const gone = bottom <= 0.5 || right <= 0.5 || left >= w - 0.5;
+              expect(inside || gone).toBe(true);
+            }
+            // The closing frame still shows the ball.
+            const row = project(ball, cam, look, fit.fov, w, h).y + lift;
+            expect(row).toBeGreaterThan(band.top);
+            expect(row).toBeLessThan(band.bottom);
+          }
+        }
+      }
+    },
+  );
+
+  it('leaves the aim alone once the scoreboard is clear', () => {
+    const fit = fitView(844, 390);
+    const band = hitBand(844, 390);
+    const cam = at(0.4, 3.5, 11);
+    const look = at(0, 0.5, -30);
+    const ball = at(0, 0.2, -30);
+    keepBoardClear(ball, cam, look, fit.fov, 844, 390, band);
+    const settled = { ...look };
+    keepBoardClear(ball, cam, look, fit.fov, 844, 390, band);
+    expect(look).toEqual(settled);
   });
 });
 

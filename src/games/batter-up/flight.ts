@@ -74,6 +74,19 @@ export function wallRadius(theta: number): number {
   return WALL_POLE + (WALL_CENTRE - WALL_POLE) * (1 - t);
 }
 
+/** The scoreboard high above the stands in centre field: its middle and its size. */
+export const BOARD = {
+  x: 0,
+  y: 23,
+  z: -(WALL_CENTRE + 22),
+  width: 20,
+  height: 10,
+};
+/** Where the fireworks go off, above the scoreboard. */
+export const FIREWORKS_CENTRE: Vec = { x: 0, y: 34, z: -(WALL_CENTRE + 12) };
+/** How far from where it goes off a firework's sparks reach (world units). */
+export const BURST_RADIUS = 13;
+
 /** A spot `radius` from home at `theta` radians from centre field, positive towards right field. */
 export function fieldPoint(theta: number, radius: number, y = 0): Vec {
   return { x: Math.sin(theta) * radius, y, z: -Math.cos(theta) * radius };

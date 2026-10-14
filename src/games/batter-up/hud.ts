@@ -85,6 +85,8 @@ export interface Hud {
   /** The answer that was picked on a correct hit; the rest fade. */
   markHit(chosen: number): void;
   renderBug(info: BugInfo): void;
+  /** Bottom edge of the scorebug, in px from the top of the screen. */
+  bugBottom(): number;
   flashRuns(): void;
   showBanner(
     title: string,
@@ -197,6 +199,9 @@ export function createHud(): Hud {
         'aria-label',
         `${info.runs} runs, ${info.outs} outs, ${info.strikes} strikes, batter ${info.batter} of ${info.batters}`,
       );
+    },
+    bugBottom() {
+      return bug.getBoundingClientRect().bottom;
     },
     flashRuns() {
       replay(runsValue);
