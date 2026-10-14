@@ -26,6 +26,7 @@ import {
 import { createEffects, fireworkColour } from './effects';
 import { buildField } from './field';
 import {
+  BALL_RADIUS,
   BASE_SIDE,
   BASE_SPOTS,
   CHASERS,
@@ -52,9 +53,12 @@ import {
   fitView,
   followGoal,
   hitBand,
+  ballScale,
   homeView,
+  hudRects,
   keepBoardClear,
   type HomeView,
+  type Rect,
   type ViewFit,
 } from './layout';
 import {
@@ -80,6 +84,8 @@ const GAME_ID = 'batter-up';
 const SKIP_AFTER = 0.6;
 /** Least seconds the correct fact stays up after a miss. */
 const REVEAL_FOR = 2.4;
+/** Seconds the name of a hit stays up while the ball is in the air. */
+const BANNER_FOR = 1.4;
 /** The pitcher winds up at least this long, however quickly the question is read. */
 const MIN_WIND = 0.9;
 /** Seconds into a hit before a tap can skip the rest of it. */
@@ -183,6 +189,8 @@ function run(session: GameSession): void {
   let props: Prop[] = [];
 
   // A hit in progress.
+  /** How much the ball is scaled up now, so its trail can match. */
+  let ballScaleNow = 1;
   let plan: HitPlan | null = null;
   let hitT = 0;
   let landed = false;
@@ -246,6 +254,7 @@ function run(session: GameSession): void {
   /** The part of the screen a hit plays out in (the question is hidden), and its two framings. */
   let hitFrame = {
     band: hitBand(0, 0),
+    blocked: [] as Rect[],
     shift: 0,
     fireworks: { fov: 60, shift: 0 } as ViewFit,
   };
@@ -261,9 +270,11 @@ function run(session: GameSession): void {
 
   /** Works out where a hit's view goes, from where the scorebug really is. */
   const measureHit = () => {
-    const band = hitBand(viewW, viewH, hud.bugBottom());
+    const bug = hud.bugRect();
+    const band = hitBand(viewW, viewH, bug.bottom);
     hitFrame = {
       band,
+      blocked: hudRects(viewW, viewH, bug),
       shift: centreShift(viewH, band),
       fireworks: fireworksFit(viewW, viewH, fit.fov, band),
     };
@@ -315,13 +326,21 @@ function run(session: GameSession): void {
   };
 
   // ---------- The ball ----------
-  const putBall = (p: Vec) => {
+  const putBall = (p: Vec, followed = false) => {
     ballPos.x = p.x;
     ballPos.y = p.y;
     ballPos.z = p.z;
-    // Far from the camera the ball is drawn bigger, so it can still be followed.
     const far = camera.position.distanceTo(point.set(p.x, p.y, p.z));
-    ball.place(ballPos, MathUtils.clamp(far / 20, 1, 3));
+    if (!followed) {
+      // Far from the camera the ball is drawn bigger, so it can still be seen.
+      ball.place(ballPos, MathUtils.clamp(far / 20, 1, 3));
+      return;
+    }
+    // A ball in flight after a hit is never smaller than a few pixels on screen, however far
+    // it goes. A bigger ball must not sink into the ground.
+    const scale = ballScale(far, viewFov, viewH);
+    ball.place({ x: p.x, y: Math.max(p.y, BALL_RADIUS * scale), z: p.z }, scale);
+    ballScaleNow = scale;
   };
 
   /** Sends the ball along straight segments, running each one's `onEnd` as it gets there. */
@@ -374,6 +393,7 @@ function run(session: GameSession): void {
     hud.setClock(1);
     hud.hideQuestion(false);
     ball.setVisible(false);
+    ball.setGlow(false);
     umpire.reset();
     batter.ready();
     pitcher.windUp();
@@ -575,6 +595,8 @@ function run(session: GameSession): void {
     // The question gives way to the view of the field.
     after(0.25, () => hud.hideQuestion(true));
     hud.showBanner(hitLabel(hit), runsText(outcome.runs), 'hit', 'top');
+    // The callout has been seen and heard; it comes down so it never hides the ball.
+    after(BANNER_FOR, () => hud.hideBanner());
     speak(hitSpeech(hit));
     after(0.35, hit === 'homer' ? sfx.bigCheer : sfx.cheer);
 
@@ -683,6 +705,7 @@ function run(session: GameSession): void {
     held = null;
     camMode = 'home';
     ball.setVisible(false);
+    ball.setGlow(false);
     stopSpeaking();
     hud.hideBanner();
     effects.onBurst = null;
@@ -703,16 +726,17 @@ function run(session: GameSession): void {
     if (held) {
       held.mover.person.handWorld('L', handPoint);
       putBall({ x: handPoint.x, y: handPoint.y + 0.05, z: handPoint.z });
+      ball.setGlow(false);
     } else if (!(plan.overWall && hitT > plan.airTime)) {
-      putBall(p);
+      putBall(p, true);
       ball.spin(delta, 18);
-      if (hitT < plan.airTime) {
-        // Far away the trail grows so the ball can still be followed.
-        const far = camera.position.distanceTo(point.set(ballPos.x, ballPos.y, ballPos.z));
-        effects.trail(ballPos, Math.max(0.5, far * 0.025));
-      }
+      ball.setGlow(true);
+      // The trail grows with the ball, so it can be followed all the way.
+      if (hitT < plan.airTime)
+        effects.trail(ballPos, Math.max(0.5, BALL_RADIUS * 2 * ballScaleNow));
     } else {
       ball.setVisible(false);
+      ball.setGlow(false);
     }
     if (!landed && hitT >= plan.airTime) {
       landed = true;
@@ -827,6 +851,7 @@ function run(session: GameSession): void {
     effects.clear();
     effects.onBurst = null;
     ball.setVisible(false);
+    ball.setGlow(false);
     // Clear the bases and bring on the first batter.
     [...spawned].forEach(retire);
     props = [];
@@ -964,7 +989,16 @@ function run(session: GameSession): void {
         goalShift = hitFrame.fireworks.shift;
       } else {
         goalShift = hitFrame.shift;
-        keepBoardClear(ballPos, goalPos, goalLook, fit.fov, viewW, viewH, hitFrame.band);
+        keepBoardClear(
+          ballPos,
+          goalPos,
+          goalLook,
+          fit.fov,
+          viewW,
+          viewH,
+          hitFrame.band,
+          hitFrame.blocked,
+        );
       }
     } else {
       Object.assign(goalPos, home.cam);

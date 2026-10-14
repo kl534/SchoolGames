@@ -1,10 +1,15 @@
 import {
+  AdditiveBlending,
+  CanvasTexture,
   CylinderGeometry,
   Group,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
   SphereGeometry,
+  Sprite,
+  SpriteMaterial,
+  SRGBColorSpace,
   TorusGeometry,
   Vector3,
   type Object3D,
@@ -36,6 +41,29 @@ export interface Ball {
   place(p: Vec, scale?: number): void;
   spin(delta: number, rate: number): void;
   setVisible(visible: boolean): void;
+  /** A soft glow around the ball, so a long fly ball can be followed. */
+  setGlow(on: boolean): void;
+}
+
+/** How much bigger than the ball its glow is drawn. */
+const GLOW_SIZE = 2.2;
+
+/** A soft yellow-white dot that fades to nothing at its edge; null where there is no canvas. */
+function glowTexture(): CanvasTexture | null {
+  if (typeof document === 'undefined') return null;
+  const canvas = Object.assign(document.createElement('canvas'), { width: 128, height: 128 });
+  const g = canvas.getContext('2d');
+  if (!g) return null;
+  const fade = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  fade.addColorStop(0, 'rgba(255, 255, 235, 1)');
+  fade.addColorStop(0.3, 'rgba(255, 238, 160, 0.7)');
+  fade.addColorStop(0.65, 'rgba(255, 210, 90, 0.22)');
+  fade.addColorStop(1, 'rgba(255, 200, 60, 0)');
+  g.fillStyle = fade;
+  g.fillRect(0, 0, 128, 128);
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
 }
 
 export function createBall(): Ball {
@@ -57,6 +85,24 @@ export function createBall(): Ball {
   );
   shadow.scale.set(BALL_RADIUS * 1.3, 0.004, BALL_RADIUS * 1.3);
   object.add(ball, shadow);
+  // The glow is a child of the ball, so it moves and grows with it.
+  const map = glowTexture();
+  const glow = map
+    ? new Sprite(
+        new SpriteMaterial({
+          map,
+          blending: AdditiveBlending,
+          transparent: true,
+          depthWrite: false,
+          fog: false,
+        }),
+      )
+    : null;
+  if (glow) {
+    glow.scale.setScalar(BALL_RADIUS * 2 * GLOW_SIZE);
+    glow.visible = false;
+    ball.add(glow);
+  }
   return {
     object,
     place(p, scale = 1) {
@@ -72,6 +118,9 @@ export function createBall(): Ball {
     },
     setVisible(visible) {
       object.visible = visible;
+    },
+    setGlow(on) {
+      if (glow) glow.visible = on;
     },
   };
 }

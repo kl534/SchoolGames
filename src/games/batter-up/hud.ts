@@ -92,6 +92,8 @@ export interface Hud {
    * begin at, as the CSS lays them out right now. Works while they are hidden.
    */
   measureBand(): { top: number; bottom: number };
+  /** The scorebug's rectangle on screen, in px. */
+  bugRect(): { left: number; top: number; right: number; bottom: number };
   /** Bottom edge of the scorebug, in px from the top of the screen. */
   bugBottom(): number;
   flashRuns(): void;
@@ -247,6 +249,10 @@ export function createHud(): Hud {
       [hudBox.hidden, answers.hidden] = [hidden[0], hidden[1]];
       buttons.forEach((b, i) => (b.hidden = hidden[i + 2]));
       return band;
+    },
+    bugRect() {
+      const r = bug.getBoundingClientRect();
+      return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
     },
     bugBottom() {
       return bug.getBoundingClientRect().bottom;

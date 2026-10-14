@@ -40,6 +40,9 @@ import {
   type Vec,
 } from '../src/games/batter-up/flight';
 import {
+  ballRadiusPx,
+  ballScale,
+  boardIsClear,
   callInPanel,
   centreShift,
   fireworksAim,
@@ -50,7 +53,10 @@ import {
   hitBand,
   homeView,
   hudLayout,
+  hudRects,
   keepBoardClear,
+  MAX_BALL_SCALE,
+  MIN_BALL_PX,
   playBand,
   project,
 } from '../src/games/batter-up/layout';
@@ -689,12 +695,15 @@ describe('the view of a hit', () => {
 
   const HITS = ['single', 'double', 'triple'] as const;
   it.each(SCREENS)(
-    'never leaves the scoreboard half behind the scorebug on a single, double or triple at %ix%i',
+    'ends a single, double or triple with the scoreboard clear of the scorebug at %ix%i',
     (w, h) => {
       const fit = fitView(w, h);
       const band = hitBand(w, h);
       const home = homeView(w / h);
       const lift = (band.top + band.bottom) / 2 - h / 2;
+      /** Screen row of the ball, with the aim as given. */
+      const ballRow = (ball: Vec, cam: Vec, look: Vec) =>
+        project(ball, cam, look, fit.fov, w, h).y + lift;
       for (const hit of HITS) {
         for (const side of [-1, 1] as const) {
           for (const roll of [0, 0.5, 1]) {
@@ -702,45 +711,40 @@ describe('the view of a hit', () => {
             const ball = at(0, 0, 0);
             const cam = at(0, 0, 0);
             const look = at(0, 0, 0);
+            const free = at(0, 0, 0);
             for (let t = 0; t <= plan.duration + 0.5; t += 0.1) {
               plan.position(t, ball);
               followGoal(ball, cam, look, home);
+              Object.assign(free, look);
               keepBoardClear(ball, cam, look, fit.fov, w, h, band);
-              const spots = [-1, 1].flatMap((sx) =>
-                [-1, 1].map((sy) =>
-                  project(
-                    at(
-                      BOARD.x + (sx * BOARD.width) / 2,
-                      BOARD.y + (sy * BOARD.height) / 2,
-                      BOARD.z,
-                    ),
-                    cam,
-                    look,
-                    fit.fov,
-                    w,
-                    h,
-                  ),
-                ),
-              );
-              const top = Math.min(...spots.map((p) => p.y)) + lift;
-              const bottom = Math.max(...spots.map((p) => p.y)) + lift;
-              const left = Math.min(...spots.map((p) => p.x));
-              const right = Math.max(...spots.map((p) => p.x));
-              // Wholly clear of the scorebug, or wholly out of the picture.
-              // (The side of the screen may cut it when the camera is looking well off to one side.)
-              const inside = top >= band.top - 0.5;
-              const gone = bottom <= 0.5 || right <= 0.5 || left >= w - 0.5;
-              expect(inside || gone).toBe(true);
+              // Tilting for the scoreboard never loses a ball that was in view.
+              const before = ballRow(ball, cam, free);
+              if (before >= band.top && before <= band.bottom) {
+                expect(ballRow(ball, cam, look)).toBeGreaterThanOrEqual(band.top);
+                expect(ballRow(ball, cam, look)).toBeLessThanOrEqual(band.bottom);
+              }
+              if (t < plan.duration) continue;
+              // Once the ball has come to rest the scoreboard is clear of the HUD: wholly in the
+              // band below the scorebug, or at least not under the scorebug or the buttons.
+              expect(boardIsClear(cam, look, fit.fov, w, h, band)).toBe(true);
+              // And the ball is in the band.
+              expect(ballRow(ball, cam, look)).toBeGreaterThan(band.top);
+              expect(ballRow(ball, cam, look)).toBeLessThan(band.bottom);
             }
-            // The closing frame still shows the ball.
-            const row = project(ball, cam, look, fit.fov, w, h).y + lift;
-            expect(row).toBeGreaterThan(band.top);
-            expect(row).toBeLessThan(band.bottom);
           }
         }
       }
     },
   );
+
+  it('knows where the HUD sits on the picture', () => {
+    const [menu, buttons, bug] = hudRects(844, 390);
+    expect(menu.left).toBeLessThan(12);
+    expect(buttons.right).toBeGreaterThan(844 - 12);
+    expect(bug.bottom).toBeGreaterThan(110);
+    const measured = hudRects(844, 390, { left: 12, top: 70, right: 300, bottom: 160 })[2];
+    expect(measured.bottom).toBe(164);
+  });
 
   it('leaves the aim alone once the scoreboard is clear', () => {
     const fit = fitView(844, 390);
@@ -752,6 +756,60 @@ describe('the view of a hit', () => {
     const settled = { ...look };
     keepBoardClear(ball, cam, look, fit.fov, 844, 390, band);
     expect(look).toEqual(settled);
+  });
+});
+
+describe('seeing the ball', () => {
+  it("works out the ball's radius on screen from its distance and the field of view", () => {
+    // At 90 degrees, tan(45) is 1: radius * (height / 2) / distance.
+    expect(ballRadiusPx(10, 90, 800)).toBeCloseTo((BALL_RADIUS * 400) / 10, 6);
+    expect(ballRadiusPx(20, 90, 800)).toBeCloseTo(ballRadiusPx(10, 90, 800) / 2, 6);
+    expect(ballRadiusPx(10, 45, 800)).toBeGreaterThan(ballRadiusPx(10, 90, 800));
+    expect(ballRadiusPx(10, 90, 1600)).toBeCloseTo(ballRadiusPx(10, 90, 800) * 2, 6);
+    expect(Number.isFinite(ballRadiusPx(0, 60, 800))).toBe(true);
+  });
+
+  it('leaves a ball that is already big enough alone, and never balloons one near the camera', () => {
+    expect(ballScale(2, 50, 844)).toBe(1);
+    expect(ballScale(0.01, 50, 844)).toBe(1);
+  });
+
+  it('scales a far ball up until it is the least size, and no further than the cap', () => {
+    let last = 1;
+    for (const distance of [5, 10, 20, 30, 40, 60, 80, 120, 400]) {
+      const scale = ballScale(distance, 50, 844);
+      expect(scale).toBeGreaterThanOrEqual(last);
+      expect(scale).toBeLessThanOrEqual(MAX_BALL_SCALE);
+      const px = ballRadiusPx(distance, 50, 844) * scale;
+      expect(px >= MIN_BALL_PX - 1e-9 || scale === MAX_BALL_SCALE).toBe(true);
+      last = scale;
+    }
+    expect(ballScale(400, 50, 844)).toBe(MAX_BALL_SCALE);
+  });
+
+  it.each([
+    [390, 844],
+    [844, 390],
+    [768, 1024],
+  ])('keeps a ball at the top of a home run clearly visible at %ix%i', (w, h) => {
+    const fit = fitView(w, h);
+    const plan = planHit('homer', 1, 0.5, 0.5);
+    const cam = at(0, 0, 0);
+    const look = at(0, 0, 0);
+    const top = at(0, 0, 0);
+    plan.position(plan.airTime / 2, top);
+    followGoal(top, cam, look, homeView(w / h));
+    const distance = Math.hypot(top.x - cam.x, top.y - cam.y, top.z - cam.z);
+    const px = ballRadiusPx(distance, fit.fov, h) * ballScale(distance, fit.fov, h);
+    expect(px).toBeGreaterThanOrEqual(MIN_BALL_PX - 1e-9);
+  });
+
+  it('turns the glow on and off without needing a canvas', () => {
+    const ball = createBall();
+    expect(() => {
+      ball.setGlow(true);
+      ball.setGlow(false);
+    }).not.toThrow();
   });
 });
 

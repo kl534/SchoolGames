@@ -1,5 +1,5 @@
 import { PerspectiveCamera, Vector3 } from 'three';
-import { BOARD, BURST_RADIUS, FIREWORKS_CENTRE, type Vec } from './flight';
+import { BALL_RADIUS, BOARD, BURST_RADIUS, FIREWORKS_CENTRE, type Vec } from './flight';
 
 export interface HomeView {
   cam: Vec;
@@ -252,6 +252,46 @@ interface BoardBox {
   right: number;
 }
 
+/** A rectangle on screen, in CSS px. */
+export interface Rect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/** Room kept around each HUD piece. */
+const HUD_PAD = 4;
+
+/**
+ * What sits on the picture while a hit plays: the Menu button, the sound and pause buttons, and
+ * the scorebug. `bug` is the scorebug as measured, when it is known; otherwise it is worked out
+ * from the layout, as for the rest of the fallbacks.
+ */
+export function hudRects(width: number, height: number, bug?: Rect): Rect[] {
+  const layout = hudLayout(width, height);
+  const scorebug = bug ?? {
+    left: 12,
+    top: 70,
+    right: layout === 'compact' ? 232 : 309,
+    bottom: BUG_BOTTOM[layout],
+  };
+  const pad = (r: Rect): Rect => ({
+    left: r.left - HUD_PAD,
+    top: r.top - HUD_PAD,
+    right: r.right + HUD_PAD,
+    bottom: r.bottom + HUD_PAD,
+  });
+  return [
+    pad({ left: 12, top: 12, right: 116, bottom: 60 }),
+    pad({ left: width - 132, top: 12, right: width - 12, bottom: 60 }),
+    pad(scorebug),
+  ];
+}
+
+const overlaps = (a: BoardBox, b: Rect) =>
+  a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+
 /** The scoreboard's screen box for a camera, after the view shift for a band. */
 function boardBox(
   cam: Vec,
@@ -280,18 +320,36 @@ function boardBox(
   return box;
 }
 
-/** Lowest the camera is allowed to aim while it keeps the scoreboard out of the way. */
+/**
+ * Whether the scoreboard is clear of the HUD for a camera: wholly in the band (below the
+ * scorebug), or at least not under any of the HUD (which includes being out of the picture).
+ */
+export function boardIsClear(
+  cam: Vec,
+  look: Vec,
+  fov: number,
+  width: number,
+  height: number,
+  band: PlayBand,
+  blocked: Rect[] = hudRects(width, height),
+): boolean {
+  const box = boardBox(cam, look, fov, width, height, band);
+  return box.top >= band.top || !blocked.some((r) => overlaps(box, r));
+}
+
+/** Lowest and highest the camera is allowed to aim while it keeps the scoreboard out of the way. */
 const MIN_LOOK_Y = -10;
-/** How far above the top of the screen the scoreboard goes when it is tilted out of the picture. */
-const GONE_MARGIN = 24;
-/** Room kept between the ball and the edges of the band when choosing which way to tilt. */
+const MAX_LOOK_RISE = 40;
+/** Aim steps tried, from the nearest to the furthest. */
+const LOOK_STEP = 0.25;
+/** Room kept between the ball and the edges of the band when choosing where to aim. */
 const BALL_MARGIN = 28;
 
 /**
- * Nudges where the camera looks so that the scoreboard is never half hidden behind the scorebug
- * and the buttons: it ends up wholly inside the band, or wholly off the top of the screen. It
- * prefers whichever keeps the ball in the band, and the smaller tilt of the two. (A board cut
- * by the side of the screen is not counted as inside: it goes off the top instead.)
+ * Nudges where the camera looks so that the scoreboard is never half behind the scorebug or the
+ * buttons: it ends up in the band or clear of them (off the top of the screen, say). It takes
+ * the smallest change of aim that does it and keeps the ball in the band. If no aim does both,
+ * it leaves things alone: a scoreboard half hidden for a moment beats losing the ball.
  */
 export function keepBoardClear(
   ball: Vec,
@@ -301,49 +359,50 @@ export function keepBoardClear(
   width: number,
   height: number,
   band: PlayBand,
+  blocked: Rect[] = hudRects(width, height),
 ): void {
-  const at = (y: number) => boardBox(cam, { x: look.x, y, z: look.z }, fov, width, height, band);
-  const clearOfBand = (r: BoardBox) => r.top >= band.top;
-  // Wholly in the band (and not cut by the side of the screen), or wholly out of the picture.
-  const inside = (r: BoardBox) => clearOfBand(r) && r.left >= 0 && r.right <= width;
-  const gone = (r: BoardBox) => r.bottom <= -GONE_MARGIN || r.right <= 0 || r.left >= width;
-  const original = at(look.y);
-  if (inside(original) || gone(original)) return;
+  const aimed = (y: number): Vec => ({ x: look.x, y, z: look.z });
+  const clear = (y: number) => boardIsClear(cam, aimed(y), fov, width, height, band, blocked);
+  if (clear(look.y)) return;
   const lift = (band.top + band.bottom) / 2 - height / 2;
   const ballOk = (y: number) => {
-    const row = project(ball, cam, { x: look.x, y, z: look.z }, fov, width, height).y + lift;
+    const row = project(ball, cam, aimed(y), fov, width, height).y + lift;
     return row >= band.top + BALL_MARGIN && row <= band.bottom - BALL_MARGIN;
   };
-  // Highest aim, from `look.y` down to the floor, at which the board is gone off the top.
-  const tiltDown = (): number | null => {
-    if (!gone(at(MIN_LOOK_Y))) return null;
-    let lo = MIN_LOOK_Y;
-    let hi = look.y;
-    for (let i = 0; i < 24; i++) {
-      const mid = (lo + hi) / 2;
-      if (gone(at(mid))) lo = mid;
-      else hi = mid;
+  for (let d = LOOK_STEP; d <= MAX_LOOK_RISE; d += LOOK_STEP) {
+    for (const y of [look.y - d, look.y + d]) {
+      if (y < MIN_LOOK_Y) continue;
+      if (clear(y) && ballOk(y)) {
+        look.y = y;
+        return;
+      }
     }
-    return lo;
-  };
-  // Lowest aim, from `look.y` upwards, at which the board is back in the band.
-  const tiltUp = (test: (r: BoardBox) => boolean): number | null => {
-    let lo = look.y;
-    let hi = look.y + 40;
-    if (!test(at(hi))) return null;
-    for (let i = 0; i < 24; i++) {
-      const mid = (lo + hi) / 2;
-      if (test(at(mid))) hi = mid;
-      else lo = mid;
-    }
-    return hi;
-  };
-  let options = [tiltDown(), tiltUp(inside)].filter((y): y is number => y !== null);
-  // The board can be cut by the side of the screen whatever the tilt (the camera is looking
-  // well off to one side): then settle for it being clear of the scorebug.
-  if (!options.length) options = [tiltUp(clearOfBand)].filter((y): y is number => y !== null);
-  const good = options.filter(ballOk);
-  const pool = good.length ? good : options;
-  if (!pool.length) return;
-  look.y = pool.reduce((best, y) => (Math.abs(y - look.y) < Math.abs(best - look.y) ? y : best));
+  }
+}
+
+/** The ball's least size on screen during a hit, as a radius in CSS px (so 14px across). */
+export const MIN_BALL_PX = 7;
+/** The most the ball is ever scaled up. */
+export const MAX_BALL_SCALE = 12;
+
+/**
+ * The ball's radius on screen in CSS px, for a camera `distance` away with a vertical field of
+ * view of `fov` degrees on a viewport `height` px tall.
+ */
+export function ballRadiusPx(
+  distance: number,
+  fov: number,
+  height: number,
+  radius: number = BALL_RADIUS,
+): number {
+  return (radius * (height / 2)) / (Math.max(distance, 0.01) * Math.tan((fov * Math.PI) / 360));
+}
+
+/**
+ * How much to scale the ball so that it is never under `MIN_BALL_PX` across on screen, however
+ * far away: 1 when it is already big enough, and never more than `MAX_BALL_SCALE`.
+ */
+export function ballScale(distance: number, fov: number, height: number): number {
+  const px = ballRadiusPx(distance, fov, height);
+  return clamp(MIN_BALL_PX / Math.max(px, 1e-6), 1, MAX_BALL_SCALE);
 }
