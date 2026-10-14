@@ -227,23 +227,35 @@ function audioContext(): AudioContext | null {
   if (context) return context;
   const Ctor = globalThis.AudioContext;
   if (!Ctor) return null;
+  // Leave navigator.audioSession alone: on iPad, 'playback' let the browser voice interrupt
+  // Web Audio for good, which silenced every clip and sound effect after the first tap.
   context = new Ctor();
-  // Without this, iOS mutes Web Audio while the ring/silent switch is on (speech ignores it).
-  const audioSession = (globalThis.navigator as { audioSession?: { type: string } } | undefined)
-    ?.audioSession;
-  if (audioSession) audioSession.type = 'playback';
   return context;
 }
+
+/** Resumes audio that is suspended or, in Safari, 'interrupted' (Siri, a call, the browser voice). */
+function resumeAudio(): void {
+  if (context && context.state !== 'running') void context.resume().catch(() => undefined);
+}
+
+// Any tap can bring audio back after an interruption, even one in a game that never unlocks again.
+for (const type of ['pointerup', 'touchend', 'keydown']) {
+  globalThis.document?.addEventListener(type, resumeAudio, { capture: true, passive: true });
+}
+
+/** The browser voice only needs waking inside a tap once; doing it on every tap disturbs iOS audio. */
+let speechUnlocked = false;
 
 /**
  * Call from a tap handler before the first sound. iOS only allows audio and
  * speech that start inside a user gesture.
  */
 export function unlockAudio(): void {
-  const ctx = audioContext();
-  if (ctx?.state === 'suspended') void ctx.resume();
+  audioContext();
+  resumeAudio();
   const s = synth();
-  if (s && !muted) {
+  if (s && !muted && !speechUnlocked) {
+    speechUnlocked = true;
     const silent = new SpeechSynthesisUtterance(' ');
     silent.volume = 0;
     s.speak(silent);
