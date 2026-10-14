@@ -66,11 +66,14 @@ import {
   applyStrike,
   clockFraction,
   easeToward,
+  endSpeech,
+  finalSpeech,
   hitFor,
   hitLabel,
   hitSpeech,
   MAX_BATTERS,
   newGame,
+  PLAY_BALL,
   runsText,
   strikeCall,
   type GameState,
@@ -792,7 +795,7 @@ function run(session: GameSession): void {
     const next = () => {
       if (spoken && shownLongEnough && turn === thisTurn && phase === 'ending') finishRun();
     };
-    speak(`${title} ${detail}.`, () => {
+    speak(endSpeech(threeOuts, state.runs), () => {
       spoken = true;
       next();
     });
@@ -813,7 +816,7 @@ function run(session: GameSession): void {
     const newHighScore = session.recordScore(runs);
     refresh();
     if (newHighScore) sfx.cheer();
-    speak(`You scored ${runs} ${runs === 1 ? 'run' : 'runs'}!`);
+    speak(finalSpeech(runs));
     showResults({
       topicId: session.topic.id,
       correct: feed.correct,
@@ -885,8 +888,8 @@ function run(session: GameSession): void {
   /** "Play ball!" and then the first pitch. */
   const startIntro = () => {
     phase = 'intro';
-    hud.showBanner('Play ball!', '', 'info');
-    speak('Play ball!');
+    hud.showBanner(PLAY_BALL, '', 'info');
+    speak(PLAY_BALL);
     sfx.cheer();
     after(1.6, () => {
       if (phase === 'intro') nextPitch();

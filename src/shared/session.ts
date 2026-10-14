@@ -1,3 +1,4 @@
+import { preloadSpeech } from './audio';
 import {
   createProgressStore,
   emptyProgress,
@@ -78,10 +79,16 @@ export function startGameSession(
     topic,
     player,
     // My Level reads the live progress, so a refill picks up levels opened since the last one.
-    chooseFacts: (count = KICKS_PER_ROUND) =>
-      isMyLevel
+    chooseFacts(count = KICKS_PER_ROUND) {
+      const facts = isMyLevel
         ? chooseLevelFacts(progress, count)
-        : chooseRoundFacts(topic.facts, progress.facts[topic.id], count),
+        : chooseRoundFacts(topic.facts, progress.facts[topic.id], count);
+      // Fetch the round's voice clips now, while the preview is up.
+      preloadSpeech(
+        facts.flatMap((f) => [f.spokenPrompt ?? f.prompt, f.spokenStatement ?? f.statement]),
+      );
+      return facts;
+    },
     timerSecondsFor: (fact) =>
       timerSecondsFor(player ? progress.facts[statTopicId(fact)]?.[fact.id] : undefined),
     recordAnswer(fact, correct) {

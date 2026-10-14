@@ -2,6 +2,8 @@
 
 /** Brains (lives) the player starts each round with. */
 export const BRAINS = 3;
+/** What the announcer says when the zombies win. */
+export const GAME_OVER_SPEECH = 'The zombies got your brains!';
 
 /** One brain lost, never below zero. */
 export function loseBrain(brains: number): number {

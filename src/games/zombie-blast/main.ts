@@ -13,7 +13,7 @@ import { createPointerInput, onPress } from '../../shared/input';
 import { showPreview } from '../../shared/preview';
 import { shuffle } from '../../shared/random';
 import { showResults } from '../../shared/results';
-import { createRound, starsFor, type Round } from '../../shared/round';
+import { createRound, scoreSpeech, starsFor, type Round } from '../../shared/round';
 import { createScene } from '../../shared/scene';
 import { startGameSession, type GameSession } from '../../shared/session';
 import { answerOptions, type Fact } from '../../shared/topics';
@@ -40,6 +40,7 @@ import {
   bombPosition,
   BRAINS,
   easeOut,
+  GAME_OVER_SPEECH,
   loseBrain,
   outOfBrains,
   zombieProgress,
@@ -558,7 +559,7 @@ function run(session: GameSession): void {
     const next = () => {
       if (spoken && shown && turn === thisTurn && phase === 'ending') finishRound();
     };
-    speak('The zombies got your brains!', () => {
+    speak(GAME_OVER_SPEECH, () => {
       spoken = true;
       next();
     });
@@ -576,7 +577,7 @@ function run(session: GameSession): void {
     const stars = starsFor(round.correct, round.length);
     const newBest = session.recordStars(stars);
     if (stars === 3) sfx.goal();
-    speak(`You scored ${round.correct} out of ${round.length}!`);
+    speak(scoreSpeech(round.correct, round.length));
     showResults({
       topicId: session.topic.id,
       correct: round.correct,

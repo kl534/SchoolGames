@@ -90,8 +90,8 @@ describe('mathFact', () => {
       prompt: '3 × 4 = ?',
       answer: '12',
       statement: '3 × 4 = 12',
-      spokenPrompt: 'What is 3 times 4?',
-      spokenStatement: '3 times 4 equals 12',
+      spokenPrompt: '3 times 4.',
+      spokenStatement: '3 times 4 equals 12.',
     });
   });
 });
@@ -103,8 +103,8 @@ describe('mathFact divide', () => {
       prompt: '12 ÷ 3 = ?',
       answer: '4',
       statement: '12 ÷ 3 = 4',
-      spokenPrompt: 'What is 12 divided by 3?',
-      spokenStatement: '12 divided by 3 equals 4',
+      spokenPrompt: '12 divided by 3.',
+      spokenStatement: '12 divided by 3 equals 4.',
     });
   });
 });

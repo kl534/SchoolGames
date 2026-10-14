@@ -1,5 +1,10 @@
 /** Pure game rules and motion helpers, kept free of three.js objects so they are easy to test. */
 
+/** What the announcer says when the ship is lost, and for the final score. */
+export const SHIP_DESTROYED_SPEECH = 'Ship destroyed!';
+export const NEW_HIGH_SCORE_SPEECH = 'New high score!';
+export const GREAT_FLYING_SPEECH = 'Great flying!';
+
 /** Shields the ship starts each run with, and the most it can have. */
 export const SHIELDS = 3;
 /** Every this-many-th target is a boss asteroid. */

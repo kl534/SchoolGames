@@ -36,8 +36,8 @@ export function mathFact(kind: Operation, a: number, b: number): Fact {
     prompt: `${shown} = ?`,
     answer: String(answer),
     statement: `${shown} = ${answer}`,
-    spokenPrompt: `What is ${spoken}?`,
-    spokenStatement: `${spoken} equals ${answer}`,
+    spokenPrompt: `${spoken}.`,
+    spokenStatement: `${spoken} equals ${answer}.`,
     visual: { kind, a, b },
   };
 }

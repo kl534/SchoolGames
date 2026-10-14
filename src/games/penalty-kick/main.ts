@@ -15,7 +15,7 @@ import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
 import { onPress } from '../../shared/input';
 import { showPreview } from '../../shared/preview';
 import { showResults } from '../../shared/results';
-import { createRound, starsFor, type Round } from '../../shared/round';
+import { createRound, scoreSpeech, starsFor, type Round } from '../../shared/round';
 import { createScene } from '../../shared/scene';
 import { startGameSession, type GameSession } from '../../shared/session';
 import { answerOptions, type Fact } from '../../shared/topics';
@@ -473,7 +473,7 @@ function run(session: GameSession): void {
     const stars = starsFor(round.correct, round.length);
     const newBest = session.recordStars(stars);
     if (stars === 3) sfx.goal();
-    speak(`You scored ${round.correct} out of ${round.length}!`);
+    speak(scoreSpeech(round.correct, round.length));
     showResults({
       topicId: session.topic.id,
       correct: round.correct,
