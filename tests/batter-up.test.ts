@@ -62,7 +62,7 @@ import {
   hudLayout,
   hudRects,
   keepBoardClear,
-  MAX_BALL_SCALE,
+  MAX_BALL_WORLD_RADIUS,
   MIN_BALL_PX,
   playBand,
   project,
@@ -846,17 +846,80 @@ describe('seeing the ball', () => {
     expect(ballScale(0.01, 50, 844)).toBe(1);
   });
 
-  it('scales a far ball up until it is the least size, and no further than the cap', () => {
+  it('scales a far ball up until it is the least size, and no further than the world-size cap', () => {
+    const most = MAX_BALL_WORLD_RADIUS / BALL_RADIUS;
     let last = 1;
     for (const distance of [5, 10, 20, 30, 40, 60, 80, 120, 400]) {
       const scale = ballScale(distance, 50, 844);
       expect(scale).toBeGreaterThanOrEqual(last);
-      expect(scale).toBeLessThanOrEqual(MAX_BALL_SCALE);
+      // However the ball is scaled, its radius in the world stays within the cap.
+      expect(BALL_RADIUS * scale).toBeLessThanOrEqual(MAX_BALL_WORLD_RADIUS + 1e-9);
       const px = ballRadiusPx(distance, 50, 844) * scale;
-      expect(px >= MIN_BALL_PX - 1e-9 || scale === MAX_BALL_SCALE).toBe(true);
+      expect(px >= MIN_BALL_PX - 1e-9 || scale === most).toBe(true);
       last = scale;
     }
-    expect(ballScale(400, 50, 844)).toBe(MAX_BALL_SCALE);
+    expect(BALL_RADIUS * ballScale(400, 50, 844)).toBeCloseTo(MAX_BALL_WORLD_RADIUS, 9);
+    // The cap is about a ball's size in the world, so it holds on any screen and fov.
+    for (const [fov, h] of [
+      [30, 320],
+      [88, 390],
+      [50, 2000],
+    ]) {
+      expect(BALL_RADIUS * ballScale(900, fov, h)).toBeLessThanOrEqual(
+        MAX_BALL_WORLD_RADIUS + 1e-9,
+      );
+    }
+  });
+
+  it('never enlarges a ball that is near the camera', () => {
+    for (const [fov, h] of [
+      [35, 320],
+      [50, 844],
+      [88, 390],
+    ]) {
+      // Within a few units the ball is already well over the least size on screen.
+      for (const distance of [0.01, 1, 3]) {
+        expect(ballRadiusPx(distance, fov, h)).toBeGreaterThan(MIN_BALL_PX);
+        expect(ballScale(distance, fov, h)).toBe(1);
+      }
+    }
+  });
+
+  it.each([
+    [568, 320],
+    [390, 844],
+    [844, 390],
+  ])('keeps the farthest point of a deep home run at least 7px across at %ix%i', (w, h) => {
+    const fit = fitView(w, h);
+    // The batting view's fov, and the (wider) one the closing shot of the fireworks eases to.
+    const fovs = [fit.fov, fireworksFit(w, h, fit.fov, hitBand(w, h)).fov];
+    for (const fov of fovs) {
+      for (const roll of [0, 0.5, 1]) {
+        for (const side of [-1, 1] as const) {
+          const plan = planHit('homer', side, roll, roll);
+          const cam = at(0, 0, 0);
+          const look = at(0, 0, 0);
+          const far = at(0, 0, 0);
+          let farthest = 0;
+          for (let t = 0; t <= plan.airTime; t += 0.05) {
+            const ball = plan.position(t, at(0, 0, 0));
+            followGoal(ball, cam, look, homeView(w / h));
+            const d = Math.hypot(ball.x - cam.x, ball.y - cam.y, ball.z - cam.z);
+            // Every point of the flight is at least 7px across, and within the world cap.
+            const scale = ballScale(d, fov, h);
+            expect(ballRadiusPx(d, fov, h) * scale).toBeGreaterThanOrEqual(MIN_BALL_PX - 1e-9);
+            expect(BALL_RADIUS * scale).toBeLessThanOrEqual(MAX_BALL_WORLD_RADIUS + 1e-9);
+            if (d > farthest) {
+              farthest = d;
+              Object.assign(far, ball);
+            }
+          }
+          expect(farthest).toBeGreaterThan(40);
+          const scale = ballScale(farthest, fov, h);
+          expect(ballRadiusPx(farthest, fov, h) * scale).toBeGreaterThanOrEqual(MIN_BALL_PX - 1e-9);
+        }
+      }
+    }
   });
 
   it.each([

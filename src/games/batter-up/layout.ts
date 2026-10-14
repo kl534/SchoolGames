@@ -410,8 +410,12 @@ export function keepBoardClear(
 
 /** The ball's least size on screen during a hit, as a radius in CSS px (so 14px across). */
 export const MIN_BALL_PX = 7;
-/** The most the ball is ever scaled up. */
-export const MAX_BALL_SCALE = 12;
+/**
+ * The biggest the scaled-up ball may be in the world (its radius, in world units), however far
+ * away. A cap in world size rather than in scale: a far ball is only ever scaled up to be seen,
+ * so this stops it ever looking like a beach ball against the wall (which is 2.6 high).
+ */
+export const MAX_BALL_WORLD_RADIUS = 1.0;
 
 /**
  * The ball's radius on screen in CSS px, for a camera `distance` away with a vertical field of
@@ -428,9 +432,11 @@ export function ballRadiusPx(
 
 /**
  * How much to scale the ball so that it is never under `MIN_BALL_PX` across on screen, however
- * far away: 1 when it is already big enough, and never more than `MAX_BALL_SCALE`.
+ * far away: 1 when it is already big enough (so near the camera it is never enlarged), and never
+ * so much that the ball's world radius passes `MAX_BALL_WORLD_RADIUS`.
  */
 export function ballScale(distance: number, fov: number, height: number): number {
   const px = ballRadiusPx(distance, fov, height);
-  return clamp(MIN_BALL_PX / Math.max(px, 1e-6), 1, MAX_BALL_SCALE);
+  const most = Math.max(MAX_BALL_WORLD_RADIUS / BALL_RADIUS, 1);
+  return clamp(MIN_BALL_PX / Math.max(px, 1e-6), 1, most);
 }
