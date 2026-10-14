@@ -38,15 +38,18 @@ import {
   easeIn,
   easeOut,
   easeToward,
+  GREAT_FLYING_SPEECH,
   hazardInterval,
   hitPoints,
   isBossTarget,
   loseShield,
   multiplierFor,
+  NEW_HIGH_SCORE_SPEECH,
   nextStreak,
   outOfShields,
   restoreShield,
   SHIELDS,
+  SHIP_DESTROYED_SPEECH,
   worldSpeedFactor,
 } from './rules';
 import { createShip } from './ship';
@@ -715,16 +718,21 @@ function run(session: GameSession): void {
     sfx.boom();
     shake = 1.2;
     setHudVisible(false);
-    showBanner('Ship destroyed!', last?.statement ?? '', 'out');
+    showBanner(SHIP_DESTROYED_SPEECH, last?.statement ?? '', 'out');
     const thisTurn = turn;
     let spoken = false;
     let shown = false;
     const next = () => {
       if (spoken && shown && turn === thisTurn && phase === 'ending') finishRun();
     };
-    speak(`Ship destroyed! ${last ? (last.spokenStatement ?? last.statement) : ''}`, () => {
+    const done = () => {
       spoken = true;
       next();
+    };
+    speak(SHIP_DESTROYED_SPEECH, () => {
+      if (turn !== thisTurn || phase !== 'ending') return;
+      if (last) speak(last.spokenStatement ?? last.statement, done);
+      else done();
     });
     after(REVEAL_FOR, () => {
       shown = true;
@@ -744,7 +752,7 @@ function run(session: GameSession): void {
     const newHighScore = session.recordScore(score);
     renderScore();
     if (newHighScore) sfx.goal();
-    speak(`You scored ${score} points!`);
+    speak(newHighScore ? NEW_HIGH_SCORE_SPEECH : GREAT_FLYING_SPEECH);
     showResults({
       topicId: session.topic.id,
       correct: feed.correct,

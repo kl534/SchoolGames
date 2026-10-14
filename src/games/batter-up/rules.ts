@@ -57,6 +57,20 @@ export function runsText(runs: number): string {
   return `+${runs} ${runs === 1 ? 'run' : 'runs'}!`;
 }
 
+/** What the announcer says when the half-inning ends, e.g. "Three outs! 2 runs scored." */
+export function endSpeech(threeOuts: boolean, runs: number): string {
+  const title = threeOuts ? 'Three outs!' : "That's the inning!";
+  return `${title} ${runs} ${runs === 1 ? 'run' : 'runs'} scored.`;
+}
+
+/** What the announcer says for the final score. */
+export function finalSpeech(runs: number): string {
+  return `You scored ${runs} ${runs === 1 ? 'run' : 'runs'}!`;
+}
+
+/** The announcer's first call. */
+export const PLAY_BALL = 'Play ball!';
+
 /** Who is on first, second and third. */
 export type Bases = readonly [boolean, boolean, boolean];
 

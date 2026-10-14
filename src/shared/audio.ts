@@ -1,4 +1,6 @@
 import { getSetting, setSetting } from './progress';
+import { voiceKey } from './voice';
+import voiceLines from './voice-lines.json';
 
 /** Speech and sound effects share one device-wide mute setting. */
 let muted = getSetting('muted') === '1';
@@ -82,9 +84,59 @@ synth()?.addEventListener?.('voiceschanged', () => {
 /** Rough speaking time, used when the browser never fires `end`. */
 const estimateMs = (text: string) => Math.min(800 + text.length * 80, 8000);
 
+// ---------- Pre-recorded clips ----------
+
+/** Keys of the lines that have a recorded clip in `public/voice/` (see `npm run voice`). */
+const CLIP_KEYS = new Set(Object.keys(voiceLines));
+/** Give up on a clip that has not loaded by now and use the browser voice for that line. */
+const CLIP_LOAD_MS = 2500;
+/** Longest wait for a suspended AudioContext to resume before using the browser voice. */
+const CLIP_RESUME_MS = 400;
+
+const clips = new Map<string, Promise<AudioBuffer | null>>();
+
+function loadClip(key: string, ctx: AudioContext): Promise<AudioBuffer | null> {
+  let clip = clips.get(key);
+  if (!clip) {
+    clip = fetch(`${import.meta.env.BASE_URL}voice/${key}.mp3`)
+      .then((response) => (response.ok ? response.arrayBuffer() : null))
+      .then((data) => (data ? ctx.decodeAudioData(data) : null))
+      .catch(() => null);
+    clips.set(key, clip);
+  }
+  return clip;
+}
+
+/** Starts fetching the clips for these lines (those that have one) so they play without a wait. */
+export function preloadSpeech(texts: string[]): void {
+  const ctx = audioContext();
+  if (!ctx) return;
+  for (const text of texts) {
+    const key = voiceKey(text);
+    if (CLIP_KEYS.has(key)) void loadClip(key, ctx);
+  }
+}
+
+/** Resolves with `fallback` if `promise` has not settled after `ms`. */
+function within<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    void promise.then((value) => {
+      clearTimeout(timer);
+      resolve(value);
+    });
+  });
+}
+
+/** Bumped by every `speak` and `stopSpeaking`, so a clip that loads late knows it was replaced. */
+let speechToken = 0;
+/** Stops the clip that is loading or playing and ends its `speak` call. */
+let stopClip: (() => void) | null = null;
+
 /**
  * Reads `text` aloud, interrupting anything already being said. `onEnd` runs once
- * when speech finishes, straight away when muted or unsupported.
+ * when speech finishes, straight away when muted or unsupported. Lines with a recorded clip
+ * play it; anything else, or a clip that can't play, uses the browser's voice.
  */
 export function speak(text: string, onEnd?: () => void): void {
   let finished = false;
@@ -96,23 +148,74 @@ export function speak(text: string, onEnd?: () => void): void {
     onEnd?.();
   };
   const s = synth();
-  if (muted || !s || !text) {
+  if (muted || !text) {
     timeout = setTimeout(finish, 0);
     return;
   }
-  s.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  const v = pickVoice(s);
-  if (v) utterance.voice = v;
-  utterance.lang = v?.lang ?? 'en-US';
-  utterance.rate = 0.9;
-  utterance.onend = finish;
-  utterance.onerror = finish;
-  timeout = setTimeout(finish, estimateMs(text));
-  s.speak(utterance);
+  const token = ++speechToken;
+  stopClip?.();
+  stopClip = null;
+  s?.cancel();
+
+  /** The browser's voice; finishes straight away when there is none. */
+  const sayWithBrowser = () => {
+    if (!s) {
+      timeout = setTimeout(finish, 0);
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(text);
+    const v = pickVoice(s);
+    if (v) utterance.voice = v;
+    utterance.lang = v?.lang ?? 'en-US';
+    utterance.rate = 0.9;
+    utterance.onend = finish;
+    utterance.onerror = finish;
+    timeout = setTimeout(finish, estimateMs(text));
+    s.speak(utterance);
+  };
+
+  const key = voiceKey(text);
+  const ctx = CLIP_KEYS.has(key) ? audioContext() : null;
+  if (!ctx) {
+    sayWithBrowser();
+    return;
+  }
+
+  let source: AudioBufferSourceNode | undefined;
+  stopClip = () => {
+    // Like a cancelled utterance, the interrupted call ends on a later tick.
+    try {
+      source?.stop();
+    } catch {
+      // Already stopped.
+    }
+    timeout = setTimeout(finish, 0);
+  };
+  void (async () => {
+    const buffer = await within(loadClip(key, ctx), CLIP_LOAD_MS, null);
+    if (ctx.state !== 'running' && token === speechToken) {
+      await within(
+        ctx.resume().catch(() => undefined),
+        CLIP_RESUME_MS,
+        undefined,
+      );
+    }
+    if (token !== speechToken) return finish();
+    if (!buffer || ctx.state !== 'running') return sayWithBrowser();
+    source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.onended = finish;
+    timeout = setTimeout(finish, buffer.duration * 1000 + 1000);
+    source.start();
+  })();
 }
 
+/** Stops the voice, whether a recording or the browser's; the interrupted `speak` still ends. */
 export function stopSpeaking(): void {
+  speechToken++;
+  stopClip?.();
+  stopClip = null;
   synth()?.cancel();
 }
 
@@ -125,6 +228,10 @@ function audioContext(): AudioContext | null {
   const Ctor = globalThis.AudioContext;
   if (!Ctor) return null;
   context = new Ctor();
+  // Without this, iOS mutes Web Audio while the ring/silent switch is on (speech ignores it).
+  const audioSession = (globalThis.navigator as { audioSession?: { type: string } } | undefined)
+    ?.audioSession;
+  if (audioSession) audioSession.type = 'playback';
   return context;
 }
 

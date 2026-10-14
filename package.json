@@ -13,7 +13,9 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "voice:lines": "tsx scripts/voice/lines.ts",
+    "voice": "npm run voice:lines && uv run scripts/voice/generate.py"
   },
   "dependencies": {
     "cannon-es": "^0.20.0",
@@ -27,6 +29,7 @@
     "globals": "^17.0.0",
     "jsdom": "^30.0.0",
     "prettier": "^3.9.0",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.0",
     "typescript-eslint": "^8.71.0",
     "vite": "^8.0.0",

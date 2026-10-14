@@ -1,0 +1,11 @@
+{
+  "voice": "af_heart",
+  "lang": "a",
+  "speed": 0.9,
+  "sampleRate": 24000,
+  "leadMs": 40,
+  "tailMs": 80,
+  "silenceRatio": 0.02,
+  "peakDbfs": -1.0,
+  "bitrateKbps": 48
+}

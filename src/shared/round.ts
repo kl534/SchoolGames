@@ -24,6 +24,11 @@ export function chooseRoundFacts(
   return shuffle(chosen, random);
 }
 
+/** What the announcer says when a round ends. */
+export function scoreSpeech(correct: number, total: number): string {
+  return `You scored ${correct} out of ${total}!`;
+}
+
 /** Stars for a finished round. */
 export function starsFor(correct: number, total: number): number {
   const ratio = total > 0 ? correct / total : 0;
