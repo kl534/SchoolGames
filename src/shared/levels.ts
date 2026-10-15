@@ -34,6 +34,21 @@ function factsOf(ids: string[], keep: (fact: Fact) => boolean = () => true): Lev
 const tables = (prefix: string, numbers: number[]) => numbers.map((n) => `${prefix}${n}`);
 const answerAtMost10 = (fact: Fact) => Number(fact.answer) <= 10;
 const startsAtMost10 = (fact: Fact) => (fact.visual?.a ?? 0) <= 10;
+/**
+ * The number a times-table or division fact is "n times" of: 7 in 7 × 3 and in 21 ÷ 3.
+ * Tables once stopped at 10, so levels 5 to 12 keep only these facts to stay as they were.
+ */
+const multiplierOf = (fact: Fact) =>
+  fact.visual?.kind === 'divide' ? Number(fact.answer) : (fact.visual?.a ?? 0);
+const multiplierAtMost10 = (fact: Fact) => multiplierOf(fact) <= 10;
+const multiplierAbove10 = (fact: Fact) => !multiplierAtMost10(fact);
+
+/** Tables with these numbers, as they were up to × 10: the facts that make up the older levels. */
+const tableFacts = (prefix: string, numbers: number[]) =>
+  factsOf(tables(prefix, numbers), multiplierAtMost10);
+/** The same tables stretched past × 10, up to × 16. */
+const stretchFacts = (prefix: string, numbers: number[]) =>
+  factsOf(tables(prefix, numbers), multiplierAbove10);
 
 /** Easiest first. Only how many are open is saved, so titles and order can change. */
 export const LEVELS: Level[] = [
@@ -44,14 +59,28 @@ export const LEVELS: Level[] = [
     title: 'Take-away within 20',
     facts: factsOf(['subtraction-1-10'], (f) => !startsAtMost10(f)),
   },
-  { title: '× 1, 2, 5, 10', facts: factsOf(tables('times-', [1, 2, 5, 10])) },
-  { title: '÷ 1, 2, 5, 10', facts: factsOf(tables('divide-by-', [1, 2, 5, 10])) },
-  { title: '× 3, 4', facts: factsOf(tables('times-', [3, 4])) },
-  { title: '÷ 3, 4', facts: factsOf(tables('divide-by-', [3, 4])) },
-  { title: '× 6, 7', facts: factsOf(tables('times-', [6, 7])) },
-  { title: '÷ 6, 7', facts: factsOf(tables('divide-by-', [6, 7])) },
-  { title: '× 8, 9', facts: factsOf(tables('times-', [8, 9])) },
-  { title: '÷ 8, 9', facts: factsOf(tables('divide-by-', [8, 9])) },
+  { title: '× 1, 2, 5, 10', facts: tableFacts('times-', [1, 2, 5, 10]) },
+  { title: '÷ 1, 2, 5, 10', facts: tableFacts('divide-by-', [1, 2, 5, 10]) },
+  { title: '× 3, 4', facts: tableFacts('times-', [3, 4]) },
+  { title: '÷ 3, 4', facts: tableFacts('divide-by-', [3, 4]) },
+  { title: '× 6, 7', facts: tableFacts('times-', [6, 7]) },
+  { title: '÷ 6, 7', facts: tableFacts('divide-by-', [6, 7]) },
+  { title: '× 8, 9', facts: tableFacts('times-', [8, 9]) },
+  { title: '÷ 8, 9', facts: tableFacts('divide-by-', [8, 9]) },
+  // The 11 to 16 times of the old tables (11 × 3 up to 16 × 3), then the new tables 11 to 16.
+  { title: '× up to 16: 1, 2, 5, 10', facts: stretchFacts('times-', [1, 2, 5, 10]) },
+  { title: '÷ up to 16: 1, 2, 5, 10', facts: stretchFacts('divide-by-', [1, 2, 5, 10]) },
+  { title: '× up to 16: 3, 4', facts: stretchFacts('times-', [3, 4]) },
+  { title: '÷ up to 16: 3, 4', facts: stretchFacts('divide-by-', [3, 4]) },
+  { title: '× up to 16: 6, 7, 8, 9', facts: stretchFacts('times-', [6, 7, 8, 9]) },
+  { title: '÷ up to 16: 6, 7, 8, 9', facts: stretchFacts('divide-by-', [6, 7, 8, 9]) },
+  ...[11, 13, 15].flatMap((from) => [
+    { title: `× ${from}, ${from + 1}`, facts: factsOf(tables('times-', [from, from + 1])) },
+    {
+      title: `÷ ${from}, ${from + 1}`,
+      facts: factsOf(tables('divide-by-', [from, from + 1])),
+    },
+  ]),
 ];
 
 const topicByFact = new Map<Fact, Topic>(

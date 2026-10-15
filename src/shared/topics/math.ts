@@ -99,22 +99,25 @@ const subtraction: Topic = {
   distractors: mathDistractors,
 };
 
-const timesTables: Topic[] = range(1, 10).map((table) => ({
+/** Tables run from 1 to this number, and each table has this many facts. */
+export const MAX_TABLE = 16;
+
+const timesTables: Topic[] = range(1, MAX_TABLE).map((table) => ({
   id: `times-${table}`,
   title: `${table} times table`,
   subject: 'Multiplication',
-  description: `1 × ${table} up to 10 × ${table}.`,
-  facts: range(1, 10).map((n) => mathFact('multiply', n, table)),
+  description: `1 × ${table} up to ${MAX_TABLE} × ${table}.`,
+  facts: range(1, MAX_TABLE).map((n) => mathFact('multiply', n, table)),
   distractors: mathDistractors,
 }));
 
-// Each table is the times table run backwards: 1 × n up to 10 × n, divided by n.
-const divisionTables: Topic[] = range(1, 10).map((divisor) => ({
+// Each table is the times table run backwards: 1 × n up to 16 × n, divided by n.
+const divisionTables: Topic[] = range(1, MAX_TABLE).map((divisor) => ({
   id: `divide-by-${divisor}`,
   title: `Divide by ${divisor}`,
   subject: 'Division',
-  description: `${divisor} ÷ ${divisor} up to ${divisor * 10} ÷ ${divisor}.`,
-  facts: range(1, 10).map((n) => mathFact('divide', n * divisor, divisor)),
+  description: `${divisor} ÷ ${divisor} up to ${divisor * MAX_TABLE} ÷ ${divisor}.`,
+  facts: range(1, MAX_TABLE).map((n) => mathFact('divide', n * divisor, divisor)),
   distractors: mathDistractors,
 }));
 

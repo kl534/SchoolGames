@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { AVATARS, createProgressStore } from '../src/shared/progress';
-import { MY_LEVEL_ID } from '../src/shared/levels';
+import { AVATARS, createProgressStore, recordAnswer } from '../src/shared/progress';
+import { LEVELS, MY_LEVEL_ID } from '../src/shared/levels';
 import { gameUrl, parseGameParams, startGameSession } from '../src/shared/session';
 import { answerOptions, TOPICS } from '../src/shared/topics';
 
@@ -121,7 +121,7 @@ describe('My Level session', () => {
   });
 
   it('describes the current level', () => {
-    expect(start('Describer').topic.description).toBe('Level 1 of 12: Sums to 10');
+    expect(start('Describer').topic.description).toBe('Level 1 of 24: Sums to 10');
   });
 
   it("saves answers under the fact's own topic and the level count with them", () => {
@@ -134,6 +134,28 @@ describe('My Level session', () => {
     expect(saved.facts[MY_LEVEL_ID]).toBeUndefined();
     expect(saved.levelsOpen).toBe(1);
     expect(session.timerSecondsFor(fact)).toBe(10);
+  });
+
+  it('saves the 11 to 16 facts under their own topics and keeps them across sessions', () => {
+    start('Big tables');
+    const store = createProgressStore();
+    const id = store.currentPlayer()!.id;
+    const progress = store.load(id);
+    // A player who has already finished the old levels gets everything open.
+    for (const { topic, fact } of LEVELS.flatMap((l) => l.facts)) {
+      recordAnswer(progress, topic.id, fact.id, true);
+    }
+    store.save(id, progress);
+    const session = startGameSession('level-game', search)!;
+    const bigTimes = session.topic.facts.find((f) => f.id === '12x15')!;
+    const bigDivide = session.topic.facts.find((f) => f.id === '176/11')!;
+    session.recordAnswer(bigTimes, false);
+    session.recordAnswer(bigDivide, true);
+    const saved = store.load(id);
+    expect(saved.facts['times-15']['12x15']).toMatchObject({ correct: 1, wrong: 1, streak: 0 });
+    expect(saved.facts['divide-by-11']['176/11']).toMatchObject({ correct: 2, streak: 2 });
+    expect(saved.facts[MY_LEVEL_ID]).toBeUndefined();
+    expect(saved.levelsOpen).toBe(LEVELS.length);
   });
 
   it('keeps stars and high scores under my-level', () => {

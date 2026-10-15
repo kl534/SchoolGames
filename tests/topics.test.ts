@@ -49,23 +49,40 @@ describe('built-in topics', () => {
     expect(topic.facts.find((f) => f.id === '15-8')?.answer).toBe('7');
   });
 
-  it('has one topic per times table', () => {
-    for (let n = 1; n <= 10; n++) {
+  it('has one topic per times table, 1 to 16, each running from 1 × n to 16 × n', () => {
+    expect(TOPICS.filter((t) => t.subject === 'Multiplication')).toHaveLength(16);
+    for (let n = 1; n <= 16; n++) {
       const topic = getTopic(`times-${n}`)!;
       expect(topic.facts.map((f) => f.answer)).toEqual(
-        Array.from({ length: 10 }, (_, i) => String((i + 1) * n)),
+        Array.from({ length: 16 }, (_, i) => String((i + 1) * n)),
       );
     }
   });
 
   it('has one topic per divisor, mirroring the times tables', () => {
-    for (let n = 1; n <= 10; n++) {
+    expect(TOPICS.filter((t) => t.subject === 'Division')).toHaveLength(16);
+    for (let n = 1; n <= 16; n++) {
       const topic = getTopic(`divide-by-${n}`)!;
       expect(topic.facts.map((f) => f.answer)).toEqual(
-        Array.from({ length: 10 }, (_, i) => String(i + 1)),
+        Array.from({ length: 16 }, (_, i) => String(i + 1)),
       );
       expect(topic.facts[1].statement).toBe(`${2 * n} ÷ ${n} = 2`);
     }
+  });
+
+  it('keeps the fact ids that existed before the tables went up to 16', () => {
+    expect(
+      getTopic('times-3')!
+        .facts.slice(0, 10)
+        .map((f) => f.id),
+    ).toEqual(Array.from({ length: 10 }, (_, i) => `${i + 1}x3`));
+    expect(
+      getTopic('divide-by-3')!
+        .facts.slice(0, 10)
+        .map((f) => f.id),
+    ).toEqual(Array.from({ length: 10 }, (_, i) => `${(i + 1) * 3}/3`));
+    expect(getTopic('times-16')!.facts[15].statement).toBe('16 × 16 = 256');
+    expect(getTopic('divide-by-16')!.facts[15].statement).toBe('256 ÷ 16 = 16');
   });
 
   it('groups by subject in order', () => {

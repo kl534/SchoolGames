@@ -33,20 +33,33 @@ const learn = (progress: PlayerProgress, level: number, times = 3) => {
 };
 
 describe('LEVELS', () => {
-  it('has 12 levels of the expected sizes', () => {
+  it('has 24 levels of the expected sizes', () => {
     expect(LEVELS.map((l) => l.facts.length)).toEqual([
-      45, 45, 55, 55, 40, 40, 20, 20, 20, 20, 20, 20,
+      45, 45, 55, 55, 40, 40, 20, 20, 20, 20, 20, 20, 24, 24, 12, 12, 24, 24, 32, 32, 32, 32, 32,
+      32,
     ]);
     expect(LEVELS[0].title).toBe('Sums to 10');
     expect(LEVELS[11].title).toBe('÷ 8, 9');
+    expect(LEVELS[23].title).toBe('÷ 15, 16');
   });
 
   it('holds every math fact exactly once', () => {
     const all = LEVELS.flatMap((l) => l.facts.map(({ topic, fact }) => `${topic.id}/${fact.id}`));
-    expect(all).toHaveLength(400);
-    expect(new Set(all).size).toBe(400);
+    expect(all).toHaveLength(712);
+    expect(new Set(all).size).toBe(712);
     const expected = MATH_TOPICS.flatMap((t) => t.facts.map((f) => `${t.id}/${f.id}`));
     expect(new Set(all)).toEqual(new Set(expected));
+  });
+
+  it('keeps levels 5 to 12 as they were before the tables went up to 16', () => {
+    for (const { fact } of LEVELS.slice(4, 12).flatMap((l) => l.facts)) {
+      const times = fact.visual!.kind === 'divide' ? Number(fact.answer) : fact.visual!.a;
+      expect(times).toBeLessThanOrEqual(10);
+    }
+    for (const { fact } of LEVELS.slice(12, 18).flatMap((l) => l.facts)) {
+      const times = fact.visual!.kind === 'divide' ? Number(fact.answer) : fact.visual!.a;
+      expect(times).toBeGreaterThan(10);
+    }
   });
 
   it("reuses the topics' own Fact objects", () => {
@@ -71,7 +84,7 @@ describe('LEVELS', () => {
 
 describe('levelLabel', () => {
   it('names the level', () => {
-    expect(levelLabel(3)).toBe('Level 3 of 12: Sums to 20');
+    expect(levelLabel(3)).toBe('Level 3 of 24: Sums to 20');
   });
 });
 
@@ -122,7 +135,14 @@ describe('levelsOpen', () => {
 
   it('stays within 1 and the number of levels', () => {
     expect(levelsOpen({ ...emptyProgress(), levelsOpen: 0 })).toBe(1);
-    expect(levelsOpen({ ...emptyProgress(), levelsOpen: 99 })).toBe(12);
+    expect(levelsOpen({ ...emptyProgress(), levelsOpen: 99 })).toBe(24);
+  });
+
+  it('opens the new levels for a player who had finished all 12 old ones', () => {
+    const progress = emptyProgress();
+    for (let level = 1; level <= 12; level++) learn(progress, level);
+    expect(levelsOpen({ ...progress, levelsOpen: 12 })).toBe(13);
+    expect(levelsOpen({ ...progress, levelsOpen: 5 })).toBe(13);
   });
 });
 
@@ -201,7 +221,7 @@ describe('chooseLevelFacts', () => {
   it('still returns the full count when everything is learned', () => {
     const progress = emptyProgress();
     for (let level = 1; level <= LEVELS.length; level++) learn(progress, level);
-    expect(levelsOpen(progress)).toBe(12);
+    expect(levelsOpen(progress)).toBe(24);
     expect(chooseLevelFacts(progress, 10, seededRandom(2))).toHaveLength(10);
     expect(chooseLevelFacts(progress, 25, seededRandom(2))).toHaveLength(25);
   });
@@ -219,7 +239,7 @@ describe('chooseLevelFacts', () => {
       }
       expect(answered).toBeLessThan(5000);
     }
-    expect(levelsOpen(progress)).toBe(12);
-    expect(progress.levelsOpen).toBe(12);
+    expect(levelsOpen(progress)).toBe(24);
+    expect(progress.levelsOpen).toBe(24);
   });
 });
