@@ -197,6 +197,46 @@
   }
 }
 
+/* A phone on its side: a slimmer HUD, so more of the field shows below it. */
+@media (max-height: 460px) {
+  .zb-hud {
+    top: max(8px, env(safe-area-inset-top));
+    gap: 3px;
+  }
+
+  .zb-problem {
+    padding: 3px 6px 3px 16px;
+    border-radius: 16px;
+  }
+
+  .zb-problem-text {
+    font-size: 26px;
+  }
+
+  .zb-hear {
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+  }
+
+  .zb-stats {
+    gap: 10px;
+    padding: 0 12px;
+  }
+
+  .zb-brain {
+    font-size: 18px;
+  }
+
+  .zb-wave {
+    font-size: 16px;
+  }
+
+  .zb-score-value {
+    font-size: 20px;
+  }
+}
+
 /* The four answers along the bottom: two rows of two on a narrow phone. */
 .zb-answers {
   position: fixed;
@@ -301,6 +341,7 @@
   flex-direction: column;
   align-items: center;
   gap: 8px;
+  box-sizing: border-box;
   width: max-content;
   max-width: min(92vw, 680px);
   padding: 12px 28px;

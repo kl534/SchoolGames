@@ -63,6 +63,8 @@ const WAVE_BREAK = 2.5;
 const BOSS_BANNER_FOR = 1.8;
 /** Least seconds the game-over banner stays up. */
 const END_FOR = 2.2;
+/** The field gets at least this share of the screen height, or the HUD overlaps the sky instead. */
+const MIN_FRAME = 0.5;
 /** Camera shake (world units) from a boss footfall, a barricade smash and a boss hit. */
 const STEP_SHAKE = 0.04;
 const SMASH_SHAKE = 0.12;
@@ -234,9 +236,23 @@ function run(session: GameSession): void {
   let lane = fitView(1).lane;
   const point = new Vector3();
 
+  /** Where the HUD ends, measured as if the question were showing so the camera never moves. */
+  const hudBottom = () => {
+    const hudWas = hud.hidden;
+    const problemWas = problem.hidden;
+    hud.hidden = false;
+    problem.hidden = false;
+    const bottom = hud.getBoundingClientRect().bottom;
+    hud.hidden = hudWas;
+    problem.hidden = problemWas;
+    return bottom;
+  };
+
   /**
-   * Fits the lanes to the part of the screen above the answer bar, for any shape: the camera
-   * frames a picture that size and the bar covers the strip of grass underneath.
+   * Fits the field to the part of the screen between the HUD and the answer bar, for any shape:
+   * the camera frames a picture that size, with the grass under the bar and the sky behind the
+   * HUD running on past its edges. On a short screen the HUD overlaps the sky instead, so the
+   * field keeps room to be seen.
    */
   const layout = () => {
     const w = container.clientWidth;
@@ -245,14 +261,17 @@ function run(session: GameSession): void {
       viewW = w;
       viewH = h;
       const barTop = answers.getBoundingClientRect().top;
-      const frameH = MathUtils.clamp(barTop > 0 ? barTop : h, h * 0.5, h);
-      wantAspect = w / Math.max(frameH, 1);
+      const bottom = MathUtils.clamp(barTop > 0 ? barTop : h, h * 0.5, h);
+      let top = hudBottom() + 4;
+      if (bottom - top < h * MIN_FRAME) top = 0;
+      const frameH = Math.max(bottom - top, 1);
+      wantAspect = w / frameH;
       const fit = fitView(wantAspect);
       lane = fit.lane;
       field.layout(lane);
       horde.setLane(lane);
       camera.fov = fit.fov;
-      camera.setViewOffset(w, frameH, 0, 0, w, h);
+      camera.setViewOffset(w, frameH, 0, -top, w, h);
       camera.aspect = wantAspect;
       camera.updateProjectionMatrix();
     } else if (camera.aspect !== wantAspect) {

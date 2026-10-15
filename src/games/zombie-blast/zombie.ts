@@ -426,7 +426,7 @@ export function createZombie(
 
   if (brute) {
     // Dull steel with rust-brown edges and rivets. Each piece has its own copies so it can fade.
-    const steelColor = 0x8a9099;
+    const steelColor = 0x9aa2ac;
     const rustColor = 0x6b3f26;
     const addPiece = (
       name: ArmourName,
@@ -436,7 +436,7 @@ export function createZombie(
         color: steelColor,
         metalness: 0.5,
         roughness: 0.45,
-        emissive: 0x15181c,
+        emissive: 0x1e2227,
         side: DoubleSide,
         transparent: true,
       });
