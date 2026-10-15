@@ -1,4 +1,4 @@
-import { Box3, PerspectiveCamera, Raycaster, Vector3 } from 'three';
+import { Box3, Group, MeshStandardMaterial, PerspectiveCamera, Raycaster, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { createEffects } from '../src/games/zombie-blast/effects';
 import {
@@ -42,7 +42,12 @@ import {
 } from '../src/games/zombie-blast/rules';
 import { barricade } from '../src/games/zombie-blast/field';
 import { createThrower, RELEASE_TIME } from '../src/games/zombie-blast/thrower';
-import { createZombie } from '../src/games/zombie-blast/zombie';
+import {
+  ARMOUR_ORDER,
+  BRUTE_LOOK,
+  createZombie,
+  ZOMBIE_LOOKS,
+} from '../src/games/zombie-blast/zombie';
 import { seededRandom } from '../src/shared/random';
 
 /** The game's camera for a screen of this size. */
@@ -623,5 +628,160 @@ describe('wave spawner', () => {
     expect(spawner.update(0, 0)).toBe(1);
     expect(spawner.update(4.4, 1)).toBe(0);
     expect(spawner.update(0.2, 1)).toBe(1);
+  });
+});
+
+describe('brute boss', () => {
+  const brute = () => createZombie(BRUTE_LOOK, { brute: true });
+
+  it('is nearly twice as tall as a regular zombie', () => {
+    const regular = createZombie();
+    const boss = brute();
+    for (const z of [regular, boss]) z.update(0.016);
+    const ratio = boss.signAnchor(new Vector3()).y / regular.signAnchor(new Vector3()).y;
+    expect(ratio).toBeGreaterThan(1.5);
+    expect(ratio).toBeLessThan(2.3);
+    expect(boss.brute).toBe(true);
+    expect(regular.brute).toBe(false);
+    expect(regular.armour).toHaveLength(0);
+    expect(regular.armourLeft).toBe(0);
+  });
+
+  it('is broader than a regular zombie', () => {
+    const width = (z: ReturnType<typeof createZombie>) => {
+      z.object.updateMatrixWorld(true);
+      const box = new Box3().setFromObject(z.object);
+      return (box.max.x - box.min.x) / z.object.scale.x;
+    };
+    expect(width(brute())).toBeGreaterThan(width(createZombie()) * 1.25);
+  });
+
+  it('puts the bomb target at its feet, further out at the bigger scale', () => {
+    const regular = createZombie(ZOMBIE_LOOKS[0]);
+    const boss = brute();
+    for (const z of [regular, boss]) z.object.position.set(0, 0, -4);
+    const a = regular.feetPosition(new Vector3());
+    const b = boss.feetPosition(new Vector3());
+    expect(b.y).toBeLessThan(0.3);
+    expect(b.z).toBeGreaterThan(a.z);
+    expect(b.z).toBeLessThan(-4 + 1.2);
+  });
+
+  it('wears three pieces of armour, and each hit takes the next one off', () => {
+    const scene = new Group();
+    const boss = brute();
+    scene.add(boss.object);
+    expect(boss.armour.map((p) => p.name)).toEqual([...ARMOUR_ORDER]);
+    expect(ARMOUR_ORDER).toEqual(['pads', 'chest', 'helmet']);
+    expect(boss.armourLeft).toBe(3);
+    boss.armour.forEach((p) => p.parts.forEach((part) => expect(part.parent).not.toBeNull()));
+    const attachedParts = (name: string) =>
+      boss.armour.find((p) => p.name === name)!.parts.map((part) => part.parent !== scene);
+    for (const [i, name] of ARMOUR_ORDER.entries()) {
+      expect(boss.knockOffArmour()).not.toBeNull();
+      expect(boss.armourLeft).toBe(2 - i);
+      expect(boss.armour.filter((p) => !p.attached).map((p) => p.name)).toEqual(
+        ARMOUR_ORDER.slice(0, i + 1),
+      );
+      // The piece that came off now hangs in the scene, the rest still on the boss.
+      expect(attachedParts(name).every((onBoss) => !onBoss)).toBe(true);
+      for (const later of ARMOUR_ORDER.slice(i + 1)) {
+        expect(attachedParts(later).every(Boolean)).toBe(true);
+      }
+    }
+  });
+
+  it('has two shoulder pads that come off together, and never goes below no armour', () => {
+    const boss = brute();
+    expect(boss.armour[0].parts).toHaveLength(2);
+    for (let i = 0; i < 3; i++) expect(boss.knockOffArmour()).not.toBeNull();
+    expect(boss.knockOffArmour()).toBeNull();
+    expect(boss.armourLeft).toBe(0);
+  });
+
+  it('throws armour up, lands it on the grass and then lets it vanish', () => {
+    const scene = new Group();
+    const boss = brute();
+    scene.add(boss.object);
+    boss.object.position.set(0, 0, -5);
+    boss.update(0.016);
+    boss.knockOffArmour();
+    const helmetless = boss.armour[0].parts[0];
+    const startY = helmetless.position.y;
+    let top = startY;
+    for (let i = 0; i < 20; i++) {
+      boss.update(0.02);
+      top = Math.max(top, helmetless.position.y);
+    }
+    expect(top).toBeGreaterThan(startY + 0.5);
+    for (let i = 0; i < 60; i++) boss.update(0.05);
+    expect(helmetless.position.y).toBeLessThan(0.3);
+    for (let i = 0; i < 100; i++) boss.update(0.05);
+    expect(helmetless.visible).toBe(false);
+  });
+
+  it('puts all the armour back on reset', () => {
+    const scene = new Group();
+    const boss = brute();
+    scene.add(boss.object);
+    const homes = boss.armour.flatMap((p) => p.parts.map((part) => [part, part.parent] as const));
+    for (let i = 0; i < 3; i++) boss.knockOffArmour();
+    for (let i = 0; i < 200; i++) boss.update(0.05);
+    boss.reset();
+    expect(boss.armourLeft).toBe(3);
+    for (const [part, parent] of homes) {
+      expect(part.parent).toBe(parent);
+      expect(part.visible).toBe(true);
+    }
+  });
+
+  it('flashes white when hit and then goes back to its own colours', () => {
+    const boss = brute();
+    const materials: MeshStandardMaterial[] = [];
+    boss.object.traverse((o) => {
+      const m = (o as { material?: unknown }).material;
+      if (m instanceof MeshStandardMaterial) materials.push(m);
+    });
+    const colours = materials.map((m) => m.color.getHex());
+    const emissive = materials.map((m) => m.emissive.getHex());
+    boss.flash();
+    expect(materials.some((m) => m.emissive.getHex() === 0xffffff)).toBe(true);
+    for (let i = 0; i < 10; i++) boss.update(0.02);
+    expect(materials.map((m) => m.color.getHex())).toEqual(colours);
+    expect(materials.map((m) => m.emissive.getHex())).toEqual(emissive);
+  });
+
+  it('lurches back when hit and recovers', () => {
+    const boss = brute();
+    boss.setMode('walk');
+    boss.update(0.1);
+    const upright = boss.signAnchor(new Vector3());
+    boss.stagger();
+    boss.update(0.2);
+    const leaning = boss.signAnchor(new Vector3());
+    expect(leaning.distanceTo(upright)).toBeGreaterThan(0.01);
+    for (let i = 0; i < 40; i++) boss.update(0.02);
+    expect(boss.signAnchor(new Vector3()).y).toBeGreaterThan(upright.y - 0.4);
+  });
+
+  it('thumps on each step of its walk, but not when standing', () => {
+    const boss = brute();
+    let steps = 0;
+    boss.onFootfall = () => steps++;
+    boss.setMode('sway');
+    for (let i = 0; i < 100; i++) boss.update(0.02);
+    expect(steps).toBe(0);
+    boss.setMode('walk');
+    for (let i = 0; i < 300; i++) boss.update(0.02);
+    expect(steps).toBeGreaterThan(5);
+    expect(steps).toBeLessThan(14);
+  });
+
+  it('is knocked out like any zombie once the armour is gone', () => {
+    const boss = brute();
+    for (let i = 0; i < 3; i++) boss.knockOffArmour();
+    boss.setMode('blast');
+    for (let i = 0; i < 100; i++) boss.update(0.02);
+    expect(boss.signAnchor(new Vector3()).y).toBeLessThan(3);
   });
 });
