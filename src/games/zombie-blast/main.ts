@@ -14,7 +14,7 @@ import { BOMB_RADIUS, createBomb } from './bomb';
 import { createEffects } from './effects';
 import { buildField, HORIZON_COLOR } from './field';
 import { createHorde, type Slot } from './horde';
-import { CAMERA, fitView, LANES, TARGET } from './layout';
+import { BOSS_TOP, CAMERA, fitView, LANES, SPAWN_Z, TARGET } from './layout';
 import {
   arcHeightFor,
   BOSS_BONUS,
@@ -65,6 +65,9 @@ const BOSS_BANNER_FOR = 1.8;
 const END_FOR = 2.2;
 /** The field gets at least this share of the screen height, or the HUD overlaps the sky instead. */
 const MIN_FRAME = 0.5;
+/** Space kept between the HUD and the boss's head, and between the kid's feet and the answers, px. */
+const BOSS_CLEARANCE = 6;
+const KID_MARGIN = 14;
 /** Camera shake (world units) from a boss footfall, a barricade smash and a boss hit. */
 const STEP_SHAKE = 0.04;
 const SMASH_SHAKE = 0.12;
@@ -271,9 +274,25 @@ function run(session: GameSession): void {
       field.layout(lane);
       horde.setLane(lane);
       camera.fov = fit.fov;
-      camera.setViewOffset(w, frameH, 0, -top, w, h);
-      camera.aspect = wantAspect;
-      camera.updateProjectionMatrix();
+      camera.position.copy(CAMERA);
+      camera.lookAt(TARGET);
+      camera.updateMatrixWorld();
+      const setFrame = (shift: number) => {
+        camera.setViewOffset(w, frameH, 0, -(top + shift), w, h);
+        camera.aspect = wantAspect;
+        camera.updateProjectionMatrix();
+      };
+      setFrame(0);
+      // The boss stands taller than the camera, so its head would sit behind the HUD while it
+      // walks out of the mist. Slide the picture down until the head clears the HUD, as far as
+      // the kid's feet can go before they reach the answer bar.
+      const screenY = (y: number, z: number) =>
+        ((1 - point.set(0, y, z).project(camera).y) / 2) * h;
+      const headY = screenY(BOSS_TOP, SPAWN_Z);
+      const feetY = screenY(0, KID_Z);
+      const wanted = top + BOSS_CLEARANCE - headY;
+      const room = bottom - KID_MARGIN - feetY;
+      setFrame(Math.max(0, Math.min(wanted, room)));
     } else if (camera.aspect !== wantAspect) {
       // The shared resize handler sets the aspect of the whole screen; put ours back.
       camera.aspect = wantAspect;

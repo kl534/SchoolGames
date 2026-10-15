@@ -10,6 +10,9 @@ export const END_Z = -0.6;
 /** Where the zombies come out of the mist. */
 export const SPAWN_Z = -19;
 
+/** How high the boss stands with its helmet crest, so the camera can keep its head clear of the HUD. */
+export const BOSS_TOP = 4.3;
+
 export const CAMERA = new Vector3(0, 3.1, 5.6);
 export const TARGET = new Vector3(0, 0.7, -3);
 /** Height of the middle of a zombie, for working out how far away it is. */
