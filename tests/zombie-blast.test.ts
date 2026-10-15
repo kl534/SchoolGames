@@ -19,14 +19,26 @@ import {
   arcHeightFor,
   bombPosition,
   BRAINS,
+  closestIndex,
+  createWaveSpawner,
   easeOutBack,
+  easeToward,
   fallTime,
+  hitPoints,
   loseBrain,
+  MAX_ON_FIELD,
+  multiplierFor,
+  nextStreak,
+  outcomeText,
   outOfBrains,
+  pickLane,
   plankFlight,
   planksInReach,
+  spawnInterval,
+  walkSpeed,
   wrapAngle,
   zombieProgress,
+  zombiesInWave,
 } from '../src/games/zombie-blast/rules';
 import { barricade } from '../src/games/zombie-blast/field';
 import { createThrower, RELEASE_TIME } from '../src/games/zombie-blast/thrower';
@@ -451,5 +463,165 @@ describe('thrower head', () => {
     });
     expect(top).toBeGreaterThan(1.3);
     expect(top).toBeLessThan(1.5);
+  });
+});
+
+describe('waves', () => {
+  it('sends 6, 8, 10 … regular zombies', () => {
+    expect([1, 2, 3, 4].map(zombiesInWave)).toEqual([6, 8, 10, 12]);
+  });
+
+  it('spawns every 5 seconds at first, half a second faster each wave, never under 1 second', () => {
+    expect([1, 2, 3, 9, 10, 30].map(spawnInterval)).toEqual([5, 4.5, 4, 1, 1, 1]);
+  });
+});
+
+describe('walk pace', () => {
+  const path = END_Z - SPAWN_Z;
+
+  it('covers the whole path in the question time', () => {
+    for (const seconds of [15, 10, 5]) expect(walkSpeed(seconds) * seconds).toBeCloseTo(path);
+  });
+
+  it('is slower for the boss and slower still while a wrong answer is explained', () => {
+    expect(walkSpeed(10, true)).toBeCloseTo(walkSpeed(10) * 0.5);
+    expect(walkSpeed(10, false, true)).toBeCloseTo(walkSpeed(10) * 0.25);
+    expect(walkSpeed(10, true, true)).toBeCloseTo(walkSpeed(10) * 0.125);
+  });
+
+  it('copes with a zero question time', () => {
+    expect(Number.isFinite(walkSpeed(0))).toBe(true);
+  });
+
+  it('eases towards a goal without overshooting', () => {
+    let pace = 0;
+    for (let i = 0; i < 30; i++) {
+      const next = easeToward(pace, 4, 6, 1 / 60);
+      expect(next).toBeGreaterThan(pace);
+      expect(next).toBeLessThanOrEqual(4);
+      pace = next;
+    }
+    // Most of the way there after half a second.
+    expect(pace).toBeGreaterThan(3.7);
+  });
+});
+
+describe('score', () => {
+  it('steps the multiplier up at streaks of 5 and 10', () => {
+    expect([1, 4, 5, 9, 10, 25].map(multiplierFor)).toEqual([1, 1, 2, 2, 3, 3]);
+  });
+
+  it('counts a streak up on hits and resets it on a miss', () => {
+    expect(nextStreak(3, true)).toBe(4);
+    expect(nextStreak(3, false)).toBe(0);
+  });
+
+  it('gives 100 to 150 points for the answer time, times the multiplier', () => {
+    expect(hitPoints(0, 10, 1)).toBe(150);
+    expect(hitPoints(5, 10, 1)).toBe(125);
+    expect(hitPoints(10, 10, 1)).toBe(100);
+    expect(hitPoints(30, 10, 1)).toBe(100);
+    expect(hitPoints(0, 10, 5)).toBe(300);
+    expect(hitPoints(0, 10, 10)).toBe(450);
+    expect(hitPoints(1, 0, 1)).toBe(100);
+  });
+
+  it('words the outcome for one zombie and for many', () => {
+    expect(outcomeText(3, 1)).toBe('You reached wave 3 and blasted 1 zombie!');
+    expect(outcomeText(1, 7)).toBe('You reached wave 1 and blasted 7 zombies!');
+  });
+});
+
+describe('targeting', () => {
+  it('picks the zombie nearest the barricade, ignoring those that cannot be hit', () => {
+    expect(closestIndex([-10, -3, -7])).toBe(1);
+    expect(closestIndex([-10, null, -7])).toBe(2);
+    expect(closestIndex([null, null])).toBe(-1);
+    expect(closestIndex([])).toBe(-1);
+  });
+
+  it('prefers a clear lane, then the lane whose last zombie has walked furthest', () => {
+    expect(pickLane([-5, null, -9, -2], () => 0)).toBe(1);
+    expect(pickLane([-5, -8, -9, -2], () => 0)).toBe(3);
+    expect(pickLane([null, null, null, null], () => 0.99)).toBe(3);
+  });
+
+  it('breaks ties at random among the best lanes only', () => {
+    const lanes = [-5, null, -9, null];
+    expect(pickLane(lanes, () => 0)).toBe(1);
+    expect(pickLane(lanes, () => 0.99)).toBe(3);
+    const random = seededRandom(5);
+    for (let i = 0; i < 50; i++) expect([1, 3]).toContain(pickLane(lanes, random));
+  });
+});
+
+describe('wave spawner', () => {
+  it('sends the first zombie at once, as the field is empty', () => {
+    const spawner = createWaveSpawner();
+    expect(spawner.left).toBe(6);
+    expect(spawner.update(0, 0)).toBe(1);
+    expect(spawner.left).toBe(5);
+  });
+
+  it('sends the next after the interval when one is walking, and not before', () => {
+    const spawner = createWaveSpawner();
+    spawner.update(0, 0);
+    expect(spawner.update(4.9, 1)).toBe(0);
+    expect(spawner.update(0.2, 1)).toBe(1);
+    // The interval restarts at each spawn.
+    expect(spawner.update(4.9, 2)).toBe(0);
+    expect(spawner.update(0.2, 2)).toBe(1);
+  });
+
+  it('sends one at once whenever the field empties', () => {
+    const spawner = createWaveSpawner();
+    spawner.update(0, 0);
+    expect(spawner.update(0.5, 1)).toBe(0);
+    expect(spawner.update(0.016, 0)).toBe(1);
+    // ... and the interval restarts from that spawn.
+    expect(spawner.update(4.9, 1)).toBe(0);
+  });
+
+  it('waits while the field is full and sends the moment there is room', () => {
+    const spawner = createWaveSpawner();
+    expect(spawner.update(60, MAX_ON_FIELD)).toBe(0);
+    expect(spawner.update(60, MAX_ON_FIELD + 1)).toBe(0);
+    expect(spawner.left).toBe(6);
+    expect(spawner.update(0.016, MAX_ON_FIELD - 1)).toBe(1);
+  });
+
+  it('counts down to the boss, which is due once the last regular is gone', () => {
+    const spawner = createWaveSpawner();
+    for (let i = 0; i < 6; i++) expect(spawner.update(0, 0)).toBe(1);
+    expect(spawner.left).toBe(0);
+    expect(spawner.update(10, 0)).toBe(0);
+    expect(spawner.bossDue).toBe(true);
+    // Not while any regular is still walking.
+    spawner.update(0.1, 2);
+    expect(spawner.bossDue).toBe(false);
+    spawner.update(0.1, 0);
+    expect(spawner.bossDue).toBe(true);
+    spawner.bossSent();
+    expect(spawner.bossDue).toBe(false);
+  });
+
+  it('is not due for the boss right after the last regular is sent', () => {
+    const spawner = createWaveSpawner();
+    for (let i = 0; i < 6; i++) spawner.update(0, 0);
+    expect(spawner.bossDue).toBe(false);
+  });
+
+  it('starts the next wave with more zombies and a shorter interval', () => {
+    const spawner = createWaveSpawner();
+    for (let i = 0; i < 6; i++) spawner.update(0, 0);
+    spawner.update(1, 0);
+    spawner.bossSent();
+    spawner.nextWave();
+    expect(spawner.wave).toBe(2);
+    expect(spawner.left).toBe(8);
+    expect(spawner.bossDue).toBe(false);
+    expect(spawner.update(0, 0)).toBe(1);
+    expect(spawner.update(4.4, 1)).toBe(0);
+    expect(spawner.update(0.2, 1)).toBe(1);
   });
 });
