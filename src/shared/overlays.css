@@ -179,6 +179,12 @@
   font-weight: 700;
 }
 
+.sg-outcome {
+  font-size: 22px;
+  font-weight: 800;
+  color: #ffe066;
+}
+
 .sg-star-off {
   opacity: 0.2;
   filter: grayscale(1);
@@ -255,7 +261,8 @@
     font-size: clamp(32px, 10vh, 42px);
   }
 
-  .sg-right {
+  .sg-right,
+  .sg-outcome {
     font-size: 18px;
   }
 
