@@ -1,7 +1,7 @@
 import './overlays.css';
 import { button } from './preview';
 import type { Fact } from './topics';
-import { topicMenuUrl, topicsUrl } from './ui';
+import { topicMenuUrl } from './ui';
 
 export interface ResultsOptions {
   topicId: string;
@@ -143,11 +143,7 @@ export function showResults(options: ResultsOptions): { dispose(): void } {
   const again = button(summary.playAgainLabel, 'sg-btn sg-btn-primary');
   const row = document.createElement('div');
   row.className = 'sg-row sg-actions';
-  row.append(
-    again,
-    link('Other games', topicMenuUrl(options.topicId)),
-    link('All topics', topicsUrl()),
-  );
+  row.append(again, link('Other games', topicMenuUrl(options.topicId)));
   card.appendChild(row);
   overlay.appendChild(card);
   container.appendChild(overlay);
