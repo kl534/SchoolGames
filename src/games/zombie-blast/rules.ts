@@ -46,23 +46,6 @@ export function outOfBrains(brains: number): boolean {
 
 const clamp01 = (n: number) => Math.min(Math.max(n, 0), 1);
 
-/**
- * How far along their walk the zombies are: 0 at the start line, 1 at the barricade.
- * Linear in the clock, so they arrive just as the time runs out.
- */
-export function zombieProgress(clockLeft: number, clockTotal: number): number {
-  if (clockTotal <= 0) return 1;
-  return clamp01(1 - clockLeft / clockTotal);
-}
-
-/** Position on the zombies' path for a progress between `startZ` and `endZ`. */
-export function approachZ(progress: number, startZ: number, endZ: number): number {
-  return startZ + (endZ - startZ) * clamp01(progress);
-}
-
-/** Slows down towards 1, for zombies shuffling out of the mist and stopping at the line. */
-export const easeOut = (t: number): number => 1 - (1 - clamp01(t)) ** 3;
-
 /** Eases `current` towards `goal`; frame-rate independent for a given `rate` (1/seconds). */
 export function easeToward(current: number, goal: number, rate: number, delta: number): number {
   return current + (goal - current) * (1 - Math.exp(-rate * delta));

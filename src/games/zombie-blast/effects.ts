@@ -14,8 +14,8 @@ interface Particle {
 
 export interface Effects {
   object: Object3D;
-  /** Cartoon BOOM: an orange and yellow flash with white puffs billowing out. */
-  boom(at: Vector3): void;
+  /** Cartoon BOOM: an orange and yellow flash with white puffs billowing out (`size` 1 is normal). */
+  boom(at: Vector3, size?: number): void;
   /** A small grey puff and a wisp of smoke for a bomb that fizzles out. */
   fizzle(at: Vector3): void;
   /** A quick white poof, for something vanishing. */
@@ -69,13 +69,13 @@ export function createEffects(): Effects {
 
   return {
     object: group,
-    boom(at) {
+    boom(at, size = 1) {
       const centre = at.clone();
-      centre.y += 0.6;
-      spawn(centre, 0xffcf33, 0.4, 3.2, 0.45, new Vector3(), 0.95);
-      spawn(centre, 0xff7a1a, 0.3, 2.3, 0.4, new Vector3(0, 0.3, 0), 0.95);
-      ring(centre, 9, 0xffffff, 0.75, 3.2, 1.8, 0.9);
-      ring(centre, 6, 0xfff1d0, 0.6, 1.8, 2.8, 1.1);
+      centre.y += 0.6 * size;
+      spawn(centre, 0xffcf33, 0.4 * size, 3.2 * size, 0.45, new Vector3(), 0.95);
+      spawn(centre, 0xff7a1a, 0.3 * size, 2.3 * size, 0.4, new Vector3(0, 0.3 * size, 0), 0.95);
+      ring(centre, 9, 0xffffff, 0.75 * size, 3.2 * size, 1.8 * size, 0.9);
+      ring(centre, 6, 0xfff1d0, 0.6 * size, 1.8 * size, 2.8 * size, 1.1);
     },
     fizzle(at) {
       const p = at.clone();

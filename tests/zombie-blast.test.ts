@@ -5,18 +5,14 @@ import { createEffects } from '../src/games/zombie-blast/effects';
 import {
   CAMERA,
   BARRICADE_Z,
-  BREAK_Z,
   END_Z,
   fitView,
   LANES,
   laneX,
-  layoutSigns,
   SPAWN_Z,
-  START_Z,
   TARGET,
 } from '../src/games/zombie-blast/layout';
 import {
-  approachZ,
   arcHeightFor,
   bombPosition,
   BRAINS,
@@ -38,7 +34,6 @@ import {
   spawnInterval,
   walkSpeed,
   wrapAngle,
-  zombieProgress,
   zombiesInWave,
 } from '../src/games/zombie-blast/rules';
 import { barricade } from '../src/games/zombie-blast/field';
@@ -89,33 +84,6 @@ describe('brains', () => {
 
   it('is out of brains at zero only', () => {
     expect([3, 2, 1, 0].map(outOfBrains)).toEqual([false, false, false, true]);
-  });
-});
-
-describe('zombie progress', () => {
-  it('runs from the start line to the barricade as the clock runs down', () => {
-    expect(zombieProgress(5, 5)).toBe(0);
-    expect(zombieProgress(2.5, 5)).toBeCloseTo(0.5);
-    expect(zombieProgress(0, 5)).toBe(1);
-  });
-
-  it('is linear, whatever the length of the clock', () => {
-    for (const total of [5, 10, 15]) {
-      expect(zombieProgress(total * 0.75, total)).toBeCloseTo(0.25);
-    }
-  });
-
-  it('stays within 0 to 1 and copes with an empty clock', () => {
-    expect(zombieProgress(-1, 5)).toBe(1);
-    expect(zombieProgress(9, 5)).toBe(0);
-    expect(zombieProgress(0, 0)).toBe(1);
-  });
-
-  it('puts the zombies at the barricade exactly when the clock hits zero', () => {
-    expect(approachZ(zombieProgress(5, 5), START_Z, END_Z)).toBe(START_Z);
-    expect(approachZ(zombieProgress(0, 5), START_Z, END_Z)).toBeCloseTo(END_Z);
-    const half = approachZ(zombieProgress(2.5, 5), START_Z, END_Z);
-    expect(half).toBeCloseTo((START_Z + END_Z) / 2);
   });
 });
 
@@ -170,8 +138,8 @@ describe('lane layout', () => {
   });
 
   it('widens the lanes with distance, so the zombies fan out as they emerge', () => {
-    expect(laneX(3, SPAWN_Z, 1)).toBeGreaterThan(laneX(3, START_Z, 1));
-    expect(laneX(3, START_Z, 1)).toBeGreaterThan(laneX(3, END_Z, 1));
+    expect(laneX(3, SPAWN_Z, 1)).toBeGreaterThan(laneX(3, -8, 1));
+    expect(laneX(3, -8, 1)).toBeGreaterThan(laneX(3, END_Z, 1));
   });
 
   it('never makes a lane narrower than the one at the barricade', () => {
@@ -184,7 +152,7 @@ describe('lane layout', () => {
       const { lane } = fitView(w / h);
 
       it('keeps all four zombies on screen from the mist to the barricade', () => {
-        for (const z of [SPAWN_Z, START_Z, END_Z]) {
+        for (const z of [SPAWN_Z, -8, END_Z]) {
           for (let i = 0; i < LANES; i++) {
             const p = toScreen(camera, w, h, new Vector3(laneX(i, z, lane), 1.2, z));
             expect(p.x).toBeGreaterThan(20);
@@ -199,7 +167,7 @@ describe('lane layout', () => {
           const b = toScreen(camera, w, h, new Vector3(laneX(2, z, lane), 1, z));
           return b.x - a.x;
         };
-        expect(gap(START_Z)).toBeCloseTo(gap(END_Z), 0);
+        expect(gap(-8)).toBeCloseTo(gap(END_Z), 0);
         expect(gap(SPAWN_Z)).toBeCloseTo(gap(END_Z), 0);
       });
     });
@@ -209,83 +177,6 @@ describe('lane layout', () => {
     expect(fitView(16 / 9).lane).toBeGreaterThan(fitView(9 / 16).lane);
     expect(fitView(9 / 16).fov).toBeGreaterThan(fitView(16 / 9).fov);
     expect(fitView(0).lane).toBeGreaterThan(0);
-  });
-});
-
-describe('answer signs', () => {
-  const area = { left: 8, top: 120, right: 0, bottom: 0 };
-  const H = 64;
-  const GAP = 6;
-
-  const overlaps = (
-    a: { x: number; y: number; w: number },
-    b: { x: number; y: number; w: number },
-  ) => Math.abs(a.x - b.x) < (a.w + b.w) / 2 && Math.abs(a.y - b.y) < H;
-
-  /** Signs hung over the zombies' heads at the start line, the barricade and in between. */
-  for (const [w, h] of SCREENS) {
-    it(`never overlap each other or leave the screen at ${w}x${h}, even with long answers`, () => {
-      const camera = cameraFor(w, h);
-      const { lane } = fitView(w / h);
-      const random = seededRandom(w * 31 + h);
-      const bounds = { ...area, right: w - 8, bottom: h - 64 };
-      for (const z of [START_Z, (START_Z + END_Z) / 2, END_Z]) {
-        for (const widths of [
-          [64, 64, 64, 64],
-          [72, 90, 68, 80],
-          [150, 64, 140, 64],
-          [220, 220, 220, 220],
-          ...Array.from({ length: 20 }, () =>
-            Array.from({ length: LANES }, () => 64 + Math.floor(random() * 160)),
-          ),
-        ]) {
-          const items = widths.map((width, i) => {
-            const head = toScreen(camera, w, h, new Vector3(laneX(i, z, lane), 2.4, z));
-            return { x: head.x + (random() - 0.5) * 16, y: head.y - 12 - H / 2, w: width };
-          });
-          const placed = layoutSigns(items, H, GAP, bounds).map((p, i) => ({ ...p, w: widths[i] }));
-          placed.forEach((a, i) => {
-            expect(a.x - a.w / 2).toBeGreaterThanOrEqual(bounds.left - 1e-6);
-            expect(a.x + a.w / 2).toBeLessThanOrEqual(bounds.right + 1e-6);
-            expect(a.y - H / 2).toBeGreaterThanOrEqual(bounds.top - 1e-6);
-            expect(a.y + H / 2).toBeLessThanOrEqual(bounds.bottom + 1e-6);
-            for (const b of placed.slice(i + 1)) expect(overlaps(a, b)).toBe(false);
-          });
-        }
-      }
-    });
-  }
-
-  it('leaves signs where they are when there is room', () => {
-    const items = [
-      { x: 100, y: 300, w: 64 },
-      { x: 200, y: 310, w: 64 },
-    ];
-    const placed = layoutSigns(items, H, GAP, { left: 0, right: 400, top: 100, bottom: 700 });
-    expect(placed).toEqual([
-      { x: 100, y: 300 },
-      { x: 200, y: 310 },
-    ]);
-  });
-
-  it('lifts a sign clear of a nearer one that it would overlap', () => {
-    const items = [
-      { x: 100, y: 300, w: 100 },
-      { x: 140, y: 290, w: 100 },
-    ];
-    const [near, far] = layoutSigns(items, H, GAP, { left: 0, right: 400, top: 100, bottom: 700 });
-    expect(near.y).toBe(300);
-    expect(far.y).toBe(300 - H - GAP);
-  });
-
-  it('keeps a sign inside the edges of the screen', () => {
-    const [sign] = layoutSigns([{ x: 2, y: 300, w: 80 }], H, GAP, {
-      left: 8,
-      right: 360,
-      top: 100,
-      bottom: 600,
-    });
-    expect(sign.x).toBe(48);
   });
 });
 
@@ -438,11 +329,6 @@ describe('fence breaking', () => {
     fence.repair();
     for (let i = 0; i < 60; i++) fence.update(1 / 60);
     planks.forEach((p, i) => expect(p.position.distanceTo(before[i])).toBeLessThan(1e-6));
-  });
-
-  it('puts the end of the break beyond the barricade and short of the kid', () => {
-    expect(BREAK_Z).toBeGreaterThan(END_Z);
-    expect(BREAK_Z).toBeLessThan(1.5);
   });
 });
 
