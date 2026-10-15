@@ -71,7 +71,6 @@ import {
   applyHit,
   applyStrike,
   batterNumber,
-  clockFraction,
   easeToward,
   EXTRA_INNINGS,
   finalSpeech,
@@ -202,6 +201,8 @@ function run(session: GameSession): void {
   let speechToken = 0;
   let flightTotal = 10;
   let elapsed = 0;
+  /** Seconds since the question finished being read, which runs on through the wind-up and flight. */
+  let answerTime = 0;
   const pitchStart: Vec = { ...RELEASE };
   const ballPos: Vec = { ...RELEASE };
   let lastTick = 0;
@@ -457,6 +458,7 @@ function run(session: GameSession): void {
     const thisTurn = ++turn;
     ({ seconds: flightTotal } = ask());
     elapsed = 0;
+    answerTime = 0;
     speechDone = false;
     dash = null;
     hud.setClock(1);
@@ -500,6 +502,9 @@ function run(session: GameSession): void {
   };
 
   const updatePitch = (delta: number) => {
+    if (speechDone && (phase === 'windup' || phase === 'release' || phase === 'pitch')) {
+      answerTime += delta;
+    }
     if (phase === 'windup' && speechDone && pitcher.windTime >= MIN_WIND) throwPitch();
     if (phase !== 'pitch') return;
     elapsed += delta;
@@ -526,8 +531,8 @@ function run(session: GameSession): void {
       // Audio trouble must never stop the swing.
     }
     speechToken++;
-    // A tap before the pitch is thrown counts as no time used at all.
-    const used = phase === 'pitch' ? elapsed : 0;
+    // A tap before the question has been read out counts as no time used at all.
+    const used = speechDone ? answerTime : 0;
     if (phase === 'windup') {
       pitcher.release(() => {});
     }
@@ -546,7 +551,7 @@ function run(session: GameSession): void {
     if (correct) {
       feed.recordHit(fact);
       session.recordAnswer(fact, true);
-      const hit = hitFor(clockFraction(used, flightTotal));
+      const hit = hitFor(used);
       startDash([{ to: CONTACT, dur: ZIP_TIME, onEnd: () => contact(hit) }]);
     } else {
       feed.recordMiss(fact);

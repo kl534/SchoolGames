@@ -22,15 +22,18 @@ export type Hit = 'single' | 'double' | 'triple' | 'homer';
 /** Bases a hit is worth, and so how far everybody moves. */
 export const BASES_FOR: Record<Hit, number> = { single: 1, double: 2, triple: 3, homer: 4 };
 
-/** The fraction of the clock used below which each better hit is earned. */
-export const HOMER_BELOW = 0.25;
-export const TRIPLE_BELOW = 0.5;
-export const DOUBLE_BELOW = 0.75;
+/**
+ * Answer times, in seconds from the end of the question, under which each better hit is earned.
+ * They are the same however long the clock is.
+ */
+export const HOMER_UNDER_SECONDS = 0.4;
+export const TRIPLE_UNDER_SECONDS = 0.6;
+export const DOUBLE_UNDER_SECONDS = 1;
 
-/** When we pitch, the fraction of the clock used below which a right answer is a pop fly... */
-export const POP_OUT_BELOW = 0.25;
+/** When we pitch, the answer time in seconds under which a right answer is a pop fly... */
+export const POP_OUT_UNDER_SECONDS = 0.5;
 /** ...or a ground out; a slower right answer is a strike. */
-export const GROUND_OUT_BELOW = 0.5;
+export const GROUND_OUT_UNDER_SECONDS = 1;
 
 /**
  * How likely each hit is when the rival gets one, as the share of the whole (they add up to 1).
@@ -45,25 +48,20 @@ export const CPU_HIT_WEIGHTS: Record<Hit, number> = {
 
 const clamp01 = (n: number) => Math.min(Math.max(n, 0), 1);
 
-/** How much of the clock has run, 0 when the answer came at once and 1 at the buzzer. */
-export function clockFraction(elapsed: number, total: number): number {
-  return total > 0 ? clamp01(elapsed / total) : 1;
-}
-
-/** The hit a correct answer earns: the sooner the answer, the further the ball goes. */
-export function hitFor(fraction: number): Hit {
-  if (fraction < HOMER_BELOW) return 'homer';
-  if (fraction < TRIPLE_BELOW) return 'triple';
-  if (fraction < DOUBLE_BELOW) return 'double';
+/** The hit a correct answer earns: the sooner the answer (in seconds), the further the ball goes. */
+export function hitFor(seconds: number): Hit {
+  if (seconds < HOMER_UNDER_SECONDS) return 'homer';
+  if (seconds < TRIPLE_UNDER_SECONDS) return 'triple';
+  if (seconds < DOUBLE_UNDER_SECONDS) return 'double';
   return 'single';
 }
 
 export type PitchOutcome = 'popout' | 'groundout' | 'strike';
 
-/** What a right answer does when we pitch: the sooner the answer, the surer the out. */
-export function pitchOutcomeFor(fraction: number): PitchOutcome {
-  if (fraction < POP_OUT_BELOW) return 'popout';
-  if (fraction < GROUND_OUT_BELOW) return 'groundout';
+/** What a right answer does when we pitch: the sooner the answer (in seconds), the surer the out. */
+export function pitchOutcomeFor(seconds: number): PitchOutcome {
+  if (seconds < POP_OUT_UNDER_SECONDS) return 'popout';
+  if (seconds < GROUND_OUT_UNDER_SECONDS) return 'groundout';
   return 'strike';
 }
 
