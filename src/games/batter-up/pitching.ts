@@ -41,7 +41,6 @@ import {
   applyFieldOut,
   applyHit,
   applyStrike,
-  clockFraction,
   cpuHitFor,
   cpuHitSpeech,
   GROUND_OUT_SPEECH,
@@ -236,7 +235,7 @@ export function createPitching(host: PitchingHost): Pitching {
     hud.lock();
     hud.buttons[index].classList.add('chosen');
     host.answered(fact, correct);
-    deliver(correct ? { kind: pitchOutcomeFor(clockFraction(used, total)) } : rivalHit());
+    deliver(correct ? { kind: pitchOutcomeFor(used) } : rivalHit());
   };
 
   const rivalHit = (): Call => ({ kind: 'hit', hit: cpuHitFor(Math.random()) });

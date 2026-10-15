@@ -89,7 +89,6 @@ import {
   applyStrike,
   BASES_FOR,
   batterNumber,
-  clockFraction,
   cpuHitFor,
   cpuHitSpeech,
   CPU_HIT_WEIGHTS,
@@ -99,11 +98,13 @@ import {
   EXTRA_INNINGS,
   finalSpeech,
   GROUND_OUT_SPEECH,
-  GROUND_OUT_BELOW,
+  GROUND_OUT_UNDER_SECONDS,
   halfEndSpeech,
   halfEndTitle,
   halfOver,
+  DOUBLE_UNDER_SECONDS,
   hitFor,
+  HOMER_UNDER_SECONDS,
   hitLabel,
   hitSpeech,
   hitWord,
@@ -120,12 +121,13 @@ import {
   pitchOutcomeFor,
   pitchStrikeCall,
   PLAY_BALL,
-  POP_OUT_BELOW,
+  POP_OUT_UNDER_SECONDS,
   POP_OUT_SPEECH,
   runsText,
   STRIKES_OUT,
   strikeCall,
   totals,
+  TRIPLE_UNDER_SECONDS,
   YOU_WIN,
   type Bases,
   type GameState,
@@ -153,27 +155,25 @@ const at = (x: number, y: number, z: number): Vec => ({ x, y, z });
 const MOUND_Z = -8.2;
 
 describe('hit tiers', () => {
-  it('gives a home run for the first quarter of the clock', () => {
+  it('gives a home run for an answer under 0.4 seconds', () => {
     expect(hitFor(0)).toBe('homer');
-    expect(hitFor(0.1)).toBe('homer');
-    expect(hitFor(0.2499)).toBe('homer');
+    expect(hitFor(0.2)).toBe('homer');
+    expect(hitFor(0.399)).toBe('homer');
   });
 
-  it('steps down to a triple, a double and a single at the quarter marks', () => {
-    expect(hitFor(0.25)).toBe('triple');
-    expect(hitFor(0.4999)).toBe('triple');
-    expect(hitFor(0.5)).toBe('double');
-    expect(hitFor(0.7499)).toBe('double');
-    expect(hitFor(0.75)).toBe('single');
+  it('steps down to a triple, a double and a single at 0.4, 0.6 and 1 second', () => {
+    expect(hitFor(0.4)).toBe('triple');
+    expect(hitFor(0.599)).toBe('triple');
+    expect(hitFor(0.6)).toBe('double');
+    expect(hitFor(0.999)).toBe('double');
     expect(hitFor(1)).toBe('single');
+    expect(hitFor(12)).toBe('single');
   });
 
-  it('works out the fraction of the clock used, kept between 0 and 1', () => {
-    expect(clockFraction(0, 10)).toBe(0);
-    expect(clockFraction(2.5, 10)).toBe(0.25);
-    expect(clockFraction(12, 10)).toBe(1);
-    expect(clockFraction(-1, 10)).toBe(0);
-    expect(clockFraction(3, 0)).toBe(1);
+  it('keeps the tiers in absolute seconds', () => {
+    expect(HOMER_UNDER_SECONDS).toBe(0.4);
+    expect(TRIPLE_UNDER_SECONDS).toBe(0.6);
+    expect(DOUBLE_UNDER_SECONDS).toBe(1);
   });
 
   it('is worth one to four bases, with names and speech', () => {
@@ -615,18 +615,18 @@ describe('the line score', () => {
 });
 
 describe('pitching', () => {
-  it('makes a right answer a pop fly in the first quarter of the clock', () => {
+  it('makes a right answer a pop fly when it comes in under half a second', () => {
     expect(pitchOutcomeFor(0)).toBe('popout');
-    expect(pitchOutcomeFor(0.2499)).toBe('popout');
+    expect(pitchOutcomeFor(0.499)).toBe('popout');
   });
 
-  it('makes it a ground out from a quarter to a half, and a strike after that', () => {
-    expect(pitchOutcomeFor(0.25)).toBe('groundout');
-    expect(pitchOutcomeFor(0.4999)).toBe('groundout');
-    expect(pitchOutcomeFor(0.5)).toBe('strike');
+  it('makes it a ground out up to a second, and a strike after that', () => {
+    expect(pitchOutcomeFor(0.5)).toBe('groundout');
+    expect(pitchOutcomeFor(0.999)).toBe('groundout');
     expect(pitchOutcomeFor(1)).toBe('strike');
-    expect(POP_OUT_BELOW).toBe(0.25);
-    expect(GROUND_OUT_BELOW).toBe(0.5);
+    expect(pitchOutcomeFor(12)).toBe('strike');
+    expect(POP_OUT_UNDER_SECONDS).toBe(0.5);
+    expect(GROUND_OUT_UNDER_SECONDS).toBe(1);
   });
 
   it('gives the rival a single 65%, a double 25%, a triple 8% and a home run 2%', () => {
