@@ -32,14 +32,17 @@ import {
   CHASERS,
   CONTACT,
   dashPosition,
+  FIELD_SPEED,
   fieldAngle,
   fieldPoint,
   GLOVE,
   GLOVE_TIME,
+  MISS_POINT,
   pickChasers,
   pitchPosition,
   planHit,
   RELEASE,
+  RUN_SPEED,
   wallRadius,
   ZIP_TIME,
   type HitPlan,
@@ -50,6 +53,7 @@ import {
   centreShift,
   fireworksAim,
   fireworksFit,
+  fitMoundView,
   fitView,
   followGoal,
   hitBand,
@@ -57,60 +61,81 @@ import {
   homeView,
   hudRects,
   keepBoardClear,
+  moundView,
   type HomeView,
   type Rect,
   type ViewFit,
 } from './layout';
+import { createPitching, REVEAL_FOR, SKIP_AFTER } from './pitching';
 import {
   applyHit,
   applyStrike,
+  batterNumber,
   clockFraction,
   easeToward,
-  endSpeech,
+  EXTRA_INNINGS,
   finalSpeech,
+  halfEndSpeech,
+  halfEndTitle,
+  halfOver,
   hitFor,
   hitLabel,
   hitSpeech,
+  inningBanner,
+  inningSpeech,
+  INNINGS,
+  isBatting,
+  leadSpeech,
+  lineScore,
   newGame,
+  nextHalf,
   PLAY_BALL,
   runsText,
   strikeCall,
+  totals,
+  YOU_WIN,
   type GameState,
   type Hit,
   type Move,
 } from './rules';
+import {
+  coloursOf,
+  loseSpeech,
+  matchupSpeech,
+  OUR_COLOURS,
+  ourAbbr,
+  outcomeText,
+  pickRival,
+  scoreLine,
+  teamName,
+  walkOffSpeech,
+  type Team,
+} from './teams';
 
 const GAME_ID = 'batter-up';
 
-/** Seconds a result stays up before a tap can skip to the next pitch. */
-const SKIP_AFTER = 0.6;
-/** Least seconds the correct fact stays up after a miss. */
-const REVEAL_FOR = 2.4;
 /** Seconds the name of a hit stays up while the ball is in the air. */
 const BANNER_FOR = 1.4;
 /** The pitcher winds up at least this long, however quickly the question is read. */
 const MIN_WIND = 0.9;
 /** Seconds into a hit before a tap can skip the rest of it. */
 const HIT_SKIP_AFTER = 1.4;
-/** How fast base runners run, and fielders run after the ball (units per second). */
-const RUN_SPEED = 12;
-const FIELD_SPEED = 9;
-/** The ball goes just over the bat when the answer was wrong. */
-const MISS_POINT: Vec = { x: 0.05, y: CONTACT.y + 0.42, z: CONTACT.z };
+/** Seconds an announcement (a new inning, the end of one) stays up at least. */
+const ANNOUNCE_FOR = 1.8;
 
 type Phase =
   | 'preview'
-  | 'intro'
+  | 'announce'
   | 'windup'
   | 'release'
   | 'pitch'
   | 'swing'
   | 'result'
   | 'hit'
-  | 'ending'
+  | 'pitching'
   | 'done';
 
-type CamMode = 'home' | 'follow';
+type CamMode = 'home' | 'follow' | 'mound';
 
 /** A runner on the move: where they end up, and what happens when they get there. */
 interface Running {
@@ -161,8 +186,11 @@ function run(session: GameSession): void {
   let state: GameState = newGame();
   /** The high score when this run began; the run saves its score as it goes. */
   let bestAtStart = session.highScore();
+  /** Who we play this game, and how we are called on the scorebug. */
+  let rival: Team = pickRival(Math.random());
+  let usAbbr = 'YOU';
   /** What the scorebug shows; it lags the real state while a play is still happening. */
-  const shown = { runs: 0, strikes: 0, batter: 1, outs: 0 };
+  const shown = { runs: 0, strikes: 0, outs: 0 };
   let fact: Fact | undefined;
   let options: string[] = [];
   let chosen = -1;
@@ -209,10 +237,16 @@ function run(session: GameSession): void {
   let replaying = 0;
   /** Moves on from a result if everything it was waiting for is done. */
   let resultDone: (() => void) | null = null;
+  /** Skips the announcement on screen, once it has been up a moment. */
+  let skipAnnounce: (() => void) | null = null;
+  let announceToken = 0;
 
   // The camera.
   let camMode: CamMode = 'home';
   let home: HomeView = homeView(0.5);
+  let mound: HomeView = moundView(0.5);
+  /** The pitching view's field of view and shift, for this screen. */
+  let moundFit: ViewFit = { fov: 60, shift: 0 };
   const cam = new Vector3(home.cam.x, home.cam.y, home.cam.z);
   const look = new Vector3(home.look.x, home.look.y, home.look.z);
   const goalPos: Vec = { ...home.cam };
@@ -294,9 +328,12 @@ function run(session: GameSession): void {
     // A little air between the HUD and the field.
     fit = fitView(w, h, { top: measured.top + 8, bottom: measured.bottom - 8 });
     home = homeView(w / Math.max(h, 1));
+    mound = moundView(w / Math.max(h, 1));
+    moundFit = fitMoundView(w, h, { top: measured.top + 8, bottom: measured.bottom - 8 });
     camera.aspect = w / Math.max(h, 1);
-    viewFov = fit.fov;
-    viewShift = fit.shift;
+    const pitchingNow = camMode === 'mound';
+    viewFov = pitchingNow ? moundFit.fov : fit.fov;
+    viewShift = pitchingNow ? moundFit.shift : fit.shift;
     measureHit();
     applyView();
   };
@@ -319,7 +356,7 @@ function run(session: GameSession): void {
    * the end, or on the next run, never takes anything away.
    */
   const saveProgress = () => {
-    session.recordScore(state.runs);
+    session.recordScore(totals(state).us);
     if (feed.answered >= MIN_ANSWERS_FOR_STARS) {
       session.recordStars(starsFor(feed.correct, feed.answered));
     }
@@ -327,19 +364,26 @@ function run(session: GameSession): void {
 
   // ---------- HUD helpers ----------
   const refresh = () => {
+    const line = lineScore(state, shown.runs);
     hud.renderBug({
-      runs: shown.runs,
+      usAbbr,
+      themAbbr: rival.abbr,
+      usRuns: line.usTotal,
+      themRuns: line.themTotal,
+      inning: state.inning,
+      half: state.half,
       best: Math.max(session.highScore(), 0),
       outs: shown.outs,
       strikes: shown.strikes,
-      batter: shown.batter,
       bases: state.bases,
     });
     field.setBoard({
-      runs: shown.runs,
+      usAbbr,
+      themAbbr: rival.abbr,
+      line,
+      inning: state.inning,
+      half: state.half,
       outs: shown.outs,
-      strikes: shown.strikes,
-      batter: shown.batter,
     });
   };
 
@@ -391,25 +435,30 @@ function run(session: GameSession): void {
     }
   };
 
-  // ---------- Pitching ----------
-  /** Starts a new pitch: the question, the answers, and the pitcher winding up as it is read. */
-  const nextPitch = () => {
-    if (state.over) return;
-    pending = [];
-    stopSpeaking();
-    hud.hideBanner();
-    const thisTurn = ++turn;
+  // ---------- Batting ----------
+  /** Takes the next fact and puts its question and answers up, for either side of the game. */
+  const ask = () => {
     fact = feed.take();
     options = answerOptions(session.topic, fact, 4);
     chosen = -1;
-    flightTotal = session.timerSecondsFor(fact);
-    elapsed = 0;
-    speechDone = false;
-    dash = null;
     hud.setOptions(options);
     hud.setQuestion(fact.prompt);
     // A long prompt may need to drop below the scorebug; then the view fits the new band.
     if (hud.settleQuestion()) layout(true);
+    return { fact, options, seconds: session.timerSecondsFor(fact) };
+  };
+
+  /** Starts a new pitch: the question, the answers, and the pitcher winding up as it is read. */
+  const nextPitch = () => {
+    if (state.over || phase === 'done') return;
+    pending = [];
+    stopSpeaking();
+    hud.hideBanner();
+    const thisTurn = ++turn;
+    ({ seconds: flightTotal } = ask());
+    elapsed = 0;
+    speechDone = false;
+    dash = null;
     hud.setClock(1);
     hud.hideQuestion(false);
     ball.setVisible(false);
@@ -579,28 +628,62 @@ function run(session: GameSession): void {
     if (struckOut) {
       struckOut = false;
       // Struck out: the batter trudges off.
-      leaving.push(batter);
-      const gone = batter;
-      gone.mover.runTo([{ x: -6, y: 0, z: 4.5 }], 3.2);
-      later(1.8, () => retire(gone.person.root));
-      if (state.over) {
-        endGame();
-        return;
-      }
-      stepUp();
+      sendOff();
+      afterPlay(true, 0);
+      return;
     }
     nextPitch();
   };
 
+  /** The batter at the plate trudges off to the dugout. */
+  const sendOff = () => {
+    leaving.push(batter);
+    const gone = batter;
+    gone.mover.runTo([{ x: -6, y: 0, z: 4.5 }], 3.2);
+    later(1.8, () => retire(gone.person.root));
+  };
+
+  /** A new batter for the side at bat: ours in their own colours, the rival's in theirs. */
+  const newBatter = () => {
+    batter = createBatter();
+    if (isBatting(state)) {
+      batter.setLook(batterNumber(state) - 1);
+    } else {
+      const colours = coloursOf(rival);
+      batter.person.recolour(colours.shirt, colours.cap);
+    }
+    spawn(batter.person.root);
+  };
+
   /** The next batter walks to the plate. */
   const stepUp = () => {
-    batter = createBatter();
-    batter.setLook(state.batter - 1);
-    spawn(batter.person.root);
-    shown.batter = state.batter;
+    newBatter();
     shown.strikes = state.strikes;
     shown.outs = state.outs;
     refresh();
+  };
+
+  /**
+   * A play is over. The game may be won, the half-inning may be done, or else the next pitch
+   * comes up (with the next batter first, if this one is done) after `delay` seconds.
+   */
+  const afterPlay = (batterGone: boolean, delay: number) => {
+    if (state.over) {
+      finishGame();
+      return;
+    }
+    const reason = halfOver(state);
+    if (reason) {
+      endHalf(reason);
+      return;
+    }
+    if (batterGone) stepUp();
+    if (isBatting(state)) {
+      if (delay > 0) after(delay, nextPitch);
+      else nextPitch();
+    } else {
+      after(delay, beginPitching);
+    }
   };
 
   // ---------- Hits ----------
@@ -633,7 +716,7 @@ function run(session: GameSession): void {
     camMode = 'follow';
     dash = null;
     sendFielders(hit, plan);
-    runBases(outcome.moves);
+    runBases(outcome.moves, outcome.runs, RUN_SPEED);
     const dropped = batter.dropBat();
     if (dropped) {
       props.push(dropped);
@@ -665,10 +748,13 @@ function run(session: GameSession): void {
   };
 
   /** The batter and every runner advance together, running the bases. */
-  const runBases = (moves: Move[]) => {
+  const runBases = (moves: Move[], runs: number, speed: number): number => {
     const next: (Batter | null)[] = [null, null, null];
     running = [];
     const old = batter;
+    const us = isBatting(state);
+    // Runs past the mercy rule or the winning run are run, but do not count.
+    let credited = 0;
     for (const move of moves) {
       const runner = move.from === 0 ? old : onBase[move.from - 1];
       if (!runner) continue;
@@ -685,13 +771,16 @@ function run(session: GameSession): void {
           if (entry.done) return;
           entry.done = true;
           if (scored) {
-            shown.runs++;
-            refresh();
-            hud.flashRuns();
-            sfx.chime();
+            if (credited < runs) {
+              credited++;
+              shown.runs++;
+              refresh();
+              hud.flashRuns(us ? 'us' : 'them');
+              if (us) sfx.chime();
+              const at = toScreen(BASE_SPOTS[0]);
+              hud.pop('+1', at.x, at.y - 30, us ? 'good' : 'bad');
+            }
             runner.cheer();
-            const at = toScreen(BASE_SPOTS[0]);
-            hud.pop('+1', at.x, at.y - 30, 'good');
             later(0.7, () => retire(runner.person.root));
           } else {
             runner.runnerStance();
@@ -702,18 +791,18 @@ function run(session: GameSession): void {
       running.push(entry);
       later(0.2, () => {
         runner.runnerStance();
-        runner.mover.runTo(route, RUN_SPEED, entry.arrive);
+        runner.mover.runTo(route, speed, entry.arrive);
       });
     }
     onBase = next;
     // A new batter steps up once the play is over.
     const longest = moves.reduce((m, mv) => Math.max(m, (mv.to - mv.from) * BASE_SIDE), 0);
-    runTime = 0.2 + longest / RUN_SPEED;
+    runTime = 0.2 + longest / speed;
+    return runTime;
   };
-  /** The play is over: back to the batting view and the next batter. */
-  const endPlay = () => {
-    if (phase !== 'hit') return;
-    // Anybody still running gets where they were going.
+
+  /** Anybody still running gets where they were going, and the scorebug catches up. */
+  const settleRunners = () => {
     for (const r of running) {
       if (r.done) continue;
       r.batter.mover.halt();
@@ -723,6 +812,12 @@ function run(session: GameSession): void {
     running = [];
     shown.runs = state.runs;
     refresh();
+  };
+
+  /** The play is over: back to the batting view and the next batter. */
+  const endPlay = () => {
+    if (phase !== 'hit') return;
+    settleRunners();
     plan = null;
     held = null;
     camMode = 'home';
@@ -733,12 +828,7 @@ function run(session: GameSession): void {
     effects.onBurst = null;
     fielders.forEach((f) => f.goHome(7));
     pending = [];
-    if (state.over) {
-      endGame();
-      return;
-    }
-    stepUp();
-    after(0.7, nextPitch);
+    afterPlay(true, 0.7);
   };
 
   const updateHit = (delta: number) => {
@@ -796,30 +886,207 @@ function run(session: GameSession): void {
     if (hitT >= end) endPlay();
   };
 
-  // ---------- Ending ----------
-  const endGame = () => {
-    phase = 'ending';
-    pending = [];
-    turn++;
+  // ---------- Pitching ----------
+  const pitching = createPitching({
+    hud,
+    pitcher,
+    catcher,
+    umpire,
+    ball,
+    effects,
+    fielders,
+    shown,
+    rival: () => rival,
+    batter: () => batter,
+    state: () => state,
+    commit: (next) => {
+      state = next;
+      saveProgress();
+    },
+    ask,
+    answered: (answered, correct) => {
+      if (correct) feed.recordHit(answered);
+      else feed.recordMiss(answered);
+      session.recordAnswer(answered, correct);
+    },
+    runBases,
+    settleRunners,
+    sendOff,
+    addProp: (prop) => {
+      props.push(prop);
+      spawn(prop.object);
+    },
+    putBall: (p) => putBall(p),
+    toScreen,
+    refresh,
+    now: () => gameTime,
+    after,
+    clearTimers: () => {
+      pending = [];
+    },
+    playOver: (batterGone) => afterPlay(batterGone, 0.4),
+  });
+
+  /** The rival's turn at bat: our pitch. */
+  const beginPitching = () => {
+    phase = 'pitching';
+    pitching.begin();
+  };
+
+  // ---------- The game's flow ----------
+  /**
+   * Puts a banner up and says some lines, then calls `then`: once the lines are said and the
+   * banner has been up for `hold` seconds, or when a tap skips it.
+   */
+  const announce = (
+    title: string,
+    detail: string,
+    kind: 'info' | 'good' | 'miss',
+    lines: string[],
+    then: () => void,
+    hold = ANNOUNCE_FOR,
+  ) => {
+    phase = 'announce';
+    const token = ++announceToken;
+    const startedAt = gameTime;
+    stopSpeaking();
     hud.hideQuestion(true);
-    const threeOuts = state.outs >= 3;
-    const title = threeOuts ? 'Three outs!' : "That's the inning!";
-    const detail = `${state.runs} ${state.runs === 1 ? 'run' : 'runs'} scored`;
-    hud.showBanner(title, detail, 'info');
-    const thisTurn = turn;
+    hud.showBanner(title, detail, kind);
     let spoken = false;
     let shownLongEnough = false;
-    const next = () => {
-      if (spoken && shownLongEnough && turn === thisTurn && phase === 'ending') finishRun();
+    let done = false;
+    const go = () => {
+      if (done || token !== announceToken) return;
+      done = true;
+      skipAnnounce = null;
+      stopSpeaking();
+      hud.hideBanner();
+      then();
     };
-    speak(endSpeech(threeOuts, state.runs), () => {
-      spoken = true;
-      next();
-    });
-    after(REVEAL_FOR, () => {
+    const next = () => {
+      if (spoken && shownLongEnough) go();
+    };
+    const say = (i: number) => {
+      if (done || token !== announceToken) return;
+      if (i >= lines.length) {
+        spoken = true;
+        next();
+        return;
+      }
+      speak(lines[i], () => say(i + 1));
+    };
+    say(0);
+    after(hold, () => {
       shownLongEnough = true;
       next();
     });
+    skipAnnounce = () => {
+      if (gameTime - startedAt >= SKIP_AFTER) go();
+    };
+  };
+
+  /** The half-inning is over: the banner and the score, then the other side comes in. */
+  const endHalf = (reason: 'outs' | 'mercy') => {
+    pending = [];
+    turn++;
+    shown.runs = state.runs;
+    shown.outs = state.outs;
+    refresh();
+    const { us, them } = totals(state);
+    announce(
+      halfEndTitle(reason),
+      scoreLine(rival, us, them),
+      'info',
+      [halfEndSpeech(reason), leadSpeech(us - them)],
+      changeSides,
+      REVEAL_FOR,
+    );
+  };
+
+  /** Everybody leaves the field, the teams swap jobs, and the camera moves to the other end. */
+  const setSide = () => {
+    shown.runs = 0;
+    shown.strikes = 0;
+    shown.outs = 0;
+    pending = [];
+    [...spawned].forEach(retire);
+    props = [];
+    onBase = [null, null, null];
+    running = [];
+    leaving = [];
+    dash = null;
+    plan = null;
+    held = null;
+    chasers = [];
+    effects.clear();
+    effects.onBurst = null;
+    ball.setVisible(false);
+    ball.setGlow(false);
+    // Whoever is in the field wears the colours of the side that is not at bat.
+    const batting = isBatting(state);
+    const wear = batting ? coloursOf(rival) : OUR_COLOURS;
+    pitcher.setColours(wear);
+    catcher.setColours(wear);
+    fielders.forEach((f) => {
+      f.setColours(wear);
+      f.mover.halt();
+      f.mover.place(f.home.x, f.home.z);
+      f.setMode('ready');
+      f.mover.face({ x: 0, y: 0, z: 0 });
+    });
+    newBatter();
+    pitcher.reset();
+    umpire.reset();
+    camMode = batting ? 'home' : 'mound';
+    hud.hideQuestion(true);
+    hud.hideBanner();
+    refresh();
+  };
+
+  /** The next half-inning, or the end of the game. */
+  const changeSides = () => {
+    state = nextHalf(state);
+    if (state.over) {
+      finishGame();
+      return;
+    }
+    startHalf();
+  };
+
+  /** "Top of the 3rd. You're up to bat!", and then the first pitch of the half. */
+  const startHalf = () => {
+    setSide();
+    const { inning, half } = state;
+    const batting = half === 'top';
+    const banner = inningBanner(inning, half);
+    const extra = batting && inning === INNINGS + 1;
+    announce(
+      extra ? EXTRA_INNINGS : banner.title,
+      extra ? `${banner.title}. ${banner.detail}` : banner.detail,
+      'info',
+      [...(extra ? [EXTRA_INNINGS] : []), inningSpeech(inning, half)],
+      () => (batting ? nextPitch() : beginPitching()),
+    );
+  };
+
+  /** The game is won or lost: the banner, then the results. */
+  const finishGame = () => {
+    pending = [];
+    turn++;
+    const { us, them } = totals(state);
+    shown.runs = state.runs;
+    refresh();
+    const won = state.winner === 'us';
+    const title = won ? 'You win!' : state.walkOff ? 'Walk-off!' : `${rival.nickname} win!`;
+    const line = won ? YOU_WIN : state.walkOff ? walkOffSpeech(rival) : loseSpeech(rival);
+    announce(
+      title,
+      scoreLine(rival, us, them),
+      won ? 'good' : 'miss',
+      [line],
+      finishRun,
+      REVEAL_FOR,
+    );
   };
 
   const finishRun = () => {
@@ -827,14 +1094,14 @@ function run(session: GameSession): void {
     hud.hideBanner();
     hud.hideQuestion(true);
     camMode = 'home';
-    const runs = state.runs;
+    const { us, them } = totals(state);
     const stars = starsFor(feed.correct, feed.answered);
     session.recordStars(stars);
-    session.recordScore(runs);
-    const newHighScore = runs > bestAtStart;
+    session.recordScore(us);
+    const newHighScore = us > bestAtStart;
     refresh();
     if (newHighScore) sfx.cheer();
-    speak(finalSpeech(runs));
+    speak(finalSpeech(us));
     showResults({
       topicId: session.topic.id,
       correct: feed.correct,
@@ -843,7 +1110,8 @@ function run(session: GameSession): void {
       newBest: false,
       missed: feed.missed(),
       playerName: session.player?.name,
-      score: runs,
+      score: us,
+      outcome: outcomeText(rival, us, them),
       highScore: session.highScore(),
       newHighScore,
       playAgainLabel: 'Play ball ⚾',
@@ -856,46 +1124,21 @@ function run(session: GameSession): void {
     pending = [];
     scenery = [];
     turn++;
+    announceToken++;
+    skipAnnounce = null;
     speechToken++;
     struckOut = false;
     replaying = 0;
     stopSpeaking();
+    pitching.reset();
     feed = createFactFeed(() => session.chooseFacts());
     state = newGame();
+    rival = pickRival(Math.random());
+    usAbbr = ourAbbr(session.player?.name, rival);
     bestAtStart = session.highScore();
-    shown.runs = shown.strikes = shown.outs = 0;
-    shown.batter = 1;
     fact = undefined;
     options = [];
-    plan = null;
-    held = null;
-    dash = null;
-    chasers = [];
-    camMode = 'home';
-    effects.clear();
-    effects.onBurst = null;
-    ball.setVisible(false);
-    ball.setGlow(false);
-    // Clear the bases and bring on the first batter.
-    [...spawned].forEach(retire);
-    props = [];
-    onBase = [null, null, null];
-    running = [];
-    leaving = [];
-    batter = createBatter();
-    batter.setLook(0);
-    spawn(batter.person.root);
-    fielders.forEach((f) => {
-      f.mover.halt();
-      f.mover.place(f.home.x, f.home.z);
-      f.setMode('ready');
-      f.mover.face({ x: 0, y: 0, z: 0 });
-    });
-    pitcher.reset();
-    umpire.reset();
-    refresh();
-    hud.hideQuestion(true);
-    hud.hideBanner();
+    setSide();
     if (!withPreview) {
       startIntro();
       return;
@@ -904,15 +1147,17 @@ function run(session: GameSession): void {
     showPreview({ topic: session.topic, facts: feed.peek(10), onDone: startIntro });
   };
 
-  /** "Play ball!" and then the first pitch. */
+  /** "Today you play the Toledo Mud Hens! Play ball!" and then the first inning. */
   const startIntro = () => {
-    phase = 'intro';
-    hud.showBanner(PLAY_BALL, '', 'info');
-    speak(PLAY_BALL);
     sfx.cheer();
-    after(1.6, () => {
-      if (phase === 'intro') nextPitch();
-    });
+    announce(
+      PLAY_BALL,
+      `vs ${teamName(rival)}`,
+      'info',
+      [matchupSpeech(rival), PLAY_BALL],
+      startHalf,
+      1.6,
+    );
   };
 
   // ---------- Input ----------
@@ -920,9 +1165,12 @@ function run(session: GameSession): void {
   const skip = () => {
     if (phase === 'result' && gameTime - resultAt >= SKIP_AFTER) advance();
     else if (phase === 'hit' && hitT >= HIT_SKIP_AFTER) endPlay();
+    else if (phase === 'pitching') pitching.skip();
+    else if (phase === 'announce') skipAnnounce?.();
   };
   const onAnswer = (index: number) => {
-    if (phase === 'windup' || phase === 'release' || phase === 'pitch') select(index);
+    if (phase === 'pitching') pitching.press(index);
+    else if (phase === 'windup' || phase === 'release' || phase === 'pitch') select(index);
     else skip();
   };
   const unpress = hud.buttons.map((button, i) => {
@@ -932,7 +1180,9 @@ function run(session: GameSession): void {
   });
   hud.hear.addEventListener('click', () => {
     unlockAudio();
-    if (fact && hud.callInPanel()) {
+    if (phase === 'pitching') {
+      pitching.hear();
+    } else if (fact && hud.callInPanel()) {
       // The call has taken the question's place: the button says the fact again.
       const current = fact;
       const thisTurn = turn;
@@ -964,18 +1214,22 @@ function run(session: GameSession): void {
   window.addEventListener('keydown', onKey);
 
   // ---------- Loop ----------
-  const runTimers = (list: { at: number; fn: () => void }[]) => {
+  /**
+   * Runs the timers that are due. They come off the list first: a timer may well clear the list
+   * or add new ones (a banner ending starts the next), and those must be kept.
+   */
+  const runDue = (list: { at: number; fn: () => void }[], keep: (rest: typeof list) => void) => {
     const due = list.filter((p) => p.at <= gameTime);
-    if (!due.length) return list;
+    if (!due.length) return;
+    keep(list.filter((p) => p.at > gameTime));
     due.forEach((p) => p.fn());
-    return list.filter((p) => !due.includes(p));
   };
 
   ctx.onUpdate((delta, time) => {
     layout();
     gameTime += delta;
-    pending = runTimers(pending);
-    scenery = runTimers(scenery);
+    runDue(pending, (rest) => (pending = rest));
+    runDue(scenery, (rest) => (scenery = rest));
 
     // --- The people ---
     pitcher.update(delta, time);
@@ -994,6 +1248,7 @@ function run(session: GameSession): void {
     // --- The pitch, the swing and the hit ---
     updatePitch(delta);
     updateDash(delta);
+    pitching.update(delta);
     if (phase === 'hit') updateHit(delta);
     if (phase === 'result' || phase === 'swing') {
       // The ball stays in the mitt.
@@ -1025,8 +1280,15 @@ function run(session: GameSession): void {
         );
       }
     } else {
-      Object.assign(goalPos, home.cam);
-      Object.assign(goalLook, home.look);
+      const view = camMode === 'mound' ? mound : home;
+      Object.assign(goalPos, view.cam);
+      Object.assign(goalLook, view.look);
+      if (camMode === 'mound') {
+        goalFov = moundFit.fov;
+        goalShift = moundFit.shift;
+      }
+      // Crossing the field between the two ends, the camera rises so it flies over the players.
+      goalPos.y += Math.min(Math.abs(cam.z - goalPos.z) / 6, 1) * 4;
     }
     const follow = camMode === 'follow';
     cam.x = easeToward(cam.x, goalPos.x, follow ? 1.8 : 2.2, delta);

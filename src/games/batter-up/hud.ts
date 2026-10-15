@@ -1,4 +1,5 @@
 import { callInPanel, questionTopBelowBug } from './layout';
+import type { Half, Side } from './rules';
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -64,15 +65,20 @@ function createDiamond(parent: HTMLElement) {
 }
 
 export interface BugInfo {
-  runs: number;
+  /** Short names and runs of the two teams. */
+  usAbbr: string;
+  themAbbr: string;
+  usRuns: number;
+  themRuns: number;
+  inning: number;
+  half: Half;
   best: number;
   outs: number;
   strikes: number;
-  batter: number;
   bases: readonly [boolean, boolean, boolean];
 }
 
-export type BannerKind = 'hit' | 'miss' | 'out' | 'info';
+export type BannerKind = 'hit' | 'miss' | 'out' | 'info' | 'good';
 
 export interface Hud {
   /** Question, clock and answers. */
@@ -101,7 +107,8 @@ export interface Hud {
   bugRect(): { left: number; top: number; right: number; bottom: number };
   /** Bottom edge of the scorebug, in px from the top of the screen. */
   bugBottom(): number;
-  flashRuns(): void;
+  /** Makes a team's runs jump, as they are scored. */
+  flashRuns(side: Side): void;
   showBanner(
     title: string,
     detail: string,
@@ -122,15 +129,17 @@ export function createHud(): Hud {
   const { bases } = createDiamond(bug);
   const bugText = el('div', 'bu-bug-text', bug);
   const rowRuns = el('div', 'bu-row', bugText);
-  el('span', 'bu-label', rowRuns).textContent = 'Runs';
-  const runsValue = el('b', 'bu-runs', rowRuns);
-  const bestText = el('span', 'bu-best', rowRuns);
+  const usName = el('span', 'bu-team', rowRuns);
+  const usRuns = el('b', 'bu-runs', rowRuns);
+  const themName = el('span', 'bu-team', rowRuns);
+  const themRuns = el('b', 'bu-runs', rowRuns);
+  const inningText = el('span', 'bu-inning', rowRuns);
   const rowCount = el('div', 'bu-row', bugText);
   el('span', 'bu-label', rowCount).textContent = 'Outs';
   const outsValue = el('span', 'bu-dots bu-outs', rowCount);
   el('span', 'bu-label', rowCount).textContent = 'Strikes';
   const strikesValue = el('span', 'bu-dots bu-strikes', rowCount);
-  const batterText = el('div', 'bu-row bu-batter', bugText);
+  const bestText = el('div', 'bu-row bu-best', bugText);
 
   const hudBox = el('div', 'bu-hud', document.body);
   const problem = el('div', 'bu-problem', hudBox);
@@ -231,15 +240,23 @@ export function createHud(): Hud {
       buttons.forEach((b, i) => b.classList.add(i === chosen ? 'right' : 'gone'));
     },
     renderBug(info) {
-      runsValue.textContent = String(info.runs);
+      usName.textContent = info.usAbbr;
+      themName.textContent = info.themAbbr;
+      usRuns.textContent = String(info.usRuns);
+      themRuns.textContent = String(info.themRuns);
+      // The team at bat is lit.
+      usName.classList.toggle('bat', info.half === 'top');
+      themName.classList.toggle('bat', info.half === 'bottom');
+      inningText.textContent = `${info.half === 'top' ? '▲' : '▼'}${info.inning}`;
       bestText.textContent = `Best ${info.best}`;
       setDots(outsValue, info.outs, 3);
       setDots(strikesValue, info.strikes, 3);
-      batterText.textContent = `Batter ${info.batter}`;
       bases.forEach((base, i) => base.classList.toggle('on', info.bases[i]));
       bug.setAttribute(
         'aria-label',
-        `${info.runs} runs, ${info.outs} outs, ${info.strikes} strikes, batter ${info.batter}`,
+        `${info.usAbbr} ${info.usRuns}, ${info.themAbbr} ${info.themRuns}, ` +
+          `${info.half === 'top' ? 'top' : 'bottom'} of inning ${info.inning}, ` +
+          `${info.outs} outs, ${info.strikes} strikes`,
       );
     },
     settleQuestion() {
@@ -277,8 +294,8 @@ export function createHud(): Hud {
     bugBottom() {
       return bug.getBoundingClientRect().bottom;
     },
-    flashRuns() {
-      replay(runsValue);
+    flashRuns(side) {
+      replay(side === 'us' ? usRuns : themRuns);
     },
     showBanner(title, detail, kind, place = 'centre') {
       const inQuestion = callInPanel(window.innerWidth, window.innerHeight);
@@ -291,7 +308,9 @@ export function createHud(): Hud {
       bannerTitle.textContent = title;
       bannerDetail.textContent = detail;
       bannerDetail.hidden = !detail;
-      banner.className = `bu-banner ${kind}`;
+      // A card beside the plate is kept narrow, so a long call wraps instead of running off.
+      const card = place === 'aside' && !inQuestion;
+      banner.className = `bu-banner ${kind}${card ? ' aside' : ''}`;
       banner.hidden = false;
       banner.style.left = '50%';
       const viewW = window.innerWidth;
@@ -308,7 +327,7 @@ export function createHud(): Hud {
         // Keep the plate clear: on a wide screen the call goes to one side. (On a tall one it
         // goes in the question panel, above; this is only for when there is no panel.)
         if (!inQuestion) {
-          banner.style.left = `${Math.round(viewW * 0.76)}px`;
+          banner.style.left = `${Math.round(viewW * 0.77)}px`;
           banner.style.top = `${Math.min(Math.max((top + bottom) / 2, top + half), bottom - half)}px`;
         } else {
           banner.style.top = `${top + half}px`;
