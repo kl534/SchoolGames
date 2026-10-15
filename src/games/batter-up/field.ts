@@ -33,6 +33,7 @@ import {
   fieldPoint,
   wallRadius,
 } from './flight';
+import { lineScore, newGame, type Half, type LineScore } from './rules';
 
 export const SKY_COLOR = 0x8cc8f4;
 
@@ -75,10 +76,13 @@ export function boardDotCentres(): number[] {
 }
 
 export interface BoardInfo {
-  runs: number;
+  /** Short names of the two teams, ours first. */
+  usAbbr: string;
+  themAbbr: string;
+  line: LineScore;
+  inning: number;
+  half: Half;
   outs: number;
-  strikes: number;
-  batter: number;
 }
 
 export interface Field {
@@ -284,6 +288,38 @@ export function buildField(scene: Scene): Field {
     }
   }
 
+  // Behind home plate: a backstop net and stands, seen over the umpire from the pitcher's mound.
+  const stopZ = 15;
+  const net = new Mesh(
+    new BoxGeometry(24, 5, 0.2),
+    new MeshBasicMaterial({ color: 0x22303d, transparent: true, opacity: 0.35, depthWrite: false }),
+  );
+  net.position.set(0, 2.5, stopZ);
+  scene.add(net);
+  for (const x of [-12, 0, 12]) {
+    const post = new Mesh(new BoxGeometry(0.3, 5, 0.3), wallGreen);
+    post.position.set(x, 2.5, stopZ);
+    scene.add(post);
+  }
+  const rail = new Mesh(new BoxGeometry(70, 1.6, 0.6), wallGreen);
+  rail.position.set(0, 0.8, stopZ + 1.2);
+  scene.add(rail);
+  for (let tier = 0; tier < 3; tier++) {
+    const height = 3.2 + tier * 2.6;
+    const depth = 4;
+    const stand = new Mesh(new BoxGeometry(70, height, depth), [
+      concrete,
+      concrete,
+      crowdFor(70, depth),
+      concrete,
+      crowdFor(70, height),
+      concrete,
+    ]);
+    stand.rotation.y = Math.PI;
+    stand.position.set(0, height / 2, stopZ + 3.5 + depth * (tier + 0.5));
+    scene.add(stand);
+  }
+
   // Foul poles at the ends of the wall, and low fences with stands along the foul lines.
   for (const side of [-1, 1]) {
     const end = fieldPoint(side * FOUL_ANGLE, wallRadius(FOUL_ANGLE) + 0.3);
@@ -352,32 +388,54 @@ export function buildField(scene: Scene): Field {
     g.lineWidth = 6;
     g.strokeRect(8, 8, 496, 240);
     g.fillStyle = '#ffe066';
-    g.font = '800 54px system-ui, sans-serif';
-    g.textAlign = 'center';
-    g.fillText('BATTER UP', 256, 72);
     g.font = '800 40px system-ui, sans-serif';
+    g.textAlign = 'center';
+    g.fillText('BATTER UP', 256, 56);
+    // The line score: a row of innings, then ours and theirs, with the total (R) at the end.
+    const columnX = (i: number) => 214 + i * 42;
+    g.font = '800 28px system-ui, sans-serif';
+    g.fillStyle = '#a9d8b8';
+    info.line.innings.forEach((inning, i) => g.fillText(String(inning), columnX(i), 98));
+    g.fillText('R', 480, 98);
+    const row = (abbr: string, cells: string[], total: number, y: number) => {
+      g.font = '800 34px system-ui, sans-serif';
+      g.textAlign = 'left';
+      g.fillStyle = '#ffffff';
+      g.fillText(abbr, 36, y);
+      g.textAlign = 'center';
+      cells.forEach((cell, i) => g.fillText(cell, columnX(i), y));
+      g.fillStyle = '#ffe066';
+      g.fillText(String(total), 480, y);
+    };
+    row(info.usAbbr, info.line.us, info.line.usTotal, 142);
+    row(info.themAbbr, info.line.them, info.line.themTotal, 186);
+    // The inning and the outs.
+    g.font = '800 30px system-ui, sans-serif';
     g.textAlign = 'left';
     g.fillStyle = '#ffffff';
-    g.fillText('RUNS', 40, 135);
-    g.fillText('OUTS', 40, 185);
-    g.fillText('BATTER', 40, 232);
-    g.textAlign = 'right';
+    g.fillText('OUTS', 40, 236);
+    g.textAlign = 'center';
     g.fillStyle = '#ffe066';
-    g.fillText(String(info.runs), 472, 135);
+    g.fillText(`${info.half === 'top' ? '▲' : '▼'} ${info.inning}`, 236, 236);
     boardDotCentres().forEach((cx, i) => {
       g.beginPath();
-      g.arc(cx, 172, BOARD_DOT_RADIUS, 0, Math.PI * 2);
+      g.arc(cx, 227, BOARD_DOT_RADIUS, 0, Math.PI * 2);
       g.fillStyle = i < info.outs ? '#ffe066' : '#2f6b4a';
       g.fill();
       g.strokeStyle = '#ffe066';
       g.lineWidth = BOARD_DOT_STROKE;
       g.stroke();
     });
-    g.fillStyle = '#ffe066';
-    g.fillText(String(info.batter), 472, 232);
     boardTexture.needsUpdate = true;
   };
-  setBoard({ runs: 0, outs: 0, strikes: 0, batter: 1 });
+  setBoard({
+    usAbbr: 'YOU',
+    themAbbr: '',
+    line: lineScore(newGame()),
+    inning: 1,
+    half: 'top',
+    outs: 0,
+  });
 
   return {
     setBoard,

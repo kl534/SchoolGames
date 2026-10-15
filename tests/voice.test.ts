@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { collectVoiceLines, voiceLinesByKey } from '../scripts/voice/lines';
-import { endSpeech, finalSpeech } from '../src/games/batter-up/rules';
+import { finalSpeech, inningSpeech, leadSpeech } from '../src/games/batter-up/rules';
 import voiceLines from '../src/shared/voice-lines.json';
 import { scoreSpeech } from '../src/shared/round';
 import { normalizeSpeech, voiceKey } from '../src/shared/voice';
@@ -32,8 +32,9 @@ describe('collectVoiceLines', () => {
       'New high score!',
       'Great flying!',
       'You scored 7 out of 10!',
-      'Three outs! 2 runs scored.',
-      "That's the inning! 1 run scored.",
+      'Three outs!',
+      "Top of the 3rd. You're up to bat!",
+      'Today you play the Toledo Mud Hens!',
       'You scored 1 run!',
     ]) {
       expect(lines).toContain(line);
@@ -68,13 +69,12 @@ describe('spoken score lines', () => {
   });
 
   it('builds the batter-up end lines', () => {
-    expect(endSpeech(true, 2)).toBe('Three outs! 2 runs scored.');
-    expect(endSpeech(false, 1)).toBe("That's the inning! 1 run scored.");
     expect(finalSpeech(1)).toBe('You scored 1 run!');
     expect(finalSpeech(0)).toBe('You scored 0 runs!');
     // A score too big to have a clip is called by a fixed line.
-    expect(finalSpeech(20)).toBe('You scored 20 runs!');
-    expect(finalSpeech(21)).toBe('You scored more than 20 runs!');
-    expect(endSpeech(true, 400)).toBe('Three outs! More than 20 runs scored.');
+    expect(finalSpeech(30)).toBe('You scored 30 runs!');
+    expect(finalSpeech(31)).toBe('You scored more than 30 runs!');
+    expect(leadSpeech(2)).toBe('You lead by 2!');
+    expect(inningSpeech(1, 'bottom')).toBe('Bottom of the 1st. Time to pitch!');
   });
 });

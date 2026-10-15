@@ -21,6 +21,19 @@ export function homeView(aspect: number): HomeView {
   };
 }
 
+/**
+ * The pitching view: back and a little above the mound, looking over the pitcher's shoulder at
+ * the plate, the batter, the catcher and the umpire. Wide screens have less height, so the camera
+ * comes down and in a little.
+ */
+export function moundView(aspect: number): HomeView {
+  const wide = clamp((aspect - 0.9) / 0.9, 0, 1);
+  return {
+    cam: { x: -1.2, y: lerp(4.4, 3.8, wide), z: lerp(-14, -13.4, wide) },
+    look: { x: 0.1, y: 1.0, z: 1.5 },
+  };
+}
+
 /** What the view must hold: the pitcher's cap down to the umpire's feet. */
 const TOP_POINT = { x: 0, y: 3.0, z: -8.2 };
 const BOTTOM_POINT = { x: 1.3, y: 0, z: 3.6 };
@@ -114,9 +127,15 @@ const probe = new PerspectiveCamera();
 /** The widest field of view the game will use. */
 const MAX_FOV = 100;
 
-/** Screen row of a point for the resting view at a given fov and aspect. */
-function rowAt(fov: number, aspect: number, height: number, p: Vec): number {
-  const { cam, look } = homeView(aspect);
+/** Screen row of a point for a resting view at a given fov and aspect. */
+function rowAt(
+  fov: number,
+  aspect: number,
+  height: number,
+  p: Vec,
+  view: (aspect: number) => HomeView = homeView,
+): number {
+  const { cam, look } = view(aspect);
   probe.fov = fov;
   probe.aspect = aspect;
   probe.near = 0.3;
@@ -156,6 +175,41 @@ export function fitView(
   const tanV = need / (MOUND_DISTANCE * aspect);
   fov = clamp(Math.max(fov, (2 * Math.atan(tanV) * 180) / Math.PI), 30, 88);
   const mid = (rowAt(fov, aspect, h, bottomPoint) + rowAt(fov, aspect, h, TOP_POINT)) / 2;
+  return { fov, shift: mid - (band.top + band.bottom) / 2 };
+}
+
+/** What the pitching view must hold: the umpire's head and the pitcher's feet. */
+const MOUND_TOP_POINT = { x: 1.3, y: 2.6, z: 3.4 };
+const MOUND_BOTTOM_POINT = { x: 0, y: 0.45, z: -8.2 };
+
+/**
+ * Field of view and vertical shift for the pitching view: wide enough that the pitcher, the plate
+ * and the umpire all fit between the question and the answers, and that the batter, catcher and
+ * umpire have room either side.
+ */
+export function fitMoundView(
+  width: number,
+  height: number,
+  band: PlayBand = playBand(width, height),
+): ViewFit {
+  const w = Math.max(width, 1);
+  const h = Math.max(height, 1);
+  const aspect = w / h;
+  const room = Math.max(band.bottom - band.top, 60) * 0.94;
+  const span = (fov: number) =>
+    rowAt(fov, aspect, h, MOUND_BOTTOM_POINT, moundView) -
+    rowAt(fov, aspect, h, MOUND_TOP_POINT, moundView);
+  let fov = 24;
+  while (fov < 88 && span(fov) > room) fov += 1;
+  // Room for the batter, the catcher and the umpire either side of the plate.
+  const need = aspect < 0.9 ? 3.4 : 4.4;
+  const { cam } = moundView(aspect);
+  const tanV = need / ((MOUND_TOP_POINT.z - cam.z) * aspect);
+  fov = clamp(Math.max(fov, (2 * Math.atan(tanV) * 180) / Math.PI), 24, 88);
+  const mid =
+    (rowAt(fov, aspect, h, MOUND_BOTTOM_POINT, moundView) +
+      rowAt(fov, aspect, h, MOUND_TOP_POINT, moundView)) /
+    2;
   return { fov, shift: mid - (band.top + band.bottom) / 2 };
 }
 

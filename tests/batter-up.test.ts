@@ -23,6 +23,7 @@ import {
 import {
   BALL_RADIUS,
   BASE_SIDE,
+  arcPosition,
   BASE_SPOTS,
   basePathPoint,
   BOARD,
@@ -34,11 +35,17 @@ import {
   fieldAngle,
   fieldPoint,
   FIREWORKS_CENTRE,
+  FIRST_BASE,
   GLOVE,
+  GROUND_BALL_TIME,
+  groundBallPosition,
+  INFIELD_PLAYS,
+  INFIELD_SPEED,
   LAP,
   pickChasers,
   pitchPosition,
   planHit,
+  POP_FLY_TIME,
   RELEASE,
   WALL_CENTRE,
   WALL_HEIGHT,
@@ -55,6 +62,7 @@ import {
   fireworksAim,
   fireworksFit,
   fireworksPoints,
+  fitMoundView,
   fitView,
   followGoal,
   hitBand,
@@ -64,6 +72,7 @@ import {
   keepBoardClear,
   MAX_BALL_WORLD_RADIUS,
   MIN_BALL_PX,
+  moundView,
   playBand,
   project,
   QUESTION_GAP,
@@ -75,27 +84,73 @@ import { createMover } from '../src/games/batter-up/mover';
 import { createPerson, mixPose, neutralPose } from '../src/games/batter-up/person';
 import {
   advance,
+  applyFieldOut,
   applyHit,
   applyStrike,
   BASES_FOR,
+  batterNumber,
   clockFraction,
+  cpuHitFor,
+  cpuHitSpeech,
+  CPU_HIT_WEIGHTS,
   dots,
   easeToward,
   EMPTY_BASES,
+  EXTRA_INNINGS,
+  finalSpeech,
+  GROUND_OUT_SPEECH,
+  GROUND_OUT_BELOW,
+  halfEndSpeech,
+  halfEndTitle,
+  halfOver,
   hitFor,
   hitLabel,
   hitSpeech,
+  hitWord,
+  inningBanner,
+  inningSpeech,
+  leadSpeech,
+  lineScore,
   MAX_OUTS,
+  MAX_SPOKEN_RUNS,
+  MERCY_RUNS,
   newGame,
+  nextHalf,
+  ordinal,
+  pitchOutcomeFor,
+  pitchStrikeCall,
+  PLAY_BALL,
+  POP_OUT_BELOW,
+  POP_OUT_SPEECH,
   runsText,
   STRIKES_OUT,
   strikeCall,
+  totals,
+  YOU_WIN,
   type Bases,
   type GameState,
   type Hit,
 } from '../src/games/batter-up/rules';
+import {
+  coloursOf,
+  darken,
+  loseSpeech,
+  matchupSpeech,
+  OUR_COLOURS,
+  ourAbbr,
+  outcomeText,
+  pickRival,
+  rivalHitTitle,
+  scoreLine,
+  TEAMS,
+  teamName,
+  walkOffSpeech,
+} from '../src/games/batter-up/teams';
+import { VOICE_LINES } from '../src/games/batter-up/voice';
+import { normalizeSpeech } from '../src/shared/voice';
 
 const at = (x: number, y: number, z: number): Vec => ({ x, y, z });
+const MOUND_Z = -8.2;
 
 describe('hit tiers', () => {
   it('gives a home run for the first quarter of the clock', () => {
@@ -196,6 +251,23 @@ describe('running the bases', () => {
   });
 });
 
+/** A game part-way through: `us` and `them` are the runs in each half-inning started so far. */
+const midGame = (
+  inning: number,
+  half: 'top' | 'bottom',
+  us: number[],
+  them: number[],
+  more: Partial<GameState> = {},
+): GameState => ({
+  ...newGame(),
+  inning,
+  half,
+  runs: (half === 'top' ? us : them).at(-1) ?? 0,
+  us,
+  them,
+  ...more,
+});
+
 describe('the count and the half-inning', () => {
   const strikeOut = (state: GameState) => {
     let s = state;
@@ -203,14 +275,21 @@ describe('the count and the half-inning', () => {
     return s;
   };
 
-  it('starts with the first batter, no outs, no strikes and nobody on', () => {
+  it('starts in the top of the 1st with the first batter, no outs, no strikes and nobody on', () => {
     expect(newGame()).toEqual({
+      inning: 1,
+      half: 'top',
       batter: 1,
+      rivalBatter: 1,
       strikes: 0,
       outs: 0,
       runs: 0,
       bases: EMPTY_BASES,
+      us: [0],
+      them: [],
       over: false,
+      winner: null,
+      walkOff: false,
     });
   });
 
@@ -232,13 +311,25 @@ describe('the count and the half-inning', () => {
     expect(third.state).toMatchObject({ strikes: 0, outs: 1, batter: 2, over: false });
   });
 
+  it('keeps a line-up for each side', () => {
+    const top = applyHit(newGame(), 'single').state;
+    expect(top).toMatchObject({ batter: 2, rivalBatter: 1 });
+    const bottom = strikeOut(midGame(1, 'bottom', [0], [0]));
+    expect(bottom).toMatchObject({ batter: 1, rivalBatter: 2 });
+    expect(batterNumber(top)).toBe(2);
+    expect(batterNumber(bottom)).toBe(2);
+  });
+
   it('ends the half-inning at three outs, even with batters left', () => {
     let s = newGame();
     s = strikeOut(s);
     s = strikeOut(s);
-    expect(s.over).toBe(false);
+    expect(halfOver(s)).toBeNull();
     s = strikeOut(s);
-    expect(s).toMatchObject({ outs: MAX_OUTS, over: true, batter: 3 });
+    expect(s).toMatchObject({ outs: MAX_OUTS, batter: 4 });
+    expect(halfOver(s)).toBe('outs');
+    // That ends the half-inning, not the game.
+    expect(s.over).toBe(false);
   });
 
   it('puts the batter on base for a hit and clears the strikes for the next batter', () => {
@@ -256,27 +347,29 @@ describe('the count and the half-inning', () => {
   });
 
   it('adds runs to the score as they cross the plate', () => {
-    let s: GameState = { ...newGame(), bases: [true, true, true] };
+    const s: GameState = { ...newGame(), bases: [true, true, true] };
     const result = applyHit(s, 'homer');
     expect(result.runs).toBe(4);
     expect(result.state.runs).toBe(4);
-    s = result.state;
-    expect(applyHit(s, 'homer').state.runs).toBe(5);
+    expect(result.state.us).toEqual([4]);
+    expect(totals(result.state)).toEqual({ us: 4, them: 0 });
   });
 
-  it('keeps going past nine batters while there are fewer than three outs', () => {
-    let s = newGame();
-    for (let i = 1; i <= 30; i++) {
-      s = applyHit(s, 'single').state;
-      expect(s.over).toBe(false);
-      expect(s.batter).toBe(i + 1);
-    }
-    // Everyone after the third batter pushes a runner home.
-    expect(s.runs).toBe(30 - 3);
-    s = strikeOut(strikeOut(s));
-    expect(s.over).toBe(false);
-    s = strikeOut(s);
-    expect(s).toMatchObject({ over: true, outs: MAX_OUTS });
+  it('scores for the rival in the bottom half', () => {
+    const s = midGame(2, 'bottom', [1, 2], [0, 0], { bases: [false, true, false] });
+    const result = applyHit(s, 'double');
+    expect(result.runs).toBe(1);
+    expect(result.state).toMatchObject({ runs: 1, rivalBatter: 2, batter: 1 });
+    expect(result.state.them).toEqual([0, 1]);
+    expect(result.state.us).toEqual([1, 2]);
+  });
+
+  it('puts a batter out in the field and holds the runners', () => {
+    const s: GameState = { ...newGame(), strikes: 2, bases: [true, false, true] };
+    const result = applyFieldOut(s);
+    expect(result).toMatchObject({ out: true, runs: 0, moves: [] });
+    expect(result.state).toMatchObject({ outs: 1, strikes: 0, batter: 2 });
+    expect(result.state.bases).toEqual([true, false, true]);
   });
 
   it('does not end early while there are outs to give and batters to come', () => {
@@ -285,6 +378,7 @@ describe('the count and the half-inning', () => {
     s = applyHit(s, 'double').state;
     s = strikeOut(s);
     expect(s).toMatchObject({ outs: 2, batter: 4, over: false });
+    expect(halfOver(s)).toBeNull();
     expect(s.bases).toEqual([false, true, false]);
   });
 
@@ -293,7 +387,420 @@ describe('the count and the half-inning', () => {
     const copy = structuredClone(before);
     applyStrike(before);
     applyHit(before, 'homer');
+    applyFieldOut(before);
+    nextHalf(before);
     expect(before).toEqual(copy);
+  });
+});
+
+describe('the mercy rule', () => {
+  it('ends the half-inning at five runs', () => {
+    expect(halfOver({ ...newGame(), runs: 4 })).toBeNull();
+    expect(halfOver({ ...newGame(), runs: MERCY_RUNS })).toBe('mercy');
+    expect(MERCY_RUNS).toBe(5);
+  });
+
+  it('stops counting at five: a grand slam with three already in scores two', () => {
+    const s = midGame(2, 'top', [0, 3], [0], { bases: [true, true, true] });
+    const result = applyHit(s, 'homer');
+    expect(result.runs).toBe(2);
+    expect(result.state.runs).toBe(5);
+    expect(result.state.us).toEqual([0, 5]);
+    // Everybody still runs home.
+    expect(result.moves.filter((m) => m.to === 4)).toHaveLength(4);
+    expect(halfOver(result.state)).toBe('mercy');
+  });
+
+  it('is the same for the rival', () => {
+    const s = midGame(3, 'bottom', [0, 0, 0], [0, 0, 4], { runs: 4, bases: [true, false, false] });
+    const result = applyHit(s, 'homer');
+    expect(result.runs).toBe(1);
+    expect(result.state.them).toEqual([0, 0, 5]);
+    expect(halfOver(result.state)).toBe('mercy');
+  });
+
+  it('counts nothing more once the cap is reached', () => {
+    const s = midGame(1, 'top', [5], [], { runs: 5, bases: [true, true, true] });
+    expect(applyHit(s, 'single').runs).toBe(0);
+  });
+
+  it('never lets a half-inning pass five runs, however it is played', () => {
+    let s = newGame();
+    for (let i = 0; i < 40 && halfOver(s) === null; i++) s = applyHit(s, 'single').state;
+    expect(s.runs).toBe(5);
+    expect(s.us).toEqual([5]);
+  });
+});
+
+describe('the innings', () => {
+  const finishHalf = (s: GameState) => ({ ...s, outs: MAX_OUTS });
+
+  it('goes from the top to the bottom, then to the top of the next inning', () => {
+    const top = applyHit(newGame(), 'single').state;
+    const bottom = nextHalf(finishHalf(top));
+    expect(bottom).toMatchObject({
+      inning: 1,
+      half: 'bottom',
+      outs: 0,
+      strikes: 0,
+      runs: 0,
+      over: false,
+    });
+    expect(bottom.bases).toEqual(EMPTY_BASES);
+    expect(bottom.them).toEqual([0]);
+    const next = nextHalf(finishHalf(bottom));
+    expect(next).toMatchObject({ inning: 2, half: 'top', outs: 0, runs: 0, over: false });
+    expect(next.us).toEqual([0, 0]);
+    expect(next.them).toEqual([0]);
+  });
+
+  it('clears the bases and the count at every change of sides', () => {
+    const s = midGame(2, 'top', [0, 1], [0], { outs: 3, strikes: 2, bases: [true, true, false] });
+    expect(nextHalf(s)).toMatchObject({ bases: EMPTY_BASES, strikes: 0, outs: 0, runs: 0 });
+  });
+
+  it('plays the bottom of the 6th when the rival is behind or tied', () => {
+    const behind = nextHalf(midGame(6, 'top', [0, 0, 0, 0, 0, 2], [0, 0, 0, 0, 0], { outs: 3 }));
+    expect(behind).toMatchObject({ half: 'bottom', over: false });
+    const tied = nextHalf(midGame(6, 'top', [0, 0, 0, 0, 0, 2], [2, 0, 0, 0, 0], { outs: 3 }));
+    expect(tied).toMatchObject({ half: 'bottom', over: false });
+  });
+
+  it('skips the bottom of the 6th when the rival already leads', () => {
+    const s = midGame(6, 'top', [0, 0, 0, 0, 0, 1], [3, 0, 0, 0, 0], { outs: 3 });
+    const result = nextHalf(s);
+    expect(result).toMatchObject({ over: true, winner: 'them', walkOff: false, half: 'top' });
+    // The line score crosses out the bottom half.
+    expect(lineScore(result).them).toEqual(['3', '0', '0', '0', '0', 'X']);
+  });
+
+  it('does not skip an earlier bottom half, whatever the score', () => {
+    const s = midGame(3, 'top', [0, 0, 0], [5, 5], { outs: 3 });
+    expect(nextHalf(s)).toMatchObject({ half: 'bottom', over: false });
+  });
+
+  it('ends the game after the bottom of the 6th with the leader winning', () => {
+    const won = nextHalf(midGame(6, 'bottom', [1, 0, 0, 0, 0, 2], [1, 0, 0, 0, 0, 1], { outs: 3 }));
+    expect(won).toMatchObject({ over: true, winner: 'us', walkOff: false });
+  });
+
+  it('goes to extra innings when it is tied after the 6th', () => {
+    const tied = midGame(6, 'bottom', [1, 0, 0, 0, 0, 1], [0, 0, 2, 0, 0, 0], { outs: 3 });
+    const seventh = nextHalf(tied);
+    expect(seventh).toMatchObject({ inning: 7, half: 'top', over: false, winner: null });
+    expect(seventh.us).toEqual([1, 0, 0, 0, 0, 1, 0]);
+  });
+
+  it('never ends the game on a tie, however long it goes', () => {
+    let s = newGame();
+    for (let i = 0; i < 40; i++) {
+      s = nextHalf({ ...s, outs: MAX_OUTS });
+      expect(s.over).toBe(false);
+    }
+    expect(s.inning).toBe(21);
+  });
+
+  it('ends an extra inning when one side leads at the end of it', () => {
+    const top = midGame(7, 'top', [0, 0, 0, 0, 0, 0, 2], [0, 0, 0, 0, 0, 0], { outs: 3 });
+    const bottom = nextHalf(top);
+    expect(bottom).toMatchObject({ half: 'bottom', over: false });
+    const end = nextHalf({ ...bottom, outs: MAX_OUTS });
+    expect(end).toMatchObject({ over: true, winner: 'us' });
+    // And a rival ahead after the top of an extra inning means no bottom is played.
+    const behind = midGame(8, 'top', [0, 0, 0, 0, 0, 0, 1, 0], [0, 0, 0, 0, 0, 0, 1], { outs: 3 });
+    expect(nextHalf(behind)).toMatchObject({ over: false, half: 'bottom' });
+    const ahead = midGame(8, 'top', [0, 0, 0, 0, 0, 0, 1, 0], [0, 0, 0, 0, 0, 0, 2], { outs: 3 });
+    expect(nextHalf(ahead)).toMatchObject({ over: true, winner: 'them' });
+  });
+});
+
+describe('a walk-off', () => {
+  it('ends the game on the rival run that takes the lead in the bottom of the 6th', () => {
+    const s = midGame(6, 'bottom', [0, 0, 0, 0, 0, 2], [0, 0, 0, 0, 0, 0], {
+      bases: [true, true, false],
+    });
+    const result = applyHit(s, 'homer');
+    expect(result.state).toMatchObject({ over: true, winner: 'them', walkOff: true });
+    expect(result.runs).toBe(3);
+    expect(totals(result.state)).toEqual({ us: 2, them: 3 });
+  });
+
+  it('counts only the runs up to the winning run', () => {
+    const s = midGame(6, 'bottom', [0, 0, 0, 0, 0, 2], [0, 0, 0, 0, 0, 0], {
+      bases: [true, true, true],
+    });
+    const result = applyHit(s, 'homer');
+    expect(result.runs).toBe(3);
+    expect(totals(result.state)).toEqual({ us: 2, them: 3 });
+    expect(result.state.walkOff).toBe(true);
+    expect(lineScore(result.state).themTotal).toBe(3);
+  });
+
+  it('ties are not enough: the game goes on while the rival has only drawn level', () => {
+    const s = midGame(6, 'bottom', [0, 0, 0, 0, 0, 2], [0, 0, 0, 0, 0, 0], {
+      bases: [false, true, false],
+    });
+    const result = applyHit(s, 'double');
+    expect(result.runs).toBe(1);
+    expect(result.state.over).toBe(false);
+    const tieing = applyHit(midGame(6, 'bottom', [0, 0, 0, 0, 0, 1], [0, 0, 0, 0, 0, 0]), 'homer');
+    expect(tieing.state).toMatchObject({ over: false, walkOff: false });
+    expect(totals(tieing.state)).toEqual({ us: 1, them: 1 });
+  });
+
+  it('also ends an extra inning', () => {
+    const s = midGame(8, 'bottom', [0, 0, 0, 0, 0, 0, 1, 0], [0, 0, 0, 0, 0, 0, 1, 0], {
+      bases: [false, false, true],
+    });
+    const result = applyHit(s, 'single');
+    expect(result.state).toMatchObject({ over: true, winner: 'them', walkOff: true });
+    expect(result.runs).toBe(1);
+  });
+
+  it('is not a walk-off before the last inning', () => {
+    const s = midGame(5, 'bottom', [0, 0, 0, 0, 2], [0, 0, 0, 0, 0], { bases: [true, true, true] });
+    const result = applyHit(s, 'homer');
+    expect(result.state.over).toBe(false);
+    expect(result.runs).toBe(4);
+  });
+
+  it('applies the mercy cap when it is lower than the winning run', () => {
+    const s = midGame(6, 'bottom', [8, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 3], {
+      bases: [true, true, true],
+    });
+    const result = applyHit(s, 'homer');
+    expect(result.runs).toBe(2);
+    expect(result.state.over).toBe(false);
+    expect(halfOver(result.state)).toBe('mercy');
+  });
+});
+
+describe('the line score', () => {
+  it('shows a cell for each half-inning played, and blanks for the rest', () => {
+    const s = midGame(2, 'bottom', [1, 3], [0, 2]);
+    const line = lineScore(s);
+    expect(line.innings).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(line.us).toEqual(['1', '3', '', '', '', '']);
+    expect(line.them).toEqual(['0', '2', '', '', '', '']);
+    expect(line).toMatchObject({ usTotal: 4, themTotal: 2 });
+  });
+
+  it('shows the runs on the board as they arrive, not as they were scored', () => {
+    const s = midGame(2, 'top', [1, 4], [0]);
+    expect(lineScore(s, 2).us).toEqual(['1', '2', '', '', '', '']);
+    expect(lineScore(s, 2).usTotal).toBe(3);
+    expect(lineScore(s, 2).themTotal).toBe(0);
+    const bottom = midGame(2, 'bottom', [1, 4], [0, 3]);
+    expect(lineScore(bottom, 1).them).toEqual(['0', '1', '', '', '', '']);
+    expect(lineScore(bottom, 1).us).toEqual(['1', '4', '', '', '', '']);
+  });
+
+  it('crosses out a bottom half that was not needed, and only then', () => {
+    const over = nextHalf(midGame(6, 'top', [0, 0, 0, 0, 0, 1], [3, 0, 0, 0, 0], { outs: 3 }));
+    expect(lineScore(over).them[5]).toBe('X');
+    const early = midGame(3, 'top', [0, 0, 0], [0, 0]);
+    expect(lineScore(early).them[2]).toBe('');
+  });
+
+  it('shows the last six innings once the game is in extra innings', () => {
+    const us = [0, 0, 0, 0, 0, 0, 1, 0];
+    const them = [0, 0, 0, 0, 0, 0, 1];
+    const line = lineScore(midGame(8, 'top', us, them, { runs: 0 }));
+    expect(line.innings).toEqual([3, 4, 5, 6, 7, 8]);
+    expect(line.us).toEqual(['0', '0', '0', '0', '1', '0']);
+    expect(line.them).toEqual(['0', '0', '0', '0', '1', '']);
+    // The totals still count the whole game.
+    expect(line).toMatchObject({ usTotal: 1, themTotal: 1 });
+  });
+});
+
+describe('pitching', () => {
+  it('makes a right answer a pop fly in the first quarter of the clock', () => {
+    expect(pitchOutcomeFor(0)).toBe('popout');
+    expect(pitchOutcomeFor(0.2499)).toBe('popout');
+  });
+
+  it('makes it a ground out from a quarter to a half, and a strike after that', () => {
+    expect(pitchOutcomeFor(0.25)).toBe('groundout');
+    expect(pitchOutcomeFor(0.4999)).toBe('groundout');
+    expect(pitchOutcomeFor(0.5)).toBe('strike');
+    expect(pitchOutcomeFor(1)).toBe('strike');
+    expect(POP_OUT_BELOW).toBe(0.25);
+    expect(GROUND_OUT_BELOW).toBe(0.5);
+  });
+
+  it('gives the rival a single 65%, a double 25%, a triple 8% and a home run 2%', () => {
+    expect(CPU_HIT_WEIGHTS).toEqual({ single: 0.65, double: 0.25, triple: 0.08, homer: 0.02 });
+    expect(Object.values(CPU_HIT_WEIGHTS).reduce((a, b) => a + b, 0)).toBeCloseTo(1, 10);
+    expect(cpuHitFor(0)).toBe('single');
+    expect(cpuHitFor(0.6499)).toBe('single');
+    expect(cpuHitFor(0.65)).toBe('double');
+    expect(cpuHitFor(0.8999)).toBe('double');
+    expect(cpuHitFor(0.9)).toBe('triple');
+    expect(cpuHitFor(0.9799)).toBe('triple');
+    expect(cpuHitFor(0.98)).toBe('homer');
+    expect(cpuHitFor(0.9999)).toBe('homer');
+    // Out-of-range input is kept in range.
+    expect(cpuHitFor(-1)).toBe('single');
+    expect(cpuHitFor(7)).toBe('homer');
+  });
+
+  it('makes the hits in about the right proportions over a sweep of the range', () => {
+    const counts: Record<Hit, number> = { single: 0, double: 0, triple: 0, homer: 0 };
+    for (let i = 0; i < 1000; i++) counts[cpuHitFor((i + 0.5) / 1000)]++;
+    expect(counts).toEqual({ single: 650, double: 250, triple: 80, homer: 20 });
+  });
+
+  it('calls the strikes on the rival and rings up the third', () => {
+    expect(pitchStrikeCall(1)).toEqual({ title: 'Strike 1!', spoken: 'Strike one!', out: false });
+    expect(pitchStrikeCall(2).spoken).toBe('Strike two!');
+    expect(pitchStrikeCall(3)).toEqual({
+      title: 'Strike 3! Strikeout!',
+      spoken: 'Strike three! Strikeout!',
+      out: true,
+    });
+  });
+});
+
+describe('the announcer', () => {
+  it('counts the innings', () => {
+    expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 101].map(ordinal)).toEqual([
+      '1st',
+      '2nd',
+      '3rd',
+      '4th',
+      '11th',
+      '12th',
+      '13th',
+      '21st',
+      '22nd',
+      '23rd',
+      '101st',
+    ]);
+  });
+
+  it('starts each half-inning', () => {
+    expect(inningSpeech(3, 'top')).toBe("Top of the 3rd. You're up to bat!");
+    expect(inningSpeech(3, 'bottom')).toBe('Bottom of the 3rd. Time to pitch!');
+    expect(inningSpeech(12, 'bottom')).toBe('Bottom of the 12th. Time to pitch!');
+    expect(inningSpeech(13, 'top')).toBe("Extra innings. You're up to bat!");
+    expect(inningSpeech(30, 'bottom')).toBe('Extra innings. Time to pitch!');
+    expect(inningBanner(4, 'top')).toEqual({
+      title: 'Top of the 4th',
+      detail: "You're up to bat!",
+    });
+    expect(inningBanner(7, 'bottom').title).toBe('Bottom of the 7th');
+  });
+
+  it('ends a half-inning with the outs or the mercy rule, and says who leads', () => {
+    expect(halfEndSpeech('outs')).toBe('Three outs!');
+    expect(halfEndSpeech('mercy')).toBe("Mercy rule! That's five runs.");
+    expect(halfEndTitle('mercy')).toBe('Mercy rule!');
+    expect(leadSpeech(3)).toBe('You lead by 3!');
+    expect(leadSpeech(-1)).toBe('They lead by 1!');
+    expect(leadSpeech(0)).toBe('All tied up!');
+    expect(leadSpeech(31)).toBe('You lead by more than 30!');
+    expect(leadSpeech(-99)).toBe('They lead by more than 30!');
+  });
+
+  it('describes a rival hit', () => {
+    expect(cpuHitSpeech('single')).toBe('They hit a single!');
+    expect(cpuHitSpeech('homer')).toBe('They hit a home run!');
+    expect(hitWord('triple')).toBe('triple');
+    expect(rivalHitTitle(TEAMS[0], hitWord('homer'))).toBe('Mud Hens home run!');
+  });
+
+  it('calls the final score, up to the most there is a clip for', () => {
+    expect(finalSpeech(1)).toBe('You scored 1 run!');
+    expect(finalSpeech(30)).toBe('You scored 30 runs!');
+    expect(finalSpeech(31)).toBe('You scored more than 30 runs!');
+    expect(MAX_SPOKEN_RUNS).toBe(30);
+  });
+
+  it('has a recorded clip for every line it can say', () => {
+    const lines = new Set(VOICE_LINES.map(normalizeSpeech));
+    const said: string[] = [PLAY_BALL, EXTRA_INNINGS, YOU_WIN, POP_OUT_SPEECH, GROUND_OUT_SPEECH];
+    for (const hit of Object.keys(BASES_FOR) as Hit[]) said.push(hitSpeech(hit), cpuHitSpeech(hit));
+    for (let n = 0; n <= 4; n++) {
+      for (const called of [true, false]) said.push(strikeCall(n, called).spoken);
+      said.push(pitchStrikeCall(n).spoken);
+    }
+    for (let inning = 1; inning <= 40; inning++) {
+      said.push(inningSpeech(inning, 'top'), inningSpeech(inning, 'bottom'));
+    }
+    for (const reason of ['outs', 'mercy'] as const) said.push(halfEndSpeech(reason));
+    for (let lead = -200; lead <= 200; lead++) said.push(leadSpeech(lead));
+    for (let runs = 0; runs <= 200; runs++) said.push(finalSpeech(runs));
+    for (const team of TEAMS) said.push(matchupSpeech(team), loseSpeech(team), walkOffSpeech(team));
+    const missing = said.filter((line) => !lines.has(normalizeSpeech(line)));
+    expect([...new Set(missing)]).toEqual([]);
+  });
+});
+
+describe('the rival', () => {
+  it('has about eighteen real minor league teams, with distinct names and short names', () => {
+    expect(TEAMS.length).toBeGreaterThanOrEqual(16);
+    expect(new Set(TEAMS.map((t) => t.id)).size).toBe(TEAMS.length);
+    expect(new Set(TEAMS.map((t) => t.abbr)).size).toBe(TEAMS.length);
+    expect(new Set(TEAMS.map(teamName)).size).toBe(TEAMS.length);
+    expect(TEAMS.map((t) => t.nickname)).toContain('Mud Hens');
+  });
+
+  it('has every field filled in properly', () => {
+    for (const team of TEAMS) {
+      expect(team.id).toMatch(/^[a-z]+(-[a-z]+)*$/);
+      expect(team.abbr).toMatch(/^[A-Z]{3}$/);
+      expect(['AAA', 'AA', 'A']).toContain(team.level);
+      expect(team.city.length).toBeGreaterThan(1);
+      expect(team.nickname.length).toBeGreaterThan(1);
+      expect(Number.isInteger(team.jersey)).toBe(true);
+      expect(team.jersey).toBeGreaterThanOrEqual(0);
+      expect(team.jersey).toBeLessThanOrEqual(0xffffff);
+    }
+    // All three levels are there.
+    expect(new Set(TEAMS.map((t) => t.level))).toEqual(new Set(['AAA', 'AA', 'A']));
+  });
+
+  it('is picked at random, covering the whole list', () => {
+    expect(pickRival(0)).toBe(TEAMS[0]);
+    expect(pickRival(0.9999)).toBe(TEAMS[TEAMS.length - 1]);
+    expect(pickRival(1)).toBe(TEAMS[TEAMS.length - 1]);
+    expect(pickRival(-1)).toBe(TEAMS[0]);
+    const seen = new Set(TEAMS.map((_, i) => pickRival((i + 0.5) / TEAMS.length)));
+    expect(seen.size).toBe(TEAMS.length);
+  });
+
+  it('names our team from the player, falling back to YOU', () => {
+    const rival = TEAMS[0];
+    expect(ourAbbr('Kevin', rival)).toBe('KEV');
+    expect(ourAbbr('ava', rival)).toBe('AVA');
+    expect(ourAbbr("D'Arcy", rival)).toBe('DAR');
+    expect(ourAbbr(undefined, rival)).toBe('YOU');
+    expect(ourAbbr('', rival)).toBe('YOU');
+    expect(ourAbbr('7', rival)).toBe('YOU');
+    expect(ourAbbr('Al', rival)).toBe('AL');
+    // Never the same as the rival's.
+    expect(ourAbbr('Tolly', rival)).toBe('YOU');
+  });
+
+  it('puts the rival in a team colour and a darker cap', () => {
+    expect(darken(0xffffff, 0.5)).toBe(0x808080);
+    expect(darken(0xe5702a, 1)).toBe(0xe5702a);
+    expect(darken(0x123456, 0)).toBe(0);
+    const colours = coloursOf(TEAMS[0]);
+    expect(colours.shirt).toBe(TEAMS[0].jersey);
+    expect(colours.cap).not.toBe(colours.shirt);
+    expect(OUR_COLOURS.shirt).not.toBe(OUR_COLOURS.cap);
+  });
+
+  it('speaks lines that name only the nickname or the city and nickname', () => {
+    const [mudHens] = TEAMS;
+    expect(matchupSpeech(mudHens)).toBe('Today you play the Toledo Mud Hens!');
+    expect(loseSpeech(mudHens)).toBe('The Mud Hens win!');
+    expect(walkOffSpeech(mudHens)).toBe('Walk-off! The Mud Hens win!');
+    expect(scoreLine(mudHens, 4, 2)).toBe('You 4 – Mud Hens 2');
+    expect(outcomeText(mudHens, 9, 6)).toBe('You beat the Toledo Mud Hens 9–6!');
+    expect(outcomeText(mudHens, 3, 4)).toBe('The Toledo Mud Hens beat you 4–3.');
   });
 });
 
@@ -690,6 +1197,150 @@ describe('the camera', () => {
     expect(homeView(2.2).cam.y).toBeLessThan(homeView(0.46).cam.y);
     expect(homeView(0.3)).toEqual(homeView(0.5));
     expect(homeView(5)).toEqual(homeView(2.5));
+  });
+});
+
+describe('the view from the mound', () => {
+  const SCREENS: [number, number][] = [
+    [360, 640],
+    [390, 844],
+    [768, 1024],
+    [1024, 768],
+    [1366, 768],
+    [844, 390],
+    [568, 320],
+  ];
+
+  /** Screen position of a world point as the pitching view shows it. */
+  const seen = (w: number, h: number, p: Vec) => {
+    const band = playBand(w, h);
+    const fit = fitMoundView(w, h, band);
+    const camera = new PerspectiveCamera(fit.fov, w / h, 0.3, 600);
+    camera.setViewOffset(w, h, 0, fit.shift, w, h);
+    const view = moundView(w / h);
+    camera.position.set(view.cam.x, view.cam.y, view.cam.z);
+    camera.lookAt(view.look.x, view.look.y, view.look.z);
+    camera.updateMatrixWorld();
+    const v = new Vector3(p.x, p.y, p.z).project(camera);
+    return { row: ((1 - v.y) / 2) * h, col: ((v.x + 1) / 2) * w };
+  };
+
+  it('sits behind the pitcher, high enough to see over him, looking in at the plate', () => {
+    for (const aspect of [0.46, 1, 1.6, 2.4]) {
+      const { cam, look } = moundView(aspect);
+      expect(cam.z).toBeLessThan(MOUND_Z);
+      expect(cam.y).toBeGreaterThan(3);
+      expect(look.z).toBeGreaterThan(0);
+      expect(Math.abs(cam.x)).toBeLessThan(2);
+    }
+  });
+
+  it('comes down a little on a wide screen, and holds still beyond the usual shapes', () => {
+    expect(moundView(2.2).cam.y).toBeLessThan(moundView(0.46).cam.y);
+    expect(moundView(0.3)).toEqual(moundView(0.5));
+    expect(moundView(5)).toEqual(moundView(2.5));
+  });
+
+  it.each(SCREENS)('picks a sensible field of view at %ix%i', (w, h) => {
+    const fit = fitMoundView(w, h);
+    expect(fit.fov).toBeGreaterThanOrEqual(24);
+    expect(fit.fov).toBeLessThanOrEqual(88);
+    expect(Number.isFinite(fit.shift)).toBe(true);
+  });
+
+  it.each(SCREENS)(
+    'keeps the pitcher, the plate and the umpire between the question and the answers at %ix%i',
+    (w, h) => {
+      const band = playBand(w, h);
+      const umpire = seen(w, h, at(1.3, 2.6, 3.4));
+      const feet = seen(w, h, at(0, 0.45, MOUND_Z));
+      const plate = seen(w, h, at(0, 0, 0));
+      expect(umpire.row).toBeGreaterThanOrEqual(band.top - 2);
+      expect(feet.row).toBeLessThanOrEqual(band.bottom + 2);
+      expect(plate.row).toBeGreaterThan(umpire.row);
+      expect(plate.row).toBeLessThan(feet.row);
+      for (const spot of [umpire, feet, plate]) {
+        expect(spot.col).toBeGreaterThan(0);
+        expect(spot.col).toBeLessThan(w);
+      }
+    },
+  );
+
+  it.each(SCREENS)('has the batter, catcher and umpire all on screen at %ix%i', (w, h) => {
+    for (const p of [at(0, 1.5, 0), at(0, 1.2, 1.2), at(1.3, 1.5, 3.4)]) {
+      const spot = seen(w, h, p);
+      expect(spot.col).toBeGreaterThan(0);
+      expect(spot.col).toBeLessThan(w);
+    }
+  });
+});
+
+describe('plays in the field', () => {
+  it('arcs a ball over the straight line, and lands it where it was going', () => {
+    const out = at(0, 0, 0);
+    const from = at(0, 1, 0);
+    const to = at(-2, 1.5, -5);
+    expect(arcPosition(from, to, 0, 6, out)).toEqual(from);
+    expect(arcPosition(from, to, 1, 6, out)).toEqual(to);
+    arcPosition(from, to, 0.5, 6, out);
+    expect(out.x).toBeCloseTo(-1, 6);
+    expect(out.z).toBeCloseTo(-2.5, 6);
+    expect(out.y).toBeCloseTo(1.25 + 6, 6);
+    // No lift is a straight line.
+    expect(arcPosition(from, to, 0.5, 0, out).y).toBeCloseTo(1.25, 6);
+  });
+
+  it('rolls a ground ball in hops that die away to the ground', () => {
+    const out = at(0, 0, 0);
+    const from = at(0, 1, 0);
+    const to = at(-2, BALL_RADIUS, -4);
+    expect(groundBallPosition(from, to, 0, out).y).toBeCloseTo(BALL_RADIUS, 6);
+    expect(groundBallPosition(from, to, 1, out).y).toBeCloseTo(BALL_RADIUS, 6);
+    expect(groundBallPosition(from, to, 1, out).z).toBeCloseTo(-4, 6);
+    let top = 0;
+    for (let i = 0; i <= 20; i++) {
+      const y = groundBallPosition(from, to, i / 20, out).y;
+      expect(y).toBeGreaterThanOrEqual(BALL_RADIUS - 1e-9);
+      top = Math.max(top, y);
+    }
+    expect(top).toBeGreaterThan(BALL_RADIUS + 0.2);
+  });
+
+  it('keeps the infield plays in the strip in front of the mound that the camera sees', () => {
+    const { cam } = moundView(0.46);
+    for (const id of ['SS', '2B', '3B'] as const) {
+      for (const spot of [INFIELD_PLAYS[id].pop, INFIELD_PLAYS[id].ground]) {
+        expect(spot.z).toBeGreaterThan(cam.z + 5);
+        expect(spot.z).toBeLessThan(0);
+        expect(Math.abs(spot.x)).toBeLessThan(3);
+      }
+    }
+  });
+
+  it('has the infielder there in time to field the grounder or catch the pop fly', () => {
+    for (const id of ['SS', '2B', '3B'] as const) {
+      const home = FIELDER_SPOTS[id];
+      const trip = (spot: Vec) => Math.hypot(spot.x - home.x, spot.z - home.z) / INFIELD_SPEED;
+      expect(trip(INFIELD_PLAYS[id].ground)).toBeLessThanOrEqual(GROUND_BALL_TIME);
+      expect(trip(INFIELD_PLAYS[id].pop)).toBeLessThanOrEqual(POP_FLY_TIME);
+    }
+  });
+
+  it('throws to first base, which is on the first base side', () => {
+    expect(FIRST_BASE).toEqual(BASE_SPOTS[1]);
+    expect(FIRST_BASE.x).toBeGreaterThan(0);
+  });
+
+  it('dresses the fielders, the pitcher and the catcher in a team colour', () => {
+    const colours = { shirt: 0x336699, cap: 0x112233 };
+    const fielder = createFielder('SS', 0);
+    const pitcher = createPitcher();
+    const catcher = createCatcher();
+    expect(() => {
+      fielder.setColours(colours);
+      pitcher.setColours(colours);
+      catcher.setColours(colours);
+    }).not.toThrow();
   });
 });
 
@@ -1123,7 +1774,16 @@ describe('the ballpark', () => {
     const scene = new Scene();
     const field = buildField(scene);
     expect(scene.children.length).toBeGreaterThan(30);
-    expect(() => field.setBoard({ runs: 3, outs: 2, strikes: 1, batter: 5 })).not.toThrow();
+    expect(() =>
+      field.setBoard({
+        usAbbr: 'KEV',
+        themAbbr: 'TOL',
+        line: lineScore(midGame(3, 'bottom', [1, 0, 2], [0, 4, 1])),
+        inning: 3,
+        half: 'bottom',
+        outs: 2,
+      }),
+    ).not.toThrow();
     // Fireworks go off beyond the outfield wall and well above it.
     expect(field.fireworksCentre.z).toBeLessThan(-wallRadius(0));
     expect(field.fireworksCentre.y).toBeGreaterThan(15);
