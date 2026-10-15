@@ -29,6 +29,11 @@ export const MOUND_HEIGHT = 0.45;
 export const RELEASE: Vec = { x: 0, y: 2.2, z: -7.4 };
 export const CONTACT: Vec = { x: 0, y: 1.0, z: 0.05 };
 export const GLOVE: Vec = { x: 0.04, y: 0.85, z: 1.0 };
+/** How fast base runners run, and fielders run after the ball (units per second). */
+export const RUN_SPEED = 12;
+export const FIELD_SPEED = 9;
+/** The ball goes just over the bat when the swing misses. */
+export const MISS_POINT: Vec = { x: 0.05, y: CONTACT.y + 0.42, z: CONTACT.z };
 /** How high the pitch rises above the straight line between release and the plate. */
 export const PITCH_ARC = 0.9;
 /** Seconds the ball takes to zip in once an answer is chosen, and from the plate to the glove. */
@@ -248,3 +253,49 @@ export function basePathPoint(distance: number, out: Vec): Vec {
   const b = BASE_SPOTS[(leg + 1) % 4];
   return dashPosition(a, b, (d - leg * BASE_SIDE) / BASE_SIDE, out);
 }
+
+// ---------- Plays in the field, seen from the mound ----------
+
+/** First base, where an infielder throws to. */
+export const FIRST_BASE: Vec = BASE_SPOTS[1];
+
+/** A straight dash is a path with no `lift`; this one rises `lift` above the line in the middle. */
+export function arcPosition(from: Vec, to: Vec, s: number, lift: number, out: Vec): Vec {
+  const t = clamp01(s);
+  dashPosition(from, to, t, out);
+  out.y += 4 * lift * t * (1 - t);
+  return out;
+}
+
+/**
+ * A ball that rolls from `from` to `to` in hops that die away, `s` of the way (0 to 1). It stays
+ * at the height of a rolling ball at the start and the end.
+ */
+export function groundBallPosition(from: Vec, to: Vec, s: number, out: Vec): Vec {
+  const t = clamp01(s);
+  dashPosition(from, to, t, out);
+  out.y = BALL_RADIUS + 0.7 * (1 - t) * Math.abs(Math.sin(t * Math.PI * 3));
+  return out;
+}
+
+export type InfielderId = 'SS' | '2B' | '3B';
+
+/**
+ * The infield plays are kept in front of the mound, in the narrow strip the camera behind the
+ * pitcher can see: where a pop fly comes down and where a grounder is fielded.
+ */
+export const INFIELD_PLAYS: Record<InfielderId, { pop: Vec; ground: Vec }> = {
+  SS: { pop: { x: -1.5, y: 0, z: -5.2 }, ground: { x: -2.1, y: 0, z: -4.4 } },
+  '2B': { pop: { x: 1.7, y: 0, z: -5.4 }, ground: { x: 2.3, y: 0, z: -4.6 } },
+  '3B': { pop: { x: -2.1, y: 0, z: -4.6 }, ground: { x: -1.6, y: 0, z: -3.2 } },
+};
+
+/** How high a pop fly climbs above the line from the bat to where it comes down. */
+export const POP_FLY_LIFT = 6.5;
+/** Seconds a pop fly hangs in the air, and a grounder takes to reach the infielder (who is there first). */
+export const POP_FLY_TIME = 1.3;
+export const GROUND_BALL_TIME = 0.8;
+/** How fast an infielder runs to a pop fly or a grounder. */
+export const INFIELD_SPEED = 14;
+/** Seconds the throw to first takes. */
+export const THROW_TIME = 0.5;

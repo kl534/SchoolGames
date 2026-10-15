@@ -17,6 +17,8 @@ export interface ResultsOptions {
   /** The player's high score, including this run when it set a new one. */
   highScore?: number;
   newHighScore?: boolean;
+  /** One line about how the game went, shown under the heading, e.g. "You beat the Bulls 9–6!". */
+  outcome?: string;
   /** Label of the play again button; defaults to 'Play again ⚽'. */
   playAgainLabel?: string;
   container?: HTMLElement;
@@ -36,6 +38,8 @@ export interface ResultsSummary {
   heading: string;
   /** The points score as text, or null for a stars game. */
   score: string | null;
+  /** How the game went, or null when there is nothing to say. */
+  outcome: string | null;
   /** 'High score: 2,400', or null when there is none to show. */
   highScore: string | null;
   /** The badge to show, if any. */
@@ -53,6 +57,7 @@ export function resultsSummary(options: ResultsOptions): ResultsSummary {
   const scored = options.score !== undefined;
   return {
     heading: `${HEADINGS[options.stars] ?? HEADINGS[0]}${name}!`,
+    outcome: options.outcome ?? null,
     score: scored ? options.score!.toLocaleString() : null,
     highScore:
       scored && options.highScore !== undefined
@@ -88,6 +93,12 @@ export function showResults(options: ResultsOptions): { dispose(): void } {
   const heading = document.createElement('h1');
   heading.textContent = summary.heading;
 
+  const outcome = summary.outcome ? document.createElement('p') : null;
+  if (outcome) {
+    outcome.className = 'sg-outcome';
+    outcome.textContent = summary.outcome;
+  }
+
   const right = document.createElement('p');
   right.className = 'sg-right';
   right.textContent = summary.right;
@@ -103,7 +114,9 @@ export function showResults(options: ResultsOptions): { dispose(): void } {
     points.className = 'sg-score';
     points.setAttribute('aria-label', `Score ${summary.score}`);
     points.textContent = summary.score;
-    card.append(heading, points);
+    card.append(heading);
+    if (outcome) card.appendChild(outcome);
+    card.appendChild(points);
     if (summary.highScore) {
       const best = document.createElement('p');
       best.className = 'sg-muted';
@@ -122,7 +135,9 @@ export function showResults(options: ResultsOptions): { dispose(): void } {
       if (i >= options.stars) star.className = 'sg-star-off';
       stars.appendChild(star);
     }
-    card.append(heading, stars, right);
+    card.append(heading);
+    if (outcome) card.appendChild(outcome);
+    card.append(stars, right);
     if (badge) card.appendChild(badge);
   }
 

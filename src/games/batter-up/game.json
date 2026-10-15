@@ -1,7 +1,7 @@
 {
   "id": "batter-up",
   "title": "Batter Up",
-  "description": "Answer fast to smash the pitch — singles, doubles, triples and home runs!",
+  "description": "Play a full 6-inning game — answer fast to smash hits, and pitch for strikeouts!",
   "thumbnail": "thumbnail.svg",
   "tags": ["sports", "3d"],
   "scoring": "score"

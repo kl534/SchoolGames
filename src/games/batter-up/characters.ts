@@ -16,6 +16,7 @@ import {
 } from 'three';
 import { BALL_RADIUS, CONTACT, GLOVE, MOUND, MOUND_HEIGHT, type Vec } from './flight';
 import { createMover, type Mover } from './mover';
+import type { Colours } from './teams';
 import {
   clamp01,
   createAnimator,
@@ -165,6 +166,8 @@ export interface Pitcher {
   readonly windTime: number;
   /** Back to standing ready. */
   reset(): void;
+  /** Puts on a team's colours. */
+  setColours(colours: Colours): void;
   /** Where the throwing hand is in the world. */
   handPosition(out: Vector3): Vector3;
   update(delta: number, elapsed: number): void;
@@ -268,6 +271,7 @@ export function createPitcher(): Pitcher {
       onRelease = undefined;
       anim.transition(0.3);
     },
+    setColours: (colours) => person.recolour(colours.shirt, colours.cap),
     handPosition: (out) => person.handWorld('R', out),
     update(delta, elapsed) {
       t += delta;
@@ -300,6 +304,8 @@ export interface Catcher {
   root: Group;
   /** The glove snaps shut on the ball. */
   pop(): void;
+  /** Puts on a team's colours. */
+  setColours(colours: Colours): void;
   /** Where the mitt is. */
   mittPosition(out: Vector3): Vector3;
   update(delta: number, elapsed: number): void;
@@ -355,6 +361,7 @@ export function createCatcher(): Catcher {
     pop() {
       popT = 0;
     },
+    setColours: (colours) => person.recolour(colours.shirt, colours.cap),
     mittPosition: (out) => person.handWorld('L', out),
     update(delta, elapsed) {
       popT += delta;
@@ -690,6 +697,8 @@ export interface Fielder {
   chase(target: Vec, speed: number, mode: FielderMode, onArrive?: () => void): void;
   /** Jogs back to position. */
   goHome(speed: number): void;
+  /** Puts on a team's colours. */
+  setColours(colours: Colours): void;
   setMode(mode: FielderMode): void;
   /** True when standing at their spot. */
   atHome(): boolean;
@@ -765,6 +774,7 @@ export function createFielder(id: FielderId, index: number): Fielder {
     mover,
     home,
     setMode,
+    setColours: (colours) => person.recolour(colours.shirt, colours.cap),
     chase(target, speed, next, onArrive) {
       setMode('ready');
       mover.runTo([target], speed, () => {

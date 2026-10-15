@@ -70,6 +70,7 @@ describe('resultsSummary', () => {
   it('is unchanged for a stars game: stars, the star badge, the usual button', () => {
     expect(resultsSummary(base)).toEqual({
       heading: 'Great job, Ava!',
+      outcome: null,
       score: null,
       highScore: null,
       badge: 'New best!',
@@ -92,6 +93,12 @@ describe('resultsSummary', () => {
     expect(s.right).toBe('7 out of 10 right');
     // The stars game's badge never shows in score mode.
     expect(s.badge).toBeNull();
+  });
+
+  it('passes on a line about how the game went', () => {
+    expect(resultsSummary({ ...base, outcome: 'You beat the Bulls 9–6!' }).outcome).toBe(
+      'You beat the Bulls 9–6!',
+    );
   });
 
   it('badges a new high score', () => {

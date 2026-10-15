@@ -89,9 +89,30 @@
   }
 }
 
+.bu-team {
+  color: #a9c8f5;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+/* The team at bat. */
+.bu-team.bat {
+  color: #fff;
+}
+
+.bu-runs + .bu-team {
+  margin-left: 8px;
+}
+
+.bu-inning {
+  margin-left: 6px;
+  color: #ffd23f;
+  font-size: 16px;
+  font-weight: 900;
+}
+
 .bu-best {
-  margin-left: auto;
-  padding-left: 8px;
   color: #a9c8f5;
   font-size: 13px;
 }
@@ -123,10 +144,6 @@
 .bu-strikes .bu-dot.on {
   border-color: #ff6b6b;
   background: #ff6b6b;
-}
-
-.bu-batter {
-  color: #fff;
 }
 
 /* The question and its clock, centred at the top. */
@@ -365,6 +382,15 @@
   text-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
 }
 
+.bu-banner.good {
+  background: rgba(14, 84, 52, 0.9);
+  border-color: #5cf2b0;
+}
+
+.bu-banner.good .bu-banner-title {
+  color: #b9ffd8;
+}
+
 .bu-banner.miss .bu-banner-title,
 .bu-banner.out .bu-banner-title {
   color: #ffa8a8;
@@ -382,6 +408,19 @@
 .bu-banner.hit .bu-banner-detail {
   font-size: clamp(24px, 6.5vmin, 42px);
   color: #fff;
+}
+
+/* The call on a wide screen sits beside the plate: narrow and smaller, so it fits at the side. */
+.bu-banner.aside {
+  max-width: 42vw;
+}
+
+.bu-banner.aside .bu-banner-title {
+  font-size: clamp(24px, 5.2vmin, 40px);
+}
+
+.bu-banner.aside .bu-banner-detail {
+  font-size: clamp(22px, 4.6vmin, 34px);
 }
 
 @keyframes bu-pop {
@@ -477,12 +516,17 @@
     font-size: 10px;
   }
 
-  .bu-runs {
-    font-size: 17px;
+  .bu-team {
+    font-size: 11px;
   }
 
-  .bu-best {
-    padding-left: 6px;
+  .bu-inning {
+    margin-left: 3px;
+    font-size: 12px;
+  }
+
+  .bu-runs {
+    font-size: 17px;
   }
 
   .bu-dots {
