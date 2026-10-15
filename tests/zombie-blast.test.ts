@@ -1,36 +1,49 @@
-import { Box3, PerspectiveCamera, Raycaster, Vector3 } from 'three';
+import { Box3, Group, MeshStandardMaterial, PerspectiveCamera, Raycaster, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
+import { createHorde } from '../src/games/zombie-blast/horde';
 import { createEffects } from '../src/games/zombie-blast/effects';
 import {
   CAMERA,
   BARRICADE_Z,
-  BREAK_Z,
   END_Z,
   fitView,
   LANES,
   laneX,
-  layoutSigns,
   SPAWN_Z,
-  START_Z,
   TARGET,
 } from '../src/games/zombie-blast/layout';
 import {
-  approachZ,
   arcHeightFor,
   bombPosition,
   BRAINS,
+  closestIndex,
+  createWaveSpawner,
   easeOutBack,
+  easeToward,
   fallTime,
+  hitPoints,
   loseBrain,
+  MAX_ON_FIELD,
+  multiplierFor,
+  nextStreak,
+  outcomeText,
   outOfBrains,
+  pickLane,
   plankFlight,
   planksInReach,
+  spawnInterval,
+  walkSpeed,
   wrapAngle,
-  zombieProgress,
+  zombiesInWave,
 } from '../src/games/zombie-blast/rules';
 import { barricade } from '../src/games/zombie-blast/field';
 import { createThrower, RELEASE_TIME } from '../src/games/zombie-blast/thrower';
-import { createZombie } from '../src/games/zombie-blast/zombie';
+import {
+  ARMOUR_ORDER,
+  BRUTE_LOOK,
+  createZombie,
+  ZOMBIE_LOOKS,
+} from '../src/games/zombie-blast/zombie';
 import { seededRandom } from '../src/shared/random';
 
 /** The game's camera for a screen of this size. */
@@ -71,33 +84,6 @@ describe('brains', () => {
 
   it('is out of brains at zero only', () => {
     expect([3, 2, 1, 0].map(outOfBrains)).toEqual([false, false, false, true]);
-  });
-});
-
-describe('zombie progress', () => {
-  it('runs from the start line to the barricade as the clock runs down', () => {
-    expect(zombieProgress(5, 5)).toBe(0);
-    expect(zombieProgress(2.5, 5)).toBeCloseTo(0.5);
-    expect(zombieProgress(0, 5)).toBe(1);
-  });
-
-  it('is linear, whatever the length of the clock', () => {
-    for (const total of [5, 10, 15]) {
-      expect(zombieProgress(total * 0.75, total)).toBeCloseTo(0.25);
-    }
-  });
-
-  it('stays within 0 to 1 and copes with an empty clock', () => {
-    expect(zombieProgress(-1, 5)).toBe(1);
-    expect(zombieProgress(9, 5)).toBe(0);
-    expect(zombieProgress(0, 0)).toBe(1);
-  });
-
-  it('puts the zombies at the barricade exactly when the clock hits zero', () => {
-    expect(approachZ(zombieProgress(5, 5), START_Z, END_Z)).toBe(START_Z);
-    expect(approachZ(zombieProgress(0, 5), START_Z, END_Z)).toBeCloseTo(END_Z);
-    const half = approachZ(zombieProgress(2.5, 5), START_Z, END_Z);
-    expect(half).toBeCloseTo((START_Z + END_Z) / 2);
   });
 });
 
@@ -152,8 +138,8 @@ describe('lane layout', () => {
   });
 
   it('widens the lanes with distance, so the zombies fan out as they emerge', () => {
-    expect(laneX(3, SPAWN_Z, 1)).toBeGreaterThan(laneX(3, START_Z, 1));
-    expect(laneX(3, START_Z, 1)).toBeGreaterThan(laneX(3, END_Z, 1));
+    expect(laneX(3, SPAWN_Z, 1)).toBeGreaterThan(laneX(3, -8, 1));
+    expect(laneX(3, -8, 1)).toBeGreaterThan(laneX(3, END_Z, 1));
   });
 
   it('never makes a lane narrower than the one at the barricade', () => {
@@ -166,7 +152,7 @@ describe('lane layout', () => {
       const { lane } = fitView(w / h);
 
       it('keeps all four zombies on screen from the mist to the barricade', () => {
-        for (const z of [SPAWN_Z, START_Z, END_Z]) {
+        for (const z of [SPAWN_Z, -8, END_Z]) {
           for (let i = 0; i < LANES; i++) {
             const p = toScreen(camera, w, h, new Vector3(laneX(i, z, lane), 1.2, z));
             expect(p.x).toBeGreaterThan(20);
@@ -181,7 +167,7 @@ describe('lane layout', () => {
           const b = toScreen(camera, w, h, new Vector3(laneX(2, z, lane), 1, z));
           return b.x - a.x;
         };
-        expect(gap(START_Z)).toBeCloseTo(gap(END_Z), 0);
+        expect(gap(-8)).toBeCloseTo(gap(END_Z), 0);
         expect(gap(SPAWN_Z)).toBeCloseTo(gap(END_Z), 0);
       });
     });
@@ -191,83 +177,6 @@ describe('lane layout', () => {
     expect(fitView(16 / 9).lane).toBeGreaterThan(fitView(9 / 16).lane);
     expect(fitView(9 / 16).fov).toBeGreaterThan(fitView(16 / 9).fov);
     expect(fitView(0).lane).toBeGreaterThan(0);
-  });
-});
-
-describe('answer signs', () => {
-  const area = { left: 8, top: 120, right: 0, bottom: 0 };
-  const H = 64;
-  const GAP = 6;
-
-  const overlaps = (
-    a: { x: number; y: number; w: number },
-    b: { x: number; y: number; w: number },
-  ) => Math.abs(a.x - b.x) < (a.w + b.w) / 2 && Math.abs(a.y - b.y) < H;
-
-  /** Signs hung over the zombies' heads at the start line, the barricade and in between. */
-  for (const [w, h] of SCREENS) {
-    it(`never overlap each other or leave the screen at ${w}x${h}, even with long answers`, () => {
-      const camera = cameraFor(w, h);
-      const { lane } = fitView(w / h);
-      const random = seededRandom(w * 31 + h);
-      const bounds = { ...area, right: w - 8, bottom: h - 64 };
-      for (const z of [START_Z, (START_Z + END_Z) / 2, END_Z]) {
-        for (const widths of [
-          [64, 64, 64, 64],
-          [72, 90, 68, 80],
-          [150, 64, 140, 64],
-          [220, 220, 220, 220],
-          ...Array.from({ length: 20 }, () =>
-            Array.from({ length: LANES }, () => 64 + Math.floor(random() * 160)),
-          ),
-        ]) {
-          const items = widths.map((width, i) => {
-            const head = toScreen(camera, w, h, new Vector3(laneX(i, z, lane), 2.4, z));
-            return { x: head.x + (random() - 0.5) * 16, y: head.y - 12 - H / 2, w: width };
-          });
-          const placed = layoutSigns(items, H, GAP, bounds).map((p, i) => ({ ...p, w: widths[i] }));
-          placed.forEach((a, i) => {
-            expect(a.x - a.w / 2).toBeGreaterThanOrEqual(bounds.left - 1e-6);
-            expect(a.x + a.w / 2).toBeLessThanOrEqual(bounds.right + 1e-6);
-            expect(a.y - H / 2).toBeGreaterThanOrEqual(bounds.top - 1e-6);
-            expect(a.y + H / 2).toBeLessThanOrEqual(bounds.bottom + 1e-6);
-            for (const b of placed.slice(i + 1)) expect(overlaps(a, b)).toBe(false);
-          });
-        }
-      }
-    });
-  }
-
-  it('leaves signs where they are when there is room', () => {
-    const items = [
-      { x: 100, y: 300, w: 64 },
-      { x: 200, y: 310, w: 64 },
-    ];
-    const placed = layoutSigns(items, H, GAP, { left: 0, right: 400, top: 100, bottom: 700 });
-    expect(placed).toEqual([
-      { x: 100, y: 300 },
-      { x: 200, y: 310 },
-    ]);
-  });
-
-  it('lifts a sign clear of a nearer one that it would overlap', () => {
-    const items = [
-      { x: 100, y: 300, w: 100 },
-      { x: 140, y: 290, w: 100 },
-    ];
-    const [near, far] = layoutSigns(items, H, GAP, { left: 0, right: 400, top: 100, bottom: 700 });
-    expect(near.y).toBe(300);
-    expect(far.y).toBe(300 - H - GAP);
-  });
-
-  it('keeps a sign inside the edges of the screen', () => {
-    const [sign] = layoutSigns([{ x: 2, y: 300, w: 80 }], H, GAP, {
-      left: 8,
-      right: 360,
-      top: 100,
-      bottom: 600,
-    });
-    expect(sign.x).toBe(48);
   });
 });
 
@@ -421,11 +330,6 @@ describe('fence breaking', () => {
     for (let i = 0; i < 60; i++) fence.update(1 / 60);
     planks.forEach((p, i) => expect(p.position.distanceTo(before[i])).toBeLessThan(1e-6));
   });
-
-  it('puts the end of the break beyond the barricade and short of the kid', () => {
-    expect(BREAK_Z).toBeGreaterThan(END_Z);
-    expect(BREAK_Z).toBeLessThan(1.5);
-  });
 });
 
 describe('charging zombie', () => {
@@ -451,5 +355,473 @@ describe('thrower head', () => {
     });
     expect(top).toBeGreaterThan(1.3);
     expect(top).toBeLessThan(1.5);
+  });
+});
+
+describe('waves', () => {
+  it('sends 6, 8, 10 … regular zombies', () => {
+    expect([1, 2, 3, 4].map(zombiesInWave)).toEqual([6, 8, 10, 12]);
+  });
+
+  it('spawns every 5 seconds at first, half a second faster each wave, never under 1 second', () => {
+    expect([1, 2, 3, 9, 10, 30].map(spawnInterval)).toEqual([5, 4.5, 4, 1, 1, 1]);
+  });
+});
+
+describe('walk pace', () => {
+  const path = END_Z - SPAWN_Z;
+
+  it('covers the whole path in the question time', () => {
+    for (const seconds of [15, 10, 5]) expect(walkSpeed(seconds) * seconds).toBeCloseTo(path);
+  });
+
+  it('is slower for the boss and slower still while a wrong answer is explained', () => {
+    expect(walkSpeed(10, true)).toBeCloseTo(walkSpeed(10) * 0.5);
+    expect(walkSpeed(10, false, true)).toBeCloseTo(walkSpeed(10) * 0.25);
+    expect(walkSpeed(10, true, true)).toBeCloseTo(walkSpeed(10) * 0.125);
+  });
+
+  it('copes with a zero question time', () => {
+    expect(Number.isFinite(walkSpeed(0))).toBe(true);
+  });
+
+  it('eases towards a goal without overshooting', () => {
+    let pace = 0;
+    for (let i = 0; i < 30; i++) {
+      const next = easeToward(pace, 4, 6, 1 / 60);
+      expect(next).toBeGreaterThan(pace);
+      expect(next).toBeLessThanOrEqual(4);
+      pace = next;
+    }
+    // Most of the way there after half a second.
+    expect(pace).toBeGreaterThan(3.7);
+  });
+});
+
+describe('score', () => {
+  it('steps the multiplier up at streaks of 5 and 10', () => {
+    expect([1, 4, 5, 9, 10, 25].map(multiplierFor)).toEqual([1, 1, 2, 2, 3, 3]);
+  });
+
+  it('counts a streak up on hits and resets it on a miss', () => {
+    expect(nextStreak(3, true)).toBe(4);
+    expect(nextStreak(3, false)).toBe(0);
+  });
+
+  it('gives 100 to 150 points for the answer time, times the multiplier', () => {
+    expect(hitPoints(0, 10, 1)).toBe(150);
+    expect(hitPoints(5, 10, 1)).toBe(125);
+    expect(hitPoints(10, 10, 1)).toBe(100);
+    expect(hitPoints(30, 10, 1)).toBe(100);
+    expect(hitPoints(0, 10, 5)).toBe(300);
+    expect(hitPoints(0, 10, 10)).toBe(450);
+    expect(hitPoints(1, 0, 1)).toBe(100);
+  });
+
+  it('words the outcome for one zombie and for many', () => {
+    expect(outcomeText(3, 1)).toBe('You reached wave 3 and blasted 1 zombie!');
+    expect(outcomeText(1, 7)).toBe('You reached wave 1 and blasted 7 zombies!');
+  });
+});
+
+describe('targeting', () => {
+  it('picks the zombie nearest the barricade, ignoring those that cannot be hit', () => {
+    expect(closestIndex([-10, -3, -7])).toBe(1);
+    expect(closestIndex([-10, null, -7])).toBe(2);
+    expect(closestIndex([null, null])).toBe(-1);
+    expect(closestIndex([])).toBe(-1);
+  });
+
+  it('prefers a clear lane, then the lane whose last zombie has walked furthest', () => {
+    expect(pickLane([-5, null, -9, -2], () => 0)).toBe(1);
+    expect(pickLane([-5, -8, -9, -2], () => 0)).toBe(3);
+    expect(pickLane([null, null, null, null], () => 0.99)).toBe(3);
+  });
+
+  it('breaks ties at random among the best lanes only', () => {
+    const lanes = [-5, null, -9, null];
+    expect(pickLane(lanes, () => 0)).toBe(1);
+    expect(pickLane(lanes, () => 0.99)).toBe(3);
+    const random = seededRandom(5);
+    for (let i = 0; i < 50; i++) expect([1, 3]).toContain(pickLane(lanes, random));
+  });
+});
+
+describe('wave spawner', () => {
+  it('sends the first zombie at once, as the field is empty', () => {
+    const spawner = createWaveSpawner();
+    expect(spawner.left).toBe(6);
+    expect(spawner.update(0, 0)).toBe(1);
+    expect(spawner.left).toBe(5);
+  });
+
+  it('sends the next after the interval when one is walking, and not before', () => {
+    const spawner = createWaveSpawner();
+    spawner.update(0, 0);
+    expect(spawner.update(4.9, 1)).toBe(0);
+    expect(spawner.update(0.2, 1)).toBe(1);
+    // The interval restarts at each spawn.
+    expect(spawner.update(4.9, 2)).toBe(0);
+    expect(spawner.update(0.2, 2)).toBe(1);
+  });
+
+  it('sends one at once whenever the field empties', () => {
+    const spawner = createWaveSpawner();
+    spawner.update(0, 0);
+    expect(spawner.update(0.5, 1)).toBe(0);
+    expect(spawner.update(0.016, 0)).toBe(1);
+    // ... and the interval restarts from that spawn.
+    expect(spawner.update(4.9, 1)).toBe(0);
+  });
+
+  it('waits while the field is full and sends the moment there is room', () => {
+    const spawner = createWaveSpawner();
+    expect(spawner.update(60, MAX_ON_FIELD)).toBe(0);
+    expect(spawner.update(60, MAX_ON_FIELD + 1)).toBe(0);
+    expect(spawner.left).toBe(6);
+    expect(spawner.update(0.016, MAX_ON_FIELD - 1)).toBe(1);
+  });
+
+  it('counts down to the boss, which is due once the last regular is gone', () => {
+    const spawner = createWaveSpawner();
+    for (let i = 0; i < 6; i++) expect(spawner.update(0, 0)).toBe(1);
+    expect(spawner.left).toBe(0);
+    expect(spawner.update(10, 0)).toBe(0);
+    expect(spawner.bossDue).toBe(true);
+    // Not while any regular is still walking.
+    spawner.update(0.1, 2);
+    expect(spawner.bossDue).toBe(false);
+    spawner.update(0.1, 0);
+    expect(spawner.bossDue).toBe(true);
+    spawner.bossSent();
+    expect(spawner.bossDue).toBe(false);
+  });
+
+  it('is not due for the boss right after the last regular is sent', () => {
+    const spawner = createWaveSpawner();
+    for (let i = 0; i < 6; i++) spawner.update(0, 0);
+    expect(spawner.bossDue).toBe(false);
+  });
+
+  it('starts the next wave with more zombies and a shorter interval', () => {
+    const spawner = createWaveSpawner();
+    for (let i = 0; i < 6; i++) spawner.update(0, 0);
+    spawner.update(1, 0);
+    spawner.bossSent();
+    spawner.nextWave();
+    expect(spawner.wave).toBe(2);
+    expect(spawner.left).toBe(8);
+    expect(spawner.bossDue).toBe(false);
+    expect(spawner.update(0, 0)).toBe(1);
+    expect(spawner.update(4.4, 1)).toBe(0);
+    expect(spawner.update(0.2, 1)).toBe(1);
+  });
+});
+
+describe('brute boss', () => {
+  const brute = () => createZombie(BRUTE_LOOK, { brute: true });
+
+  it('is nearly twice as tall as a regular zombie', () => {
+    const regular = createZombie();
+    const boss = brute();
+    for (const z of [regular, boss]) z.update(0.016);
+    const ratio = boss.signAnchor(new Vector3()).y / regular.signAnchor(new Vector3()).y;
+    expect(ratio).toBeGreaterThan(1.5);
+    expect(ratio).toBeLessThan(2.3);
+    expect(boss.brute).toBe(true);
+    expect(regular.brute).toBe(false);
+    expect(regular.armour).toHaveLength(0);
+    expect(regular.armourLeft).toBe(0);
+  });
+
+  it('is broader than a regular zombie', () => {
+    const width = (z: ReturnType<typeof createZombie>) => {
+      z.object.updateMatrixWorld(true);
+      const box = new Box3().setFromObject(z.object);
+      return (box.max.x - box.min.x) / z.object.scale.x;
+    };
+    expect(width(brute())).toBeGreaterThan(width(createZombie()) * 1.25);
+  });
+
+  it('puts the bomb target at its feet, further out at the bigger scale', () => {
+    const regular = createZombie(ZOMBIE_LOOKS[0]);
+    const boss = brute();
+    for (const z of [regular, boss]) z.object.position.set(0, 0, -4);
+    const a = regular.feetPosition(new Vector3());
+    const b = boss.feetPosition(new Vector3());
+    expect(b.y).toBeLessThan(0.3);
+    expect(b.z).toBeGreaterThan(a.z);
+    expect(b.z).toBeLessThan(-4 + 1.2);
+  });
+
+  it('wears three pieces of armour, and each hit takes the next one off', () => {
+    const scene = new Group();
+    const boss = brute();
+    scene.add(boss.object);
+    expect(boss.armour.map((p) => p.name)).toEqual([...ARMOUR_ORDER]);
+    expect(ARMOUR_ORDER).toEqual(['pads', 'chest', 'helmet']);
+    expect(boss.armourLeft).toBe(3);
+    boss.armour.forEach((p) => p.parts.forEach((part) => expect(part.parent).not.toBeNull()));
+    const attachedParts = (name: string) =>
+      boss.armour.find((p) => p.name === name)!.parts.map((part) => part.parent !== scene);
+    for (const [i, name] of ARMOUR_ORDER.entries()) {
+      expect(boss.knockOffArmour()).not.toBeNull();
+      expect(boss.armourLeft).toBe(2 - i);
+      expect(boss.armour.filter((p) => !p.attached).map((p) => p.name)).toEqual(
+        ARMOUR_ORDER.slice(0, i + 1),
+      );
+      // The piece that came off now hangs in the scene, the rest still on the boss.
+      expect(attachedParts(name).every((onBoss) => !onBoss)).toBe(true);
+      for (const later of ARMOUR_ORDER.slice(i + 1)) {
+        expect(attachedParts(later).every(Boolean)).toBe(true);
+      }
+    }
+  });
+
+  it('has two shoulder pads that come off together, and never goes below no armour', () => {
+    const boss = brute();
+    expect(boss.armour[0].parts).toHaveLength(2);
+    for (let i = 0; i < 3; i++) expect(boss.knockOffArmour()).not.toBeNull();
+    expect(boss.knockOffArmour()).toBeNull();
+    expect(boss.armourLeft).toBe(0);
+  });
+
+  it('throws armour up, lands it on the grass and then lets it vanish', () => {
+    const scene = new Group();
+    const boss = brute();
+    scene.add(boss.object);
+    boss.object.position.set(0, 0, -5);
+    boss.update(0.016);
+    boss.knockOffArmour();
+    const helmetless = boss.armour[0].parts[0];
+    const startY = helmetless.position.y;
+    let top = startY;
+    for (let i = 0; i < 20; i++) {
+      boss.update(0.02);
+      top = Math.max(top, helmetless.position.y);
+    }
+    expect(top).toBeGreaterThan(startY + 0.5);
+    for (let i = 0; i < 60; i++) boss.update(0.05);
+    expect(helmetless.position.y).toBeLessThan(0.3);
+    for (let i = 0; i < 100; i++) boss.update(0.05);
+    expect(helmetless.visible).toBe(false);
+  });
+
+  it('puts all the armour back on reset', () => {
+    const scene = new Group();
+    const boss = brute();
+    scene.add(boss.object);
+    const homes = boss.armour.flatMap((p) => p.parts.map((part) => [part, part.parent] as const));
+    for (let i = 0; i < 3; i++) boss.knockOffArmour();
+    for (let i = 0; i < 200; i++) boss.update(0.05);
+    boss.reset();
+    expect(boss.armourLeft).toBe(3);
+    for (const [part, parent] of homes) {
+      expect(part.parent).toBe(parent);
+      expect(part.visible).toBe(true);
+    }
+  });
+
+  it('flashes white when hit and then goes back to its own colours', () => {
+    const boss = brute();
+    const materials: MeshStandardMaterial[] = [];
+    boss.object.traverse((o) => {
+      const m = (o as { material?: unknown }).material;
+      if (m instanceof MeshStandardMaterial) materials.push(m);
+    });
+    const colours = materials.map((m) => m.color.getHex());
+    const emissive = materials.map((m) => m.emissive.getHex());
+    boss.flash();
+    expect(materials.some((m) => m.emissive.getHex() === 0xffffff)).toBe(true);
+    for (let i = 0; i < 10; i++) boss.update(0.02);
+    expect(materials.map((m) => m.color.getHex())).toEqual(colours);
+    expect(materials.map((m) => m.emissive.getHex())).toEqual(emissive);
+  });
+
+  it('lurches back when hit and recovers', () => {
+    const boss = brute();
+    boss.setMode('walk');
+    boss.update(0.1);
+    const upright = boss.signAnchor(new Vector3());
+    boss.stagger();
+    boss.update(0.2);
+    const leaning = boss.signAnchor(new Vector3());
+    expect(leaning.distanceTo(upright)).toBeGreaterThan(0.01);
+    for (let i = 0; i < 40; i++) boss.update(0.02);
+    expect(boss.signAnchor(new Vector3()).y).toBeGreaterThan(upright.y - 0.4);
+  });
+
+  it('thumps on each step of its walk, but not when standing', () => {
+    const boss = brute();
+    let steps = 0;
+    boss.onFootfall = () => steps++;
+    boss.setMode('sway');
+    for (let i = 0; i < 100; i++) boss.update(0.02);
+    expect(steps).toBe(0);
+    boss.setMode('walk');
+    for (let i = 0; i < 300; i++) boss.update(0.02);
+    expect(steps).toBeGreaterThan(5);
+    expect(steps).toBeLessThan(14);
+  });
+
+  it('is knocked out like any zombie once the armour is gone', () => {
+    const boss = brute();
+    for (let i = 0; i < 3; i++) boss.knockOffArmour();
+    boss.setMode('blast');
+    for (let i = 0; i < 100; i++) boss.update(0.02);
+    expect(boss.signAnchor(new Vector3()).y).toBeLessThan(3);
+  });
+});
+
+describe('horde', () => {
+  const make = () => {
+    const scene = new Group();
+    const effects = createEffects();
+    const horde = createHorde(scene, effects, seededRandom(3));
+    horde.setLane(1.2);
+    return { scene, effects, horde };
+  };
+  const run = (horde: ReturnType<typeof make>['horde'], seconds: number, speed = 2) => {
+    for (let t = 0; t < seconds; t += 0.05) horde.update(0.05, speed);
+  };
+
+  it('makes every zombie up front and puts them all in the scene, hidden', () => {
+    const { scene, horde } = make();
+    expect(horde.slots).toHaveLength(MAX_ON_FIELD + 3 + 1);
+    expect(scene.children).toHaveLength(horde.slots.length);
+    expect(horde.slots.every((s) => !s.zombie.object.visible && s.state === 'idle')).toBe(true);
+  });
+
+  it('sends a zombie out of the mist in one of the lanes and walks it to the barricade', () => {
+    const { horde } = make();
+    const slot = horde.spawn()!;
+    expect(slot.z).toBe(SPAWN_Z);
+    expect(slot.lane).toBeGreaterThanOrEqual(0);
+    expect(slot.lane).toBeLessThan(LANES);
+    expect(slot.zombie.mode).toBe('walk');
+    expect(horde.walkingCount).toBe(1);
+    run(horde, 2, 4);
+    expect(slot.z).toBeCloseTo(SPAWN_Z + 8, 0);
+    expect(slot.zombie.object.position.z).toBeCloseTo(slot.z);
+    // It stays in its lane, give or take the wobble.
+    expect(Math.abs(slot.zombie.object.position.x - laneX(slot.lane, slot.z, 1.2))).toBeLessThan(
+      0.15 * 1.2 * 4 + 1e-6,
+    );
+  });
+
+  it('walks the boss at half pace down the middle', () => {
+    const { horde } = make();
+    const regular = horde.spawn()!;
+    const boss = horde.spawnBoss();
+    run(horde, 2, 4);
+    expect(boss.z - SPAWN_Z).toBeCloseTo((regular.z - SPAWN_Z) / 2, 1);
+    expect(boss.zombie.object.position.x).toBe(0);
+  });
+
+  it('spreads new zombies over the lanes rather than stacking them', () => {
+    const { horde } = make();
+    const lanes = Array.from({ length: 4 }, () => horde.spawn()!.lane);
+    expect(new Set(lanes).size).toBe(4);
+  });
+
+  it('picks the zombie nearest the barricade, and skips the knocked out', () => {
+    const { horde } = make();
+    const first = horde.spawn()!;
+    run(horde, 1);
+    const second = horde.spawn()!;
+    expect(horde.closest()).toBe(first);
+    horde.blast(first);
+    expect(first.zombie.mode).toBe('blast');
+    expect(horde.closest()).toBe(second);
+    expect(horde.walkingCount).toBe(1);
+    horde.blast(second);
+    expect(horde.closest()).toBeNull();
+  });
+
+  it('lets a knocked out zombie lie there, then poof away and free its place', () => {
+    const { horde, effects } = make();
+    const slot = horde.spawn()!;
+    horde.blast(slot);
+    run(horde, 1);
+    expect(slot.state).toBe('blasted');
+    expect(slot.zombie.object.visible).toBe(true);
+    run(horde, 0.5);
+    expect(slot.state).toBe('idle');
+    expect(slot.zombie.object.visible).toBe(false);
+    expect(effects.object.children.length).toBeGreaterThan(0);
+  });
+
+  it('tells you when a zombie reaches the barricade, leans it there, then poofs it', () => {
+    const { horde } = make();
+    const reached: number[] = [];
+    horde.onReach((slot) => reached.push(slot.z));
+    const slot = horde.spawn()!;
+    run(horde, 20, 5);
+    expect(reached).toEqual([END_Z]);
+    expect(slot.state === 'idle').toBe(true);
+    const other = horde.spawn()!;
+    run(horde, 2, 10);
+    expect(other.state).toBe('reached');
+    expect(other.zombie.mode).toBe('lean');
+    run(horde, 1, 10);
+    expect(other.state).toBe('idle');
+    expect(horde.walkingCount).toBe(0);
+  });
+
+  it('keeps zombies leaning over the barricade when told to linger', () => {
+    const { horde } = make();
+    horde.setLingering(true);
+    const slot = horde.spawn()!;
+    run(horde, 20, 5);
+    expect(slot.state).toBe('reached');
+    expect(slot.zombie.object.visible).toBe(true);
+  });
+
+  it('holds a laughing zombie still until told to walk on', () => {
+    const { horde } = make();
+    const slot = horde.spawn()!;
+    run(horde, 1, 3);
+    horde.laugh(slot);
+    const z = slot.z;
+    run(horde, 1, 3);
+    expect(slot.z).toBe(z);
+    expect(slot.zombie.mode).toBe('laugh');
+    expect(horde.walkingCount).toBe(1);
+    horde.unlaugh();
+    run(horde, 1, 3);
+    expect(slot.z).toBeGreaterThan(z);
+    expect(slot.zombie.mode).toBe('walk');
+  });
+
+  it('staggers the boss back, but never past the mist', () => {
+    const { horde } = make();
+    const boss = horde.spawnBoss();
+    run(horde, 4, 4);
+    const before = boss.z;
+    horde.knockBack(boss, 1.5);
+    run(horde, 0.6, 0);
+    expect(boss.z).toBeCloseTo(before - 1.5, 3);
+    const fresh = horde.spawn()!;
+    horde.knockBack(fresh, 5);
+    run(horde, 0.6, 0);
+    expect(fresh.z).toBe(SPAWN_Z);
+  });
+
+  it('never runs out of places: the oldest body makes way for a new zombie', () => {
+    const { horde } = make();
+    for (let i = 0; i < MAX_ON_FIELD + 3; i++) horde.blast(horde.spawn()!);
+    expect(horde.spawn()).not.toBeNull();
+  });
+
+  it('puts the boss back for the next wave with all its armour on', () => {
+    const { horde } = make();
+    const boss = horde.spawnBoss();
+    boss.zombie.knockOffArmour();
+    horde.blast(boss);
+    run(horde, 3);
+    expect(boss.state).toBe('idle');
+    horde.spawnBoss();
+    expect(boss.zombie.armourLeft).toBe(3);
+    expect(boss.z).toBe(SPAWN_Z);
   });
 });

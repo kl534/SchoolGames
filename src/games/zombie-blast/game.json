@@ -1,7 +1,7 @@
 {
   "id": "zombie-blast",
   "title": "Zombie Blast",
-  "description": "Throw a bomb at the zombie holding the right answer before they reach you.",
+  "description": "Answer fast to bomb the zombies before they reach you. Survive the waves and beat the boss!",
   "thumbnail": "thumbnail.svg",
   "tags": ["action", "3d"]
 }

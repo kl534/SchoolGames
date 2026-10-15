@@ -1,19 +1,11 @@
 import './style.css';
-import {
-  CircleGeometry,
-  MathUtils,
-  Mesh,
-  MeshBasicMaterial,
-  Raycaster,
-  Vector2,
-  Vector3,
-} from 'three';
+import { CircleGeometry, MathUtils, Mesh, MeshBasicMaterial, Vector3 } from 'three';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
+import { createFactFeed, type FactFeed } from '../../shared/feed';
 import { createPointerInput, onPress } from '../../shared/input';
 import { showPreview } from '../../shared/preview';
-import { shuffle } from '../../shared/random';
 import { showResults } from '../../shared/results';
-import { createRound, scoreSpeech, starsFor, type Round } from '../../shared/round';
+import { starsFor } from '../../shared/round';
 import { createScene } from '../../shared/scene';
 import { startGameSession, type GameSession } from '../../shared/session';
 import { answerOptions, type Fact } from '../../shared/topics';
@@ -21,32 +13,33 @@ import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from 
 import { BOMB_RADIUS, createBomb } from './bomb';
 import { createEffects } from './effects';
 import { buildField, HORIZON_COLOR } from './field';
+import { createHorde, type Slot } from './horde';
+import { BOSS_TOP, CAMERA, fitView, LANES, SPAWN_Z, TARGET } from './layout';
 import {
-  BARRICADE_Z,
-  BREAK_Z,
-  END_Z,
-  fitView,
-  CAMERA,
-  LANES,
-  laneX,
-  layoutSigns,
-  SPAWN_Z,
-  START_Z,
-  TARGET,
-} from './layout';
-import {
-  approachZ,
   arcHeightFor,
+  BOSS_BONUS,
+  BOSS_DOWN_SPEECH,
+  BOSS_HITS,
+  BOSS_KNOCKBACK,
+  BOSS_SPEECH,
   bombPosition,
   BRAINS,
-  easeOut,
+  createWaveSpawner,
+  easeToward,
   GAME_OVER_SPEECH,
+  GREAT_BLASTING_SPEECH,
+  hitPoints,
   loseBrain,
+  multiplierFor,
+  NEW_HIGH_SCORE_SPEECH,
+  NEXT_WAVE_SPEECH,
+  nextStreak,
+  outcomeText,
   outOfBrains,
-  zombieProgress,
+  walkSpeed,
+  type WaveSpawner,
 } from './rules';
 import { createThrower } from './thrower';
-import { createZombie, ZOMBIE_LOOKS, type Zombie } from './zombie';
 
 const GAME_ID = 'zombie-blast';
 
@@ -54,29 +47,57 @@ const GAME_ID = 'zombie-blast';
 const KID_Z = 1.5;
 /** Seconds a thrown bomb is in the air. */
 const BOMB_TIME = 0.7;
-/** Seconds the zombies take to shuffle out of the mist and reach the start line. */
-const ARRIVE_TIME = 2.2;
-/** How fast zombies flee back into the mist, in world units per second. */
-const RUN_SPEED = 11;
-/** Zombies that have run this far back are hidden in the mist. */
-const GONE_Z = -23;
-/** How fast zombies charge through the barricade, in world units per second. */
-const CHARGE_SPEED = 7;
-/** Longest random wait before a zombie joins the charge, in seconds. */
-const CHARGE_STAGGER = 0.25;
-/** Pause after the last zombie is through, before the next wave or the end banner. */
-const BREAK_GAP = 0.9;
-
-const SIGN_HEIGHT = 64;
-const SIGN_GAP = 6;
-/** Gap between the bottom of a sign and the top of the head it hangs over (the sign's tail). */
-const SIGN_TAIL = 12;
-/** Bottom of the play area; the brains and progress dots sit underneath. */
-const STATUS_HEIGHT = 64;
-/** Seconds a result stays up before a tap can skip to the next question. */
+/** Seconds a result stays up before a tap can skip it. */
 const SKIP_AFTER = 0.6;
+/** Least seconds the correct fact stays up after a wrong answer. */
+const REVEAL_FOR = 2.6;
+/** Seconds each step of the 3, 2, 1, Go! lasts. */
+const COUNT_STEP = 0.75;
+/** How quickly the shared walking pace follows a new question (1/seconds): about half a second. */
+const PACE_RATE = 6;
+/** The barricade mends itself this long after the most recent smash. */
+const REPAIR_AFTER = 3;
+/** Seconds after a boss is knocked out until "Wave N" shows, and until the next wave starts. */
+const WAVE_BANNER_AT = 1.5;
+const WAVE_BREAK = 2.5;
+const BOSS_BANNER_FOR = 1.8;
+/** Least seconds the game-over banner stays up. */
+const END_FOR = 2.2;
+/** The field gets at least this share of the screen height, or the HUD overlaps the sky instead. */
+const MIN_FRAME = 0.5;
+/** Space kept between the HUD and the boss's head, and between the kid's feet and the answers, px. */
+const BOSS_CLEARANCE = 6;
+const KID_MARGIN = 14;
+/** Camera shake (world units) from a boss footfall, a barricade smash and a boss hit. */
+const STEP_SHAKE = 0.04;
+const SMASH_SHAKE = 0.12;
+const HIT_SHAKE = 0.1;
 
-type Phase = 'preview' | 'aiming' | 'throw' | 'result' | 'breaking' | 'ending' | 'done';
+type Phase = 'preview' | 'countdown' | 'playing' | 'waveBreak' | 'ending' | 'done';
+type BannerKind = 'hit' | 'miss' | 'warn' | 'out';
+
+interface Question {
+  fact: Fact;
+  options: string[];
+  /** Seconds the fact gives: sets the zombies' pace and what counts as a quick answer. */
+  seconds: number;
+  /** open: tappable; throwing: a bomb is in the air; reveal: the right answer is being shown. */
+  state: 'open' | 'throwing' | 'reveal';
+  /** Game time at which the question finished being read out. */
+  speechEndAt: number | null;
+  chosen: number;
+}
+
+interface Flight {
+  kind: 'bomb' | 'dud';
+  question: Question;
+  slot: Slot | null;
+  from: Vector3;
+  to: Vector3;
+  t: number;
+  arc: number;
+  points: number;
+}
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -103,13 +124,9 @@ function run(session: GameSession): void {
   thrower.object.position.set(0, 0, KID_Z);
   scene.add(thrower.object);
 
-  const zombies = ZOMBIE_LOOKS.slice(0, LANES).map((look) => createZombie(look));
-  zombies.forEach((z) => scene.add(z.object));
-  /** Depth of each zombie along its walk. */
-  const zs = zombies.map(() => SPAWN_Z);
-
   const effects = createEffects();
   scene.add(effects.object);
+  const horde = createHorde(scene, effects);
 
   const flyingBomb = createBomb();
   flyingBomb.object.visible = false;
@@ -132,14 +149,17 @@ function run(session: GameSession): void {
   hear.type = 'button';
   hear.textContent = '🔊';
   hear.setAttribute('aria-label', 'Hear the question');
-  const clockBar = el('div', 'zb-clock', hud);
-  const clockFill = el('div', 'zb-clock-fill', clockBar);
-  const status = el('div', 'zb-status', document.body);
-  const brainsBar = el('div', 'zb-brains', status);
-  const dotsBar = el('div', 'zb-dots', status);
-  dotsBar.setAttribute('aria-hidden', 'true');
-  const signs = zombies.map(() => {
-    const button = el('button', 'zb-sign', document.body);
+  const stats = el('div', 'zb-stats', hud);
+  const brainsBar = el('div', 'zb-brains', stats);
+  const waveText = el('div', 'zb-wave', stats);
+  const scoreRow = el('div', 'zb-score', stats);
+  const scoreValue = el('span', 'zb-score-value', scoreRow);
+  const multBadge = el('span', 'zb-mult', scoreRow);
+  const bossStatus = el('div', 'zb-sr', document.body);
+  bossStatus.setAttribute('aria-live', 'polite');
+  const answers = el('div', 'zb-answers', document.body);
+  const buttons = Array.from({ length: LANES }, () => {
+    const button = el('button', 'zb-answer', answers);
     button.type = 'button';
     return button;
   });
@@ -148,6 +168,9 @@ function run(session: GameSession): void {
   const bannerTitle = el('div', 'zb-banner-title', banner);
   const bannerDetail = el('div', 'zb-banner-detail', banner);
   banner.hidden = true;
+  const count = el('div', 'zb-count', document.body);
+  count.setAttribute('aria-live', 'assertive');
+  count.hidden = true;
 
   createBackButton();
   const mute = createMuteButton();
@@ -161,30 +184,33 @@ function run(session: GameSession): void {
 
   // ---------- State ----------
   let phase: Phase = 'preview';
-  let round: Round = createRound([]);
-  let fact: Fact | undefined;
-  let options: string[] = [];
-  let chosen = -1;
-  let turn = 0;
+  let feed: FactFeed = createFactFeed(() => session.chooseFacts());
+  let spawner: WaveSpawner = createWaveSpawner();
+  let question: Question | null = null;
+  let flight: Flight | null = null;
+  let score = 0;
+  /** Right answers in a row since the last wrong answer or lost brain; sets the multiplier. */
+  let streak = 0;
   let brains = BRAINS;
-  /** The question has been read out. */
-  let speechDone = false;
-  /** Seconds since this wave came out of the mist, and when each lane sets off. */
-  let arriveTime = 0;
-  let arriveDelay = [0, 0.12, 0.25, 0.37];
-  let clockLeft = 0;
-  /** Seconds this question started with, for the bar's fill and the zombies' pace. */
-  let clockTotal = 1;
-  let clockRunning = false;
-  let lastTick = 0;
-  /** Game time at which the current result was shown. */
-  let resultAt = 0;
-  /** The other zombies have already run off, so the next wave can follow straight away. */
-  let survivorsGone = false;
-  /** Per zombie while the barricade is being smashed: seconds until it sets off, and its progress. */
-  const charge = zombies.map(() => ({ delay: 0, smashed: false, through: false }));
-  let breakQueued = false;
-  let flight: { from: Vector3; to: Vector3; t: number; arc: number } | null = null;
+  /** Zombies and bosses knocked out this run. */
+  let blasted = 0;
+  let bossActive = false;
+  let bossHp = 0;
+  /** Seconds the current question gives, and the shared walking pace (units/s) following it. */
+  let paceSeconds = 10;
+  let pace = 0;
+  /** Game time at which the wrong-answer reveal appeared, and whether it has been read out. */
+  let revealAt = 0;
+  let revealSpoken = false;
+  /** Between the tap and the bomb leaving the hand. */
+  let releasePending = false;
+  /** Game time at which the kid goes back to waiting, the barricade is mended, 0 for never. */
+  let kidResetAt = 0;
+  let repairAt = 0;
+  /** Bumped by each new run and wave, so late callbacks can tell they are stale. */
+  let epoch = 0;
+  let bannerId = 0;
+  let shake = 0;
 
   // Delayed actions run on game time so pausing freezes them too.
   let gameTime = 0;
@@ -192,82 +218,97 @@ function run(session: GameSession): void {
   const after = (seconds: number, fn: () => void) => pending.push({ at: gameTime + seconds, fn });
 
   /**
-   * Dims the signs while a throw plays out. They are not `disabled`, so a tap in that window
-   * still reaches `onSignTap` instead of being swallowed.
+   * Dims the answers while a bomb is in the air. They are not `disabled`, so a tap in that window
+   * still reaches `onAnswer` instead of being swallowed.
    */
-  const lockAnswers = () => signs.forEach((b) => b.setAttribute('aria-disabled', 'true'));
+  const lockAnswers = () => buttons.forEach((b) => b.setAttribute('aria-disabled', 'true'));
+  const unlockAnswers = () => buttons.forEach((b) => b.removeAttribute('aria-disabled'));
 
-  const setPlayVisible = (visible: boolean) => {
+  /** The top HUD, with or without the question; the answer bar goes with the question. */
+  const setHud = (visible: boolean, withQuestion: boolean) => {
     hud.hidden = !visible;
-    status.hidden = !visible;
-    signs.forEach((b, i) => (b.hidden = !visible || options[i] === undefined));
+    problem.hidden = !withQuestion;
+    answers.classList.toggle('off', !withQuestion);
     if (!visible) banner.hidden = true;
   };
 
   // ---------- Layout ----------
   let viewW = 0;
   let viewH = 0;
+  let wantAspect = 1;
   let lane = fitView(1).lane;
   const point = new Vector3();
 
-  /** Fits the lanes to the screen, for any aspect ratio. */
+  /** Where the HUD ends, measured as if the question were showing so the camera never moves. */
+  const hudBottom = () => {
+    const hudWas = hud.hidden;
+    const problemWas = problem.hidden;
+    hud.hidden = false;
+    problem.hidden = false;
+    const bottom = hud.getBoundingClientRect().bottom;
+    hud.hidden = hudWas;
+    problem.hidden = problemWas;
+    return bottom;
+  };
+
+  /**
+   * Fits the field to the part of the screen between the HUD and the answer bar, for any shape:
+   * the camera frames a picture that size, with the grass under the bar and the sky behind the
+   * HUD running on past its edges. On a short screen the HUD overlaps the sky instead, so the
+   * field keeps room to be seen.
+   */
   const layout = () => {
     const w = container.clientWidth;
     const h = container.clientHeight;
-    if (w === viewW && h === viewH) return;
-    viewW = w;
-    viewH = h;
-    const aspect = w / Math.max(h, 1);
-    const fit = fitView(aspect);
-    lane = fit.lane;
-    field.layout(lane);
-    camera.fov = fit.fov;
-    camera.aspect = aspect;
-    camera.position.copy(CAMERA);
-    camera.lookAt(TARGET);
-    camera.updateProjectionMatrix();
-    camera.updateMatrixWorld();
+    if (w !== viewW || h !== viewH) {
+      viewW = w;
+      viewH = h;
+      const barTop = answers.getBoundingClientRect().top;
+      const bottom = MathUtils.clamp(barTop > 0 ? barTop : h, h * 0.5, h);
+      let top = hudBottom() + 4;
+      if (bottom - top < h * MIN_FRAME) top = 0;
+      const frameH = Math.max(bottom - top, 1);
+      wantAspect = w / frameH;
+      const fit = fitView(wantAspect);
+      lane = fit.lane;
+      field.layout(lane);
+      horde.setLane(lane);
+      camera.fov = fit.fov;
+      camera.position.copy(CAMERA);
+      camera.lookAt(TARGET);
+      camera.updateMatrixWorld();
+      const setFrame = (shift: number) => {
+        camera.setViewOffset(w, frameH, 0, -(top + shift), w, h);
+        camera.aspect = wantAspect;
+        camera.updateProjectionMatrix();
+      };
+      setFrame(0);
+      // The boss stands taller than the camera, so its head would sit behind the HUD while it
+      // walks out of the mist. Slide the picture down until the head clears the HUD, as far as
+      // the kid's feet can go before they reach the answer bar.
+      const screenY = (y: number, z: number) =>
+        ((1 - point.set(0, y, z).project(camera).y) / 2) * h;
+      const headY = screenY(BOSS_TOP, SPAWN_Z);
+      const feetY = screenY(0, KID_Z);
+      const wanted = top + BOSS_CLEARANCE - headY;
+      const room = bottom - KID_MARGIN - feetY;
+      setFrame(Math.max(0, Math.min(wanted, room)));
+    } else if (camera.aspect !== wantAspect) {
+      // The shared resize handler sets the aspect of the whole screen; put ours back.
+      camera.aspect = wantAspect;
+      camera.updateProjectionMatrix();
+    }
   };
 
   const toScreen = (world: Vector3) => {
-    const p = world.clone().project(camera);
-    return { x: ((p.x + 1) / 2) * viewW, y: ((1 - p.y) / 2) * viewH };
-  };
-
-  /** Hangs each answer sign over its zombie's head without overlapping the others or the HUD. */
-  const positionSigns = () => {
-    if (!viewW) return;
-    const top = hud.hidden ? 80 : hud.getBoundingClientRect().bottom + 8;
-    const wishes = signs.map((button, i) => {
-      const p = toScreen(zombies[i].signAnchor(point));
-      return { x: p.x, y: p.y - SIGN_TAIL - SIGN_HEIGHT / 2, w: button.offsetWidth || 72 };
-    });
-    const placed = layoutSigns(wishes, SIGN_HEIGHT, SIGN_GAP, {
-      left: 8,
-      right: viewW - 8,
-      top,
-      bottom: viewH - STATUS_HEIGHT,
-    });
-    signs.forEach((button, i) => {
-      const { x, y } = placed[i];
-      button.style.transform = `translate(${x - wishes[i].w / 2}px, ${y - SIGN_HEIGHT / 2}px)`;
-      // Signs fade in as their zombies come out of the mist.
-      button.style.setProperty('--fade', String(MathUtils.clamp((zs[i] - SPAWN_Z - 3) / 7, 0, 1)));
-    });
+    const p = point.copy(world).project(camera);
+    return {
+      x: MathUtils.clamp(((p.x + 1) / 2) * viewW, 40, viewW - 40),
+      y: MathUtils.clamp(((1 - p.y) / 2) * viewH, 90, viewH - 90),
+    };
   };
 
   // ---------- HUD helpers ----------
-  const renderDots = () => {
-    const dots = Array.from({ length: round.length }, (_, i) => {
-      const dot = document.createElement('span');
-      const result = round.results[i];
-      dot.className = `zb-dot${result === true ? ' hit' : result === false ? ' miss' : ''}`;
-      if (i === round.played && phase === 'aiming') dot.classList.add('current');
-      return dot;
-    });
-    dotsBar.replaceChildren(...dots);
-  };
-
   const renderBrains = (justLost = false) => {
     const icons = Array.from({ length: BRAINS }, (_, i) => {
       const icon = document.createElement('span');
@@ -289,423 +330,505 @@ function run(session: GameSession): void {
     setTimeout(() => fly.remove(), 1200);
   };
 
-  const setClock = (fraction: number) => {
-    const f = MathUtils.clamp(fraction, 0, 1);
-    clockFill.style.transform = `scaleX(${f})`;
-    clockBar.classList.toggle('urgent', f < 0.4);
+  const renderScore = () => {
+    scoreValue.textContent = score.toLocaleString();
+    const multiplier = multiplierFor(streak);
+    multBadge.hidden = multiplier === 1;
+    multBadge.textContent = `×${multiplier}`;
+    waveText.textContent = `Wave ${spawner.wave}`;
+  };
+
+  const renderBossStatus = () => {
+    bossStatus.textContent = bossActive
+      ? `Boss: ${bossHp} ${bossHp === 1 ? 'hit' : 'hits'} left`
+      : '';
+  };
+
+  /** Floats a short message up from a spot on the screen. */
+  const pop = (text: string, at: { x: number; y: number }, kind: 'good' | 'bad' | 'plain') => {
+    const node = el('div', `zb-pop ${kind}`, document.body);
+    node.textContent = text;
+    node.style.left = `${at.x}px`;
+    node.style.top = `${at.y}px`;
+    node.addEventListener('animationend', () => node.remove());
+    setTimeout(() => node.remove(), 1600);
+  };
+
+  /** Restarts a CSS animation on an overlay. */
+  const replay = (node: HTMLElement) => {
+    node.classList.remove('on');
+    void node.offsetWidth;
+    node.classList.add('on');
   };
 
   /**
-   * Centres the banner on the barricade (zombies still at the start line) or on the kid (zombies
-   * crowding the barricade), so it never covers the zombies or their signs.
+   * Centres the banner in the clear space between the HUD and the answer bar, or (for the game
+   * over message) on the kid.
    */
   const showBanner = (
     title: string,
     detail: string,
-    kind: 'hit' | 'miss' | 'out',
-    place: 'barricade' | 'kid' = 'barricade',
-  ) => {
+    kind: BannerKind,
+    place: 'middle' | 'kid' = 'middle',
+  ): number => {
     bannerTitle.textContent = title;
     bannerDetail.textContent = detail;
     bannerDetail.hidden = !detail;
     banner.className = `zb-banner ${kind}`;
     banner.hidden = false;
-    const anchor = place === 'kid' ? point.set(0, 0.6, KID_Z) : point.set(0, 0.2, BARRICADE_Z);
+    const top = hud.hidden ? 20 : hud.getBoundingClientRect().bottom + 8;
+    const bottom = answers.classList.contains('off')
+      ? viewH - 20
+      : answers.getBoundingClientRect().top - 8;
     const half = banner.offsetHeight / 2;
-    const top = hud.hidden ? 0 : hud.getBoundingClientRect().bottom + 8;
-    const centre = toScreen(anchor).y + (place === 'kid' ? 0 : 36);
-    const lowest = viewH - STATUS_HEIGHT - 4 - half;
-    banner.style.top = `${Math.min(Math.max(centre, top + half), Math.max(lowest, top + half))}px`;
+    const wish = place === 'kid' ? toScreen(point.set(0, 0.6, KID_Z)).y : (top + bottom) / 2;
+    banner.style.top = `${Math.min(Math.max(wish, top + half), Math.max(bottom - half, top + half))}px`;
+    return ++bannerId;
   };
 
-  // ---------- Round flow ----------
-  const startRound = () => {
-    field.repairFence();
-    const facts = session.chooseFacts();
-    round = createRound(facts);
-    phase = 'preview';
-    options = [];
-    brains = BRAINS;
-    renderBrains();
-    setPlayVisible(false);
-    effects.clear();
-    thrower.reset();
-    showPreview({
-      topic: session.topic,
-      facts,
-      onDone: () => {
-        setPlayVisible(true);
-        startTurn();
-      },
-    });
-  };
-
-  const startTurn = () => {
+  // ---------- Run flow ----------
+  const startRun = (withPreview: boolean) => {
     pending = [];
-    field.repairFence();
-    fact = round.current();
-    if (!fact) {
-      finishRound();
-      return;
-    }
-    const current = fact;
-    const thisTurn = ++turn;
-    options = answerOptions(session.topic, current, LANES);
-    chosen = -1;
+    epoch++;
+    feed = createFactFeed(() => session.chooseFacts());
+    spawner = createWaveSpawner();
+    score = 0;
+    streak = 0;
+    brains = BRAINS;
+    blasted = 0;
+    bossActive = false;
+    bossHp = 0;
+    question = null;
     flight = null;
-    survivorsGone = false;
+    releasePending = false;
+    kidResetAt = 0;
+    repairAt = 0;
+    pace = 0;
     flyingBomb.object.visible = false;
     bombShadow.visible = false;
+    horde.clear();
+    horde.setLingering(false);
+    field.repairFence();
     effects.clear();
     thrower.reset();
-    arriveTime = 0;
-    arriveDelay = shuffle([0, 0.12, 0.25, 0.37]);
-    speechDone = false;
-    zombies.forEach((zombie, i) => {
-      zombie.reset();
-      zombie.setMode('walk');
-      zombie.object.visible = options[i] !== undefined;
-      zs[i] = SPAWN_Z;
+    renderBrains();
+    renderScore();
+    renderBossStatus();
+    setHud(false, false);
+    count.hidden = true;
+    if (!withPreview) {
+      startCountdown();
+      return;
+    }
+    phase = 'preview';
+    showPreview({ topic: session.topic, facts: feed.peek(10), onDone: startCountdown });
+  };
+
+  /** 3, 2, 1, Go! and the zombies start to come. */
+  const startCountdown = () => {
+    phase = 'countdown';
+    setHud(true, false);
+    const thisEpoch = epoch;
+    const steps = ['3', '2', '1', 'Go!'];
+    steps.forEach((text, i) => {
+      after(i * COUNT_STEP, () => {
+        if (epoch !== thisEpoch) return;
+        count.textContent = text;
+        count.hidden = false;
+        replay(count);
+        if (i < 3) sfx.tick();
+        else sfx.goal();
+      });
     });
-    signs.forEach((button, i) => {
-      const text = options[i];
+    after(steps.length * COUNT_STEP, () => {
+      if (epoch !== thisEpoch) return;
+      count.hidden = true;
+      phase = 'playing';
+      openQuestion();
+    });
+  };
+
+  /** Whether a spoken question or explanation is being read out right now. */
+  const isReading = () =>
+    question !== null &&
+    (question.state === 'reveal' ? !revealSpoken : question.speechEndAt === null);
+
+  /** Shows the next question with its four answers and reads it out. The zombies keep walking. */
+  const openQuestion = (locked = false) => {
+    const fact = feed.take();
+    const q: Question = {
+      fact,
+      options: answerOptions(session.topic, fact, buttons.length),
+      seconds: session.timerSecondsFor(fact),
+      state: locked ? 'throwing' : 'open',
+      speechEndAt: null,
+      chosen: -1,
+    };
+    question = q;
+    paceSeconds = q.seconds;
+    buttons.forEach((button, i) => {
+      const text = q.options[i];
       button.hidden = text === undefined;
       button.textContent = text ?? '';
       button.setAttribute('aria-label', `Answer ${text ?? ''}`);
-      button.removeAttribute('aria-disabled');
-      button.className = 'zb-sign';
+      button.className = 'zb-answer';
+      if (locked) button.setAttribute('aria-disabled', 'true');
+      else button.removeAttribute('aria-disabled');
     });
-    problemText.textContent = current.prompt;
-    banner.hidden = true;
-    phase = 'aiming';
-    renderDots();
-    clockRunning = false;
-    setClock(1);
-    positionSigns();
-    sfx.groan();
-
-    // The clock starts once the question has been read out and the zombies are in place.
-    speak(current.spokenPrompt ?? current.prompt, () => {
-      if (turn !== thisTurn || phase !== 'aiming') return;
-      speechDone = true;
+    problemText.textContent = fact.prompt;
+    setHud(true, true);
+    speak(fact.spokenPrompt ?? fact.prompt, () => {
+      if (question === q && q.speechEndAt === null) q.speechEndAt = gameTime;
     });
   };
 
-  /** Throw at the sign's zombie: all the zombies freeze, the kid winds up and lets fly. */
+  /** The player picks an answer: the kid throws a bomb (a real one for the right answer). */
   const select = (index: number) => {
-    if (phase !== 'aiming' || !fact || options[index] === undefined) return;
+    const q = question;
+    if (phase !== 'playing' || !q || q.state !== 'open' || q.options[index] === undefined) return;
     try {
       unlockAudio();
       stopSpeaking();
     } catch {
       // Audio trouble must never stop the throw.
     }
-    phase = 'throw';
-    clockRunning = false;
-    chosen = index;
+    q.state = 'throwing';
+    q.chosen = index;
     lockAnswers();
-    signs[index].classList.add('chosen');
-    renderDots();
-    zombies.forEach((zombie) => zombie.setMode('freeze'));
+    buttons[index].classList.add('chosen');
+    const right = q.options[index] === q.fact.answer;
+    let points = 0;
+    if (right) {
+      feed.recordHit(q.fact);
+      session.recordAnswer(q.fact, true);
+      streak = nextStreak(streak, true);
+      const answerSeconds = q.speechEndAt === null ? 0 : Math.max(0, gameTime - q.speechEndAt);
+      points = hitPoints(answerSeconds, q.seconds, streak);
+      score += points;
+      renderScore();
+      replay(scoreValue);
+      if (multiplierFor(streak) > multiplierFor(streak - 1)) {
+        pop(`×${multiplierFor(streak)} streak!`, { x: viewW / 2, y: viewH * 0.3 }, 'plain');
+      }
+      buttons.forEach((button, i) => button.classList.add(i === index ? 'right' : 'gone'));
+    } else {
+      feed.recordMiss(q.fact);
+      session.recordAnswer(q.fact, false);
+      streak = nextStreak(streak, false);
+      renderScore();
+      buttons[index].classList.add('wrong');
+      buttons[q.options.indexOf(q.fact.answer)]?.classList.add('right');
+    }
+    releasePending = true;
+    kidResetAt = 0;
+    const thisEpoch = epoch;
     thrower.throwBomb(() => {
-      const from = thrower.handPosition(new Vector3());
-      const to = zombies[index].feetPosition(new Vector3());
-      flight = { from, to, t: 0, arc: arcHeightFor(from.distanceTo(to)) };
-      flyingBomb.object.visible = true;
-      bombShadow.visible = true;
-      sfx.whoosh();
+      releasePending = false;
+      if (epoch === thisEpoch && phase === 'playing') release(q, right, points);
     });
   };
 
-  /** Brain lost: update the bar and let the brain fly off. */
-  const hurt = () => {
-    brains = loseBrain(brains);
-    renderBrains(true);
+  /** The bomb leaves the hand, aimed at the zombie nearest the barricade. */
+  const release = (q: Question, right: boolean, points: number) => {
+    const slot = horde.closest();
+    const from = thrower.handPosition(new Vector3());
+    const to = new Vector3(0, 0.12, -8);
+    if (slot) slot.zombie.feetPosition(to);
+    flight = { kind: right ? 'bomb' : 'dud', question: q, slot, from, to, t: 0, arc: 0, points };
+    flight.arc = arcHeightFor(from.distanceTo(to));
+    flyingBomb.object.visible = true;
+    bombShadow.visible = true;
+    sfx.whoosh();
+    if (!right) return;
+    if (slot?.boss && bossHp === 1) {
+      // This hit knocks the boss out: no more questions until the next wave.
+      question = null;
+      setHud(true, false);
+    } else {
+      openQuestion(true);
+    }
   };
 
-  /** Shows the right answer and reads the fact out before moving on (misses and time-outs). */
-  const resolveMiss = (title: string, place: 'barricade' | 'kid' = 'barricade') => {
-    if (!fact) return;
-    const current = fact;
-    phase = 'result';
-    resultAt = gameTime;
-    round.record(false);
-    session.recordAnswer(current, false);
-    renderDots();
-    hurt();
-    signs[options.indexOf(current.answer)]?.classList.add('right');
-    if (chosen >= 0) signs[chosen].classList.add('wrong');
-    showBanner(title, current.statement, 'miss', place);
+  /** The bomb lands on its target. */
+  const land = (f: Flight) => {
+    flight = null;
+    flyingBomb.object.visible = false;
+    bombShadow.visible = false;
+    const at = f.to.clone();
+    const alive = f.slot !== null && f.slot.state === 'walking';
+    if (f.kind === 'dud') {
+      effects.fizzle(at);
+      sfx.fizz();
+      if (f.slot && alive) horde.laugh(f.slot);
+      thrower.react('cower');
+      startReveal(f.question);
+      return;
+    }
+    if (f.slot && alive) {
+      if (f.slot.boss) hitBoss(f.slot, at, f.points);
+      else blast(f.slot, at, f.points);
+    } else {
+      // Whatever it was aimed at is gone: the bomb just goes off in the grass.
+      effects.boom(at);
+      sfx.boom();
+    }
+    thrower.react('cheer');
+    kidResetAt = gameTime + 1;
+    // The question that opened when the bomb left the hand can be answered now.
+    if (question && question.state === 'throwing') {
+      question.state = 'open';
+      unlockAnswers();
+    }
+  };
+
+  /** Knocks a regular zombie flat. */
+  const blast = (slot: Slot, at: Vector3, points: number) => {
+    effects.boom(at);
+    sfx.boom();
+    horde.blast(slot);
+    blasted++;
+    const head = slot.zombie.signAnchor(new Vector3());
+    pop(`+${points.toLocaleString()}`, toScreen(head), 'good');
+  };
+
+  /** A hit on the boss: a flash, a stagger, and a piece of armour flies off. */
+  const hitBoss = (slot: Slot, at: Vector3, points: number) => {
+    bossHp = Math.max(0, bossHp - 1);
+    renderBossStatus();
+    slot.zombie.flash();
+    slot.zombie.knockOffArmour();
+    sfx.boom();
+    sfx.crash();
+    shake = Math.max(shake, HIT_SHAKE);
+    pop(`+${points.toLocaleString()}`, toScreen(slot.zombie.signAnchor(new Vector3())), 'good');
+    if (bossHp > 0) {
+      effects.boom(at, 0.7);
+      slot.zombie.stagger();
+      horde.knockBack(slot, BOSS_KNOCKBACK);
+      return;
+    }
+    // Knocked out: a big boom, the bonus, and then the break before the next wave.
+    effects.boom(at, 1.8);
+    horde.blast(slot);
+    blasted++;
+    bossActive = false;
+    score += BOSS_BONUS;
+    renderScore();
+    replay(scoreValue);
+    pop(`+${BOSS_BONUS}`, { x: viewW / 2, y: viewH * 0.4 }, 'good');
+    showBanner('Boss down!', '', 'hit');
+    sfx.goal();
+    speak(BOSS_DOWN_SPEECH);
+    startWaveBreak(true);
+  };
+
+  /** The wrong answer's explanation: shown and read out, then on to the next question. */
+  const startReveal = (q: Question) => {
+    q.state = 'reveal';
+    revealAt = gameTime;
+    revealSpoken = false;
+    showBanner('Dud!', q.fact.statement, 'miss');
     sfx.miss();
-    // Move on once the correct fact has been read out and shown for a bit.
-    const thisTurn = turn;
-    let spoken = false;
+    const id = epoch;
     let shown = false;
     const next = () => {
-      if (spoken && shown && turn === thisTurn && phase === 'result') advance();
+      if (revealSpoken && shown && epoch === id && question === q && q.state === 'reveal') {
+        endReveal();
+      }
     };
-    after(0.6, () =>
-      speak(current.spokenStatement ?? current.statement, () => {
-        spoken = true;
+    after(0.6, () => {
+      if (question !== q || q.state !== 'reveal') return;
+      speak(q.fact.spokenStatement ?? q.fact.statement, () => {
+        revealSpoken = true;
         next();
-      }),
-    );
-    after(2.6, () => {
+      });
+    });
+    after(REVEAL_FOR, () => {
       shown = true;
       next();
     });
   };
 
-  const hit = () => {
-    if (!fact) return;
-    const current = fact;
-    phase = 'result';
-    resultAt = gameTime;
-    round.record(true);
-    session.recordAnswer(current, true);
-    renderDots();
-    signs.forEach((button, i) => button.classList.add(i === chosen ? 'right' : 'gone'));
-    zombies.forEach((zombie, i) => zombie.setMode(i === chosen ? 'blast' : 'run'));
-    survivorsGone = true;
-    thrower.react('cheer');
-    showBanner('BOOM!', '', 'hit');
-    sfx.boom();
-    after(0.3, sfx.goal);
-    // The knocked-out zombie vanishes in a puff, then the next wave comes.
-    const thisTurn = turn;
-    const victim = zombies[chosen];
-    after(1.9, () => {
-      if (turn !== thisTurn) return;
-      effects.poof(victim.object.position);
-      victim.object.visible = false;
-      signs[chosen].classList.add('gone');
+  const endReveal = () => {
+    stopSpeaking();
+    banner.hidden = true;
+    horde.unlaugh();
+    thrower.reset();
+    if (phase === 'playing') openQuestion();
+  };
+
+  // ---------- Zombies reaching the barricade ----------
+  horde.onReach((slot) => {
+    if (phase !== 'playing' && phase !== 'waveBreak') return;
+    field.smashFence(slot.zombie.object.position.x);
+    repairAt = gameTime + REPAIR_AFTER;
+    sfx.crash();
+    shake = Math.max(shake, SMASH_SHAKE);
+    brains = loseBrain(brains);
+    streak = nextStreak(streak, false);
+    renderBrains(true);
+    renderScore();
+    if (!releasePending) {
+      thrower.react('cower');
+      kidResetAt = gameTime + 0.9;
+    }
+    if (outOfBrains(brains)) {
+      endRun();
+      return;
+    }
+    if (slot.boss) {
+      // The boss got through: no bonus, but the wave is over.
+      bossActive = false;
+      startWaveBreak(false);
+    }
+  });
+
+  // ---------- Bosses and waves ----------
+  const startBoss = () => {
+    bossActive = true;
+    bossHp = BOSS_HITS;
+    spawner.bossSent();
+    horde.spawnBoss();
+    renderBossStatus();
+    sfx.alarm();
+    const id = showBanner('BOSS ZOMBIE!', '', 'warn');
+    after(BOSS_BANNER_FOR, () => {
+      if (id === bannerId) banner.hidden = true;
     });
-    after(2.5, () => turn === thisTurn && phase === 'result' && startTurn());
+    // Never cut off a question that is being read.
+    if (!isReading()) speak(BOSS_SPEECH);
   };
 
-  const dud = () => {
-    thrower.react('cower');
-    zombies[chosen].setMode('laugh');
-    sfx.fizz();
-    resolveMiss('Dud!');
-  };
-
-  const timeUp = () => {
-    phase = 'result';
-    clockRunning = false;
-    chosen = -1;
-    lockAnswers();
-    renderDots();
-    zombies.forEach((zombie) => zombie.setMode('lean'));
-    thrower.react('cower');
-    sfx.groan();
-    resolveMiss("Time's up!", 'kid');
-  };
-
-  /** Lands the bomb: BOOM on the right zombie, a fizzle on a wrong one. */
-  const land = (at: Vector3) => {
+  /** The wave is over: the question goes away, then "Wave N" and the next wave. */
+  const startWaveBreak = (bossDown: boolean) => {
+    phase = 'waveBreak';
+    const thisEpoch = ++epoch;
+    question = null;
     flight = null;
     flyingBomb.object.visible = false;
     bombShadow.visible = false;
-    if (fact && options[chosen] === fact.answer) {
-      effects.boom(at);
-      hit();
-    } else {
-      effects.fizzle(at);
-      dud();
-    }
-  };
-
-  /** After a result: on to the next wave, or the end if the brains have run out. */
-  const advance = () => {
-    stopSpeaking();
-    pending = [];
-    if (survivorsGone) {
-      startTurn();
-      return;
-    }
-    // A miss: the zombies charge and smash through the barricade.
-    phase = 'breaking';
-    breakQueued = false;
-    banner.hidden = true;
-    signs.forEach((button) => button.classList.add('gone'));
-    thrower.react('cower');
-    zombies.forEach((_, i) => {
-      charge[i].delay = Math.random() * CHARGE_STAGGER;
-      charge[i].smashed = false;
-      charge[i].through = false;
+    horde.unlaugh();
+    renderBossStatus();
+    setHud(true, false);
+    if (!bossDown) banner.hidden = true;
+    after(WAVE_BANNER_AT, () => {
+      if (epoch !== thisEpoch || phase !== 'waveBreak') return;
+      horde.clearBlasted();
+      showBanner(`Wave ${spawner.wave + 1}`, '', 'hit');
+      speak(NEXT_WAVE_SPEECH);
+    });
+    after(WAVE_BREAK, () => {
+      if (epoch !== thisEpoch || phase !== 'waveBreak') return;
+      banner.hidden = true;
+      spawner.nextWave();
+      renderScore();
+      phase = 'playing';
+      openQuestion();
     });
   };
 
-  /** The zombies are through the barricade: on to the next wave, or the end if brains ran out. */
-  const afterBreak = () => {
-    if (outOfBrains(brains)) endRound();
-    else startTurn();
-  };
-
-  /** The zombies swarm the barricade, the kid is out of brains, and the round is over. */
-  const endRound = () => {
+  // ---------- The end ----------
+  /** The last brain is gone: the zombies finish the walk and swarm the barricade. */
+  const endRun = () => {
     phase = 'ending';
-    signs.forEach((button) => button.classList.add('gone'));
-    showBanner('The zombies got your brains!', '', 'out', 'kid');
-    // Zombies already through the barricade stay where they are.
-    zombies.forEach((zombie, i) => {
-      if (zombie.object.visible && zs[i] < END_Z) zombie.setMode('walk');
-    });
+    const thisEpoch = ++epoch;
+    pending = [];
+    question = null;
+    flight = null;
+    flyingBomb.object.visible = false;
+    bombShadow.visible = false;
+    bossActive = false;
+    renderBossStatus();
+    horde.unlaugh();
+    horde.setLingering(true);
+    stopSpeaking();
+    setHud(true, false);
     thrower.react('cower');
-    const thisTurn = turn;
+    showBanner(GAME_OVER_SPEECH, '', 'out', 'kid');
     let spoken = false;
     let shown = false;
     const next = () => {
-      if (spoken && shown && turn === thisTurn && phase === 'ending') finishRound();
+      if (spoken && shown && epoch === thisEpoch && phase === 'ending') finishRun();
     };
     speak(GAME_OVER_SPEECH, () => {
       spoken = true;
       next();
     });
-    after(2.2, () => {
+    after(END_FOR, () => {
       shown = true;
       next();
     });
   };
 
-  const finishRound = () => {
+  const finishRun = () => {
     phase = 'done';
-    setPlayVisible(false);
+    setHud(false, false);
+    count.hidden = true;
     effects.clear();
-    thrower.reset();
-    const stars = starsFor(round.correct, round.length);
-    const newBest = session.recordStars(stars);
-    if (stars === 3) sfx.goal();
-    speak(scoreSpeech(round.correct, round.length));
+    const stars = starsFor(feed.correct, feed.answered);
+    session.recordStars(stars);
+    const newHighScore = session.recordScore(score);
+    renderScore();
+    if (newHighScore) sfx.goal();
+    speak(newHighScore ? NEW_HIGH_SCORE_SPEECH : GREAT_BLASTING_SPEECH);
     showResults({
       topicId: session.topic.id,
-      correct: round.correct,
-      total: round.length,
+      correct: feed.correct,
+      total: feed.answered,
       stars,
-      newBest,
-      missed: round.missed(),
+      newBest: false,
+      missed: feed.missed(),
       playerName: session.player?.name,
-      onPlayAgain: startRound,
+      score,
+      highScore: session.highScore(),
+      newHighScore,
+      outcome: outcomeText(spawner.wave, blasted),
+      playAgainLabel: 'Play again 💣',
+      onPlayAgain: () => startRun(false),
     });
   };
 
   // ---------- Input ----------
-  /** A tap while a result is showing skips ahead, so it never feels ignored. */
-  const onSignTap = (index: number) => {
-    if (phase === 'aiming') select(index);
+  /** A tap while the wrong answer is being explained skips ahead, so it never feels ignored. */
+  const skip = () => {
+    if (phase === 'playing' && question?.state === 'reveal' && gameTime - revealAt >= SKIP_AFTER) {
+      endReveal();
+    }
+  };
+  const onAnswer = (index: number) => {
+    if (phase === 'playing' && question?.state === 'open') select(index);
     else skip();
   };
-  const skip = () => {
-    if (phase === 'result' && gameTime - resultAt >= SKIP_AFTER) advance();
-  };
-  signs.forEach((button, i) => {
-    onPress(button, () => onSignTap(i));
+  const unpress = buttons.map((button, i) => {
     // A touch press doesn't count as a user gesture for iOS audio; the release does.
     button.addEventListener('pointerup', unlockAudio);
+    return onPress(button, () => onAnswer(i));
   });
   hear.addEventListener('click', () => {
     unlockAudio();
-    if (fact) speak(fact.spokenPrompt ?? fact.prompt);
+    if (question) speak(question.fact.spokenPrompt ?? question.fact.prompt);
   });
-
-  // Tapping a zombie itself picks its answer too.
-  const raycaster = new Raycaster();
-  const pointer = new Vector2();
-  const zombieAt = (clientX: number, clientY: number): number => {
-    const rect = container.getBoundingClientRect();
-    pointer.set(
-      ((clientX - rect.left) / rect.width) * 2 - 1,
-      -(((clientY - rect.top) / rect.height) * 2 - 1),
-    );
-    raycaster.setFromCamera(pointer, camera);
-    const hits = raycaster.intersectObjects(
-      zombies.filter((z) => z.object.visible).map((z) => z.hitbox),
-      false,
-    );
-    return hits.length ? zombies.findIndex((z) => z.hitbox === hits[0].object) : -1;
-  };
   const stopPointer = createPointerInput(ctx.renderer.domElement, {
-    // Act on the press, not the release: a tap that slides a little is still a tap.
-    onDragStart: ({ x, y }) => {
+    onDragStart: () => {
       unlockAudio();
-      if (phase === 'aiming') {
-        const index = zombieAt(x, y);
-        if (index >= 0) select(index);
-      } else {
-        skip();
-      }
+      skip();
     },
   });
 
-  // Keys 1-4 pick the zombies from left to right.
+  // Keys 1-4 pick the answers from left to right.
   const onKey = (e: KeyboardEvent) => {
     const index = Number(e.key) - 1;
-    if (!pause.isPaused && index >= 0 && index < LANES) select(index);
+    if (!pause.isPaused && index >= 0 && index < LANES) onAnswer(index);
   };
   window.addEventListener('keydown', onKey);
 
+  // The boss's heavy steps shake the camera and thump.
+  horde.boss.zombie.onFootfall = () => {
+    shake = Math.max(shake, STEP_SHAKE);
+    if (horde.boss.state === 'walking') sfx.kick();
+  };
+
   // ---------- Loop ----------
-  /**
-   * Runs one zombie at the kid after a miss: it smashes the barricade as it reaches it, carries on
-   * through, then waves its arms. Once the last one is through, a short pause leads to what's next.
-   */
-  const chargeThrough = (zombie: Zombie, i: number, delta: number) => {
-    const c = charge[i];
-    if (c.through) return;
-    if (c.delay > 0) {
-      c.delay -= delta;
-      return;
-    }
-    zombie.setMode('charge');
-    zs[i] = Math.min(zs[i] + CHARGE_SPEED * delta, BREAK_Z);
-    if (!c.smashed && zs[i] >= END_Z) {
-      c.smashed = true;
-      field.smashFence(laneX(i, BARRICADE_Z, lane));
-      sfx.crash();
-    }
-    if (zs[i] < BREAK_Z) return;
-    c.through = true;
-    zombie.setMode('lean');
-    const allThrough = zombies.every((z, j) => !z.object.visible || charge[j].through);
-    if (allThrough && !breakQueued) {
-      breakQueued = true;
-      const thisTurn = turn;
-      after(BREAK_GAP, () => turn === thisTurn && phase === 'breaking' && afterBreak());
-    }
-  };
-
-  /** Moves each zombie along its path for the current phase and picks its animation. */
-  const moveZombies = (delta: number) => {
-    const arriving = phase === 'aiming' && arriveTime < ARRIVE_TIME;
-    zombies.forEach((zombie, i) => {
-      if (phase === 'aiming') {
-        if (clockRunning) {
-          zs[i] = approachZ(zombieProgress(clockLeft, clockTotal), START_Z, END_Z);
-          zombie.setMode('walk');
-        } else if (arriving) {
-          const span = ARRIVE_TIME - Math.max(...arriveDelay);
-          const k = MathUtils.clamp((arriveTime - arriveDelay[i]) / span, 0, 1);
-          zs[i] = SPAWN_Z + (START_Z - SPAWN_Z) * easeOut(k);
-          zombie.setMode(k < 1 ? 'walk' : 'sway');
-        } else {
-          zs[i] = START_Z;
-          zombie.setMode('sway');
-        }
-      } else if (phase === 'breaking') {
-        if (zombie.object.visible) chargeThrough(zombie, i, delta);
-      } else if (zombie.mode === 'run') {
-        zs[i] = Math.max(zs[i] - RUN_SPEED * delta, SPAWN_Z - 8);
-        if (zs[i] <= GONE_Z) zombie.object.visible = false;
-      } else if (phase === 'ending' && zombie.object.visible && zs[i] < END_Z) {
-        zs[i] = Math.min(zs[i] + 4 * delta, END_Z);
-        zombie.setMode(zs[i] >= END_Z ? 'lean' : 'walk');
-      }
-      zombie.object.position.set(laneX(i, zs[i], lane), 0, zs[i]);
-      zombie.update(delta);
-    });
-  };
-
   ctx.onUpdate((delta, elapsed) => {
     layout();
 
@@ -715,61 +838,73 @@ function run(session: GameSession): void {
       pending = pending.filter((p) => p.at > gameTime);
       due.forEach((p) => p.fn());
     }
-
-    if (phase === 'aiming') {
-      arriveTime += delta;
-      if (!clockRunning && speechDone && arriveTime >= ARRIVE_TIME && fact) {
-        clockTotal = session.timerSecondsFor(fact);
-        clockLeft = clockTotal;
-        lastTick = Math.ceil(clockLeft);
-        clockRunning = true;
-      }
-      if (clockRunning) {
-        clockLeft -= delta;
-        setClock(clockLeft / clockTotal);
-        const seconds = Math.ceil(clockLeft);
-        if (seconds < lastTick && seconds > 0 && seconds <= 3) sfx.tick();
-        lastTick = seconds;
-        if (clockLeft <= 0) {
-          clockLeft = 0;
-          zs.fill(END_Z);
-          timeUp();
-        }
-      }
+    if (kidResetAt && gameTime >= kidResetAt && !releasePending) {
+      kidResetAt = 0;
+      if (question?.state !== 'reveal') thrower.reset();
+    }
+    if (repairAt && gameTime >= repairAt) {
+      repairAt = 0;
+      field.repairFence();
     }
 
-    moveZombies(delta);
+    // The zombies' pace follows the current question, and drops while a wrong answer is explained.
+    const goal = walkSpeed(paceSeconds, false, question?.state === 'reveal');
+    pace = easeToward(pace, goal, PACE_RATE, delta);
+
+    if (phase === 'playing') {
+      const spawns = spawner.update(delta, horde.walkingCount);
+      for (let i = 0; i < spawns; i++) horde.spawn();
+      // The boss waits for a wrong answer's explanation to finish rather than hide it.
+      if (spawner.bossDue && !bossActive && question?.state !== 'reveal') startBoss();
+    }
+
+    horde.update(delta, pace);
     thrower.update(delta, elapsed);
     effects.update(delta);
     field.update(elapsed, delta);
 
     if (flight) {
-      flight.t += delta;
-      const p = bombPosition(flight.from, flight.to, flight.t, BOMB_TIME, flight.arc);
+      const f = flight;
+      f.t += delta;
+      // The bomb's end point follows its target, which keeps walking.
+      if (f.slot && f.slot.state === 'walking') f.slot.zombie.feetPosition(f.to);
+      const p = bombPosition(f.from, f.to, f.t, BOMB_TIME, f.arc);
       flyingBomb.object.position.set(p.x, p.y, p.z);
-      flyingBomb.object.rotation.x = -flight.t * 14;
+      flyingBomb.object.rotation.x = -f.t * 14;
       flyingBomb.update(elapsed);
       bombShadow.position.set(p.x, 0.02, p.z);
       bombShadow.scale.setScalar(Math.max(0.4, 1 - p.y * 0.12));
-      if (flight.t >= BOMB_TIME) land(flight.to.clone());
+      if (f.t >= BOMB_TIME) land(f);
     }
 
-    positionSigns();
+    // Camera shake from the boss's steps, hits and smashed barricades.
+    shake = easeToward(shake, 0, 20, delta);
+    camera.position.set(
+      CAMERA.x + Math.sin(elapsed * 61) * shake,
+      CAMERA.y + Math.sin(elapsed * 73 + 1) * shake,
+      CAMERA.z,
+    );
+    camera.lookAt(TARGET);
+    camera.updateMatrixWorld();
   });
 
   layout();
-  setPlayVisible(false);
+  setHud(false, false);
   renderBrains();
+  renderScore();
   ctx.start();
-  startRound();
+  startRun(true);
 
   window.addEventListener('pagehide', () => {
     stopSpeaking();
     window.removeEventListener('keydown', onKey);
     stopPointer();
+    unpress.forEach((fn) => fn());
     pause.dispose();
     mute.dispose();
     effects.clear();
+    [hud, bossStatus, answers, banner, count].forEach((node) => node.remove());
+    document.querySelectorAll('.zb-brain-fly, .zb-pop').forEach((node) => node.remove());
     ctx.dispose();
   });
 }

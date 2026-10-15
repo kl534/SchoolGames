@@ -7,12 +7,11 @@ export const LANES = 4;
 export const BARRICADE_Z = 0;
 /** Zombies that reach the barricade stop here, leaning over it. */
 export const END_Z = -0.6;
-/** Zombies that smash through the barricade end up this far past it, close to the kid. */
-export const BREAK_Z = 0.7;
-/** Where they sway in place while the question is read. */
-export const START_Z = -4.5;
-/** Where they come out of the mist. */
+/** Where the zombies come out of the mist. */
 export const SPAWN_Z = -19;
+
+/** How high the boss stands with its helmet crest, so the camera can keep its head clear of the HUD. */
+export const BOSS_TOP = 4.3;
 
 export const CAMERA = new Vector3(0, 3.1, 5.6);
 export const TARGET = new Vector3(0, 0.7, -3);
@@ -56,68 +55,15 @@ export function fitView(aspect: number): ViewFit {
   return { fov: (2 * Math.atan(tanHalf) * 180) / Math.PI, lane: Math.min(lane, LANE_MAX) };
 }
 
+/** How much wider things are spread at depth `z` than at the barricade, so they look evenly spaced. */
+export function spreadAt(z: number): number {
+  return Math.max(depthAt(z) / depthAt(BARRICADE_Z), 1);
+}
+
 /**
  * Sideways position of a lane at depth `z`. The lanes fan out with distance so they stay the same
- * distance apart on screen: that leaves room for four answer signs even on a phone.
+ * distance apart on screen, however far away the zombies are.
  */
 export function laneX(index: number, z: number, lane: number): number {
-  const spread = Math.max(depthAt(z) / depthAt(BARRICADE_Z), 1);
-  return (index - (LANES - 1) / 2) * lane * spread;
-}
-
-export interface SignInput {
-  /** Where the sign would like to be: the middle of its box, in px. */
-  x: number;
-  y: number;
-  /** Box width in px. */
-  w: number;
-}
-
-export interface SignArea {
-  left: number;
-  right: number;
-  top: number;
-  bottom: number;
-}
-
-/**
- * Keeps answer signs on screen and apart. Each sign sits at its wish unless that overlaps one
- * placed before it (nearest zombie first), in which case it moves to the closest free spot above
- * or below. Returns box centres in the same order as `items`.
- */
-export function layoutSigns(
-  items: readonly SignInput[],
-  height: number,
-  gap: number,
-  area: SignArea,
-): { x: number; y: number }[] {
-  const placed: { x: number; y: number; w: number }[] = [];
-  const out = items.map((item) => ({ x: item.x, y: item.y }));
-  const order = items.map((_, i) => i).sort((a, b) => items[b].y - items[a].y);
-  const minY = area.top + height / 2;
-  const maxY = Math.max(area.bottom - height / 2, minY);
-  for (const i of order) {
-    const { w } = items[i];
-    const half = w / 2;
-    const x = Math.min(
-      Math.max(items[i].x, area.left + half),
-      Math.max(area.right - half, area.left + half),
-    );
-    const wish = Math.min(Math.max(items[i].y, minY), maxY);
-    const clear = (y: number) =>
-      y >= minY - 1e-9 &&
-      y <= maxY + 1e-9 &&
-      !placed.some(
-        (p) => Math.abs(p.x - x) < (p.w + w) / 2 + gap && Math.abs(p.y - y) < height + gap - 1e-9,
-      );
-    // The only places a sign can end up are its wish or just clear of a sign already down.
-    const candidates = [
-      wish,
-      ...placed.flatMap((p) => [p.y - height - gap, p.y + height + gap]),
-    ].sort((a, b) => Math.abs(a - wish) - Math.abs(b - wish) || a - b);
-    const y = candidates.find(clear) ?? wish;
-    placed.push({ x, y, w });
-    out[i] = { x, y };
-  }
-  return out;
+  return (index - (LANES - 1) / 2) * lane * spreadAt(z);
 }

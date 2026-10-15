@@ -1,22 +1,30 @@
 import {
+  AdditiveBlending,
   BoxGeometry,
   CapsuleGeometry,
   CircleGeometry,
   ConeGeometry,
   CylinderGeometry,
+  DataTexture,
+  DoubleSide,
   ExtrudeGeometry,
   Group,
   MathUtils,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  Quaternion,
   Shape,
   SphereGeometry,
+  Sprite,
+  SpriteMaterial,
+  TorusGeometry,
   Vector3,
   type BufferGeometry,
   type Material,
   type Object3D,
 } from 'three';
+import { fallTime, plankFlight, type Point3 } from './rules';
 
 const HIP_Y = 0.62;
 const THIGH = 0.32;
@@ -32,6 +40,18 @@ const LIE_Y = 0.3;
 const LIE_SLIDE = 0.8;
 const BLAST_FLIGHT = 0.95;
 const BLAST_BOUNCE = 0.3;
+
+/** How much bigger, wider and longer-armed the brute is than the rest. */
+const BRUTE_WIDTH = 1.4;
+const BRUTE_ARMS = 1.3;
+/** Seconds the whole body flashes white when the brute takes a hit, and it lurches back for. */
+const FLASH_TIME = 0.12;
+const STAGGER_TIME = 0.4;
+/** Seconds a knocked-off armour piece lies on the grass, then takes to fade away. */
+const DEBRIS_LIE = 1.5;
+const DEBRIS_FADE = 0.4;
+/** Height of the grass where armour comes to rest, in world units. */
+const DEBRIS_FLOOR = 0.14;
 
 export type ZombieMode =
   /** Standing and swaying, groaning. */
@@ -70,6 +90,32 @@ export const ZOMBIE_LOOKS: readonly ZombieLook[] = [
   { shirt: 0xff6b3d, pants: 0x2f7a5a, skin: 0x8fe06a, hair: 'side', scale: 1.16, seed: 4.6 },
 ];
 
+/** The brute's armour, in the order it is knocked off. */
+export const ARMOUR_ORDER = ['pads', 'chest', 'helmet'] as const;
+export type ArmourName = (typeof ARMOUR_ORDER)[number];
+
+export interface ArmourPiece {
+  name: ArmourName;
+  /** The meshes that make up the piece: two shoulder pads, one plate, one helmet. */
+  parts: readonly Object3D[];
+  attached: boolean;
+}
+
+export interface ZombieOptions {
+  /** Build the big armoured boss instead of a regular zombie. */
+  brute?: boolean;
+}
+
+/** The boss: dark grey-green skin under a torn black shirt. */
+export const BRUTE_LOOK: ZombieLook = {
+  shirt: 0x2c2a33,
+  pants: 0x3a3d33,
+  skin: 0x5f7d68,
+  hair: 'bald',
+  scale: 2.2,
+  seed: 0.5,
+};
+
 export interface Zombie {
   /** Place this in the scene; it faces the camera (+z). */
   object: Group;
@@ -86,6 +132,21 @@ export interface Zombie {
   /** Back to standing upright, facing the camera, ready for the next wave. */
   reset(look?: ZombieLook): void;
   update(delta: number): void;
+  readonly brute: boolean;
+  /** The armour pieces (none on a regular zombie), in the order they come off. */
+  readonly armour: readonly ArmourPiece[];
+  readonly armourLeft: number;
+  /**
+   * Knocks the next armour piece off: it flies up and away, lands on the grass and fades out.
+   * Returns where it came off (world position), or null when there is no armour left.
+   */
+  knockOffArmour(out?: Vector3): Vector3 | null;
+  /** The whole body flashes white for a moment. */
+  flash(): void;
+  /** A short lurch backwards, as if hit. */
+  stagger(): void;
+  /** Called on each heavy footfall of a walking brute. */
+  onFootfall: (() => void) | null;
 }
 
 const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
@@ -127,8 +188,49 @@ function starGeometry(outer: number, inner: number): ExtrudeGeometry {
   return new ExtrudeGeometry(shape, { depth: 0.04, bevelEnabled: false });
 }
 
-/** A goofy green zombie with arms stretched out in front, facing +z (towards the camera). */
-export function createZombie(initialLook: ZombieLook = ZOMBIE_LOOKS[0]): Zombie {
+/** A soft round glow, made without a canvas so it also works under test. */
+function haloTexture(): DataTexture {
+  const size = 32;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const r = Math.hypot(x - (size - 1) / 2, y - (size - 1) / 2) / (size / 2);
+      const a = Math.max(0, 1 - r) ** 2;
+      data.set([255, 255, 255, Math.round(a * 255)], (y * size + x) * 4);
+    }
+  }
+  const texture = new DataTexture(data, size, size);
+  texture.needsUpdate = true;
+  return texture;
+}
+
+let halo: DataTexture | undefined;
+
+interface Debris {
+  part: Object3D;
+  from: Point3;
+  velocity: Point3;
+  spin: Vector3;
+  age: number;
+  floor: number;
+  /** Materials to fade; the piece owns them so fading one never touches another. */
+  materials: Material[];
+}
+
+/**
+ * A goofy green zombie with arms stretched out in front, facing +z (towards the camera). With
+ * `brute` it is the boss: nearly twice the height, hunched and broad, with red eyes and three
+ * pieces of armour that come off one by one.
+ */
+export function createZombie(
+  initialLook: ZombieLook = ZOMBIE_LOOKS[0],
+  options: ZombieOptions = {},
+): Zombie {
+  const brute = options.brute === true;
+  const W = brute ? BRUTE_WIDTH : 1;
+  const ARM = brute ? BRUTE_ARMS : 1;
+  const upperArm = UPPER_ARM * ARM;
+  const forearm = FOREARM * ARM;
   const skin = new MeshStandardMaterial({ color: initialLook.skin, roughness: 0.7 });
   const shirt = new MeshStandardMaterial({ color: initialLook.shirt, roughness: 0.75 });
   const pants = new MeshStandardMaterial({ color: initialLook.pants, roughness: 0.8 });
@@ -147,16 +249,20 @@ export function createZombie(initialLook: ZombieLook = ZOMBIE_LOOKS[0]): Zombie 
   torso.rotation.order = 'XZY';
 
   // Shirt, with a ragged hem and a tummy poking out.
-  mesh(new CapsuleGeometry(0.2, 0.34, 6, 16), shirt, torso, 0, 0.4).scale.set(1.2, 1, 0.78);
+  mesh(new CapsuleGeometry(0.2, 0.34, 6, 16), shirt, torso, 0, 0.4).scale.set(
+    1.2 * W,
+    1,
+    brute ? 0.9 : 0.78,
+  );
   for (let i = 0; i < 7; i++) {
     const a = (i / 7) * Math.PI * 2;
     const tooth = mesh(
       new ConeGeometry(0.055, 0.12, 4),
       shirt,
       torso,
-      Math.cos(a) * 0.23,
+      Math.cos(a) * 0.23 * W,
       0.07,
-      Math.sin(a) * 0.17,
+      Math.sin(a) * (brute ? 0.2 : 0.17),
     );
     tooth.rotation.x = Math.PI;
     tooth.rotation.y = a;
@@ -172,44 +278,101 @@ export function createZombie(initialLook: ZombieLook = ZOMBIE_LOOKS[0]): Zombie 
     { x: -0.11, r: 0.095, px: 0.025 },
     { x: 0.12, r: 0.07, px: -0.02 },
   ];
-  for (const eye of eyes) {
-    mesh(new SphereGeometry(eye.r, 14, 10), white, head, eye.x, 0.08, 0.2);
-    mesh(
-      new SphereGeometry(eye.r * 0.45, 10, 8),
-      dark,
-      head,
-      eye.x + eye.px,
-      0.075,
-      0.2 + eye.r * 0.8,
-    );
+  if (brute) {
+    // Glowing red eyes: unlit, with a soft additive halo, so they show through the helmet slit.
+    halo ??= haloTexture();
+    for (const x of [-0.11, 0.11]) {
+      mesh(
+        new SphereGeometry(0.058, 12, 8),
+        new MeshBasicMaterial({ color: 0xff2a1a }),
+        head,
+        x,
+        0.05,
+        0.225,
+      );
+      const glow = new Sprite(
+        new SpriteMaterial({
+          map: halo,
+          color: 0xff3a22,
+          blending: AdditiveBlending,
+          transparent: true,
+          depthWrite: false,
+          fog: false,
+        }),
+      );
+      glow.scale.setScalar(0.34);
+      glow.position.set(x, 0.05, 0.3);
+      head.add(glow);
+    }
+  } else {
+    for (const eye of eyes) {
+      mesh(new SphereGeometry(eye.r, 14, 10), white, head, eye.x, 0.08, 0.2);
+      mesh(
+        new SphereGeometry(eye.r * 0.45, 10, 8),
+        dark,
+        head,
+        eye.x + eye.px,
+        0.075,
+        0.2 + eye.r * 0.8,
+      );
+    }
   }
   const brow = mesh(new BoxGeometry(0.14, 0.03, 0.03), hairMat, head, -0.11, 0.2, 0.22);
   brow.rotation.z = -0.3;
+  if (brute) {
+    mesh(new BoxGeometry(0.14, 0.035, 0.03), hairMat, head, 0.11, 0.17, 0.22).rotation.z = 0.3;
+  }
   const mouth = mesh(new SphereGeometry(0.11, 14, 8), mouthMat, head, 0.01, -0.12, 0.22);
   mouth.scale.set(1, 0.4, 0.3);
   mesh(new BoxGeometry(0.045, 0.05, 0.02), white, head, -0.04, -0.09, 0.255);
   mesh(new BoxGeometry(0.045, 0.05, 0.02), white, head, 0.06, -0.09, 0.255);
+  if (brute) {
+    // Two tusks poking up from the lower jaw.
+    for (const x of [-0.09, 0.1]) {
+      mesh(new ConeGeometry(0.022, 0.1, 6), white, head, x, -0.08, 0.245);
+    }
+  }
   const hair = new Group();
   head.add(hair);
 
   // Arms stretched forward.
   const arms = [-1, 1].map((side) => {
-    const shoulder = joint(torso, side * 0.27, SHOULDER_Y - HIP_Y);
-    mesh(new SphereGeometry(0.1, 12, 8), shirt, shoulder);
-    limb(shoulder, UPPER_ARM, 0.075, shirt);
-    const elbow = joint(shoulder, 0, -UPPER_ARM);
-    limb(elbow, FOREARM, 0.065, skin);
-    mesh(new SphereGeometry(0.1, 12, 8), skin, elbow, 0, -FOREARM - 0.04).scale.set(1, 1, 0.7);
+    const shoulder = joint(torso, side * 0.27 * W, SHOULDER_Y - HIP_Y);
+    const thick = brute ? 1.3 : 1;
+    mesh(new SphereGeometry(0.1 * thick, 12, 8), shirt, shoulder);
+    limb(shoulder, upperArm, 0.075 * thick, shirt);
+    const elbow = joint(shoulder, 0, -upperArm);
+    limb(elbow, forearm, 0.065 * thick, skin);
+    mesh(new SphereGeometry(0.1 * thick, 12, 8), skin, elbow, 0, -forearm - 0.04).scale.set(
+      1,
+      1,
+      brute ? 0.9 : 0.7,
+    );
+    if (brute) {
+      // A few crude stitches across the forearm.
+      mesh(new BoxGeometry(0.014, 0.2, 0.014), dark, elbow, 0.03, -forearm * 0.5, 0.085);
+      for (const y of [0.3, 0.5, 0.7]) {
+        mesh(
+          new BoxGeometry(0.1, 0.014, 0.014),
+          dark,
+          elbow,
+          0.03,
+          -forearm * y,
+          0.088,
+        ).rotation.z = side * 0.4;
+      }
+    }
     return { shoulder, elbow, side };
   });
 
   // Legs, with a stiff shuffle.
   const legs = [-1, 1].map((side) => {
-    const hip = joint(body, side * 0.11, HIP_Y);
-    limb(hip, THIGH, 0.095, pants);
+    const hip = joint(body, side * (brute ? 0.16 : 0.11), HIP_Y);
+    const thick = brute ? 1.25 : 1;
+    limb(hip, THIGH, 0.095 * thick, pants);
     const knee = joint(hip, 0, -THIGH);
-    limb(knee, SHIN, 0.08, pants);
-    mesh(new BoxGeometry(0.15, 0.1, 0.3), shoeMat, knee, 0, -SHIN - 0.04, 0.07);
+    limb(knee, SHIN, 0.08 * thick, pants);
+    mesh(new BoxGeometry(0.15 * thick, 0.1, 0.3), shoeMat, knee, 0, -SHIN - 0.04, 0.07);
     return { hip, knee, side };
   });
 
@@ -229,10 +392,164 @@ export function createZombie(initialLook: ZombieLook = ZOMBIE_LOOKS[0]): Zombie 
   const starMat = new MeshBasicMaterial({ color: 0xffe44d });
   const starMeshes = [0, 1, 2].map(() => mesh(starGeo, starMat, stars));
 
-  const hitbox = new Mesh(new BoxGeometry(1.05, 2.2, 0.9), new MeshBasicMaterial());
+  const hitbox = new Mesh(
+    new BoxGeometry(brute ? 1.4 : 1.05, brute ? 2.1 : 2.2, 0.9),
+    new MeshBasicMaterial(),
+  );
   hitbox.position.y = 1.05;
   hitbox.visible = false;
   root.add(hitbox);
+
+  // ---------- The brute's armour: shoulder pads, chest plate, helmet ----------
+  interface Home {
+    part: Object3D;
+    parent: Object3D;
+    position: Vector3;
+    quaternion: Quaternion;
+    scale: Vector3;
+  }
+  const armour: ArmourPiece[] = [];
+  const homes: Home[] = [];
+  const flashable: MeshStandardMaterial[] = [
+    skin,
+    shirt,
+    pants,
+    hairMat,
+    white,
+    dark,
+    mouthMat,
+    shoeMat,
+    patch,
+  ];
+  const debris: Debris[] = [];
+  const pieceMaterials = new Map<ArmourName, Material[]>();
+
+  if (brute) {
+    // Dull steel with rust-brown edges and rivets. Each piece has its own copies so it can fade.
+    const steelColor = 0x9aa2ac;
+    const rustColor = 0x6b3f26;
+    const addPiece = (
+      name: ArmourName,
+      build: (steel: Material, rust: Material) => [Object3D, Object3D][],
+    ) => {
+      const steel = new MeshStandardMaterial({
+        color: steelColor,
+        metalness: 0.5,
+        roughness: 0.45,
+        emissive: 0x1e2227,
+        side: DoubleSide,
+        transparent: true,
+      });
+      const rust = new MeshStandardMaterial({
+        color: rustColor,
+        metalness: 0.3,
+        roughness: 0.75,
+        transparent: true,
+      });
+      flashable.push(steel, rust);
+      pieceMaterials.set(name, [steel, rust]);
+      const parts = build(steel, rust).map(([part, parent]) => {
+        parent.add(part);
+        homes.push({
+          part,
+          parent,
+          position: part.position.clone(),
+          quaternion: part.quaternion.clone(),
+          scale: part.scale.clone(),
+        });
+        return part;
+      });
+      armour.push({ name, parts, attached: true });
+    };
+
+    // 1. Spiked shoulder pads, one rounded plate per shoulder.
+    addPiece('pads', (steel, rust) =>
+      arms.map(({ shoulder, side }) => {
+        const pad = new Group();
+        pad.position.set(side * 0.07, 0.1, 0);
+        pad.rotation.z = -side * 0.3;
+        const dome = mesh(
+          new SphereGeometry(0.2, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+          steel,
+          pad,
+        );
+        dome.scale.set(1.1, 0.75, 1.05);
+        mesh(new TorusGeometry(0.205, 0.02, 6, 20), rust, pad).rotation.x = Math.PI / 2;
+        for (const [x, y, z, tilt] of [
+          [0, 0.15, 0, 0],
+          [side * 0.1, 0.1, 0.07, -side * 0.5],
+          [side * 0.1, 0.1, -0.07, -side * 0.5],
+        ]) {
+          const spike = mesh(new ConeGeometry(0.04, 0.17, 6), rust, pad, x, y, z);
+          spike.rotation.z = tilt;
+        }
+        return [pad, shoulder] as [Object3D, Object3D];
+      }),
+    );
+
+    // 2. A curved chest plate with rivets and a couple of dents.
+    addPiece('chest', (steel, rust) => {
+      const plate = new Group();
+      plate.position.set(0, 0.5, 0);
+      const front = mesh(
+        new CylinderGeometry(0.2, 0.2, 0.4, 24, 1, true, -Math.PI * 0.6, Math.PI * 1.2),
+        steel,
+        plate,
+      );
+      front.scale.set(1.78, 1, 1.02);
+      mesh(new BoxGeometry(0.035, 0.4, 0.03), rust, plate, 0, 0, 0.2);
+      for (const a of [-0.85, -0.55, -0.28, 0.28, 0.55, 0.85]) {
+        mesh(
+          new SphereGeometry(0.02, 6, 4),
+          rust,
+          plate,
+          Math.sin(a) * 0.356,
+          0.16,
+          Math.cos(a) * 0.205,
+        );
+      }
+      for (const [x, y] of [
+        [-0.17, -0.06],
+        [0.12, 0.04],
+      ]) {
+        mesh(new SphereGeometry(0.055, 8, 6), rust, plate, x, y, 0.2).scale.set(1, 0.8, 0.25);
+      }
+      return [[plate, torso]];
+    });
+
+    // 3. A domed helmet with an eye slit, nose guard, crest and one horn.
+    addPiece('helmet', (steel, rust) => {
+      const helmet = new Group();
+      helmet.position.set(0, 0.02, 0);
+      const dome = mesh(new SphereGeometry(0.335, 20, 12, 0, Math.PI * 2, 0, 1.2), steel, helmet);
+      dome.scale.set(1.04, 0.95, 1.02);
+      mesh(new TorusGeometry(0.3, 0.02, 6, 24), rust, helmet, 0, 0.1, 0).rotation.x = Math.PI / 2;
+      mesh(new BoxGeometry(0.055, 0.2, 0.04), steel, helmet, 0, 0.0, 0.318);
+      mesh(new BoxGeometry(0.04, 0.12, 0.4), rust, helmet, 0, 0.33, 0);
+      const horn = mesh(new ConeGeometry(0.05, 0.24, 8), rust, helmet, -0.27, 0.2, 0);
+      horn.rotation.z = 0.9;
+      for (const x of [-0.2, 0.2]) {
+        mesh(new SphereGeometry(0.02, 6, 4), rust, helmet, x, 0.15, 0.27);
+      }
+      return [[helmet, head]];
+    });
+  }
+
+  const armourLeft = () => armour.filter((piece) => piece.attached).length;
+  const setEmissive = (on: boolean) => {
+    for (const m of flashable) {
+      if (on) {
+        m.userData.emissive ??= m.emissive.getHex();
+        m.emissive.setHex(0xffffff);
+        m.emissiveIntensity = 0.9;
+      } else if (m.userData.emissive !== undefined) {
+        m.emissive.setHex(m.userData.emissive as number);
+        m.emissiveIntensity = 1;
+      }
+    }
+  };
+  let flashLeft = 0;
+  let staggerLeft = 0;
 
   let look = initialLook;
   let mode: ZombieMode = 'sway';
@@ -241,6 +558,8 @@ export function createZombie(initialLook: ZombieLook = ZOMBIE_LOOKS[0]): Zombie 
   /** Facing: 0 towards the camera, π away from it. */
   let yaw = 0;
   let lifted = false;
+  let lastStep = 0;
+  let onFootfall: (() => void) | null = null;
 
   const buildHair = (kind: ZombieLook['hair']) => {
     hair.clear();
@@ -275,12 +594,13 @@ export function createZombie(initialLook: ZombieLook = ZOMBIE_LOOKS[0]): Zombie 
   const neutral = () => {
     body.position.set(0, 0, 0);
     body.rotation.set(0, 0, 0);
-    torso.rotation.set(0.12, 0, 0);
-    head.rotation.set(0.1, 0, 0);
+    // The brute is hunched forward with its head thrust out and its long arms hanging low.
+    torso.rotation.set(brute ? 0.42 : 0.12, 0, 0);
+    head.rotation.set(brute ? -0.22 : 0.1, 0, 0);
     mouth.scale.set(1, 0.4, 0.3);
     for (const { shoulder, elbow, side } of arms) {
-      shoulder.rotation.set(-1.45, 0, side * 0.06);
-      elbow.rotation.set(-0.15, 0, 0);
+      shoulder.rotation.set(brute ? -0.35 : -1.45, 0, side * (brute ? 0.2 : 0.06));
+      elbow.rotation.set(brute ? -0.25 : -0.15, 0, 0);
     }
     for (const { hip, knee, side } of legs) {
       hip.rotation.set(0, 0, side * 0.05);
@@ -291,7 +611,15 @@ export function createZombie(initialLook: ZombieLook = ZOMBIE_LOOKS[0]): Zombie 
   const pose = (delta: number) => {
     modeTime += delta;
     const speed =
-      mode === 'run' || mode === 'charge' ? 12 : mode === 'walk' ? 6.5 : mode === 'lean' ? 9 : 2.2;
+      mode === 'run' || mode === 'charge'
+        ? 12
+        : mode === 'walk'
+          ? brute
+            ? 4.2
+            : 6.5
+          : mode === 'lean'
+            ? 9
+            : 2.2;
     phase += delta * speed;
     const s = Math.sin(phase);
     const c = Math.cos(phase);
@@ -374,6 +702,37 @@ export function createZombie(initialLook: ZombieLook = ZOMBIE_LOOKS[0]): Zombie 
     } else if (mode === 'blast') {
       blastPose();
     }
+
+    if (brute && (mode === 'walk' || mode === 'sway')) {
+      // Heavy stomping: slow, wide steps, arms swinging low, the whole body rolling.
+      const walking = mode === 'walk';
+      const swing = walking ? 0.3 : 0.05;
+      body.position.y = Math.abs(c) * (walking ? 0.09 : 0.015);
+      body.rotation.z = s * (walking ? 0.09 : 0.03);
+      arms.forEach(({ shoulder, side }) => {
+        shoulder.rotation.x = -0.35 + Math.sin(phase + (side > 0 ? 0 : Math.PI)) * swing;
+      });
+      if (walking) {
+        legs.forEach(({ hip, knee, side }) => {
+          const p = phase + (side > 0 ? 0 : Math.PI);
+          hip.rotation.x = Math.sin(p) * 0.45;
+          knee.rotation.x = Math.max(0, -Math.sin(p + 0.8)) * 0.8;
+        });
+        const step = Math.floor((phase - Math.PI / 2) / Math.PI);
+        if (step !== lastStep) {
+          lastStep = step;
+          onFootfall?.();
+        }
+      }
+    }
+
+    if (staggerLeft > 0 && mode !== 'blast') {
+      // Lurches back: chest up, head and arms thrown back, then recovers.
+      const k = Math.sin(Math.PI * (1 - staggerLeft / STAGGER_TIME));
+      torso.rotation.x -= 0.75 * k;
+      head.rotation.x -= 0.4 * k;
+      arms.forEach(({ shoulder }) => (shoulder.rotation.x -= 0.9 * k));
+    }
   };
 
   /** Pops up spinning, lands flat on its back, bounces once and lies there seeing stars. */
@@ -424,6 +783,30 @@ export function createZombie(initialLook: ZombieLook = ZOMBIE_LOOKS[0]): Zombie 
     }
   };
 
+  /** Armour that has come off flies up and away, lands on the grass, lies a while and fades. */
+  const updateDebris = (delta: number) => {
+    for (let i = debris.length - 1; i >= 0; i--) {
+      const d = debris[i];
+      d.age += delta;
+      const flight = fallTime(d.from.y, d.velocity.y, d.floor);
+      const p = plankFlight(d.from, d.velocity, d.age, d.floor);
+      d.part.position.set(p.x, p.y, p.z);
+      if (d.age < flight)
+        d.part.rotation.set(
+          d.part.rotation.x + d.spin.x * delta,
+          d.part.rotation.y + d.spin.y * delta,
+          d.part.rotation.z + d.spin.z * delta,
+        );
+      const lying = d.age - flight - DEBRIS_LIE;
+      const fade = MathUtils.clamp(1 - lying / DEBRIS_FADE, 0, 1);
+      d.materials.forEach((m) => (m.opacity = fade));
+      if (fade <= 0) {
+        d.part.visible = false;
+        debris.splice(i, 1);
+      }
+    }
+  };
+
   const zombie: Zombie = {
     object: root,
     hitbox,
@@ -443,6 +826,59 @@ export function createZombie(initialLook: ZombieLook = ZOMBIE_LOOKS[0]): Zombie 
         shadow.scale.setScalar(1);
       }
     },
+    get brute() {
+      return brute;
+    },
+    armour,
+    get armourLeft() {
+      return armourLeft();
+    },
+    get onFootfall() {
+      return onFootfall;
+    },
+    set onFootfall(fn) {
+      onFootfall = fn;
+    },
+    flash() {
+      flashLeft = FLASH_TIME;
+      setEmissive(true);
+    },
+    stagger() {
+      staggerLeft = STAGGER_TIME;
+    },
+    knockOffArmour(out = new Vector3()) {
+      const piece = armour.find((p) => p.attached);
+      if (!piece) return null;
+      piece.attached = false;
+      const host = root.parent ?? root;
+      const materials = pieceMaterials.get(piece.name) ?? [];
+      root.updateWorldMatrix(true, true);
+      piece.parts.forEach((part, i) => {
+        host.attach(part);
+        part.getWorldPosition(out);
+        const sign = piece.parts.length > 1 ? (i === 0 ? -1 : 1) : Math.random() < 0.5 ? -1 : 1;
+        debris.push({
+          part,
+          from: { x: part.position.x, y: part.position.y, z: part.position.z },
+          velocity: {
+            x: sign * (1.4 + Math.random() * 1.6),
+            y: 4.5 + Math.random() * 1.5,
+            z: 1.2 + Math.random() * 1.5,
+          },
+          spin: new Vector3(
+            (Math.random() - 0.5) * 14,
+            (Math.random() - 0.5) * 14,
+            (Math.random() - 0.5) * 14,
+          ),
+          age: 0,
+          floor: DEBRIS_FLOOR,
+          materials,
+        });
+      });
+      const first = piece.parts[0];
+      first.getWorldPosition(out);
+      return out;
+    },
     signAnchor(out) {
       // Sideways it stays over the lane, so swaying heads don't make neighbouring signs jump about.
       root.getWorldPosition(out);
@@ -454,7 +890,7 @@ export function createZombie(initialLook: ZombieLook = ZOMBIE_LOOKS[0]): Zombie 
     },
     feetPosition(out) {
       root.getWorldPosition(out);
-      out.z += 0.45;
+      out.z += 0.39 * root.scale.z;
       out.y = 0.12;
       return out;
     },
@@ -467,10 +903,31 @@ export function createZombie(initialLook: ZombieLook = ZOMBIE_LOOKS[0]): Zombie 
       shadow.scale.setScalar(1);
       root.visible = true;
       root.rotation.y = 0;
+      flashLeft = 0;
+      staggerLeft = 0;
+      lastStep = 0;
+      setEmissive(false);
+      // Every piece of armour goes back on, whether it is flying, lying or fading.
+      debris.length = 0;
+      homes.forEach(({ part, parent, position, quaternion, scale }) => {
+        parent.add(part);
+        part.position.copy(position);
+        part.quaternion.copy(quaternion);
+        part.scale.copy(scale);
+        part.visible = true;
+      });
+      armour.forEach((piece) => (piece.attached = true));
+      pieceMaterials.forEach((list) => list.forEach((m) => (m.opacity = 1)));
       applyLook(next);
       neutral();
     },
     update(delta) {
+      if (flashLeft > 0) {
+        flashLeft -= delta;
+        if (flashLeft <= 0) setEmissive(false);
+      }
+      if (staggerLeft > 0) staggerLeft = Math.max(0, staggerLeft - delta);
+      updateDebris(delta);
       // Turn to run away, and back round to face the player for the next wave.
       const target = mode === 'run' ? Math.PI : 0;
       yaw = MathUtils.damp(yaw, target, 14, delta);

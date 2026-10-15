@@ -1,3 +1,18 @@
+.zb-hud,
+.zb-answers,
+.zb-banner,
+.zb-count,
+.zb-pop {
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  color: #fff;
+}
+
+/* The question and, under it, brains, wave and score, centred at the top. */
 .zb-hud {
   position: fixed;
   top: max(12px, env(safe-area-inset-top));
@@ -7,15 +22,9 @@
   flex-direction: column;
   align-items: center;
   gap: 6px;
+  width: max-content;
+  max-width: calc(100vw - 200px);
   transform: translateX(-50%);
-  max-width: calc(100vw - 24px);
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    sans-serif;
-  color: #fff;
   pointer-events: none;
 }
 
@@ -23,7 +32,18 @@
 @media (max-width: 640px) {
   .zb-hud {
     top: calc(max(12px, env(safe-area-inset-top)) + 60px);
+    max-width: calc(100vw - 24px);
   }
+}
+
+.zb-hud[hidden],
+.zb-problem[hidden],
+.zb-answer[hidden],
+.zb-banner[hidden],
+.zb-banner-detail[hidden],
+.zb-mult[hidden],
+.zb-count[hidden] {
+  display: none;
 }
 
 .zb-problem {
@@ -37,7 +57,7 @@
 }
 
 .zb-problem-text {
-  font-size: clamp(30px, 8vmin, 60px);
+  font-size: clamp(28px, 7vmin, 56px);
   font-weight: 800;
   white-space: nowrap;
 }
@@ -55,56 +75,25 @@
   touch-action: manipulation;
 }
 
-.zb-clock {
-  width: 100%;
-  height: 10px;
-  border-radius: 5px;
-  background: rgba(47, 24, 84, 0.6);
-  overflow: hidden;
-}
-
-.zb-hud[hidden],
-.zb-status[hidden],
-.zb-sign[hidden],
-.zb-clock[hidden],
-.zb-banner-detail[hidden] {
-  display: none;
-}
-
-.zb-clock-fill {
-  height: 100%;
-  width: 100%;
-  background: #8ce99a;
-  transform-origin: left;
-}
-
-.zb-clock.urgent .zb-clock-fill {
-  background: #ff6b6b;
-}
-
-/* Brains left, then one dot per question. */
-.zb-status {
-  position: fixed;
-  bottom: max(10px, env(safe-area-inset-bottom));
-  left: 50%;
-  z-index: 10;
+/* Brains left, the wave and the score. */
+.zb-stats {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 6px 14px;
+  padding: 4px 14px;
   border-radius: 16px;
-  background: rgba(47, 24, 84, 0.75);
-  transform: translateX(-50%);
-  pointer-events: none;
+  background: rgba(47, 24, 84, 0.78);
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .zb-brains {
   display: flex;
-  gap: 4px;
+  gap: 3px;
 }
 
 .zb-brain {
-  font-size: 26px;
+  font-size: 24px;
   line-height: 1;
 }
 
@@ -116,7 +105,7 @@
 .zb-brain-fly {
   position: fixed;
   z-index: 25;
-  font-size: 26px;
+  font-size: 24px;
   line-height: 1;
   pointer-events: none;
   animation: zb-fly 1s ease-out forwards;
@@ -137,190 +126,235 @@
   }
 }
 
-.zb-dots {
+.zb-wave {
+  font-size: 20px;
+  color: #b9b2ff;
+}
+
+.zb-score {
   display: flex;
-  gap: 6px;
+  align-items: center;
+  gap: 8px;
 }
 
-.zb-dot {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.28);
+.zb-score-value {
+  font-size: 28px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  color: #ffe066;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
 }
 
-.zb-dot.current {
-  box-shadow: 0 0 0 3px #fff;
+.zb-score-value.on {
+  animation: zb-score 0.3s ease-out;
 }
 
-.zb-dot.hit {
-  background: #51cf66;
-}
-
-.zb-dot.miss {
-  background: #ff6b6b;
-}
-
-/* On wide screens the kid fills the bottom middle, so the status moves to the corner. */
-@media (min-width: 641px) {
-  .zb-status {
-    left: max(12px, env(safe-area-inset-left));
-    transform: none;
+@keyframes zb-score {
+  0% {
+    transform: scale(1.35);
   }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.zb-mult {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #ff9f1c;
+  color: #1a0f3d;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+/* Said aloud by screen readers, never seen. */
+.zb-sr {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 @media (max-width: 480px) {
-  .zb-status {
+  .zb-stats {
     gap: 10px;
-    padding: 6px 10px;
+    padding: 3px 10px;
   }
 
   .zb-brain {
-    font-size: 22px;
+    font-size: 20px;
   }
 
-  .zb-dots {
-    gap: 4px;
+  .zb-wave {
+    font-size: 17px;
   }
 
-  .zb-dot {
-    width: 11px;
-    height: 11px;
-  }
-
-  .zb-dot.current {
-    box-shadow: 0 0 0 2px #fff;
+  .zb-score-value {
+    font-size: 24px;
   }
 }
 
-/* A wooden sign hanging over a zombie's head; placed every frame by positionSigns. */
-.zb-sign {
+/* A phone on its side: a slimmer HUD, so more of the field shows below it. */
+@media (max-height: 460px) {
+  .zb-hud {
+    top: max(8px, env(safe-area-inset-top));
+    gap: 3px;
+  }
+
+  .zb-problem {
+    padding: 3px 6px 3px 16px;
+    border-radius: 16px;
+  }
+
+  .zb-problem-text {
+    font-size: 26px;
+  }
+
+  .zb-hear {
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+  }
+
+  .zb-stats {
+    gap: 10px;
+    padding: 0 12px;
+  }
+
+  .zb-brain {
+    font-size: 18px;
+  }
+
+  .zb-wave {
+    font-size: 16px;
+  }
+
+  .zb-score-value {
+    font-size: 20px;
+  }
+}
+
+/* The four answers along the bottom: two rows of two on a narrow phone. */
+.zb-answers {
   position: fixed;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 50%;
   z-index: 10;
-  left: 0;
-  top: 0;
-  min-width: 64px;
-  height: 64px;
-  padding: 0 12px;
-  border: 4px solid #7a4a1d;
-  border-radius: 16px;
-  background: #fff1cc;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  width: min(760px, calc(100vw - 24px));
+  transform: translateX(-50%);
+}
+
+/* Hidden between questions, but still taking up its room so the camera does not move. */
+.zb-answers.off {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+@media (max-width: 560px) {
+  .zb-answers {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.zb-answer {
+  min-width: 0;
+  height: 72px;
+  padding: 0 8px;
+  border: 3px solid #7a4a1d;
+  border-radius: 20px;
+  background: linear-gradient(#fff6dc, #ffe2a1);
   color: #3b2410;
   font:
-    800 30px system-ui,
+    800 clamp(28px, 6.5vmin, 40px) system-ui,
     sans-serif;
   white-space: nowrap;
+  overflow: hidden;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  box-shadow: 0 6px 16px rgba(40, 10, 60, 0.4);
-  opacity: var(--fade, 1);
+  box-shadow: 0 6px 18px rgba(40, 10, 60, 0.45);
   transition:
     background 0.15s,
-    color 0.15s;
+    border-color 0.15s,
+    opacity 0.3s;
 }
 
-/* The little post that points down at the zombie. */
-.zb-sign::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  bottom: -14px;
-  width: 0;
-  height: 0;
-  margin-left: -8px;
-  border-left: 8px solid transparent;
-  border-right: 8px solid transparent;
-  border-top: 10px solid #7a4a1d;
+@media (max-height: 460px) {
+  .zb-answer {
+    height: 64px;
+  }
 }
 
-.zb-sign:active:not([aria-disabled='true']) {
-  scale: 0.95;
+.zb-answer:active:not([aria-disabled='true']) {
+  scale: 0.96;
 }
 
-.zb-sign:focus-visible {
+.zb-answer:focus-visible {
   outline: 4px solid #ffd43b;
   outline-offset: 2px;
 }
 
-.zb-sign[aria-disabled='true'] {
+.zb-answer[aria-disabled='true'] {
   cursor: default;
-  opacity: calc(var(--fade, 1) * 0.6);
+  opacity: 0.6;
 }
 
-.zb-sign.chosen {
-  opacity: var(--fade, 1);
+.zb-answer.chosen {
+  opacity: 1;
+  border-color: #fff;
 }
 
-.zb-sign.right {
-  opacity: var(--fade, 1);
+.zb-answer.right {
+  opacity: 1;
   border-color: #1b6b2b;
   background: #8ce99a;
+  color: #0c3a1d;
   box-shadow:
-    0 0 0 6px rgba(140, 233, 154, 0.55),
-    0 0 28px 8px rgba(140, 233, 154, 0.8);
+    0 0 0 5px rgba(140, 233, 154, 0.55),
+    0 0 26px 8px rgba(140, 233, 154, 0.75);
 }
 
-.zb-sign.right::after {
-  border-top-color: #1b6b2b;
-}
-
-.zb-sign.wrong {
-  opacity: var(--fade, 1);
+.zb-answer.wrong {
+  opacity: 1;
   border-color: #8c1d1d;
   background: #ff8787;
+  color: #4a0c0c;
 }
 
-.zb-sign.wrong::after {
-  border-top-color: #8c1d1d;
+.zb-answer.gone {
+  opacity: 0.35;
 }
 
-.zb-sign.gone {
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.3s;
-}
-
-@media (max-width: 480px) {
-  .zb-sign {
-    padding: 0 8px;
-    font-size: 26px;
-  }
-}
-
+/* Big messages in the clear space between the HUD and the answers. */
 .zb-banner {
   position: fixed;
   left: 50%;
-  top: 56%;
+  top: 50%;
   z-index: 12;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
+  box-sizing: border-box;
   width: max-content;
   max-width: min(92vw, 680px);
   padding: 12px 28px;
   border-radius: 24px;
   background: rgba(47, 24, 84, 0.88);
-  color: #fff;
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    sans-serif;
   text-align: center;
   transform: translate(-50%, -50%);
   pointer-events: none;
   animation: zb-pop 0.35s ease-out;
 }
 
-.zb-banner[hidden] {
-  display: none;
-}
-
 .zb-banner-title {
-  font-size: clamp(36px, 11vmin, 80px);
+  font-size: clamp(32px, 9vmin, 68px);
   font-weight: 900;
   line-height: 1.1;
 }
@@ -335,11 +369,23 @@
 }
 
 .zb-banner.out .zb-banner-title {
-  font-size: clamp(30px, 8vmin, 60px);
+  font-size: clamp(28px, 8vmin, 56px);
+}
+
+.zb-banner.warn {
+  background: rgba(120, 10, 40, 0.9);
+  box-shadow: 0 0 0 3px #ff6b6b;
+  animation:
+    zb-pop 0.35s ease-out,
+    zb-blink 0.45s steps(2) infinite;
+}
+
+.zb-banner.warn .zb-banner-title {
+  color: #ffe066;
 }
 
 .zb-banner-detail {
-  font-size: clamp(26px, 7vmin, 48px);
+  font-size: clamp(24px, 6.5vmin, 44px);
   font-weight: 800;
 }
 
@@ -354,8 +400,91 @@
   }
 }
 
+@keyframes zb-blink {
+  50% {
+    box-shadow: 0 0 0 3px #ffe066;
+  }
+}
+
+/* 3, 2, 1, Go! */
+.zb-count {
+  position: fixed;
+  left: 50%;
+  top: 40%;
+  z-index: 12;
+  font-size: clamp(90px, 26vmin, 200px);
+  font-weight: 900;
+  color: #ffe066;
+  text-shadow:
+    0 6px 0 rgba(0, 0, 0, 0.3),
+    0 0 40px rgba(255, 224, 102, 0.6);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.zb-count.on {
+  animation: zb-count 0.7s ease-out;
+}
+
+@keyframes zb-count {
+  from {
+    transform: translate(-50%, -50%) scale(1.8);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Points floating up from where they were scored. */
+.zb-pop {
+  position: fixed;
+  z-index: 14;
+  font-size: clamp(26px, 6.5vmin, 42px);
+  font-weight: 900;
+  white-space: nowrap;
+  text-shadow:
+    0 3px 0 rgba(0, 0, 0, 0.45),
+    0 0 12px rgba(0, 0, 0, 0.5);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: zb-rise 1.3s ease-out forwards;
+}
+
+.zb-pop.good {
+  color: #ffe066;
+}
+
+.zb-pop.bad {
+  color: #ff8787;
+}
+
+.zb-pop.plain {
+  color: #fff;
+}
+
+@keyframes zb-rise {
+  0% {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0;
+  }
+  15% {
+    transform: translate(-50%, -80%) scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -260%) scale(1);
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .zb-banner {
+  .zb-banner,
+  .zb-banner.warn,
+  .zb-count.on,
+  .zb-score-value.on,
+  .zb-pop {
     animation: none;
   }
 
