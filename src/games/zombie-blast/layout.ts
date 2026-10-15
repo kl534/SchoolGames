@@ -56,13 +56,17 @@ export function fitView(aspect: number): ViewFit {
   return { fov: (2 * Math.atan(tanHalf) * 180) / Math.PI, lane: Math.min(lane, LANE_MAX) };
 }
 
+/** How much wider things are spread at depth `z` than at the barricade, so they look evenly spaced. */
+export function spreadAt(z: number): number {
+  return Math.max(depthAt(z) / depthAt(BARRICADE_Z), 1);
+}
+
 /**
  * Sideways position of a lane at depth `z`. The lanes fan out with distance so they stay the same
- * distance apart on screen: that leaves room for four answer signs even on a phone.
+ * distance apart on screen, however far away the zombies are.
  */
 export function laneX(index: number, z: number, lane: number): number {
-  const spread = Math.max(depthAt(z) / depthAt(BARRICADE_Z), 1);
-  return (index - (LANES - 1) / 2) * lane * spread;
+  return (index - (LANES - 1) / 2) * lane * spreadAt(z);
 }
 
 export interface SignInput {

@@ -1,5 +1,6 @@
 import { Box3, Group, MeshStandardMaterial, PerspectiveCamera, Raycaster, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
+import { createHorde } from '../src/games/zombie-blast/horde';
 import { createEffects } from '../src/games/zombie-blast/effects';
 import {
   CAMERA,
@@ -783,5 +784,158 @@ describe('brute boss', () => {
     boss.setMode('blast');
     for (let i = 0; i < 100; i++) boss.update(0.02);
     expect(boss.signAnchor(new Vector3()).y).toBeLessThan(3);
+  });
+});
+
+describe('horde', () => {
+  const make = () => {
+    const scene = new Group();
+    const effects = createEffects();
+    const horde = createHorde(scene, effects, seededRandom(3));
+    horde.setLane(1.2);
+    return { scene, effects, horde };
+  };
+  const run = (horde: ReturnType<typeof make>['horde'], seconds: number, speed = 2) => {
+    for (let t = 0; t < seconds; t += 0.05) horde.update(0.05, speed);
+  };
+
+  it('makes every zombie up front and puts them all in the scene, hidden', () => {
+    const { scene, horde } = make();
+    expect(horde.slots).toHaveLength(MAX_ON_FIELD + 3 + 1);
+    expect(scene.children).toHaveLength(horde.slots.length);
+    expect(horde.slots.every((s) => !s.zombie.object.visible && s.state === 'idle')).toBe(true);
+  });
+
+  it('sends a zombie out of the mist in one of the lanes and walks it to the barricade', () => {
+    const { horde } = make();
+    const slot = horde.spawn()!;
+    expect(slot.z).toBe(SPAWN_Z);
+    expect(slot.lane).toBeGreaterThanOrEqual(0);
+    expect(slot.lane).toBeLessThan(LANES);
+    expect(slot.zombie.mode).toBe('walk');
+    expect(horde.walkingCount).toBe(1);
+    run(horde, 2, 4);
+    expect(slot.z).toBeCloseTo(SPAWN_Z + 8, 0);
+    expect(slot.zombie.object.position.z).toBeCloseTo(slot.z);
+    // It stays in its lane, give or take the wobble.
+    expect(Math.abs(slot.zombie.object.position.x - laneX(slot.lane, slot.z, 1.2))).toBeLessThan(
+      0.15 * 1.2 * 4 + 1e-6,
+    );
+  });
+
+  it('walks the boss at half pace down the middle', () => {
+    const { horde } = make();
+    const regular = horde.spawn()!;
+    const boss = horde.spawnBoss();
+    run(horde, 2, 4);
+    expect(boss.z - SPAWN_Z).toBeCloseTo((regular.z - SPAWN_Z) / 2, 1);
+    expect(boss.zombie.object.position.x).toBe(0);
+  });
+
+  it('spreads new zombies over the lanes rather than stacking them', () => {
+    const { horde } = make();
+    const lanes = Array.from({ length: 4 }, () => horde.spawn()!.lane);
+    expect(new Set(lanes).size).toBe(4);
+  });
+
+  it('picks the zombie nearest the barricade, and skips the knocked out', () => {
+    const { horde } = make();
+    const first = horde.spawn()!;
+    run(horde, 1);
+    const second = horde.spawn()!;
+    expect(horde.closest()).toBe(first);
+    horde.blast(first);
+    expect(first.zombie.mode).toBe('blast');
+    expect(horde.closest()).toBe(second);
+    expect(horde.walkingCount).toBe(1);
+    horde.blast(second);
+    expect(horde.closest()).toBeNull();
+  });
+
+  it('lets a knocked out zombie lie there, then poof away and free its place', () => {
+    const { horde, effects } = make();
+    const slot = horde.spawn()!;
+    horde.blast(slot);
+    run(horde, 1);
+    expect(slot.state).toBe('blasted');
+    expect(slot.zombie.object.visible).toBe(true);
+    run(horde, 0.5);
+    expect(slot.state).toBe('idle');
+    expect(slot.zombie.object.visible).toBe(false);
+    expect(effects.object.children.length).toBeGreaterThan(0);
+  });
+
+  it('tells you when a zombie reaches the barricade, leans it there, then poofs it', () => {
+    const { horde } = make();
+    const reached: number[] = [];
+    horde.onReach((slot) => reached.push(slot.z));
+    const slot = horde.spawn()!;
+    run(horde, 20, 5);
+    expect(reached).toEqual([END_Z]);
+    expect(slot.state === 'idle').toBe(true);
+    const other = horde.spawn()!;
+    run(horde, 2, 10);
+    expect(other.state).toBe('reached');
+    expect(other.zombie.mode).toBe('lean');
+    run(horde, 1, 10);
+    expect(other.state).toBe('idle');
+    expect(horde.walkingCount).toBe(0);
+  });
+
+  it('keeps zombies leaning over the barricade when told to linger', () => {
+    const { horde } = make();
+    horde.setLingering(true);
+    const slot = horde.spawn()!;
+    run(horde, 20, 5);
+    expect(slot.state).toBe('reached');
+    expect(slot.zombie.object.visible).toBe(true);
+  });
+
+  it('holds a laughing zombie still until told to walk on', () => {
+    const { horde } = make();
+    const slot = horde.spawn()!;
+    run(horde, 1, 3);
+    horde.laugh(slot);
+    const z = slot.z;
+    run(horde, 1, 3);
+    expect(slot.z).toBe(z);
+    expect(slot.zombie.mode).toBe('laugh');
+    expect(horde.walkingCount).toBe(1);
+    horde.unlaugh();
+    run(horde, 1, 3);
+    expect(slot.z).toBeGreaterThan(z);
+    expect(slot.zombie.mode).toBe('walk');
+  });
+
+  it('staggers the boss back, but never past the mist', () => {
+    const { horde } = make();
+    const boss = horde.spawnBoss();
+    run(horde, 4, 4);
+    const before = boss.z;
+    horde.knockBack(boss, 1.5);
+    run(horde, 0.6, 0);
+    expect(boss.z).toBeCloseTo(before - 1.5, 3);
+    const fresh = horde.spawn()!;
+    horde.knockBack(fresh, 5);
+    run(horde, 0.6, 0);
+    expect(fresh.z).toBe(SPAWN_Z);
+  });
+
+  it('never runs out of places: the oldest body makes way for a new zombie', () => {
+    const { horde } = make();
+    for (let i = 0; i < MAX_ON_FIELD + 3; i++) horde.blast(horde.spawn()!);
+    expect(horde.spawn()).not.toBeNull();
+  });
+
+  it('puts the boss back for the next wave with all its armour on', () => {
+    const { horde } = make();
+    const boss = horde.spawnBoss();
+    boss.zombie.knockOffArmour();
+    horde.blast(boss);
+    run(horde, 3);
+    expect(boss.state).toBe('idle');
+    horde.spawnBoss();
+    expect(boss.zombie.armourLeft).toBe(3);
+    expect(boss.z).toBe(SPAWN_Z);
   });
 });
