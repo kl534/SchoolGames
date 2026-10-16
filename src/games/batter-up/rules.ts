@@ -77,6 +77,93 @@ export function cpuHitFor(random: number): Hit {
   return 'homer';
 }
 
+// ---------- Kinds of hit ----------
+
+export type HitKind =
+  | 'single-liner'
+  | 'single-grounder'
+  | 'single-bloop'
+  | 'single-chopper'
+  | 'double-gap'
+  | 'double-line'
+  | 'double-wall'
+  | 'triple-corner'
+  | 'triple-gap'
+  | 'homer-liner'
+  | 'homer-moonshot'
+  | 'homer-scraper';
+
+/** The hit a kind is (its first word). */
+export function hitOfKind(kind: HitKind): Hit {
+  return kind.split('-')[0] as Hit;
+}
+
+/** Weighted variants for each hit; the weights of a hit add up to 1. */
+export const HIT_KINDS: Record<Hit, readonly { kind: HitKind; weight: number }[]> = {
+  single: [
+    { kind: 'single-liner', weight: 0.3 },
+    { kind: 'single-grounder', weight: 0.3 },
+    { kind: 'single-bloop', weight: 0.2 },
+    { kind: 'single-chopper', weight: 0.2 },
+  ],
+  double: [
+    { kind: 'double-gap', weight: 0.45 },
+    { kind: 'double-line', weight: 0.3 },
+    { kind: 'double-wall', weight: 0.25 },
+  ],
+  triple: [
+    { kind: 'triple-corner', weight: 0.5 },
+    { kind: 'triple-gap', weight: 0.5 },
+  ],
+  homer: [
+    { kind: 'homer-liner', weight: 0.35 },
+    { kind: 'homer-moonshot', weight: 0.35 },
+    { kind: 'homer-scraper', weight: 0.3 },
+  ],
+};
+
+/** Picks one of `items` by weight; `random` is from 0 up to (not including) 1. */
+export function pickWeighted<T>(items: readonly { value: T; weight: number }[], random: number): T {
+  const total = items.reduce((n, item) => n + item.weight, 0);
+  const r = clamp01(random) * total;
+  let upTo = 0;
+  for (const item of items) {
+    upTo += item.weight;
+    // A hair of slack, so the sums of decimals land exactly on the boundaries.
+    if (r < upTo - 1e-9) return item.value;
+  }
+  return items[items.length - 1].value;
+}
+
+/** Picks a kind for a hit; `random` from 0 up to (not including) 1. Like `cpuHitFor`. */
+export function pickHitKind(hit: Hit, random: number): HitKind {
+  return pickWeighted(
+    HIT_KINDS[hit].map((k) => ({ value: k.kind, weight: k.weight })),
+    random,
+  );
+}
+
+// ---------- Field zones ----------
+
+export type FieldZone = 'LL' | 'LF' | 'LC' | 'CF' | 'RC' | 'RF' | 'RL';
+
+/** The zone of the field a ball goes to, from its angle `theta` (radians, + towards right). */
+export function zoneOf(theta: number): FieldZone {
+  const d = (theta * 180) / Math.PI;
+  if (d <= -36) return 'LL';
+  if (d < -22) return 'LF';
+  if (d < -7) return 'LC';
+  if (d <= 7) return 'CF';
+  if (d < 22) return 'RC';
+  if (d < 36) return 'RF';
+  return 'RL';
+}
+
+/** Whether a zone is on the right-field side. */
+export function isRightSide(zone: FieldZone): boolean {
+  return zone === 'RC' || zone === 'RF' || zone === 'RL';
+}
+
 /** The big word shown for a hit. */
 export function hitLabel(hit: Hit): string {
   return {
@@ -84,16 +171,6 @@ export function hitLabel(hit: Hit): string {
     double: 'DOUBLE!',
     triple: 'TRIPLE!',
     homer: 'HOME RUN!',
-  }[hit];
-}
-
-/** What the announcer says for a hit. */
-export function hitSpeech(hit: Hit): string {
-  return {
-    single: 'Single!',
-    double: 'Double!',
-    triple: 'Triple!',
-    homer: 'Home run!',
   }[hit];
 }
 
@@ -165,6 +242,54 @@ export function advance(bases: Bases, count: number): Advance {
     moves.push({ from, to: Math.min(to, 4) });
     if (to >= 4) runs++;
     else next[to - 1] = true;
+  }
+  return { bases: next, runs, moves };
+}
+
+/**
+ * The base (4 is home) a runner on `from` is sent to on a hit of this kind to this zone, beyond
+ * what the hit forces. The batter's own base is never stretched.
+ */
+function extraTarget(from: number, kind: HitKind, zone: FieldZone): number {
+  const hit = hitOfKind(kind);
+  if (hit === 'triple' || hit === 'homer') return 4;
+  if (hit === 'double') {
+    if (kind === 'double-wall') return from === 1 ? 3 : 4;
+    return 4;
+  }
+  // Singles.
+  if (kind === 'single-chopper' || kind === 'single-bloop') return from + 1;
+  if (isRightSide(zone)) return from === 1 ? 3 : 4;
+  return from === 1 ? 2 : 4;
+}
+
+/**
+ * Where each runner ends up on a hit of this kind to this zone, and the runs. `advance` is the
+ * least that is forced; here runners also take the extra bases the play gives them. The batter
+ * always goes exactly as far as the hit is worth, and a runner never ends up on or past the base
+ * of the runner ahead of it unless that one scored.
+ */
+export function advanceOnHit(bases: Bases, kind: HitKind, zone: FieldZone): Advance {
+  const count = BASES_FOR[hitOfKind(kind)];
+  const next: [boolean, boolean, boolean] = [false, false, false];
+  const moves: Move[] = [];
+  let runs = 0;
+  // The base the runner ahead stopped on, once it did not score.
+  let ahead = 5;
+  for (const from of [3, 2, 1, 0]) {
+    if (from > 0 && !bases[from - 1]) continue;
+    let to = Math.min(from + count, 4);
+    if (from > 0) {
+      to = Math.min(Math.max(to, extraTarget(from, kind, zone)), 4);
+      // Never past the runner ahead, but never short of what the hit forces.
+      to = Math.max(Math.min(to, ahead - 1), Math.min(from + count, 4));
+    }
+    moves.push({ from, to });
+    if (to >= 4) runs++;
+    else {
+      next[to - 1] = true;
+      ahead = to;
+    }
   }
   return { bases: next, runs, moves };
 }
@@ -281,17 +406,28 @@ function score(state: GameState, runs: number): GameState {
 /**
  * A hit: everybody moves up, the strikes are forgotten and the next batter comes up. The runs
  * that count stop at the mercy rule, and at the rival's winning run in the last half-inning
- * (which ends the game on the spot).
+ * (which ends the game on the spot). With `play` the runners take the extra bases that kind of
+ * hit and zone give; without it they move only as far as the hit forces them.
  */
-export function applyHit(state: GameState, hit: Hit): Outcome {
-  const moved = advance(state.bases, BASES_FOR[hit]);
+export function applyHit(
+  state: GameState,
+  hit: Hit,
+  play?: { kind: HitKind; zone: FieldZone },
+): Outcome {
+  const moved = play
+    ? advanceOnHit(state.bases, play.kind, play.zone)
+    : advance(state.bases, BASES_FOR[hit]);
   const runs = Math.min(moved.runs, roomToScore(state));
   let next = nextBatter({ ...score(state, runs), bases: moved.bases });
-  if (isLastChance(state)) {
-    const { us, them } = totals(next);
-    if (them > us) next = { ...next, over: true, winner: 'them', walkOff: true };
-  }
+  next = walkOffCheck(state, next);
   return { state: next, out: false, runs, moves: moved.moves };
+}
+
+/** The game ends on the spot when the rival goes ahead in the last half-inning. */
+function walkOffCheck(before: GameState, next: GameState): GameState {
+  if (!isLastChance(before)) return next;
+  const { us, them } = totals(next);
+  return them > us ? { ...next, over: true, winner: 'them', walkOff: true } : next;
 }
 
 /** A strike (a miss, a called strike or one thrown past the batter). The third one is an out. */
@@ -307,6 +443,396 @@ export function applyStrike(state: GameState): Outcome {
 export function applyFieldOut(state: GameState): Outcome {
   const next = nextBatter({ ...state, outs: state.outs + 1 });
   return { state: next, out: true, runs: 0, moves: [] };
+}
+
+// ---------- Outs when we pitch ----------
+
+export type OutKind =
+  'pop' | 'foul-pop' | 'fly' | 'liner' | 'diving' | 'ground' | 'double-play' | 'force-second';
+export type Position = 'P' | 'C' | '1B' | '2B' | 'SS' | '3B' | 'LF' | 'CF' | 'RF';
+
+export interface OutCall {
+  kind: OutKind;
+  /** Who fields the ball first. */
+  fielder: Position;
+  zone: FieldZone;
+  /** Ground outs: '6-3', '3U', '3-1', '6-4-3', '6-4'... (for the scorebook-style subtitle). */
+  chain?: string;
+}
+
+/** A ground ball hit this quickly (seconds) can be turned into two. */
+export const DP_UNDER_SECONDS = 0.75;
+
+/** Where a ball goes, from the infielder or pitcher who plays it. */
+const INFIELD_ZONE: Partial<Record<Position, FieldZone>> = {
+  '3B': 'LF',
+  SS: 'LC',
+  P: 'CF',
+  '2B': 'RC',
+  '1B': 'RF',
+};
+const OUTFIELD_ZONE: Partial<Record<Position, FieldZone>> = { LF: 'LF', CF: 'CF', RF: 'RF' };
+
+export const AIR_OUTS: readonly { value: OutKind; weight: number }[] = [
+  { value: 'pop', weight: 0.25 },
+  { value: 'foul-pop', weight: 0.1 },
+  { value: 'fly', weight: 0.35 },
+  { value: 'liner', weight: 0.15 },
+  { value: 'diving', weight: 0.15 },
+];
+export const LINER_FIELDERS: readonly { value: Position; weight: number }[] = [
+  { value: '3B', weight: 0.25 },
+  { value: 'SS', weight: 0.25 },
+  { value: '2B', weight: 0.25 },
+  { value: '1B', weight: 0.15 },
+  { value: 'P', weight: 0.1 },
+];
+export const DOUBLE_PLAYS: readonly { value: string; weight: number }[] = [
+  { value: '6-4-3', weight: 0.35 },
+  { value: '4-6-3', weight: 0.3 },
+  { value: '5-4-3', weight: 0.2 },
+  { value: '1-6-3', weight: 0.15 },
+];
+export const FORCE_OUTS: readonly { value: string; weight: number }[] = [
+  { value: '6-4', weight: 1 },
+  { value: '4-6', weight: 1 },
+  { value: '5-4', weight: 1 },
+];
+export const GROUND_OUTS: readonly { value: string; weight: number }[] = [
+  { value: '6-3', weight: 0.3 },
+  { value: '4-3', weight: 0.25 },
+  { value: '5-3', weight: 0.2 },
+  { value: '3U', weight: 0.075 },
+  { value: '3-1', weight: 0.075 },
+  { value: '1-3', weight: 0.1 },
+];
+
+/** The infielder a ground-out chain starts with (its first digit). */
+const CHAIN_FIELDER: Record<string, Position> = {
+  '1': 'P',
+  '3': '1B',
+  '4': '2B',
+  '5': '3B',
+  '6': 'SS',
+};
+
+/**
+ * The out a right answer gives, from its kind of out, the answer time and the game. `random`
+ * is called a few times, each from 0 up to (not including) 1.
+ */
+export function pickOut(
+  outcome: 'popout' | 'groundout',
+  seconds: number,
+  state: GameState,
+  random: () => number,
+): OutCall {
+  if (outcome === 'popout') {
+    const kind = pickWeighted(AIR_OUTS, random());
+    const equally = <T>(list: readonly T[]) =>
+      list[Math.min(Math.floor(random() * list.length), list.length - 1)];
+    switch (kind) {
+      case 'pop': {
+        const fielder = equally<Position>(['1B', '2B', 'SS', '3B']);
+        return { kind, fielder, zone: INFIELD_ZONE[fielder]! };
+      }
+      case 'foul-pop': {
+        return { kind, fielder: 'C', zone: random() < 0.5 ? 'LL' : 'RL' };
+      }
+      case 'liner': {
+        const fielder = pickWeighted(LINER_FIELDERS, random());
+        return { kind, fielder, zone: INFIELD_ZONE[fielder]! };
+      }
+      default: {
+        // A fly ball or a diving catch is made by an outfielder.
+        const fielder = equally<Position>(['LF', 'CF', 'RF']);
+        return { kind, fielder, zone: OUTFIELD_ZONE[fielder]! };
+      }
+    }
+  }
+  const runnerOnFirst = state.bases[0];
+  let kind: OutKind = 'ground';
+  let chain: string;
+  if (runnerOnFirst && state.outs < 2 && seconds < DP_UNDER_SECONDS) {
+    kind = 'double-play';
+    chain = pickWeighted(DOUBLE_PLAYS, random());
+  } else if (runnerOnFirst && state.outs >= 2 && random() < 0.5) {
+    kind = 'force-second';
+    chain = pickWeighted(FORCE_OUTS, random());
+  } else {
+    chain = pickWeighted(GROUND_OUTS, random());
+  }
+  const fielder = CHAIN_FIELDER[chain[0]];
+  return { kind, fielder, zone: INFIELD_ZONE[fielder]!, chain };
+}
+
+export interface OutOutcome extends Outcome {
+  /** Who is put out, in order: 0 the batter, 1 to 3 a runner from that base. */
+  retired: number[];
+  /** A run scored on a fly ball out. */
+  sacFly: boolean;
+}
+
+/** Everybody on the listed bases moves up one, lead first, only into a base that is free. */
+function moveUp(bases: Bases, skip: readonly number[] = []): Advance {
+  const next: [boolean, boolean, boolean] = [false, false, false];
+  const moves: Move[] = [];
+  let runs = 0;
+  for (const from of [3, 2, 1]) {
+    if (!bases[from - 1]) continue;
+    const to = from + 1;
+    if (skip.includes(from) || (to < 4 && next[to - 1])) {
+      // Held up by the runner ahead, or put out.
+      if (!skip.includes(from)) next[from - 1] = true;
+      continue;
+    }
+    moves.push({ from, to });
+    if (to >= 4) runs++;
+    else next[to - 1] = true;
+  }
+  return { bases: next, runs, moves };
+}
+
+/**
+ * Applies an out call: outs, runners moving up or tagging, runs and the walk-off. In the table
+ * of the design "outs" are those before the play.
+ */
+export function applyOut(state: GameState, call: OutCall): OutOutcome {
+  const outs0 = state.outs;
+  const [on1, on2, on3] = state.bases;
+  let retired: number[] = [0];
+  let moves: Move[] = [];
+  let bases: Bases = state.bases;
+  let runs = 0;
+  let sacFly = false;
+  let added = 1;
+  let batterSafe = false;
+
+  const taken = (m: Advance) => {
+    moves = m.moves;
+    bases = m.bases;
+    runs = m.runs;
+  };
+
+  switch (call.kind) {
+    case 'fly':
+      if (outs0 < 2) {
+        const next: [boolean, boolean, boolean] = [on1, on2, on3];
+        if (on3) {
+          moves.push({ from: 3, to: 4 });
+          next[2] = false;
+          runs++;
+          sacFly = true;
+        }
+        if (on2 && !next[2] && ['CF', 'RC', 'RF', 'RL'].includes(call.zone)) {
+          moves.push({ from: 2, to: 3 });
+          next[1] = false;
+          next[2] = true;
+        }
+        bases = next;
+      }
+      break;
+    case 'ground':
+      if (outs0 < 2) {
+        const infieldIn = on3 && !on1;
+        if (!infieldIn) taken(moveUp(state.bases));
+      }
+      break;
+    case 'double-play':
+      added = 2;
+      retired = [1, 0];
+      if (outs0 + added < MAX_OUTS) taken(moveUp(state.bases, [1]));
+      else bases = state.bases;
+      break;
+    case 'force-second': {
+      retired = [1];
+      batterSafe = true;
+      // The batter takes first, and anybody forced ahead of him moves up.
+      const next: [boolean, boolean, boolean] = [true, false, false];
+      // The runner from first is out at second, so the runner on second was forced by him.
+      if (on3 && on2 && on1) {
+        moves.push({ from: 3, to: 4 });
+        runs++;
+      } else if (on3) {
+        next[2] = true;
+      }
+      if (on2 && on1) {
+        moves.push({ from: 2, to: 3 });
+        next[2] = true;
+      } else if (on2) {
+        next[1] = true;
+      }
+      moves.push({ from: 0, to: 1 });
+      bases = next;
+      break;
+    }
+    default:
+      // A pop-up, a foul pop, a line out or a diving catch: the runners hold.
+      break;
+  }
+
+  const outs = Math.min(outs0 + added, MAX_OUTS);
+  if (outs >= MAX_OUTS) {
+    // No run counts on a play that makes the third out.
+    runs = 0;
+    sacFly = false;
+    moves = batterSafe ? moves.filter((m) => m.to < 4) : [];
+    bases = state.bases;
+  }
+  const counted = Math.min(runs, roomToScore(state));
+  sacFly = sacFly && counted > 0;
+  let next = nextBatter({ ...score(state, counted), outs, bases });
+  next = walkOffCheck(state, next);
+  return {
+    state: next,
+    out: !batterSafe,
+    runs: counted,
+    moves,
+    retired,
+    sacFly,
+  };
+}
+
+// ---------- Lines and labels ----------
+
+export const HIT_KIND_SPEECH: Record<HitKind, string> = {
+  'single-liner': 'Line drive! Base hit!',
+  'single-grounder': 'Ground ball, through the hole!',
+  'single-bloop': 'Bloop single! It drops in!',
+  'single-chopper': 'Chopper! Beats the throw!',
+  'double-gap': 'Into the gap! Double!',
+  'double-line': 'Down the line! Double!',
+  'double-wall': 'Off the wall! Double!',
+  'triple-corner': 'Into the corner! Triple!',
+  'triple-gap': 'All the way to the wall! Triple!',
+  'homer-liner': 'A line drive! Home run!',
+  'homer-moonshot': 'Way up, and gone! Home run!',
+  'homer-scraper': 'Over the glove! Home run!',
+};
+
+/** What the announcer says for one of our hits. */
+export function hitKindSpeech(kind: HitKind): string {
+  return HIT_KIND_SPEECH[kind];
+}
+
+/** A kind of hit in words, as in "Mud Hens bloop single!". */
+export function hitKindWord(kind: HitKind): string {
+  return {
+    'single-liner': 'line-drive single',
+    'single-grounder': 'ground-ball single',
+    'single-bloop': 'bloop single',
+    'single-chopper': 'chopper single',
+    'double-gap': 'gap double',
+    'double-line': 'double down the line',
+    'double-wall': 'double off the wall',
+    'triple-corner': 'corner triple',
+    'triple-gap': 'triple to the wall',
+    'homer-liner': 'line-drive home run',
+    'homer-moonshot': 'moonshot home run',
+    'homer-scraper': 'wall-scraping home run',
+  }[kind];
+}
+
+const ZONE_WORDS: Record<FieldZone, string> = {
+  LL: 'left field',
+  LF: 'left',
+  LC: 'left-center',
+  CF: 'center',
+  RC: 'right-center',
+  RF: 'right',
+  RL: 'right field',
+};
+
+const POSITION_WORDS: Record<Position, string> = {
+  P: 'the pitcher',
+  C: 'the catcher',
+  '1B': 'first',
+  '2B': 'second',
+  SS: 'short',
+  '3B': 'third',
+  LF: 'left',
+  CF: 'center',
+  RF: 'right',
+};
+
+/** The small line under a hit's name: where the ball went. On screen only, so it is free-form. */
+export function hitSubtitle(kind: HitKind, zone: FieldZone, fielder?: Position): string {
+  const where = ZONE_WORDS[zone];
+  const rightSide = isRightSide(zone);
+  switch (kind) {
+    case 'single-liner':
+      return `Line drive to ${where}`;
+    case 'single-grounder':
+      if (zone === 'CF') return 'Up the middle';
+      return rightSide ? 'Through the right side' : 'Through the left side';
+    case 'single-bloop':
+      return `Bloop to ${where}`;
+    case 'single-chopper':
+      return `Chopper to ${fielder ? POSITION_WORDS[fielder] : 'the infield'}`;
+    case 'double-gap':
+      return `Into the ${where} gap`;
+    case 'double-line':
+      return `Down the ${rightSide ? 'right' : 'left'}-field line`;
+    case 'double-wall':
+      return `Off the wall in ${where}`;
+    case 'triple-corner':
+      return `Into the ${rightSide ? 'right' : 'left'}-field corner`;
+    case 'triple-gap':
+      return 'To the deepest part of the park';
+    case 'homer-liner':
+      return `A line drive over the ${where} wall`;
+    case 'homer-moonshot':
+      return 'A towering moonshot';
+    case 'homer-scraper':
+      return 'Just over the wall';
+  }
+}
+
+export const FOUL_POP_SPEECH = 'Foul pop! The catcher has it!';
+export const FLY_OUT_SPEECH = 'Fly ball! Caught for the out!';
+export const SAC_FLY_SPEECH = 'Sacrifice fly! The run scores.';
+export const LINER_OUT_SPEECH = 'Line drive! Snagged for the out!';
+export const DIVING_SPEECH = 'Diving catch! What a grab!';
+export const DOUBLE_PLAY_SPEECH = 'Double play!';
+export const FORCE_OUT_SPEECH = 'Force out at second!';
+
+/** What the announcer says for an out we pitched. */
+export function outSpeech(call: OutCall, sacFly: boolean): string {
+  switch (call.kind) {
+    case 'pop':
+      return POP_OUT_SPEECH;
+    case 'foul-pop':
+      return FOUL_POP_SPEECH;
+    case 'fly':
+      return sacFly ? SAC_FLY_SPEECH : FLY_OUT_SPEECH;
+    case 'liner':
+      return LINER_OUT_SPEECH;
+    case 'diving':
+      return DIVING_SPEECH;
+    case 'ground':
+      return GROUND_OUT_SPEECH;
+    case 'double-play':
+      return DOUBLE_PLAY_SPEECH;
+    case 'force-second':
+      return FORCE_OUT_SPEECH;
+  }
+}
+
+/** The word that pops over the plate for an out. */
+export function outPopText(call: OutCall, sacFly = false): string {
+  switch (call.kind) {
+    case 'diving':
+      return 'Diving catch!';
+    case 'double-play':
+      return 'Double play!';
+    case 'pop':
+    case 'foul-pop':
+    case 'liner':
+      return 'Caught!';
+    case 'fly':
+      return sacFly ? 'Out! Run scores' : 'Caught!';
+    default:
+      return 'Out!';
+  }
 }
 
 /**
