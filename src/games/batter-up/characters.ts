@@ -14,7 +14,15 @@ import {
   Vector3,
   type Object3D,
 } from 'three';
-import { BALL_RADIUS, CONTACT, GLOVE, MOUND, MOUND_HEIGHT, type Vec } from './flight';
+import {
+  BALL_RADIUS,
+  CONTACT,
+  GLOVE,
+  MOUND,
+  MOUND_HEIGHT,
+  POSITION_SPOTS,
+  type Vec,
+} from './flight';
 import { createMover, type Mover } from './mover';
 import type { Colours } from './teams';
 import {
@@ -678,13 +686,13 @@ export function createBatter(): Batter {
 export type FielderId = '1B' | '2B' | 'SS' | '3B' | 'LF' | 'CF' | 'RF';
 
 export const FIELDER_SPOTS: Record<FielderId, Vec> = {
-  '1B': { x: 9.6, y: 0, z: -9.6 },
-  '2B': { x: 4.2, y: 0, z: -14.8 },
-  SS: { x: -4.6, y: 0, z: -14.2 },
-  '3B': { x: -9.8, y: 0, z: -9.8 },
-  LF: { x: -14, y: 0, z: -22.5 },
-  CF: { x: 0, y: 0, z: -27 },
-  RF: { x: 14, y: 0, z: -22.5 },
+  '1B': POSITION_SPOTS['1B'],
+  '2B': POSITION_SPOTS['2B'],
+  SS: POSITION_SPOTS.SS,
+  '3B': POSITION_SPOTS['3B'],
+  LF: POSITION_SPOTS.LF,
+  CF: POSITION_SPOTS.CF,
+  RF: POSITION_SPOTS.RF,
 };
 
 export type FielderMode = 'ready' | 'scoop' | 'watch';

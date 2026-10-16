@@ -2,7 +2,7 @@
  * The ball's paths and the field's measurements, as plain numbers so they are easy to test.
  * Home plate is the origin; the field stretches away along -z, first base is on the +x side.
  */
-import type { Hit } from './rules';
+import type { Hit, Position } from './rules';
 
 export interface Vec {
   x: number;
@@ -24,6 +24,19 @@ export const BASE_SPOTS: readonly Vec[] = [
 ];
 export const MOUND: Vec = { x: 0, y: 0, z: -8.2 };
 export const MOUND_HEIGHT = 0.45;
+
+/** Where each of the nine fielders normally stands (the pitcher on the rubber, the catcher crouched). */
+export const POSITION_SPOTS: Record<Position, Vec> = {
+  P: { x: 0, y: 0, z: -8.2 },
+  C: { x: 0, y: 0, z: 1.5 },
+  '1B': { x: 9.6, y: 0, z: -9.6 },
+  '2B': { x: 4.2, y: 0, z: -14.8 },
+  SS: { x: -4.6, y: 0, z: -14.2 },
+  '3B': { x: -9.8, y: 0, z: -9.8 },
+  LF: { x: -14, y: 0, z: -22.5 },
+  CF: { x: 0, y: 0, z: -27 },
+  RF: { x: 14, y: 0, z: -22.5 },
+};
 
 /** Where the pitcher lets go, where the bat meets the ball, and where the catcher's glove is. */
 export const RELEASE: Vec = { x: 0, y: 2.2, z: -7.4 };
@@ -105,123 +118,6 @@ export function fieldPoint(theta: number, radius: number, y = 0): Vec {
 /** Angle from straight ahead of a spot on the field, positive towards right field. */
 export function fieldAngle(p: Vec): number {
   return Math.atan2(p.x, -p.z);
-}
-
-const deg = (d: number) => (d * Math.PI) / 180;
-
-export interface HitPlan {
-  hit: Hit;
-  /** -1 down the left field line, 1 to right. */
-  side: -1 | 1;
-  /** Seconds in the air, and in all (rolling included). */
-  airTime: number;
-  duration: number;
-  /** Where the ball first comes down, and where it ends up. */
-  landing: Vec;
-  stop: Vec;
-  /** How far above the straight line from bat to landing spot the ball climbs. */
-  lift: number;
-  /** The ball leaves the park. */
-  overWall: boolean;
-  /** Writes the ball's position `t` seconds after contact. */
-  position(t: number, out: Vec): Vec;
-}
-
-interface Spec {
-  /** Angle from straight ahead (degrees) and distance to the landing spot. */
-  angle: [number, number];
-  radius: [number, number];
-  /** Where it ends, as an angle and the distance short of the wall. */
-  stopAngle: [number, number];
-  lift: [number, number];
-  air: number;
-  roll: number;
-}
-
-const SPECS: Record<Hit, Spec> = {
-  // A line drive or a hop into shallow left or right-centre.
-  single: {
-    angle: [8, 26],
-    radius: [20, 23],
-    stopAngle: [12, 30],
-    lift: [1.4, 3],
-    air: 0.8,
-    roll: 1.1,
-  },
-  // In the gap between the outfielders, rolling on to the wall.
-  double: {
-    angle: [15, 24],
-    radius: [30, 32],
-    stopAngle: [20, 27],
-    lift: [6, 8],
-    air: 1.5,
-    roll: 1.4,
-  },
-  // A deep drive down the line, into the corner.
-  triple: {
-    angle: [35, 40],
-    radius: [30, 31.5],
-    stopAngle: [42.5, 44],
-    lift: [9, 11],
-    air: 1.9,
-    roll: 1.3,
-  },
-  // Out of the park: a hard-hit drive that clears the wall, not a pop-up.
-  homer: {
-    angle: [4, 22],
-    radius: [47, 50],
-    stopAngle: [4, 22],
-    lift: [12, 14],
-    air: 2.3,
-    roll: 0,
-  },
-};
-
-const mix = (range: [number, number], roll: number) => lerp(range[0], range[1], clamp01(roll));
-
-/**
- * The path of a hit. `side` picks left or right field; `roll1` and `roll2` (0 to 1, usually
- * random) vary the angle and distance a little so no two hits are the same.
- */
-export function planHit(hit: Hit, side: -1 | 1, roll1 = 0.5, roll2 = 0.5): HitPlan {
-  const spec = SPECS[hit];
-  const theta = side * deg(mix(spec.angle, roll1));
-  const landing = fieldPoint(theta, mix(spec.radius, roll2), hit === 'homer' ? 4 : BALL_RADIUS);
-  const overWall = hit === 'homer';
-  const stopTheta = side * deg(mix(spec.stopAngle, roll1));
-  const stop = overWall
-    ? landing
-    : fieldPoint(
-        stopTheta,
-        hit === 'single'
-          ? mix(spec.radius, roll2) + 5
-          : Math.min(wallRadius(stopTheta) - 1.2, mix(spec.radius, roll2) + 6),
-        BALL_RADIUS,
-      );
-  const lift = mix(spec.lift, roll2);
-  const airTime = spec.air;
-  const duration = airTime + (overWall ? 0.4 : spec.roll);
-  const roll = Math.max(spec.roll, 0.01);
-
-  const position = (t: number, out: Vec): Vec => {
-    if (t <= airTime) {
-      const s = clamp01(t / airTime);
-      out.x = lerp(CONTACT.x, landing.x, s);
-      out.z = lerp(CONTACT.z, landing.z, s);
-      out.y = lerp(CONTACT.y, landing.y, s) + 4 * lift * s * (1 - s);
-      return out;
-    }
-    if (overWall) return dashPosition(landing, landing, 0, out);
-    // On the ground: two hops that die away while the ball slows to a stop.
-    const g = t - airTime;
-    const p = 1 - (1 - clamp01(g / roll)) ** 3;
-    out.x = lerp(landing.x, stop.x, p);
-    out.z = lerp(landing.z, stop.z, p);
-    out.y = BALL_RADIUS + 0.55 * Math.exp(-4.5 * g) * Math.abs(Math.sin((g * Math.PI) / 0.34));
-    return out;
-  };
-
-  return { hit, side, airTime, duration, landing, stop, lift, overWall, position };
 }
 
 /** The fielders that should run for a ball, nearest first. */
