@@ -36,6 +36,8 @@ export interface Court {
   swish(): void;
   /** The rim dips and wobbles after a dunk. */
   dunkWobble(): void;
+  /** The backboard's face: 0 is solid white, 1 is see-through (the defense view looks through it). */
+  setBoardSeeThrough(amount: number): void;
   update(delta: number): void;
   dispose(): void;
 }
@@ -220,12 +222,45 @@ export function buildCourt(scene: Scene): Court {
   arm.rotation.x = Math.PI / 2;
   arm.position.set(0, 3.45, -0.6 + 1.78 / 2);
   hoopGroup.add(arm);
-  const board = new Mesh(
-    new BoxGeometry(1.8, 1.05, 0.05),
-    new MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 }),
-  );
+  // The board's two faces (+z and -z) can turn see-through, so the rim shows from behind the
+  // hoop; its edges and a white frame stay opaque so it still reads as a board.
+  const faceMaterial = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 });
+  const edgeMaterial = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 });
+  const board = new Mesh(new BoxGeometry(1.8, 1.05, 0.05), [
+    edgeMaterial,
+    edgeMaterial,
+    edgeMaterial,
+    edgeMaterial,
+    faceMaterial,
+    faceMaterial,
+  ]);
   board.position.set(0, 3.425, BOARD.z);
   hoopGroup.add(board);
+  const frameWidth = 0.05;
+  for (const [w, h, x, y] of [
+    [1.8, frameWidth, 0, 3.425 + 0.525 - frameWidth / 2],
+    [1.8, frameWidth, 0, 3.425 - 0.525 + frameWidth / 2],
+    [frameWidth, 1.05, -0.9 + frameWidth / 2, 3.425],
+    [frameWidth, 1.05, 0.9 - frameWidth / 2, 3.425],
+  ]) {
+    const bar = new Mesh(new BoxGeometry(w, h, 0.07), edgeMaterial);
+    bar.position.set(x, y, BOARD.z);
+    hoopGroup.add(bar);
+  }
+  /** Opacity of the board's face when see-through. */
+  const SEE_THROUGH_OPACITY = 0.3;
+  let seeThrough = 0;
+  const setBoardSeeThrough = (amount: number) => {
+    const k = Math.min(Math.max(amount, 0), 1);
+    if (k === seeThrough) return;
+    const wasSolid = seeThrough === 0;
+    seeThrough = k;
+    faceMaterial.opacity = 1 + (SEE_THROUGH_OPACITY - 1) * k;
+    // Solid is drawn as a plain opaque surface; anything else blends and leaves the depth alone.
+    faceMaterial.transparent = k > 0;
+    faceMaterial.depthWrite = k === 0;
+    if (wasSolid || k === 0) faceMaterial.needsUpdate = true;
+  };
   const red = new MeshBasicMaterial({ color: 0xd23b2f });
   const outline = (w: number, h: number, x: number, y: number) => {
     const m = new Mesh(new BoxGeometry(w, h, 0.01), red);
@@ -442,6 +477,7 @@ export function buildCourt(scene: Scene): Court {
     dunkWobble() {
       wobble = 0;
     },
+    setBoardSeeThrough,
     update,
     dispose() {
       scene.remove(root);

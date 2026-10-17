@@ -312,9 +312,18 @@ function run(session: GameSession): void {
   };
 
   /** Eases the camera to a view (or snaps there). */
+  let seeFrom = 0;
+  let seeTo = 0;
+  let seeNow = 0;
   const goTo = (kind: ViewKind, a: number, seconds: number) => {
     goal = { kind, angle: a };
-    if (!viewW) return;
+    // The backboard fades to see-through for the defense views, over the same ease as the camera.
+    seeFrom = seeNow;
+    seeTo = kind === 'defense' || kind === 'ft-them' ? 1 : 0;
+    if (!viewW) {
+      seeFrom = seeTo;
+      return;
+    }
     from = { pos: { ...cur.pos }, look: { ...cur.look }, fov: cur.fov, shift: cur.shift };
     to = viewFor(kind, a);
     moveT = 0;
@@ -343,6 +352,8 @@ function run(session: GameSession): void {
     cur.look = lerpVec(from.look, to.look, e);
     cur.fov = MathUtils.lerp(from.fov, to.fov, e);
     cur.shift = MathUtils.lerp(from.shift, to.shift, e);
+    seeNow = MathUtils.lerp(seeFrom, seeTo, e);
+    court.setBoardSeeThrough(seeNow);
     // The slow-motion push-in: a quarter of the way to the moment.
     // The look point goes a quarter of the way too, so the action stays in the picture.
     let pos = cur.pos;
