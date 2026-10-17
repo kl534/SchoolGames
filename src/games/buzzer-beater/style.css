@@ -1,0 +1,582 @@
+.bb-bug,
+.bb-hud,
+.bb-answers,
+.bb-banner {
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  color: #fff;
+}
+
+/* The scorebug: points, the half and rounds left, and the best score. Under the menu button. */
+.bb-bug {
+  position: fixed;
+  top: calc(max(12px, env(safe-area-inset-top)) + 58px);
+  left: max(12px, env(safe-area-inset-left));
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 12px;
+  border-radius: 16px;
+  background: rgba(12, 28, 56, 0.78);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  pointer-events: none;
+}
+
+.bb-bug-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.bb-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.bb-pts {
+  font-size: 22px;
+  font-weight: 900;
+  color: #ffe066;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.bb-pts.on {
+  animation: bb-score 0.35s ease-out;
+}
+
+@keyframes bb-score {
+  0% {
+    transform: scale(1.6);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.bb-team {
+  color: #a9c8f5;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+/* The side with the ball. */
+.bb-team.ball {
+  color: #fff;
+  font-weight: 900;
+}
+
+.bb-pts + .bb-team {
+  margin-left: 8px;
+}
+
+.bb-period {
+  color: #ffd23f;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.bb-best {
+  color: #a9c8f5;
+  font-size: 13px;
+  gap: 10px;
+}
+
+.bb-fire {
+  color: #ffb703;
+  font-size: 13px;
+  font-weight: 900;
+  animation: bb-flicker 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes bb-flicker {
+  from {
+    opacity: 0.75;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.bb-fire[hidden] {
+  display: none;
+}
+
+.bb-dots {
+  display: inline-flex;
+  gap: 4px;
+  align-self: center;
+}
+
+.bb-dot {
+  display: block;
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+}
+
+.bb-dot.on {
+  border-color: #ffd23f;
+  background: #ffd23f;
+}
+
+/* The question, centred at the top. */
+.bb-hud {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  max-width: calc(100vw - 300px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/*
+ * Leave room for the menu, sound and pause buttons and the scorebug on any screen held upright,
+ * phone or tablet. A phone on its side is wide enough for them to sit side by side (see the
+ * compact block below), so this is for tall screens only. layout.ts (hudLayout) mirrors these
+ * queries.
+ */
+@media (max-aspect-ratio: 6/5) {
+  .bb-hud {
+    top: calc(max(12px, env(safe-area-inset-top)) + 58px + 86px);
+    max-width: min(680px, calc(100vw - 24px));
+  }
+}
+
+/* A safety net (see settleQuestion in hud.ts): the question dropped below the scorebug. */
+.bb-hud.below-bug {
+  top: var(--bb-below-bug, 156px);
+}
+
+.bb-hud[hidden],
+.bb-answers[hidden],
+.bb-answer[hidden],
+.bb-banner[hidden],
+.bb-banner-detail[hidden] {
+  display: none;
+}
+
+.bb-problem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 22px;
+  border-radius: 20px;
+  background: rgba(12, 28, 56, 0.85);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  pointer-events: auto;
+}
+
+.bb-problem-text {
+  font-size: clamp(28px, 7vmin, 56px);
+  font-weight: 800;
+  text-wrap: balance;
+}
+
+/* A call shown in place of the question: the call over the fact. */
+.bb-hud.calling .bb-problem-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.15;
+}
+
+.bb-call-title {
+  color: #ffa8a8;
+  font-size: clamp(22px, 5.6vmin, 44px);
+  font-weight: 900;
+}
+
+.bb-hear {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* The four answers along the bottom: two rows of two on a narrow phone. */
+.bb-answers {
+  position: fixed;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 50%;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  width: min(760px, calc(100vw - 24px));
+  transform: translateX(-50%);
+}
+
+@media (max-width: 560px) and (max-aspect-ratio: 6/5) {
+  .bb-answers {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.bb-answer {
+  min-width: 0;
+  height: 72px;
+  padding: 0 8px;
+  border: 3px solid #9cc2ff;
+  border-radius: 20px;
+  background: linear-gradient(#2f66d0, #1c3f96);
+  color: #fff;
+  font:
+    800 clamp(26px, 6vmin, 40px) system-ui,
+    sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 6px 18px rgba(4, 12, 40, 0.5);
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    opacity 0.3s;
+}
+
+@media (max-width: 560px) and (max-aspect-ratio: 6/5), (max-height: 460px) {
+  .bb-answer {
+    height: 64px;
+  }
+}
+
+.bb-answer:active:not([aria-disabled='true']) {
+  scale: 0.96;
+}
+
+.bb-answer:focus-visible {
+  outline: 4px solid #ffd43b;
+  outline-offset: 2px;
+}
+
+.bb-answer[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.bb-answer.chosen {
+  opacity: 1;
+  border-color: #fff;
+}
+
+.bb-answer.right {
+  opacity: 1;
+  border-color: #1b6b2b;
+  background: #5cf2b0;
+  color: #0c3a1d;
+  box-shadow:
+    0 0 0 5px rgba(92, 242, 176, 0.5),
+    0 0 26px 8px rgba(92, 242, 176, 0.7);
+}
+
+.bb-answer.wrong {
+  opacity: 1;
+  border-color: #8c1d1d;
+  background: #ff8787;
+  color: #4a0c0c;
+}
+
+.bb-answer.gone {
+  opacity: 0.25;
+}
+
+/* The shot clock above the backboard: red digits on black. */
+.bb-shotclock {
+  position: fixed;
+  z-index: 9;
+  box-sizing: border-box;
+  width: 64px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 2px solid #4a4e55;
+  background: #000;
+  color: #ff3b30;
+  font:
+    900 32px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-shadow: 0 0 8px rgba(255, 59, 48, 0.7);
+  pointer-events: none;
+}
+
+.bb-shotclock[hidden] {
+  display: none;
+}
+
+.bb-shotclock.urgent {
+  animation: bb-pulse 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes bb-pulse {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.18);
+  }
+}
+
+/* Big messages: the name of a play, and the announcer's calls. */
+.bb-banner {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: min(92vw, 680px);
+  padding: 12px 28px;
+  border-radius: 24px;
+  background: rgba(12, 28, 56, 0.88);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: bb-pop 0.35s ease-out;
+}
+
+.bb-banner-title {
+  font-size: clamp(30px, 8.5vmin, 64px);
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.bb-banner.good {
+  background: rgba(14, 84, 52, 0.9);
+  border-color: #5cf2b0;
+}
+
+.bb-banner.good .bb-banner-title {
+  color: #b9ffd8;
+}
+
+.bb-banner.miss .bb-banner-title {
+  color: #ffa8a8;
+}
+
+.bb-banner.info .bb-banner-title {
+  color: #ffe066;
+}
+
+.bb-banner-detail {
+  font-size: clamp(26px, 7vmin, 48px);
+  font-weight: 800;
+}
+
+/* The call on a wide screen sits beside the plate: narrow and smaller, so it fits at the side. */
+.bb-banner.aside {
+  max-width: 42vw;
+}
+
+.bb-banner.aside .bb-banner-title {
+  font-size: clamp(24px, 5.2vmin, 40px);
+}
+
+.bb-banner.aside .bb-banner-detail {
+  font-size: clamp(22px, 4.6vmin, 34px);
+}
+
+@keyframes bb-pop {
+  from {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Short messages floating up from a spot. */
+.bb-pop {
+  position: fixed;
+  z-index: 14;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  font-size: clamp(26px, 6.5vmin, 42px);
+  font-weight: 900;
+  white-space: nowrap;
+  text-shadow:
+    0 3px 0 rgba(0, 0, 0, 0.45),
+    0 0 12px rgba(0, 0, 0, 0.5);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: bb-rise 1.3s ease-out forwards;
+}
+
+.bb-pop.good {
+  color: #ffe066;
+}
+
+.bb-pop.bad {
+  color: #ff8787;
+}
+
+.bb-pop.plain {
+  color: #fff;
+}
+
+@keyframes bb-rise {
+  0% {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0;
+  }
+  15% {
+    transform: translate(-50%, -80%) scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -260%) scale(1);
+    opacity: 0;
+  }
+}
+
+/*
+ * A phone on its side (568x320, 640x360, 667x375): little height, so everything shrinks to leave
+ * the field most of the screen. Tap targets stay at least 48px. layout.ts (hudLayout) mirrors
+ * this query.
+ */
+@media (max-height: 380px) and (min-aspect-ratio: 6/5) {
+  .bb-bug {
+    top: calc(max(12px, env(safe-area-inset-top)) + 58px);
+    gap: 6px;
+    padding: 3px 9px 3px 4px;
+    border-width: 1.5px;
+    border-radius: 12px;
+  }
+
+  .bb-bug-text {
+    gap: 0;
+    font-size: 12px;
+    line-height: 1.15;
+  }
+
+  .bb-row {
+    gap: 4px;
+  }
+
+  .bb-best {
+    font-size: 10px;
+  }
+
+  .bb-team {
+    font-size: 11px;
+  }
+
+  .bb-period {
+    font-size: 12px;
+  }
+
+  .bb-fire {
+    font-size: 10px;
+  }
+
+  .bb-shotclock {
+    width: 52px;
+    height: 36px;
+    font-size: 26px;
+  }
+
+  .bb-pts {
+    font-size: 17px;
+  }
+
+  .bb-dots {
+    gap: 3px;
+  }
+
+  .bb-dot {
+    width: 9px;
+    height: 9px;
+    border-width: 1.5px;
+  }
+
+  .bb-hud {
+    top: max(6px, env(safe-area-inset-top));
+    gap: 3px;
+    max-width: calc(100vw - 260px);
+  }
+
+  .bb-problem {
+    gap: 8px;
+    padding: 0 4px 0 16px;
+    border-radius: 16px;
+  }
+
+  .bb-problem-text {
+    font-size: clamp(22px, 7vmin, 32px);
+  }
+
+  .bb-call-title {
+    font-size: clamp(18px, 5.4vmin, 26px);
+  }
+
+  .bb-hear {
+    width: 48px;
+    height: 48px;
+    font-size: 22px;
+  }
+
+  .bb-answers {
+    bottom: max(8px, env(safe-area-inset-bottom));
+    gap: 8px;
+  }
+
+  .bb-answer {
+    height: 56px;
+    border-width: 2px;
+    border-radius: 16px;
+    font-size: clamp(22px, 7vmin, 30px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bb-banner,
+  .bb-pop,
+  .bb-fire,
+  .bb-shotclock.urgent,
+  .bb-pts.on {
+    animation: none;
+  }
+}
