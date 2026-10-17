@@ -23,7 +23,6 @@ import {
   groundBallPosition,
   INFIELD_SPEED,
   MISS_POINT,
-  pickChasers,
   POSITION_SPOTS,
   RUN_SPEED,
   THROW_TIME,
@@ -442,8 +441,13 @@ export function createPitching(host: PitchingHost): Pitching {
       x: f.mover.person.root.position.x,
       z: f.mover.person.root.position.z,
     }));
-    const [near] = pickChasers(candidates, plan.firstTouch.p, 1);
-    near?.f.chase({ ...target }, FIELD_SPEED, hit === 'homer' ? 'watch' : 'scoop');
+    const near = candidates.reduce((best, c) =>
+      Math.hypot(c.x - plan!.firstTouch.p.x, c.z - plan!.firstTouch.p.z) <
+      Math.hypot(best.x - plan!.firstTouch.p.x, best.z - plan!.firstTouch.p.z)
+        ? c
+        : best,
+    );
+    near.f.chase({ ...target }, FIELD_SPEED, hit === 'homer' ? 'watch' : 'scoop');
     const runTime = host.runBases(outcome.moves, outcome.runs, RUN_SPEED * RIVAL_RUN_BOOST);
     const play = Math.max(plan.end / PLAY_SPEED + 0.3, runTime + 0.4, HIT_FOR);
     host.after(play, () => mark('play'));

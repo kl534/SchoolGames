@@ -2,7 +2,7 @@
  * The ball's paths and the field's measurements, as plain numbers so they are easy to test.
  * Home plate is the origin; the field stretches away along -z, first base is on the +x side.
  */
-import type { Hit, Position } from './rules';
+import type { Position } from './rules';
 
 export interface Vec {
   x: number;
@@ -24,6 +24,14 @@ export const BASE_SPOTS: readonly Vec[] = [
 ];
 export const MOUND: Vec = { x: 0, y: 0, z: -8.2 };
 export const MOUND_HEIGHT = 0.45;
+
+/** Height of the ground at a spot: the mound's top, sloping down to the flat from 1.0 to 2.4 out. */
+export function groundHeight(x: number, z: number): number {
+  const d = Math.hypot(x - MOUND.x, z - MOUND.z);
+  if (d <= 1.0) return MOUND_HEIGHT;
+  if (d >= 2.4) return 0;
+  return MOUND_HEIGHT * (1 - (d - 1.0) / 1.4);
+}
 
 /** Where each of the nine fielders normally stands (the pitcher on the rubber, the catcher crouched). */
 export const POSITION_SPOTS: Record<Position, Vec> = {
@@ -119,19 +127,6 @@ export function fieldPoint(theta: number, radius: number, y = 0): Vec {
 export function fieldAngle(p: Vec): number {
   return Math.atan2(p.x, -p.z);
 }
-
-/** The fielders that should run for a ball, nearest first. */
-export function pickChasers<T extends { x: number; z: number }>(
-  fielders: readonly T[],
-  target: Vec,
-  count: number,
-): T[] {
-  const dist = (f: T) => Math.hypot(f.x - target.x, f.z - target.z);
-  return [...fielders].sort((a, b) => dist(a) - dist(b)).slice(0, Math.max(count, 0));
-}
-
-/** How many outfielders go after each kind of hit. */
-export const CHASERS: Record<Hit, number> = { single: 1, double: 2, triple: 2, homer: 1 };
 
 // ---------- The base paths ----------
 

@@ -59,6 +59,8 @@ export interface Pose {
   twist: number;
   /** Positive looks up. */
   headPitch: number;
+  /** The whole body tipped about its forward axis, in radians; positive tips towards their left (+x). */
+  roll: number;
   headYaw: number;
   armL: LimbPose;
   armR: LimbPose;
@@ -75,6 +77,7 @@ export function neutralPose(): Pose {
     twist: 0,
     headPitch: 0,
     headYaw: 0,
+    roll: 0,
     armL: limb(),
     armR: limb(),
     legL: limb(),
@@ -84,7 +87,7 @@ export function neutralPose(): Pose {
 
 /** Resets a pose to standing at ease. */
 export function resetPose(pose: Pose): Pose {
-  pose.lift = pose.lean = pose.twist = pose.headPitch = pose.headYaw = 0;
+  pose.lift = pose.lean = pose.twist = pose.headPitch = pose.headYaw = pose.roll = 0;
   for (const l of [pose.armL, pose.armR, pose.legL, pose.legR]) l.raise = l.out = l.bend = 0;
   return pose;
 }
@@ -269,6 +272,7 @@ export function createPerson(style: PersonStyle): Person {
 
   const apply = (pose: Pose) => {
     body.position.y = pose.lift;
+    body.rotation.z = -pose.roll;
     torso.rotation.set(pose.lean, pose.twist, 0);
     head.rotation.set(-pose.headPitch, pose.headYaw, 0);
     for (const [arm, p, side] of [
@@ -350,6 +354,7 @@ export function copyPose(from: Pose, to: Pose): Pose {
   to.twist = from.twist;
   to.headPitch = from.headPitch;
   to.headYaw = from.headYaw;
+  to.roll = from.roll;
   copyLimb(from.armL, to.armL);
   copyLimb(from.armR, to.armR);
   copyLimb(from.legL, to.legL);
@@ -369,6 +374,7 @@ export function mixPose(a: Pose, b: Pose, t: number, out: Pose): Pose {
   out.twist = lerp(a.twist, b.twist, t);
   out.headPitch = lerp(a.headPitch, b.headPitch, t);
   out.headYaw = lerp(a.headYaw, b.headYaw, t);
+  out.roll = lerp(a.roll, b.roll, t);
   mixLimb(a.armL, b.armL, t, out.armL);
   mixLimb(a.armR, b.armR, t, out.armR);
   mixLimb(a.legL, b.legL, t, out.legL);

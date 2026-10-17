@@ -19,11 +19,15 @@ import {
   createUmpire,
   FIELDER_SPOTS,
   type Batter,
+  type Actor,
   type Fielder,
   type FielderId,
   type Prop,
 } from './characters';
 import { planBatted, type BattedBall } from './batted';
+import { planPlay, type PlayEvent, type PlayScript } from './choreo';
+import { POSITIONS } from './defense';
+import { createPlayRunner } from './play';
 import { devStart, forcedPlay } from './dev';
 import { createEffects, fireworkColour } from './effects';
 import { buildField } from './field';
@@ -31,19 +35,13 @@ import {
   BALL_RADIUS,
   BASE_SIDE,
   BASE_SPOTS,
-  CHASERS,
   CONTACT,
   dashPosition,
-  FIELD_SPEED,
-  fieldPoint,
   GLOVE,
   GLOVE_TIME,
   MISS_POINT,
-  pickChasers,
   pitchPosition,
   RELEASE,
-  RUN_SPEED,
-  wallRadius,
   ZIP_TIME,
   type Vec,
 } from './flight';
@@ -55,6 +53,7 @@ import {
   fitMoundView,
   fitView,
   followGoal,
+  frameAction,
   hitBand,
   ballScale,
   homeView,
@@ -98,6 +97,7 @@ import {
   type GameState,
   type Hit,
   type Move,
+  type Position,
 } from './rules';
 import {
   coloursOf,
@@ -136,7 +136,7 @@ type Phase =
   | 'pitching'
   | 'done';
 
-type CamMode = 'home' | 'follow' | 'mound';
+type CamMode = 'home' | 'follow' | 'frame' | 'mound';
 
 /** A runner on the move: where they end up, and what happens when they get there. */
 interface Running {
@@ -163,11 +163,16 @@ function run(session: GameSession): void {
   const catcher = createCatcher();
   const umpire = createUmpire();
   scene.add(pitcher.root, catcher.root, umpire.root);
-  const outfield: FielderId[] = ['LF', 'CF', 'RF'];
   const fielders: Fielder[] = (Object.keys(FIELDER_SPOTS) as FielderId[]).map((id, i) =>
     createFielder(id, i),
   );
   fielders.forEach((f) => scene.add(f.mover.person.root));
+  /** All nine, by position. */
+  const actors = {
+    P: pitcher,
+    C: catcher,
+    ...Object.fromEntries(fielders.map((f) => [f.id, f])),
+  } as unknown as Record<Position, Actor>;
 
   // ---------- HUD ----------
   const hud = createHud();
@@ -226,13 +231,13 @@ function run(session: GameSession): void {
   // A hit in progress.
   /** How much the ball is scaled up now, so its trail can match. */
   let ballScaleNow = 1;
+  /** The path of the ball in play, and the script of the play being run. */
   let plan: BattedBall | null = null;
-  let hitT = 0;
-  let landed = false;
-  let held: Fielder | null = null;
-  let chasers: Fielder[] = [];
+  let script: PlayScript | null = null;
+  /** The people in the play: the batter, and the runners from first, second and third. */
+  let playFigures: (Batter | null)[] = [null, null, null, null];
   let fireworksFrom = Infinity;
-  /** Seconds the batter and runners need to finish running the bases. */
+  /** Seconds the batter and runners need to finish running the bases (for the rival's plays). */
   let runTime = 0;
   /** The batter at the plate was just struck out. */
   let struckOut = false;
@@ -694,6 +699,36 @@ function run(session: GameSession): void {
   };
 
   // ---------- Hits ----------
+  const playRunner = createPlayRunner({
+    actor: (p) => actors[p],
+    runner: (from) => playFigures[from],
+    ball: (p, kind, delta) => {
+      ball.setVisible(true);
+      if (kind === 'held') {
+        putBall(p);
+        ball.setGlow(false);
+        return;
+      }
+      putBall(p, true);
+      ball.spin(delta, kind === 'throw' ? 30 : 18);
+      ball.setGlow(kind === 'batted');
+      // The trail grows with the ball, so it can be followed all the way.
+      if (kind === 'throw' || (kind === 'batted' && plan && playRunner.time < plan.airTime)) {
+        effects.trail(ballPos, Math.max(0.5, BALL_RADIUS * 2 * ballScaleNow));
+      }
+    },
+    hideBall: () => {
+      ball.setVisible(false);
+      ball.setGlow(false);
+    },
+    scored: (from) => {
+      const fig = playFigures[from];
+      if (!fig) return;
+      playFigures[from] = null;
+      retire(fig.person.root);
+    },
+  });
+
   /** The bat meets the ball. */
   const contact = (answered: Hit) => {
     sfx.bat();
@@ -704,6 +739,7 @@ function run(session: GameSession): void {
     const kind = forced ?? pickHitKind(answered, Math.random());
     const hit = hitOfKind(kind);
     const ballPlan = planBatted(kind, { side: Math.random(), a: Math.random(), b: Math.random() });
+    const before = state;
     const outcome = applyHit(state, hit, { kind, zone: ballPlan.zone });
     state = outcome.state;
     saveProgress();
@@ -712,17 +748,43 @@ function run(session: GameSession): void {
     // The question gives way to the view of the field.
     after(0.25, () => hud.hideQuestion(true));
 
-    // The ball's flight.
+    // The play: where everybody is, and what the rules decided.
     plan = ballPlan;
-    hitT = 0;
-    landed = false;
-    held = null;
+    const spots = {} as Record<Position, Vec>;
+    for (const p of POSITIONS) {
+      const at = actors[p].mover.person.root.position;
+      spots[p] = { x: at.x, y: 0, z: at.z };
+    }
+    const leads: (Vec | null)[] = [
+      null,
+      ...onBase.map((fig) => (fig ? { ...fig.person.root.position } : null)),
+    ];
+    script = planPlay({
+      ball: ballPlan,
+      moves: outcome.moves,
+      retired: [],
+      bases: before.bases,
+      outs: before.outs,
+      call: kind,
+      spots,
+      leads,
+      runs: outcome.runs,
+    });
+    playFigures = [batter, ...onBase];
+    const next: (Batter | null)[] = [null, null, null];
+    for (const move of outcome.moves) {
+      const fig = playFigures[move.from];
+      if (fig && move.to < 4) next[move.to - 1] = fig;
+    }
+    onBase = next;
+    running = [];
     fireworksFrom = hit === 'homer' ? plan.airTime * 0.78 : Infinity;
     phase = 'hit';
     camMode = 'follow';
     dash = null;
-    sendFielders(hit, plan);
-    const detail = [hitSubtitle(kind, plan.zone, chasers[0]?.id), runsText(outcome.runs)]
+    ball.setVisible(true);
+    playRunner.start(script, onPlayEvent, endPlay);
+    const detail = [hitSubtitle(kind, plan.zone, script.fielder), runsText(outcome.runs)]
       .filter(Boolean)
       .join(' · ');
     hud.showBanner(hitLabel(hit), detail, 'hit', 'top');
@@ -730,7 +792,6 @@ function run(session: GameSession): void {
     after(BANNER_FOR, () => hud.hideBanner());
     speak(hitKindSpeech(kind));
     after(0.35, hit === 'homer' ? sfx.bigCheer : sfx.cheer);
-    runBases(outcome.moves, outcome.runs, RUN_SPEED);
     const dropped = batter.dropBat();
     if (dropped) {
       props.push(dropped);
@@ -739,32 +800,38 @@ function run(session: GameSession): void {
     resultAt = gameTime;
   };
 
-  /** The fielders nearest the ball chase it; on a home run they only watch it go. */
-  const sendFielders = (hit: Hit, hitPlan: BattedBall) => {
-    const deep = hitPlan.theta;
-    const target: Vec = hit === 'homer' ? fieldPoint(deep, wallRadius(deep) - 1.8) : hitPlan.rest;
-    // A ball that stays on the infield is fielded by an infielder.
-    const shallow = !hitPlan.overWall && Math.hypot(hitPlan.rest.x, hitPlan.rest.z) < 20;
-    const candidates = fielders
-      .filter((f) => shallow || outfield.includes(f.id))
-      .map((f) => ({ f, x: f.mover.person.root.position.x, z: f.mover.person.root.position.z }));
-    chasers = pickChasers(
-      candidates,
-      shallow ? hitPlan.rest : hitPlan.firstTouch.p,
-      CHASERS[hit],
-    ).map((c) => c.f);
-    chasers.forEach((f, i) => {
-      const spot: Vec = {
-        x: target.x + (i ? (target.x > 0 ? -2 : 2) : 0),
-        y: 0,
-        z: target.z + (i ? 1.8 : 0),
-      };
-      f.chase(spot, FIELD_SPEED, hit === 'homer' ? 'watch' : 'scoop');
-    });
-    // Everyone else turns to watch the ball go.
-    fielders
-      .filter((f) => !chasers.includes(f))
-      .forEach((f) => f.mover.face(hit === 'homer' ? hitPlan.firstTouch.p : hitPlan.rest));
+  /** Things that happen in a play as it runs: a catch, a run scoring, a slide. */
+  const onPlayEvent = (e: PlayEvent) => {
+    const us = isBatting(state);
+    switch (e.type) {
+      case 'catch':
+        sfx.glove();
+        // The ball is in a glove: from here the camera frames the play, not the flight.
+        if (camMode === 'follow' && plan && !plan.overWall) camMode = 'frame';
+        break;
+      case 'run': {
+        shown.runs++;
+        refresh();
+        hud.flashRuns(us ? 'us' : 'them');
+        if (us) sfx.chime();
+        const at = toScreen(BASE_SPOTS[0]);
+        hud.pop('+1', at.x, at.y - 30, us ? 'good' : 'bad');
+        break;
+      }
+      case 'safe':
+        effects.dust({ ...BASE_SPOTS[e.base % 4], y: 0.1 }, 8);
+        if (e.base === 4) umpire.callSafe();
+        break;
+      case 'out':
+        shown.outs++;
+        refresh();
+        break;
+      case 'wall':
+      case 'land':
+      case 'dust':
+        effects.dust({ x: e.p.x, y: 0.1, z: e.p.z }, 7);
+        break;
+    }
   };
 
   /** The batter and every runner advance together, running the bases. */
@@ -857,56 +924,33 @@ function run(session: GameSession): void {
   /** The play is over: back to the batting view and the next batter. */
   const endPlay = () => {
     if (phase !== 'hit') return;
-    settleRunners();
+    playRunner.settle();
+    playFigures = [null, null, null, null];
+    shown.runs = state.runs;
+    refresh();
     plan = null;
-    held = null;
+    script = null;
     camMode = 'home';
     ball.setVisible(false);
     ball.setGlow(false);
     stopSpeaking();
     hud.hideBanner();
     effects.onBurst = null;
-    fielders.forEach((f) => f.goHome(7));
+    goHomeAll(7);
     pending = [];
     afterPlay(true, 0.7);
   };
 
+  /** Everybody in the field jogs back to where they stand. */
+  const goHomeAll = (speed: number) => {
+    for (const p of POSITIONS) actors[p].goHome(speed);
+  };
+
   const updateHit = (delta: number) => {
     if (!plan) return;
-    hitT += delta;
-    const p = plan.position(hitT, ballPos);
-    if (held) {
-      held.mover.person.handWorld('L', handPoint);
-      putBall({ x: handPoint.x, y: handPoint.y + 0.05, z: handPoint.z });
-      ball.setGlow(false);
-    } else if (!(plan.overWall && hitT > plan.airTime)) {
-      putBall(p, true);
-      ball.spin(delta, 18);
-      ball.setGlow(true);
-      // The trail grows with the ball, so it can be followed all the way.
-      if (hitT < plan.airTime)
-        effects.trail(ballPos, Math.max(0.5, BALL_RADIUS * 2 * ballScaleNow));
-    } else {
-      ball.setVisible(false);
-      ball.setGlow(false);
-    }
-    if (!landed && hitT >= plan.airTime) {
-      landed = true;
-      if (!plan.overWall) {
-        effects.dust({ x: plan.firstTouch.p.x, y: 0.1, z: plan.firstTouch.p.z }, 7);
-      }
-    }
-    // A fielder who gets to the ball once it has stopped scoops it up.
-    if (!held && !plan.overWall && hitT >= plan.end - 0.1) {
-      const taker = chasers.find((f) => {
-        const pos = f.mover.person.root.position;
-        return Math.hypot(pos.x - plan!.rest.x, pos.z - plan!.rest.z) < 3 && !f.mover.moving;
-      });
-      if (taker) {
-        held = taker;
-        sfx.glove();
-      }
-    }
+    playRunner.update(delta);
+    if (!plan) return;
+    const hitT = playRunner.time;
     // Fireworks over the scoreboard once the ball clears the wall.
     if (hitT >= fireworksFrom) {
       fireworksFrom = Infinity;
@@ -920,10 +964,7 @@ function run(session: GameSession): void {
         effects.firework({ x, y, z: centre.z }, fireworkColour(i), 0.1 + i * 0.24);
       }
     }
-    const camEnd = plan.overWall ? plan.airTime + 1.4 : plan.end + 0.5;
-    if (camMode === 'follow' && hitT > camEnd) camMode = 'home';
-    const end = Math.max(plan.end + 0.9, runTime + 0.6, plan.overWall ? 4.2 : 2.6);
-    if (hitT >= end) endPlay();
+    if (camMode === 'follow' && plan.overWall && hitT > plan.airTime + 1.4) camMode = 'home';
   };
 
   // ---------- Pitching ----------
@@ -1056,8 +1097,8 @@ function run(session: GameSession): void {
     leaving = [];
     dash = null;
     plan = null;
-    held = null;
-    chasers = [];
+    script = null;
+    playFigures = [null, null, null, null];
     effects.clear();
     effects.onBurst = null;
     ball.setVisible(false);
@@ -1065,15 +1106,14 @@ function run(session: GameSession): void {
     // Whoever is in the field wears the colours of the side that is not at bat.
     const batting = isBatting(state);
     const wear = batting ? coloursOf(rival) : OUR_COLOURS;
-    pitcher.setColours(wear);
-    catcher.setColours(wear);
-    fielders.forEach((f) => {
-      f.setColours(wear);
-      f.mover.halt();
-      f.mover.place(f.home.x, f.home.z);
-      f.setMode('ready');
-      f.mover.face({ x: 0, y: 0, z: 0 });
-    });
+    for (const p of POSITIONS) {
+      const a = actors[p];
+      a.setColours(wear);
+      a.mover.halt();
+      a.actions.stop();
+      a.mover.place(a.home.x, a.home.z);
+      a.mover.face(p === 'C' ? { x: 0, y: 0, z: -10 } : { x: 0, y: 0, z: 0 });
+    }
     newBatter();
     pitcher.reset();
     umpire.reset();
@@ -1237,7 +1277,7 @@ function run(session: GameSession): void {
   /** A tap while a result is showing skips ahead, so it never feels ignored. */
   const skip = () => {
     if (phase === 'result' && gameTime - resultAt >= SKIP_AFTER) advance();
-    else if (phase === 'hit' && hitT >= HIT_SKIP_AFTER) endPlay();
+    else if (phase === 'hit' && playRunner.time >= HIT_SKIP_AFTER) endPlay();
     else if (phase === 'pitching') pitching.skip();
     else if (phase === 'announce') skipAnnounce?.();
   };
@@ -1309,6 +1349,7 @@ function run(session: GameSession): void {
     catcher.update(delta, time);
     umpire.update(delta, time);
     const figures = new Set<Batter>([batter, ...running.map((r) => r.batter), ...leaving]);
+    playFigures.forEach((fig) => fig && figures.add(fig));
     onBase.forEach((fig) => fig && figures.add(fig));
     figures.forEach((fig) => fig.mover.update(delta, time));
     fielders.forEach((f) => f.mover.update(delta, time));
@@ -1332,13 +1373,29 @@ function run(session: GameSession): void {
     // --- The camera: behind the plate, or following the ball ---
     let goalFov = fit.fov;
     let goalShift = fit.shift;
-    if (camMode === 'follow' && plan) {
+    if ((camMode === 'follow' || camMode === 'frame') && plan) {
       // Once the fireworks are up, the shot is of the scoreboard and the bursts.
-      const closing = fireworksFrom === Infinity && plan.overWall && hitT >= plan.airTime * 0.78;
+      const closing =
+        fireworksFrom === Infinity && plan.overWall && playRunner.time >= plan.airTime * 0.78;
       followGoal(closing ? fireworksAim() : ballPos, goalPos, goalLook, home);
       if (closing) {
         goalFov = hitFrame.fireworks.fov;
         goalShift = hitFrame.fireworks.shift;
+      } else if (camMode === 'frame' && script) {
+        // The ball is in play on the field: frame it and where it is going.
+        goalShift = hitFrame.shift;
+        const now = playRunner.time;
+        const marks = script.frames.filter((f) => f.from <= now).at(-1)?.points ?? [];
+        const shot = frameAction(
+          [ballPos, ...marks],
+          goalPos,
+          fit.fov,
+          viewW,
+          viewH,
+          hitFrame.band,
+        );
+        Object.assign(goalLook, shot.look);
+        goalFov = shot.fov;
       } else {
         goalShift = hitFrame.shift;
         keepBoardClear(
@@ -1363,7 +1420,7 @@ function run(session: GameSession): void {
       // Crossing the field between the two ends, the camera rises so it flies over the players.
       goalPos.y += Math.min(Math.abs(cam.z - goalPos.z) / 6, 1) * 4;
     }
-    const follow = camMode === 'follow';
+    const follow = camMode === 'follow' || camMode === 'frame';
     cam.x = easeToward(cam.x, goalPos.x, follow ? 1.8 : 2.2, delta);
     cam.y = easeToward(cam.y, goalPos.y, follow ? 1.8 : 2.2, delta);
     cam.z = easeToward(cam.z, goalPos.z, follow ? 1.8 : 2.2, delta);

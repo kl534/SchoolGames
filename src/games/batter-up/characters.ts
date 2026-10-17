@@ -14,15 +14,19 @@ import {
   Vector3,
   type Object3D,
 } from 'three';
+import { createActions, ready, type Actions } from './actions';
+import type { FielderPose } from './choreo';
 import {
   BALL_RADIUS,
   CONTACT,
   GLOVE,
+  groundHeight,
   MOUND,
   MOUND_HEIGHT,
   POSITION_SPOTS,
   type Vec,
 } from './flight';
+import type { Position } from './rules';
 import { createMover, type Mover } from './mover';
 import type { Colours } from './teams';
 import {
@@ -30,6 +34,7 @@ import {
   createAnimator,
   createPerson,
   easeInOut,
+  neutralPose,
   easeOut,
   lerp,
   type Person,
@@ -159,12 +164,36 @@ function createBat(): Group {
   return bat;
 }
 
+// ---------- Anyone in the field ----------
+
+/** What the nine fielders share: they can run, act, face and go back to where they stand. */
+export interface Actor {
+  position: Position;
+  mover: Mover;
+  actions: Actions;
+  /** Where he goes back to between plays. */
+  home: Vec;
+  setHome(spot: Vec): void;
+  /** Runs to a spot; `face` keeps him looking at a point as he goes. */
+  run(to: Vec, speed: number, face?: Vec, onArrive?: () => void): void;
+  /** Starts an action (a catch, a throw, a dive) facing `toward`. */
+  act(pose: FielderPose, opts?: { toward?: Vec; side?: -1 | 1 }): void;
+  /** Turns to a spot. */
+  faceTo(point: Vec): void;
+  /** Jogs back to where he stands. */
+  goHome(speed: number): void;
+  /** True when standing at home. */
+  atHome(): boolean;
+  /** Puts on a team's colours. */
+  setColours(colours: Colours): void;
+}
+
 // ---------- The pitcher ----------
 
 const WIND_TIME = 0.7;
 const THROW_RELEASE = 0.12;
 
-export interface Pitcher {
+export interface Pitcher extends Actor {
   root: Group;
   /** Rocks back and raises the front leg, then holds there. */
   windUp(): void;
@@ -174,8 +203,6 @@ export interface Pitcher {
   readonly windTime: number;
   /** Back to standing ready. */
   reset(): void;
-  /** Puts on a team's colours. */
-  setColours(colours: Colours): void;
   /** Where the throwing hand is in the world. */
   handPosition(out: Vector3): Vector3;
   update(delta: number, elapsed: number): void;
@@ -191,8 +218,11 @@ export function createPitcher(): Pitcher {
     hair: 0x2b1a10,
     skin: 0xc68642,
   });
-  person.root.position.set(MOUND.x, MOUND_HEIGHT, MOUND.z);
-  const anim = createAnimator(person);
+  const mover = createMover(person, { ground: groundHeight });
+  mover.place(MOUND.x, MOUND.z);
+  person.root.position.y = MOUND_HEIGHT;
+  const actions = createActions(mover);
+  let home: Vec = { ...MOUND };
   let mode: 'idle' | 'wind' | 'throw' | 'finish' = 'idle';
   let t = 0;
   let released = false;
@@ -254,13 +284,48 @@ export function createPitcher(): Pitcher {
     pose.lift = lerp(-0.04, -0.06, stride);
   };
 
+  mover.idle = (pose, elapsed) => {
+    if (actions.build(pose, elapsed)) return;
+    if (mode === 'idle') idle(pose, elapsed);
+    else if (mode === 'wind') windPose(pose, t / WIND_TIME, elapsed);
+    else if (mode === 'throw') throwPose(pose, t);
+    else {
+      throwPose(pose, 0.6);
+      pose.lean += Math.sin(elapsed * 2) * 0.02;
+    }
+  };
+
   return {
+    position: 'P',
     root: person.root,
+    mover,
+    actions,
+    get home() {
+      return home;
+    },
+    setHome(spot) {
+      home = { ...spot };
+    },
+    run(to, speed, face, onArrive) {
+      mover.runTo([to], speed, onArrive, face ? { face } : undefined);
+    },
+    act(pose, opts) {
+      actions.start(pose, opts);
+    },
+    faceTo: (point) => mover.face(point),
+    goHome(speed) {
+      actions.stop();
+      mover.runTo([home], speed, () => mover.face({ x: 0, y: 0, z: 0 }));
+    },
+    atHome() {
+      const p = person.root.position;
+      return Math.hypot(p.x - home.x, p.z - home.z) < 0.05 && !mover.moving;
+    },
     windUp() {
       mode = 'wind';
       t = 0;
       released = false;
-      anim.transition(0.25);
+      mover.anim.transition(0.25);
     },
     release(callback) {
       if (mode === 'throw') return;
@@ -268,7 +333,7 @@ export function createPitcher(): Pitcher {
       released = false;
       mode = 'throw';
       t = 0;
-      anim.transition(0.05);
+      mover.anim.transition(0.05);
     },
     get windTime() {
       return mode === 'wind' ? t : 0;
@@ -277,7 +342,8 @@ export function createPitcher(): Pitcher {
       mode = 'idle';
       t = 0;
       onRelease = undefined;
-      anim.transition(0.3);
+      actions.stop();
+      mover.anim.transition(0.3);
     },
     setColours: (colours) => person.recolour(colours.shirt, colours.cap),
     handPosition: (out) => person.handWorld('R', out),
@@ -293,27 +359,18 @@ export function createPitcher(): Pitcher {
         mode = 'finish';
         t = 0;
       }
-      anim.step(delta, (pose) => {
-        if (mode === 'idle') idle(pose, elapsed);
-        else if (mode === 'wind') windPose(pose, t / WIND_TIME, elapsed);
-        else if (mode === 'throw') throwPose(pose, t);
-        else {
-          throwPose(pose, 0.6);
-          pose.lean += Math.sin(elapsed * 2) * 0.02;
-        }
-      });
+      actions.update(delta);
+      mover.update(delta, elapsed);
     },
   };
 }
 
 // ---------- The catcher ----------
 
-export interface Catcher {
+export interface Catcher extends Actor {
   root: Group;
   /** The glove snaps shut on the ball. */
   pop(): void;
-  /** Puts on a team's colours. */
-  setColours(colours: Colours): void;
   /** Where the mitt is. */
   mittPosition(out: Vector3): Vector3;
   update(delta: number, elapsed: number): void;
@@ -339,7 +396,8 @@ export function createCatcher(): Catcher {
   });
   person.root.position.set(0, 0, 1.2);
   person.root.rotation.y = Math.PI;
-  const anim = createAnimator(person);
+  const mover = createMover(person);
+  const actions = createActions(mover);
   let popT = 1;
 
   const crouch = (pose: Pose, elapsed: number) => {
@@ -359,13 +417,49 @@ export function createCatcher(): Catcher {
     pose.armR.bend = 0.9;
     pose.armR.out = 0.05;
   };
+  mover.idle = (pose, elapsed) => {
+    if (actions.build(pose, elapsed)) return;
+    crouch(pose, elapsed);
+  };
   // Settle the pose once so the mitt can be lined up with the ball's last stop.
-  anim.step(1, (pose) => crouch(pose, 0));
+  mover.anim.step(1, (pose) => crouch(pose, 0));
   person.root.updateMatrixWorld(true);
   alignHand(person, 'L', GLOVE);
+  /** Where he crouches: the mitt meets the glove spot exactly. */
+  const crouchSpot: Vec = { x: person.root.position.x, y: 0, z: person.root.position.z };
+  let home: Vec = crouchSpot;
 
   return {
+    position: 'C',
     root: person.root,
+    mover,
+    actions,
+    get home() {
+      return home;
+    },
+    setHome(spot) {
+      home = { ...spot };
+    },
+    run(to, speed, face, onArrive) {
+      mover.runTo([to], speed, onArrive, face ? { face } : undefined);
+    },
+    act(pose, opts) {
+      actions.start(pose, opts);
+    },
+    faceTo: (point) => mover.face(point),
+    /** Back to the crouch behind the plate, the mitt meeting the glove spot again. */
+    goHome(speed) {
+      actions.stop();
+      mover.runTo([crouchSpot], speed, () => {
+        mover.place(crouchSpot.x, crouchSpot.z);
+        mover.setYaw(Math.PI);
+        person.root.updateMatrixWorld(true);
+      });
+    },
+    atHome() {
+      const p = person.root.position;
+      return Math.hypot(p.x - crouchSpot.x, p.z - crouchSpot.z) < 0.05 && !mover.moving;
+    },
     pop() {
       popT = 0;
     },
@@ -373,7 +467,8 @@ export function createCatcher(): Catcher {
     mittPosition: (out) => person.handWorld('L', out),
     update(delta, elapsed) {
       popT += delta;
-      anim.step(delta, (pose) => crouch(pose, elapsed));
+      actions.update(delta);
+      mover.update(delta, elapsed);
     },
   };
 }
@@ -384,6 +479,8 @@ export interface Umpire {
   root: Group;
   /** Calls a strike: an arm up and a pump of the fist (a bigger one for strike three). */
   callStrike(big: boolean): void;
+  /** Calls a runner safe: both arms swept out flat for 0.7 s. */
+  callSafe(): void;
   reset(): void;
   update(delta: number, elapsed: number): void;
 }
@@ -402,6 +499,7 @@ export function createUmpire(): Umpire {
   const anim = createAnimator(person);
   let call = -1;
   let big = false;
+  let safe = -1;
 
   const stand = (pose: Pose, elapsed: number) => {
     pose.lean = 0.35;
@@ -422,14 +520,34 @@ export function createUmpire(): Umpire {
       big = isBig;
       anim.transition(0.12);
     },
+    callSafe() {
+      safe = 0;
+      call = -1;
+      anim.transition(0.1);
+    },
     reset() {
       call = -1;
+      safe = -1;
       anim.transition(0.3);
     },
     update(delta, elapsed) {
       if (call >= 0) call += delta;
+      if (safe >= 0) safe += delta;
       anim.step(delta, (pose) => {
         stand(pose, elapsed);
+        if (safe >= 0) {
+          // Both arms swept out flat.
+          const out =
+            easeOut(clamp01(safe / 0.15)) * (safe < 0.7 ? 1 : 1 - clamp01((safe - 0.7) / 0.2));
+          pose.lean = lerp(0.35, 0.05, out);
+          pose.headPitch = 0;
+          pose.armL.raise = lerp(0.5, 0.15, out);
+          pose.armR.raise = lerp(0.5, 0.15, out);
+          pose.armL.out = lerp(0, 1.45, out);
+          pose.armR.out = lerp(0, 1.45, out);
+          pose.armL.bend = pose.armR.bend = lerp(0.5, 0.1, out);
+          return;
+        }
         if (call < 0) return;
         // The right arm (his right is -x in his own frame) goes up and pumps the fist.
         const up = easeOut(clamp01(call / 0.18));
@@ -477,6 +595,16 @@ export interface Batter {
   cheer(): void;
   /** Stands like a base runner, leaning to go. */
   runnerStance(): void;
+  /** A lead off the base: crouched, watching the pitcher. */
+  lead(): void;
+  /** Slides feet first: lean back, legs up, low to the ground. */
+  slide(): void;
+  /** Runs on past the bag, slowing, and turns back. */
+  overrun(): void;
+  /** On the bag tagging up, leaning towards the next base. */
+  tagUp(towards: Vec): void;
+  /** Turns and runs back to the bag. */
+  retreat(): void;
 }
 
 const PIVOT = { x: -0.15, y: 0.33, z: 0.27 };
@@ -500,7 +628,7 @@ export function createBatter(): Batter {
   pivot.add(bat);
   person.torso.add(pivot);
 
-  type Mode = 'stance' | 'swing' | 'slump' | 'cheer' | 'runner';
+  type Mode = 'stance' | 'swing' | 'slump' | 'cheer' | 'runner' | 'lead' | 'slide' | 'tag' | 'back';
   let mode: Mode = 'stance';
   let t = 0;
   let batDropped = false;
@@ -587,8 +715,47 @@ export function createBatter(): Batter {
     pose.armL.bend = pose.armR.bend = 1.0;
   };
 
+  const slidePose = (pose: Pose) => {
+    // Feet first, leaning back, legs up, low to the ground.
+    const k = easeOut(clamp01(t / 0.12));
+    pose.lift = -0.45 * k;
+    pose.lean = -0.9 * k;
+    pose.headPitch = 0.5 * k;
+    pose.legL.raise = pose.legR.raise = 1.4 * k;
+    pose.legL.bend = pose.legR.bend = 0.2;
+    pose.armL.raise = pose.armR.raise = -0.4 * k;
+    pose.armL.out = pose.armR.out = 0.5 * k;
+  };
+
+  const leadPose = (pose: Pose, elapsed: number) => {
+    runnerPose(pose, elapsed);
+    pose.lean = 0.35;
+    pose.headYaw = 0.4;
+    pose.legL.out = pose.legR.out = 0.45;
+  };
+
+  const tagPose = (pose: Pose, elapsed: number) => {
+    runnerPose(pose, elapsed);
+    pose.lean = 0.5;
+    pose.legR.raise = -0.3;
+    pose.legR.bend = 0.4;
+    pose.headYaw = 0.5;
+  };
+
+  mover.override = (pose) => {
+    if (mode !== 'slide') return false;
+    slidePose(pose);
+    return true;
+  };
+
   mover.idle = (pose, elapsed) => {
-    if (mode === 'swing') swingPose(pose, t);
+    if (mode === 'slide') slidePose(pose);
+    else if (mode === 'lead') leadPose(pose, elapsed);
+    else if (mode === 'tag') tagPose(pose, elapsed);
+    else if (mode === 'back') {
+      runnerPose(pose, elapsed);
+      pose.headYaw = 1.0;
+    } else if (mode === 'swing') swingPose(pose, t);
     else if (mode === 'slump') slumpPose(pose, elapsed);
     else if (mode === 'cheer') cheerPose(pose);
     else if (mode === 'runner') runnerPose(pose, elapsed);
@@ -601,17 +768,7 @@ export function createBatter(): Batter {
   mover.setYaw(BAT_YAW);
   person.root.position.set(0, 0, 0);
   const calibrate = () => {
-    const scratch: Pose = {
-      lift: 0,
-      lean: 0,
-      twist: 0,
-      headPitch: 0,
-      headYaw: 0,
-      armL: { raise: 0, out: 0, bend: 0 },
-      armR: { raise: 0, out: 0, bend: 0 },
-      legL: { raise: 0, out: 0, bend: 0 },
-      legR: { raise: 0, out: 0, bend: 0 },
-    };
+    const scratch = neutralPose();
     swingPose(scratch, SWING_CONTACT);
     person.apply(scratch);
     person.root.updateMatrixWorld(true);
@@ -644,6 +801,14 @@ export function createBatter(): Batter {
     ready: () => setMode('stance', 0.2),
     cheer: () => setMode('cheer', 0.15),
     runnerStance: () => setMode('runner', 0.2),
+    lead: () => setMode('lead', 0.2),
+    slide: () => setMode('slide', 0.1),
+    overrun: () => setMode('runner', 0.2),
+    tagUp(towards) {
+      mover.face(towards);
+      setMode('tag', 0.2);
+    },
+    retreat: () => setMode('back', 0.15),
     dropBat() {
       if (batDropped) return null;
       batDropped = true;
@@ -697,92 +862,68 @@ export const FIELDER_SPOTS: Record<FielderId, Vec> = {
 
 export type FielderMode = 'ready' | 'scoop' | 'watch';
 
-export interface Fielder {
+export interface Fielder extends Actor {
   id: FielderId;
-  mover: Mover;
-  home: Vec;
   /** Runs after a ball and fields it; `onArrive` runs when they get there. */
   chase(target: Vec, speed: number, mode: FielderMode, onArrive?: () => void): void;
-  /** Jogs back to position. */
-  goHome(speed: number): void;
-  /** Puts on a team's colours. */
-  setColours(colours: Colours): void;
   setMode(mode: FielderMode): void;
-  /** True when standing at their spot. */
-  atHome(): boolean;
 }
 
 export function createFielder(id: FielderId, index: number): Fielder {
+  const outfield = id === 'LF' || id === 'CF' || id === 'RF';
   const person = createPerson({
     shirt: 0xe3e7ee,
     pants: 0xcfd5e0,
     hat: 'cap',
-    hatColor: id === 'LF' || id === 'CF' || id === 'RF' ? 0x2c6e49 : NAVY,
+    hatColor: outfield ? 0x2c6e49 : NAVY,
     glove: 'left',
     hair: index % 2 ? 0x2b1a10 : 0x6b4423,
     skin: index % 3 === 0 ? 0xc68642 : 0xf1b48a,
   });
-  const home = FIELDER_SPOTS[id];
+  let home: Vec = { ...FIELDER_SPOTS[id] };
   const mover = createMover(person);
   mover.place(home.x, home.z);
   mover.setYaw(Math.atan2(-home.x, -home.z));
-  let mode: FielderMode = 'ready';
-  let t = 0;
+  // An outfielder's throw has a crow hop; an infielder's is quick.
+  const actions = createActions(mover, { release: outfield ? 0.38 : 0.22 });
 
   mover.idle = (pose, elapsed) => {
-    const sway = Math.sin(elapsed * 1.9 + index * 1.7);
-    if (mode === 'ready') {
-      pose.lift = -0.07;
-      pose.lean = 0.3;
-      pose.headPitch = -0.1;
-      pose.legL.raise = pose.legR.raise = 0.35;
-      pose.legL.bend = pose.legR.bend = 0.7;
-      pose.legL.out = pose.legR.out = 0.2;
-      pose.armL.raise = 0.75 + sway * 0.04;
-      pose.armL.bend = 0.9;
-      pose.armL.out = 0.1;
-      pose.armR.raise = 0.3;
-      pose.armR.bend = 0.4;
-    } else if (mode === 'scoop') {
-      const k = easeOut(clamp01(t / 0.2));
-      pose.lift = -0.1 * k;
-      pose.lean = 0.9 * k;
-      pose.headPitch = -0.4 * k;
-      pose.legL.raise = pose.legR.raise = 0.5 * k;
-      pose.legL.bend = pose.legR.bend = 0.9 * k;
-      pose.armL.raise = 1.0 * k;
-      pose.armL.bend = 0.2;
-      pose.armR.raise = 0.8 * k;
-      pose.armR.bend = 0.3;
-    } else {
-      // Watching a ball sail out of the park, glove hanging.
-      const k = easeOut(clamp01(t / 0.3));
-      pose.lean = -0.1 * k;
-      pose.headPitch = 0.9 * k;
-      pose.armL.raise = 0.2;
-      pose.armR.raise = 0.1;
-    }
+    if (actions.build(pose, elapsed)) return;
+    ready(pose, Math.sin(elapsed * 1.9 + index * 1.7));
   };
 
   const baseUpdate = mover.update;
   mover.update = (delta, elapsed) => {
-    t += delta;
+    actions.update(delta);
     baseUpdate(delta, elapsed);
   };
 
   const setMode = (next: FielderMode) => {
-    if (mode === next) return;
-    mode = next;
-    t = 0;
-    mover.anim.transition(0.15);
+    if (next === 'ready') actions.stop();
+    else if (actions.pose !== next) actions.start(next);
   };
 
   return {
     id,
+    position: id,
     mover,
-    home,
+    actions,
+    get home() {
+      return home;
+    },
+    setHome(spot) {
+      home = { ...spot };
+    },
     setMode,
     setColours: (colours) => person.recolour(colours.shirt, colours.cap),
+    run(to, speed, face, onArrive) {
+      actions.stop();
+      mover.runTo([to], speed, onArrive, face ? { face } : undefined);
+    },
+    act(pose, opts) {
+      actions.start(pose, opts);
+    },
+    faceTo: (point) => mover.face(point),
     chase(target, speed, next, onArrive) {
       setMode('ready');
       mover.runTo([target], speed, () => {
