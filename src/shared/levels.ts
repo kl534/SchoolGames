@@ -43,6 +43,18 @@ const multiplierOf = (fact: Fact) =>
 const multiplierAtMost10 = (fact: Fact) => multiplierOf(fact) <= 10;
 const multiplierAbove10 = (fact: Fact) => !multiplierAtMost10(fact);
 
+/** The biggest of the two numbers a sum or take-away is made of: 12 in 7 + 12 and in 19 − 7. */
+const biggestNumber = (fact: Fact): number => {
+  const visual = fact.visual;
+  if (!visual) return 0;
+  return visual.kind === 'subtract'
+    ? Math.max(visual.b, visual.a - visual.b)
+    : Math.max(visual.a, visual.b);
+};
+/** Facts of a topic whose biggest number is from `from` to `to`. */
+const biggest = (from: number, to: number) => (fact: Fact) =>
+  biggestNumber(fact) >= from && biggestNumber(fact) <= to;
+
 /** Tables with these numbers, as they were up to × 10: the facts that make up the older levels. */
 const tableFacts = (prefix: string, numbers: number[]) =>
   factsOf(tables(prefix, numbers), multiplierAtMost10);
@@ -67,6 +79,13 @@ export const LEVELS: Level[] = [
   { title: '÷ 6, 7', facts: tableFacts('divide-by-', [6, 7]) },
   { title: '× 8, 9', facts: tableFacts('times-', [8, 9]) },
   { title: '÷ 8, 9', facts: tableFacts('divide-by-', [8, 9]) },
+  // Addition and subtraction with numbers up to 16: after the tables up to 10, before the 11s.
+  { title: 'Sums to 24', facts: factsOf(['addition-11-16'], biggest(11, 12)) },
+  { title: 'Take-away within 24', facts: factsOf(['subtraction-11-16'], biggest(11, 12)) },
+  { title: 'Sums to 28', facts: factsOf(['addition-11-16'], biggest(13, 14)) },
+  { title: 'Take-away within 28', facts: factsOf(['subtraction-11-16'], biggest(13, 14)) },
+  { title: 'Sums to 32', facts: factsOf(['addition-11-16'], biggest(15, 16)) },
+  { title: 'Take-away within 32', facts: factsOf(['subtraction-11-16'], biggest(15, 16)) },
   // The 11 to 16 times of the old tables (11 × 3 up to 16 × 3), then the new tables 11 to 16.
   { title: '× up to 16: 1, 2, 5, 10', facts: stretchFacts('times-', [1, 2, 5, 10]) },
   { title: '÷ up to 16: 1, 2, 5, 10', facts: stretchFacts('divide-by-', [1, 2, 5, 10]) },

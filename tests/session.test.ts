@@ -121,7 +121,7 @@ describe('My Level session', () => {
   });
 
   it('describes the current level', () => {
-    expect(start('Describer').topic.description).toBe('Level 1 of 24: Sums to 10');
+    expect(start('Describer').topic.description).toBe('Level 1 of 30: Sums to 10');
   });
 
   it("saves answers under the fact's own topic and the level count with them", () => {
