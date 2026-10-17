@@ -50,7 +50,12 @@ import {
   wallRadius,
   type Vec,
 } from '../src/games/batter-up/flight';
-import { assignDefense, pickFielder } from '../src/games/batter-up/defense';
+import {
+  assignDefense,
+  fieldingSpots,
+  leadSpot,
+  pickFielder,
+} from '../src/games/batter-up/defense';
 import {
   checkScript,
   planPlay,
@@ -2607,6 +2612,74 @@ describe('the swoop to the wide view', () => {
       expect(swoopPosition(from, to, s).y).toBeGreaterThan(Math.min(from.y, to.y));
     }
     expect(SWOOP_SECONDS).toBeCloseTo(0.7, 6);
+  });
+});
+
+describe('positioning for the situation', () => {
+  const on = (...bases: number[]): Bases => [
+    bases.includes(1),
+    bases.includes(2),
+    bases.includes(3),
+  ];
+  const normal = POSITION_SPOTS;
+
+  it('stands in the normal spots with nobody on', () => {
+    expect(fieldingSpots(on(), 0)).toEqual(normal);
+    expect(fieldingSpots(on(2), 1)).toEqual(normal);
+  });
+
+  it('plays double-play depth with a runner on first and fewer than two out', () => {
+    const spots = fieldingSpots(on(1, 2), 1);
+    expect(spots.SS).toEqual({ x: -3.6, y: 0, z: -13.6 });
+    expect(spots['2B']).toEqual({ x: 3.2, y: 0, z: -14.2 });
+    expect(fieldingSpots(on(1, 2), 2).SS).toEqual(normal.SS);
+  });
+
+  it('has the first baseman hold a runner on first when second is empty', () => {
+    expect(fieldingSpots(on(1), 2)['1B']).toEqual({ x: 8.1, y: 0, z: -8.9 });
+    expect(fieldingSpots(on(1, 2), 0)['1B']).toEqual(normal['1B']);
+  });
+
+  it('brings the infield in with a runner on third, first empty and fewer than two out', () => {
+    const spots = fieldingSpots(on(3), 0);
+    for (const p of ['2B', 'SS', '3B'] as const) {
+      expect(spots[p].x).toBeCloseTo(normal[p].x * 0.75, 6);
+      expect(spots[p].z).toBeCloseTo(normal[p].z * 0.75, 6);
+    }
+    expect(spots['1B'].z).toBeCloseTo(normal['1B'].z * 0.9, 6);
+    expect(fieldingSpots(on(3), 2)).toEqual(normal);
+    expect(fieldingSpots(on(1, 3), 0)['3B']).toEqual(normal['3B']);
+  });
+
+  it('keeps every fielder in fair ground and inside the wall for every base state', () => {
+    for (let mask = 0; mask < 8; mask++) {
+      for (const outs of [0, 1, 2]) {
+        const spots = fieldingSpots(on(...[1, 2, 3].filter((b) => mask & (1 << (b - 1)))), outs);
+        for (const p of Object.keys(spots) as Position[]) {
+          const spot = spots[p];
+          if (p === 'C') continue;
+          expect(Math.abs(fieldAngle(spot))).toBeLessThanOrEqual(FOUL_ANGLE + 1e-9);
+          expect(Math.hypot(spot.x, spot.z)).toBeLessThan(wallRadius(fieldAngle(spot)));
+        }
+      }
+    }
+  });
+
+  it('takes leads a few steps off each base, towards the next', () => {
+    for (const base of [1, 2, 3] as const) {
+      const lead = leadSpot(base);
+      const bag = BASE_SPOTS[base];
+      expect(Math.hypot(lead.x - bag.x, lead.z - bag.z)).toBeLessThanOrEqual(3);
+      expect(Math.hypot(lead.x - bag.x, lead.z - bag.z)).toBeGreaterThan(1);
+    }
+    const first = leadSpot(1);
+    expect(Math.hypot(first.x - BASE_SPOTS[2].x, first.z - BASE_SPOTS[2].z)).toBeLessThan(
+      BASE_SIDE - 1,
+    );
+    // Off third towards home and a little into foul ground, on the left.
+    const third = leadSpot(3);
+    expect(third.z).toBeGreaterThan(BASE_SPOTS[3].z);
+    expect(third.x).toBeLessThan(BASE_SPOTS[3].x + 1.7);
   });
 });
 
