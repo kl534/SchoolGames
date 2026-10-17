@@ -33,20 +33,22 @@ const learn = (progress: PlayerProgress, level: number, times = 3) => {
 };
 
 describe('LEVELS', () => {
-  it('has 24 levels of the expected sizes', () => {
+  it('has 30 levels of the expected sizes', () => {
     expect(LEVELS.map((l) => l.facts.length)).toEqual([
-      45, 45, 55, 55, 40, 40, 20, 20, 20, 20, 20, 20, 24, 24, 12, 12, 24, 24, 32, 32, 32, 32, 32,
-      32,
+      45, 45, 55, 55, 40, 40, 20, 20, 20, 20, 20, 20, 44, 44, 52, 52, 60, 60, 24, 24, 12, 12, 24,
+      24, 32, 32, 32, 32, 32, 32,
     ]);
     expect(LEVELS[0].title).toBe('Sums to 10');
     expect(LEVELS[11].title).toBe('÷ 8, 9');
-    expect(LEVELS[23].title).toBe('÷ 15, 16');
+    expect(LEVELS[12].title).toBe('Sums to 24');
+    expect(LEVELS[17].title).toBe('Take-away within 32');
+    expect(LEVELS[29].title).toBe('÷ 15, 16');
   });
 
   it('holds every math fact exactly once', () => {
     const all = LEVELS.flatMap((l) => l.facts.map(({ topic, fact }) => `${topic.id}/${fact.id}`));
-    expect(all).toHaveLength(712);
-    expect(new Set(all).size).toBe(712);
+    expect(all).toHaveLength(1024);
+    expect(new Set(all).size).toBe(1024);
     const expected = MATH_TOPICS.flatMap((t) => t.facts.map((f) => `${t.id}/${f.id}`));
     expect(new Set(all)).toEqual(new Set(expected));
   });
@@ -56,10 +58,42 @@ describe('LEVELS', () => {
       const times = fact.visual!.kind === 'divide' ? Number(fact.answer) : fact.visual!.a;
       expect(times).toBeLessThanOrEqual(10);
     }
-    for (const { fact } of LEVELS.slice(12, 18).flatMap((l) => l.facts)) {
+    for (const { fact } of LEVELS.slice(18, 24).flatMap((l) => l.facts)) {
       const times = fact.visual!.kind === 'divide' ? Number(fact.answer) : fact.visual!.a;
       expect(times).toBeGreaterThan(10);
     }
+  });
+
+  it('puts the bigger sums and take-aways after the tables up to 10 and before the 11s', () => {
+    const biggest = (fact: Parameters<typeof topicOfFact>[0]) => {
+      const { kind, a, b } = fact.visual!;
+      return kind === 'subtract' ? Math.max(b, a - b) : Math.max(a, b);
+    };
+    const ranges = [
+      [11, 12],
+      [13, 14],
+      [15, 16],
+    ];
+    LEVELS.slice(12, 18).forEach((level, i) => {
+      const [from, to] = ranges[Math.floor(i / 2)];
+      for (const { fact } of level.facts) {
+        expect(['add', 'subtract']).toContain(fact.visual!.kind);
+        expect(biggest(fact)).toBeGreaterThanOrEqual(from);
+        expect(biggest(fact)).toBeLessThanOrEqual(to);
+      }
+    });
+    for (const level of [...LEVELS.slice(4, 12), ...LEVELS.slice(18)]) {
+      for (const { fact } of level.facts) {
+        expect(['add', 'subtract']).not.toContain(fact.visual!.kind);
+      }
+    }
+  });
+
+  it('alternates addition and subtraction in the new levels', () => {
+    LEVELS.slice(12, 18).forEach((level, i) => {
+      const kind = i % 2 === 0 ? 'add' : 'subtract';
+      for (const { fact } of level.facts) expect(fact.visual!.kind).toBe(kind);
+    });
   });
 
   it("reuses the topics' own Fact objects", () => {
@@ -84,7 +118,8 @@ describe('LEVELS', () => {
 
 describe('levelLabel', () => {
   it('names the level', () => {
-    expect(levelLabel(3)).toBe('Level 3 of 24: Sums to 20');
+    expect(levelLabel(3)).toBe('Level 3 of 30: Sums to 20');
+    expect(levelLabel(13)).toBe('Level 13 of 30: Sums to 24');
   });
 });
 
@@ -135,14 +170,19 @@ describe('levelsOpen', () => {
 
   it('stays within 1 and the number of levels', () => {
     expect(levelsOpen({ ...emptyProgress(), levelsOpen: 0 })).toBe(1);
-    expect(levelsOpen({ ...emptyProgress(), levelsOpen: 99 })).toBe(24);
+    expect(levelsOpen({ ...emptyProgress(), levelsOpen: 99 })).toBe(30);
   });
 
-  it('opens the new levels for a player who had finished all 12 old ones', () => {
+  it('opens the first above-10 level for a player who finished the tables up to 10', () => {
     const progress = emptyProgress();
     for (let level = 1; level <= 12; level++) learn(progress, level);
     expect(levelsOpen({ ...progress, levelsOpen: 12 })).toBe(13);
     expect(levelsOpen({ ...progress, levelsOpen: 5 })).toBe(13);
+  });
+
+  it('reads a saved level of 15 against the new order, without a migration', () => {
+    expect(levelsOpen({ ...emptyProgress(), levelsOpen: 15 })).toBe(15);
+    expect(LEVELS[14].title).toBe('Sums to 28');
   });
 });
 
@@ -221,7 +261,7 @@ describe('chooseLevelFacts', () => {
   it('still returns the full count when everything is learned', () => {
     const progress = emptyProgress();
     for (let level = 1; level <= LEVELS.length; level++) learn(progress, level);
-    expect(levelsOpen(progress)).toBe(24);
+    expect(levelsOpen(progress)).toBe(30);
     expect(chooseLevelFacts(progress, 10, seededRandom(2))).toHaveLength(10);
     expect(chooseLevelFacts(progress, 25, seededRandom(2))).toHaveLength(25);
   });
@@ -239,7 +279,7 @@ describe('chooseLevelFacts', () => {
       }
       expect(answered).toBeLessThan(5000);
     }
-    expect(levelsOpen(progress)).toBe(24);
-    expect(progress.levelsOpen).toBe(24);
+    expect(levelsOpen(progress)).toBe(30);
+    expect(progress.levelsOpen).toBe(30);
   });
 });

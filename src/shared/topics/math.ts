@@ -99,6 +99,37 @@ const subtraction: Topic = {
   distractors: mathDistractors,
 };
 
+/** Addition and subtraction numbers run up to this; the first two topics stop at 10. */
+export const MAX_ADDEND = 16;
+/** The first addition and subtraction topics use numbers up to this. */
+const BASE_ADDEND = 10;
+
+/** Pairs (a, b) from 1 to MAX_ADDEND where at least one number is above BASE_ADDEND. */
+const bigPairs = range(1, MAX_ADDEND).flatMap((a) =>
+  range(1, MAX_ADDEND)
+    .filter((b) => Math.max(a, b) > BASE_ADDEND)
+    .map((b) => [a, b] as const),
+);
+
+const bigAddition: Topic = {
+  id: 'addition-11-16',
+  title: 'Addition 11–16',
+  subject: 'Addition',
+  description: 'Add two numbers from 1 to 16 where one is over 10.',
+  facts: bigPairs.map(([a, b]) => mathFact('add', a, b)),
+  distractors: mathDistractors,
+};
+
+const bigSubtraction: Topic = {
+  id: 'subtraction-11-16',
+  title: 'Subtraction 11–16',
+  subject: 'Subtraction',
+  description:
+    'Take away 1 to 16 from numbers up to 32 (the answer or the number taken away is over 10).',
+  facts: bigPairs.map(([b, c]) => mathFact('subtract', b + c, b)),
+  distractors: mathDistractors,
+};
+
 /** Tables run from 1 to this number, and each table has this many facts. */
 export const MAX_TABLE = 16;
 
@@ -121,4 +152,11 @@ const divisionTables: Topic[] = range(1, MAX_TABLE).map((divisor) => ({
   distractors: mathDistractors,
 }));
 
-export const MATH_TOPICS: Topic[] = [addition, subtraction, ...timesTables, ...divisionTables];
+export const MATH_TOPICS: Topic[] = [
+  addition,
+  bigAddition,
+  subtraction,
+  bigSubtraction,
+  ...timesTables,
+  ...divisionTables,
+];

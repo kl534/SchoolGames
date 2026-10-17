@@ -49,6 +49,45 @@ describe('built-in topics', () => {
     expect(topic.facts.find((f) => f.id === '15-8')?.answer).toBe('7');
   });
 
+  it('addition 11-16 holds every pair up to 16 with a number over 10', () => {
+    const big = getTopic('addition-11-16')!;
+    const base = getTopic('addition-1-10')!;
+    expect(big.facts).toHaveLength(156);
+    for (const { visual } of big.facts) {
+      expect(Math.min(visual!.a, visual!.b)).toBeGreaterThanOrEqual(1);
+      expect(Math.max(visual!.a, visual!.b)).toBeLessThanOrEqual(16);
+      expect(Math.max(visual!.a, visual!.b)).toBeGreaterThanOrEqual(11);
+    }
+    const pairs = [...base.facts, ...big.facts].map((f) => `${f.visual!.a},${f.visual!.b}`);
+    expect(pairs).toHaveLength(256);
+    expect(new Set(pairs).size).toBe(256);
+    const three = big.facts.find((f) => f.id === '3+12')!;
+    expect(three.answer).toBe('15');
+    expect(three.statement).toBe('3 + 12 = 15');
+    expect(big.facts.find((f) => f.id === '16+16')?.answer).toBe('32');
+    const answers = big.facts.map((f) => Number(f.answer));
+    expect(Math.min(...answers)).toBe(12);
+    expect(Math.max(...answers)).toBe(32);
+  });
+
+  it('subtraction 11-16 mirrors addition 11-16', () => {
+    const big = getTopic('subtraction-11-16')!;
+    const base = getTopic('subtraction-1-10')!;
+    expect(big.facts).toHaveLength(156);
+    const fact = big.facts.find((f) => f.id === '27-12')!;
+    expect(fact.answer).toBe('15');
+    expect(fact.statement).toBe('27 − 12 = 15');
+    expect(big.facts.find((f) => f.id === '32-16')?.answer).toBe('16');
+    for (const f of big.facts) {
+      expect(f.visual!.a).toBeLessThanOrEqual(32);
+      expect(Number(f.answer)).toBeGreaterThanOrEqual(1);
+      expect(Number(f.answer)).toBeLessThanOrEqual(16);
+    }
+    const pairs = [...base.facts, ...big.facts].map((f) => `${f.visual!.b},${Number(f.answer)}`);
+    expect(pairs).toHaveLength(256);
+    expect(new Set(pairs).size).toBe(256);
+  });
+
   it('has one topic per times table, 1 to 16, each running from 1 × n to 16 × n', () => {
     expect(TOPICS.filter((t) => t.subject === 'Multiplication')).toHaveLength(16);
     for (let n = 1; n <= 16; n++) {
@@ -92,6 +131,12 @@ describe('built-in topics', () => {
       'Multiplication',
       'Division',
     ]);
+    const ids = (subject: string) =>
+      groupBySubject()
+        .find((g) => g.subject === subject)!
+        .topics.map((t) => t.id);
+    expect(ids('Addition')).toEqual(['addition-1-10', 'addition-11-16']);
+    expect(ids('Subtraction')).toEqual(['subtraction-1-10', 'subtraction-11-16']);
   });
 
   it('returns undefined for unknown topics', () => {
