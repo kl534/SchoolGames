@@ -16,14 +16,18 @@ feature code yourself.
 
 If `$ARGUMENTS` is empty, ask the owner what they want before you do anything else.
 
-## 1. Pre-flight
+## 1. Pre-flight: get onto the latest `main`
 
-- Run `git status` and `git fetch origin main`. Anything uncommitted outside `docs/` belongs to
-  other work, so ask the owner what to do with it before going on. Never stash it or throw it away
-  without asking.
-- Note the current branch and any open PRs (`gh pr list`). If the feature builds on a branch that
-  hasn't merged yet, it may have to branch from that branch instead of `main`. Ask the owner if it
-  isn't obvious.
+Always do this first, before reading code or asking any questions. You read code and design against
+the latest `main`, and the work branches from it.
+
+1. Run `git status`. If anything is uncommitted outside `docs/`, it belongs to other work, so stop
+   and ask the owner what to do with it. Never stash it, commit it or throw it away without asking.
+   Untracked files in `docs/` are design docs, and they carry over safely.
+2. Run `git checkout main && git pull --ff-only origin main`. If the network fails, retry up to 4
+   times and wait 2, 4, 8 and 16 s between tries. If the pull can't fast-forward (local `main` has
+   diverged), stop and ask the owner. Don't reset it.
+3. Check that `git log -1 --oneline` matches `origin/main`.
 
 ## 2. Learn the ground before asking anything
 
@@ -105,8 +109,8 @@ Hand off one milestone at a time, in order. For each one:
 
 1. Fill in every `<…>` placeholder in `.claude/skills/add-feature/implementer-prompt.md`:
    `<REPO_ROOT>`, `<DOC_PATH>` (absolute), `<MILESTONE>`, `<BRANCH>`, `<BASE>` (the ref to branch
-   from) and `<PR_BASE>` (the branch the PR targets). Milestone 1 branches from `origin/main` (or
-   the branch the owner chose). Each later milestone branches from the branch of the milestone
+   from) and `<PR_BASE>` (the branch the PR targets). Milestone 1 always branches from `origin/main`
+   and targets `main`. Each later milestone branches from the branch of the milestone
    before it and targets it in the PR, unless that PR has merged. If it has merged, use
    `origin/main` and target `main`.
 2. Call the `Agent` tool with `model: "sonnet"`, `subagent_type: "general-purpose"`, a short
