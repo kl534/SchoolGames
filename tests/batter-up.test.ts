@@ -28,7 +28,6 @@ import {
   basePathPoint,
   BOARD,
   BURST_RADIUS,
-  CHASERS,
   CONTACT,
   dashPosition,
   FOUL_ANGLE,
@@ -39,10 +38,12 @@ import {
   GLOVE,
   GROUND_BALL_TIME,
   groundBallPosition,
+  groundHeight,
+  MOUND,
+  MOUND_HEIGHT,
   INFIELD_PLAYS,
   INFIELD_SPEED,
   LAP,
-  pickChasers,
   pitchPosition,
   POSITION_SPOTS,
   POP_FLY_TIME,
@@ -53,6 +54,14 @@ import {
   wallRadius,
   type Vec,
 } from '../src/games/batter-up/flight';
+import { assignDefense, pickFielder } from '../src/games/batter-up/defense';
+import {
+  checkScript,
+  planPlay,
+  roundRoute,
+  roundRouteInfo,
+  type PlayInput,
+} from '../src/games/batter-up/choreo';
 import { isFair, planBatted, type BattedBall } from '../src/games/batter-up/batted';
 import {
   ballRadiusPx,
@@ -66,6 +75,8 @@ import {
   fitMoundView,
   fitView,
   followGoal,
+  frameAction,
+  FRAME_MAX_FOV,
   hitBand,
   homeView,
   hudLayout,
@@ -923,17 +934,6 @@ describe('pitches and hits in flight', () => {
     expect(fieldAngle(p)).toBeCloseTo(0.4, 6);
     expect(fieldPoint(0, 10).z).toBeCloseTo(-10, 6);
     expect(fieldPoint(0.5, 10).x).toBeGreaterThan(0);
-  });
-
-  it('sends the nearest outfielders after the ball', () => {
-    const outfield = (['LF', 'CF', 'RF'] as FielderId[]).map((id) => ({
-      id,
-      ...FIELDER_SPOTS[id],
-    }));
-    expect(pickChasers(outfield, at(-10, 0, -25), 1).map((f) => f.id)).toEqual(['LF']);
-    expect(pickChasers(outfield, at(12, 0, -30), 2).map((f) => f.id)).toEqual(['RF', 'CF']);
-    expect(pickChasers(outfield, at(0, 0, -30), 0)).toEqual([]);
-    expect(CHASERS).toEqual({ single: 1, double: 2, triple: 2, homer: 1 });
   });
 
   it('lays out the bases a base-side apart, with the mound between home and second', () => {
@@ -2281,6 +2281,200 @@ describe('batted ball paths', () => {
     expect(left.rest.x).toBeLessThan(-5);
     expect(Math.abs(middle.rest.x)).toBeLessThan(2);
     expect(right.rest.x).toBeGreaterThan(5);
+  });
+});
+
+describe('the play script', () => {
+  const rolls = (n: number) => {
+    let seed = n * 7919 + 13;
+    const next = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
+    return { side: next(), a: next(), b: next() };
+  };
+  const inputFor = (
+    kind: HitKind,
+    r: ReturnType<typeof rolls>,
+    mask: number,
+    outs = 0,
+  ): PlayInput => {
+    const ball = planBatted(kind, r);
+    const bases: Bases = [Boolean(mask & 1), Boolean(mask & 2), Boolean(mask & 4)];
+    const adv = advanceOnHit(bases, kind, ball.zone);
+    return {
+      ball,
+      moves: adv.moves,
+      retired: [],
+      bases,
+      outs,
+      call: kind,
+      spots: POSITION_SPOTS,
+      leads: [null, BASE_SPOTS[1], BASE_SPOTS[2], BASE_SPOTS[3]],
+      runs: adv.runs,
+    };
+  };
+
+  it('breaks no rule for any hit, base state, outs or seed', () => {
+    for (const kind of ALL_HIT_KINDS) {
+      for (let seed = 0; seed < 20; seed++) {
+        const r = rolls(seed);
+        for (let mask = 0; mask < 8; mask++) {
+          for (const outs of [0, 1, 2]) {
+            const input = inputFor(kind, r, mask, outs);
+            const script = planPlay(input);
+            expect(checkScript(script, input), `${kind} ${seed} ${mask}`).toEqual([]);
+          }
+        }
+      }
+    }
+  });
+
+  it('plans the same play twice for the same input', () => {
+    const input = inputFor('double-gap', rolls(3), 3);
+    expect(JSON.stringify(planPlay(input).legs)).toBe(JSON.stringify(planPlay(input).legs));
+  });
+
+  it('keeps a play within five seconds unless it is a home run', () => {
+    for (const kind of ALL_HIT_KINDS.filter((k) => !k.startsWith('homer'))) {
+      for (let mask = 0; mask < 8; mask++) {
+        expect(planPlay(inputFor(kind, rolls(5), mask)).duration).toBeLessThanOrEqual(5);
+      }
+    }
+  });
+
+  it('notices a broken script', () => {
+    const input = inputFor('single-liner', rolls(1), 1);
+    const script = planPlay(input);
+    script.legs[1] = { ...script.legs[1], start: script.legs[1].start + 1 };
+    expect(checkScript(script, input).length).toBeGreaterThan(0);
+  });
+
+  const assign = (kind: HitKind, r: { side: number; a: number; b: number }, mask: number) => {
+    const input = inputFor(kind, r, mask);
+    const f = pickFielder(kind, input.ball);
+    const target =
+      Math.max(...input.moves.map((m) => m.to)) >= 4
+        ? 4
+        : Math.max(...input.moves.map((m) => m.to), 2);
+    return {
+      input,
+      a: assignDefense({
+        kind,
+        theta: input.ball.theta,
+        zone: input.ball.zone,
+        fielder: f.fielder,
+        pickup: f.p,
+        target: kind === 'single-chopper' ? 1 : target,
+        moves: input.moves,
+      }),
+      fielder: f.fielder,
+    };
+  };
+
+  it('plays a single to right with a runner on first the textbook way', () => {
+    const { a, fielder } = assign('single-liner', { side: 0.95, a: 1, b: 0.5 }, 1);
+    expect(fielder).toBe('RF');
+    expect(a.SS.role).toBe('cutoff');
+    expect(a['3B']).toMatchObject({ role: 'cover', base: 3 });
+    expect(a.P).toMatchObject({ role: 'backupBase', base: 3 });
+    expect(a.LF).toMatchObject({ role: 'backupBase', base: 3 });
+    expect(a.CF.role).toBe('backupFielder');
+  });
+
+  it('plays a double to left-centre with the shortstop relaying and second baseman trailing', () => {
+    const { a } = assign('double-gap', { side: 0.1, a: 0.5, b: 0.5 }, 1);
+    expect(a.SS.role).toBe('relay');
+    expect(a['2B'].role).toBe('trail');
+    expect(a['1B']).toMatchObject({ role: 'cover', base: 2 });
+    expect(a.C).toMatchObject({ role: 'cover', base: 4 });
+  });
+
+  it('plays a chopper to third with first covered and the catcher and right fielder backing up', () => {
+    const { a, fielder } = assign('single-chopper', { side: 0.1, a: 0.5, b: 0.5 }, 0);
+    expect(fielder).toBe('3B');
+    expect(a['1B']).toMatchObject({ role: 'cover', base: 1 });
+    expect(a.C).toMatchObject({ role: 'backupBase', base: 1 });
+    expect(a.RF).toMatchObject({ role: 'backupBase', base: 1 });
+  });
+
+  it('rounds the bases in curves close to the base path', () => {
+    for (let from = 0; from < 4; from++) {
+      for (let to = from + 1; to <= 4; to++) {
+        const { points, baseAt } = roundRouteInfo(from, to);
+        expect(roundRoute(from, to)).toEqual(points);
+        for (const p of points) {
+          let nearest = Infinity;
+          for (let d = 0; d <= LAP; d += 0.1)
+            nearest = Math.min(
+              nearest,
+              Math.hypot(
+                p.x - basePathPoint(d, at(0, 0, 0)).x,
+                p.z - basePathPoint(d, at(0, 0, 0)).z,
+              ),
+            );
+          expect(nearest).toBeLessThan(1.5);
+        }
+        for (let b = from + 1; b <= to; b++) {
+          const spot = BASE_SPOTS[b % 4];
+          const p = points[baseAt[b]];
+          expect(Math.hypot(p.x - spot.x, p.z - spot.z)).toBeLessThan(0.3);
+        }
+      }
+    }
+  });
+});
+
+describe('the mound and the camera frame', () => {
+  it('raises the ground on the mound and slopes it to the flat', () => {
+    expect(groundHeight(MOUND.x, MOUND.z)).toBe(MOUND_HEIGHT);
+    expect(groundHeight(MOUND.x + 1, MOUND.z)).toBe(MOUND_HEIGHT);
+    expect(groundHeight(MOUND.x + 2.4, MOUND.z)).toBe(0);
+    expect(groundHeight(MOUND.x + 1.7, MOUND.z)).toBeCloseTo(MOUND_HEIGHT / 2, 6);
+    expect(groundHeight(10, -3)).toBe(0);
+  });
+
+  const SCREENS: [number, number][] = [
+    [390, 844],
+    [844, 390],
+    [1024, 768],
+    [1366, 1024],
+  ];
+  const plays: Vec[][] = [
+    [at(14, 1.3, -22), at(-4, 1.3, -14), at(-8.5, 0, -8.5)],
+    [at(-20, 1, -30), at(-10, 1, -22), at(0, 0, 0)],
+    [at(-8, 1.2, -9), at(0, 1.2, -17), at(8.5, 0, -8.5)],
+  ];
+  it.each(SCREENS)('keeps the points of a play inside the band at %ix%i', (w, h) => {
+    const fit = fitView(w, h);
+    const band = hitBand(w, h);
+    const home = homeView(w / h);
+    for (const points of plays) {
+      const cam = at(0, 0, 0);
+      const look = at(0, 0, 0);
+      followGoal(points[0], cam, look, home);
+      const shot = frameAction(points, cam, fit.fov, w, h, band);
+      expect(shot.fov).toBeGreaterThanOrEqual(fit.fov);
+      expect(shot.fov).toBeLessThanOrEqual(FRAME_MAX_FOV);
+      const lift = (band.top + band.bottom) / 2 - h / 2;
+      // On a narrow screen the first two (the ball and its receiver) win over the rest.
+      for (const p of w < 800 ? points.slice(0, 2) : points) {
+        const s = project(p, cam, shot.look, shot.fov, w, h);
+        expect(s.y + lift).toBeGreaterThanOrEqual(band.top + 27);
+        expect(s.y + lift).toBeLessThanOrEqual(band.bottom - 27);
+        expect(s.x).toBeGreaterThanOrEqual(27);
+        expect(s.x).toBeLessThanOrEqual(w - 27);
+      }
+    }
+  });
+
+  it('keeps the catcher mitt on the glove spot after he goes home', () => {
+    const catcher = createCatcher();
+    catcher.update(0.016, 0);
+    catcher.run(at(3, 0, 4), 8);
+    for (let i = 0; i < 60; i++) catcher.update(1 / 30, i / 30);
+    catcher.goHome(8);
+    for (let i = 0; i < 120; i++) catcher.update(1 / 30, 3 + i / 30);
+    const mitt = catcher.mittPosition(new Vector3());
+    expect(mitt.x).toBeCloseTo(GLOVE.x, 1);
+    expect(mitt.z).toBeCloseTo(GLOVE.z, 1);
   });
 });
 
