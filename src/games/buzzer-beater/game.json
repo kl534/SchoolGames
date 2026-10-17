@@ -1,0 +1,8 @@
+{
+  "id": "buzzer-beater",
+  "title": "Buzzer Beater",
+  "description": "Play 1-on-1 streetball — answer fast for dunks and threes, and block their shots!",
+  "thumbnail": "thumbnail.svg",
+  "tags": ["sports", "3d"],
+  "scoring": "score"
+}
