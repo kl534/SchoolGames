@@ -1,35 +1,18 @@
 /**
  * The bottom half of an inning: we pitch. The question is read while the pitcher stands set, then
  * the clock runs. A right answer is a pop fly, a ground out or a strike by how fast it came; a
- * wrong one (or none) is a hit for the rival. The plays are quick and simple, seen from behind
- * the mound.
+ * wrong one (or none) is a hit for the rival. A ball in play is a planned play on the field, seen
+ * from a camera that swoops up to a high wide shot behind the plate.
  */
 import { Vector3 } from 'three';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
 import type { Fact } from '../../shared/topics';
-import type { Ball, Batter, Catcher, Fielder, Pitcher, Prop, Umpire } from './characters';
+import type { Ball, Batter, Catcher, Pitcher, Prop, Umpire } from './characters';
 import type { Effects } from './effects';
 import { planBatted, type BattedBall } from './batted';
+import { planPlay, type PlayEvent, type PlayScript } from './choreo';
 import { forcedPlay } from './dev';
-import {
-  arcPosition,
-  BASE_SPOTS,
-  CONTACT,
-  FIELD_SPEED,
-  fieldPoint,
-  FIRST_BASE,
-  GLOVE,
-  GLOVE_TIME,
-  groundBallPosition,
-  INFIELD_SPEED,
-  MISS_POINT,
-  POSITION_SPOTS,
-  RUN_SPEED,
-  THROW_TIME,
-  wallRadius,
-  ZIP_TIME,
-  type Vec,
-} from './flight';
+import { CONTACT, GLOVE, GLOVE_TIME, MISS_POINT, ZIP_TIME, arcPosition, type Vec } from './flight';
 import type { Hud } from './hud';
 import {
   applyHit,
@@ -61,12 +44,6 @@ export const SKIP_AFTER = 0.6;
 export const REVEAL_FOR = 2.4;
 /** Seconds the call on a good pitch stays up. */
 const CALL_FOR = 1.0;
-/** The rival's runners run this many times as fast as ours, so the half moves along. */
-const RIVAL_RUN_BOOST = 2;
-/** The rival's hits fly this many times as fast as the ones we hit. */
-const PLAY_SPEED = 1.5;
-/** The shortest a rival's hit plays for, and when a tap can skip the rest of it. */
-const HIT_FOR = 2;
 /** How often the rival swings and misses a strike, rather than letting it go by. */
 const SWING_AND_MISS = 0.4;
 
@@ -85,7 +62,6 @@ export interface PitchingHost {
   umpire: Umpire;
   ball: Ball;
   effects: Effects;
-  fielders: Fielder[];
   /** What the scorebug shows; it lags the real state while a play is still happening. */
   shown: { runs: number; strikes: number; outs: number };
   rival(): Team;
@@ -98,10 +74,22 @@ export interface PitchingHost {
   ask(): { fact: Fact; options: string[]; seconds: number };
   /** Records an answer with the feed and the session. */
   answered(fact: Fact, correct: boolean): void;
-  /** Sends the batter and the runners round the bases; returns the seconds that takes. */
-  runBases(moves: Move[], runs: number, speed: number, retired?: number[]): number;
-  /** Puts anybody still running where they were going. */
-  settleRunners(): void;
+  /**
+   * Starts a play on the field (the camera swoops up to watch it). `extra` hears every event of
+   * it; `onEnd` runs when it is done.
+   */
+  startPlay(
+    script: PlayScript,
+    batted: BattedBall,
+    moves: Move[],
+    retired: number[],
+    extra: ((e: PlayEvent) => void) | undefined,
+    onEnd: () => void,
+  ): void;
+  /** Settles a play that is over (or skipped): everybody to where they finish, camera back. */
+  endPlay(): void;
+  /** Where every fielder stands and where each runner stands now. */
+  snapshot(): { spots: Record<Position, Vec>; leads: (Vec | null)[] };
   /** The batter at the plate walks off. */
   sendOff(): void;
   addProp(prop: Prop): void;
@@ -140,7 +128,7 @@ interface Leg {
 }
 
 export function createPitching(host: PitchingHost): Pitching {
-  const { hud, pitcher, catcher, umpire, ball, effects, fielders, shown } = host;
+  const { hud, pitcher, catcher, umpire, ball, effects, shown } = host;
   type Phase = 'idle' | 'set' | 'live' | 'delivery' | 'play';
   let phase: Phase = 'idle';
   /** Ticks up for each pitch, so late callbacks can tell they are stale. */
@@ -157,18 +145,13 @@ export function createPitching(host: PitchingHost): Pitching {
   let resultAt = 0;
   let resultDone: (() => void) | null = null;
   let ending: (() => void) | null = null;
+  /** A play on the field is running (so it must be settled when the result is over). */
+  let played = false;
 
   const handPoint = new Vector3();
   const here: Vec = { ...GLOVE };
   const scratch: Vec = { x: 0, y: 0, z: 0 };
   let flight: { from: Vec; legs: Leg[]; t: number } | null = null;
-  let plan: BattedBall | null = null;
-  let planT = 0;
-  /** How fast the path plays, and what happens when it ends (an out is made, or a ball caught). */
-  let planSpeed = 1;
-  let planEnded: (() => void) | null = null;
-  let landed = false;
-  let held: Fielder | null = null;
 
   const put = (p: Vec) => {
     here.x = p.x;
@@ -207,9 +190,7 @@ export function createPitching(host: PitchingHost): Pitching {
     resultDone = null;
     ending = null;
     flight = null;
-    plan = null;
-    planEnded = null;
-    held = null;
+    played = false;
     hud.setClock(1);
     hud.hideQuestion(false);
     ball.setVisible(false);
@@ -336,17 +317,14 @@ export function createPitching(host: PitchingHost): Pitching {
     host.clearTimers();
     hud.hideBanner();
     flight = null;
-    plan = null;
-    planEnded = null;
-    held = null;
     resultDone = null;
     ending = null;
     ball.setVisible(false);
     ball.setGlow(false);
     umpire.reset();
     shown.outs = host.state().outs;
-    host.settleRunners();
-    fielders.forEach((f) => f.goHome(7));
+    if (played) host.endPlay();
+    played = false;
     if (sendOff) host.sendOff();
     host.playOver(batterGone);
   };
@@ -408,8 +386,9 @@ export function createPitching(host: PitchingHost): Pitching {
     const current = fact;
     const kind = call.forced ?? pickHitKind(call.hit, Math.random());
     const hit = hitOfKind(kind);
-    plan = planBatted(kind, rolls());
-    const outcome = applyHit(host.state(), hit, { kind, zone: plan.zone });
+    const path = planBatted(kind, rolls());
+    const before = host.state();
+    const outcome = applyHit(before, hit, { kind, zone: path.zone });
     host.commit(outcome.state);
     host.refresh();
     hud.mark(chosen, options.indexOf(current.answer), false);
@@ -428,63 +407,20 @@ export function createPitching(host: PitchingHost): Pitching {
       speak(current.spokenStatement ?? current.statement, () => mark('speech'));
     });
     host.after(REVEAL_FOR, () => mark('hold'));
-
-    // The ball flies off towards the field (and the camera); one fielder jogs after it.
-    planT = 0;
-    planSpeed = PLAY_SPEED;
-    planEnded = null;
-    landed = false;
-    const deep = plan.theta;
-    const target = hit === 'homer' ? fieldPoint(deep, wallRadius(deep) - 1.8) : plan.rest;
-    const candidates = fielders.map((f) => ({
-      f,
-      x: f.mover.person.root.position.x,
-      z: f.mover.person.root.position.z,
-    }));
-    const near = candidates.reduce((best, c) =>
-      Math.hypot(c.x - plan!.firstTouch.p.x, c.z - plan!.firstTouch.p.z) <
-      Math.hypot(best.x - plan!.firstTouch.p.x, best.z - plan!.firstTouch.p.z)
-        ? c
-        : best,
-    );
-    near.f.chase({ ...target }, FIELD_SPEED, hit === 'homer' ? 'watch' : 'scoop');
-    const runTime = host.runBases(outcome.moves, outcome.runs, RUN_SPEED * RIVAL_RUN_BOOST);
-    const play = Math.max(plan.end / PLAY_SPEED + 0.3, runTime + 0.4, HIT_FOR);
-    host.after(play, () => mark('play'));
-  };
-
-  /** The fielder who plays a ball; the pitcher and catcher stand in for by an infielder here. */
-  const fielderFor = (position: Position, ball: BattedBall): Fielder => {
-    const id =
-      position === 'P' ? 'SS' : position === 'C' ? (ball.rest.x < 0 ? '3B' : '1B') : position;
-    return fielders.find((f) => f.id === id)!;
-  };
-
-  /** The batter starts for first, and is stopped short when the out is made. */
-  const runToFirst = () => {
-    const batter = host.batter();
-    host.after(0.15, () => {
-      batter.runnerStance();
-      batter.mover.runTo([FIRST_BASE], RUN_SPEED * 0.85);
+    const { spots, leads } = host.snapshot();
+    const script = planPlay({
+      ball: path,
+      moves: outcome.moves,
+      retired: [],
+      bases: before.bases,
+      outs: before.outs,
+      call: kind,
+      spots,
+      leads,
+      runs: outcome.runs,
     });
-  };
-
-  /** The out is made: the call, the scorebug, and the batter pulls up, beaten. */
-  const outMade = (
-    mark: (what: 'play' | 'speech' | 'hold') => void,
-    text: string,
-    spoken: string,
-    batterOut: boolean,
-  ) => {
-    shown.outs = host.state().outs;
-    host.refresh();
-    if (batterOut) {
-      const batter = host.batter();
-      batter.mover.halt();
-      batter.slump();
-    }
-    callGood(text, spoken, mark);
-    mark('play');
+    played = true;
+    host.startPlay(script, path, outcome.moves, [], undefined, () => mark('play'));
   };
 
   /** A forced kind of out, or one the rules pick for this answer. */
@@ -505,66 +441,51 @@ export function createPitching(host: PitchingHost): Pitching {
   /** A right answer in time: the rival's batter is out, one way or another. */
   const outPlay = (call: Extract<Call, { kind: 'popout' | 'groundout' }>) => {
     const picked = chooseOut(call);
-    const path = planBatted(picked.kind, rolls(), POSITION_SPOTS[picked.fielder]);
+    const { spots, leads } = host.snapshot();
+    const path = planBatted(picked.kind, rolls(), spots[picked.fielder]);
     // Where the ball really comes down is the zone that counts for the runners.
     const out: OutCall = { ...picked, zone: path.zone };
-    const result = applyOut(host.state(), out);
+    const before = host.state();
+    const result = applyOut(before, out);
     host.commit(result.state);
     hud.markHit(chosen);
-    const fielder = fielderFor(out.fielder, path);
     const spoken = outSpeech(out, result.sacFly);
     const text = outPopText(out, result.sacFly);
     const batterOut = result.retired.includes(0);
-    const mark = startResult(true, batterOut);
-    const sendRunners = () => {
-      if (result.moves.length || result.retired.some((r) => r > 0)) {
-        host.runBases(result.moves, result.runs, RUN_SPEED * RIVAL_RUN_BOOST, result.retired);
-      }
-    };
-    plan = path;
-    planT = 0;
-    planSpeed = 1;
-    landed = true;
-    if (batterOut) runToFirst();
-    const air = path.firstTouch.what === 'air-catch';
-    if (air) {
-      const under = path.firstTouch.p;
-      fielder.chase({ x: under.x, y: 0, z: under.z }, INFIELD_SPEED, 'ready');
-      planEnded = () => {
-        held = fielder;
-        sfx.glove();
-        sendRunners();
-        outMade(mark, text, spoken, batterOut);
-      };
-      return;
-    }
-    // A grounder: the fielder gets to it, and throws to first (or to second on a force).
-    fielder.chase({ ...path.rest }, INFIELD_SPEED, 'scoop');
-    sendRunners();
-    const base = out.kind === 'force-second' ? BASE_SPOTS[2] : FIRST_BASE;
-    planEnded = () => {
-      held = fielder;
-      sfx.glove();
-      fielder.mover.face(base);
-      host.after(0.15, () => {
-        fielder.mover.person.handWorld('L', handPoint);
-        held = null;
-        fly(
-          [
-            {
-              to: { x: base.x, y: 1.2, z: base.z },
-              seconds: THROW_TIME,
-              lift: 0.8,
-              onEnd: () => {
-                sfx.glove();
-                outMade(mark, text, spoken, batterOut);
-              },
-            },
-          ],
-          handPoint,
-        );
-      });
-    };
+    // The batter who is out leaves by himself (the play sends him off); a forced one runs on.
+    const mark = startResult(true, false);
+    const script = planPlay({
+      ball: path,
+      moves: result.moves,
+      retired: result.retired,
+      bases: before.bases,
+      outs: before.outs,
+      call: out,
+      spots,
+      leads,
+      runs: result.runs,
+    });
+    let called = false;
+    const outsInPlay = result.retired.length;
+    let seen = 0;
+    played = true;
+    void batterOut;
+    host.startPlay(
+      script,
+      path,
+      result.moves,
+      result.retired,
+      (e) => {
+        if (e.type !== 'out') return;
+        seen++;
+        // The call comes with the last out of the play: "Double play!" after both.
+        if (seen >= outsInPlay && !called) {
+          called = true;
+          callGood(text, spoken, mark);
+        }
+      },
+      () => mark('play'),
+    );
   };
 
   // ---------- Frame ----------
@@ -585,8 +506,7 @@ export function createPitching(host: PitchingHost): Pitching {
       } else {
         flight.t += delta;
         const s = flight.t / leg.seconds;
-        if (leg.ground) groundBallPosition(flight.from, leg.to, s, scratch);
-        else arcPosition(flight.from, leg.to, s, leg.lift ?? 0, scratch);
+        arcPosition(flight.from, leg.to, s, leg.lift ?? 0, scratch);
         put(scratch);
         ball.spin(delta, 30);
         effects.trail(here);
@@ -597,35 +517,6 @@ export function createPitching(host: PitchingHost): Pitching {
           if (!flight.legs.length) flight = null;
           leg.onEnd?.();
         }
-      }
-    }
-    if (held) {
-      held.mover.person.handWorld('L', handPoint);
-      put({ x: handPoint.x, y: handPoint.y + 0.05, z: handPoint.z });
-    }
-    if (plan) {
-      planT += delta * planSpeed;
-      const gone = plan.overWall && planT > plan.airTime;
-      if (gone) {
-        ball.setVisible(false);
-      } else {
-        put(plan.position(planT, scratch));
-        ball.spin(delta, 18);
-        ball.setGlow(true);
-        if (planT < plan.airTime) effects.trail(here);
-      }
-      if (!landed && planT >= plan.airTime) {
-        landed = true;
-        if (!plan.overWall) {
-          effects.dust({ x: plan.firstTouch.p.x, y: 0.1, z: plan.firstTouch.p.z }, 7);
-        }
-      }
-      if (planEnded && planT >= plan.end) {
-        const done = planEnded;
-        planEnded = null;
-        plan = null;
-        ball.setGlow(false);
-        done();
       }
     }
   };
@@ -659,9 +550,7 @@ export function createPitching(host: PitchingHost): Pitching {
     speechToken++;
     phase = 'idle';
     flight = null;
-    plan = null;
-    planEnded = null;
-    held = null;
+    played = false;
     resultDone = null;
     ending = null;
     replaying = 0;
