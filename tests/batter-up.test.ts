@@ -76,6 +76,7 @@ import {
   fitMoundView,
   fitView,
   followGoal,
+  popPosition,
   swoopPosition,
   SWOOP_SECONDS,
   wideView,
@@ -2680,6 +2681,32 @@ describe('positioning for the situation', () => {
     const third = leadSpot(3);
     expect(third.z).toBeGreaterThan(BASE_SPOTS[3].z);
     expect(third.x).toBeLessThan(BASE_SPOTS[3].x + 1.7);
+  });
+});
+
+describe('pop-ups over the picture', () => {
+  const band = { top: 150, bottom: 700 };
+  it('keeps a pop-up where its spot is when that is in the band', () => {
+    expect(popPosition({ x: 200, y: 400 }, false, 400, band)).toEqual({ x: 200, y: 400 });
+  });
+  it('moves one whose spot is off screen, behind the camera or under the HUD to the middle of the band', () => {
+    for (const shown of [
+      { x: -50, y: 400 },
+      { x: 200, y: 20 },
+      { x: 200, y: 760 },
+      { x: 390, y: 400 },
+    ]) {
+      expect(popPosition(shown, false, 400, band)).toEqual({ x: 200, y: 425 });
+    }
+    expect(popPosition({ x: 200, y: 400 }, true, 400, band)).toEqual({ x: 200, y: 425 });
+  });
+  it('stays left of a card beside the field', () => {
+    const p = popPosition({ x: 600, y: 400 }, false, 844, {
+      top: 100,
+      bottom: 330,
+      right: 500,
+    });
+    expect(p.x).toBeLessThanOrEqual(470);
   });
 });
 

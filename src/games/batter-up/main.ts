@@ -62,6 +62,7 @@ import {
   hudRects,
   keepBoardClear,
   moundView,
+  popPosition,
   type HomeView,
   type PlayBand,
   type Rect,
@@ -353,12 +354,19 @@ function run(session: GameSession): void {
     applyView();
   };
 
+  /**
+   * Where a pop-up for a spot in the world goes, through the live camera, kept inside the part of
+   * the screen the play is shown in (clear of the scorebug and the answers).
+   */
   const toScreen = (world: Vec) => {
     const p = point.set(world.x, world.y, world.z).project(camera);
-    return {
-      x: MathUtils.clamp(((p.x + 1) / 2) * viewW, 40, viewW - 40),
-      y: MathUtils.clamp(((1 - p.y) / 2) * viewH, 90, viewH - 90),
-    };
+    const band = isBatting(state) ? hitFrame.band : playBandNow();
+    return popPosition(
+      { x: ((p.x + 1) / 2) * viewW, y: ((1 - p.y) / 2) * viewH },
+      p.z > 1,
+      viewW,
+      band,
+    );
   };
 
   // ---------- Saving ----------

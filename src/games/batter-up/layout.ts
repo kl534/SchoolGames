@@ -609,3 +609,30 @@ export function frameAction(
   }
   return best;
 }
+
+// ---------- Pop-ups over the picture ----------
+
+/** Room kept between a pop-up and the edges of the band or screen, in CSS px. */
+const POP_MARGIN = 30;
+
+/**
+ * Where a pop-up (a call such as "Out!") goes on screen for a point in the world that projects
+ * to `shown` (CSS px; `behind` when the point is behind the camera). It stays inside the band, so
+ * it is clear of the scorebug and the answers; if the point is not in view, it goes in the middle
+ * of the band.
+ */
+export function popPosition(
+  shown: { x: number; y: number },
+  behind: boolean,
+  width: number,
+  band: PlayBand,
+): { x: number; y: number } {
+  const left = (band.left ?? 0) + POP_MARGIN;
+  const right = Math.min(band.right ?? width, width) - POP_MARGIN;
+  const top = band.top + POP_MARGIN;
+  const bottom = Math.max(band.bottom - POP_MARGIN, top);
+  const inView =
+    !behind && shown.x >= left && shown.x <= right && shown.y >= top && shown.y <= bottom;
+  if (!inView) return { x: (left + right) / 2, y: (top + bottom) / 2 };
+  return { x: shown.x, y: shown.y };
+}
