@@ -39,7 +39,6 @@ import {
   easeOut,
   easeToward,
   GREAT_FLYING_SPEECH,
-  hazardInterval,
   hitPoints,
   isBossTarget,
   loseShield,
@@ -47,7 +46,6 @@ import {
   NEW_HIGH_SCORE_SPEECH,
   nextStreak,
   outOfShields,
-  restoreShield,
   SHIELDS,
   SHIP_DESTROYED_SPEECH,
   worldSpeedFactor,
@@ -66,8 +64,6 @@ const BOSS_ARRIVE_TIME = 2.6;
 /** Seconds the laser bolts take to reach the asteroid, and a thrown chunk to reach the ship. */
 const LASER_TIME = 0.32;
 const DEBRIS_TIME = 0.5;
-/** Seconds the ship is safe after bumping a rock. */
-const BUMP_SAFE = 1.5;
 /** Seconds a result stays up before a tap can skip to the next question. */
 const SKIP_AFTER = 0.6;
 /** Least seconds the correct fact stays up after a miss. */
@@ -120,7 +116,6 @@ function run(session: GameSession): void {
   const ship = createShip();
   scene.add(ship.object, ship.trail);
   const obstacles = createObstacles();
-  obstacles.hazards.forEach((h) => scene.add(h.object));
   obstacles.crystals.forEach((c) => scene.add(c.object));
   const rockTarget = createAsteroid(false);
   const bossTarget = createAsteroid(true);
@@ -190,7 +185,7 @@ function run(session: GameSession): void {
   let options: string[] = [];
   let chosen = -1;
   let score = 0;
-  /** Hits in a row since the last miss or bump; sets the score multiplier. */
+  /** Hits in a row since the last miss; sets the score multiplier. */
   let streak = 0;
   let shields = SHIELDS;
   /** Asteroids destroyed this run; the world speeds up with each. */
@@ -227,11 +222,8 @@ function run(session: GameSession): void {
   const shipPos = { x: 0, y: 0 };
   const goal = { x: 0, y: 0 };
   const motion = { vx: 0, vy: 0, bank: 0, pitch: 0, yaw: 0 };
-  let safeFor = 0;
   let speed = IDLE_SPEED;
   let flightActive = false;
-  let hudVisible = false;
-  let hazardIn = 1;
   let crystalIn = 4;
   let shake = 0;
   let pullBack = 0;
@@ -256,7 +248,6 @@ function run(session: GameSession): void {
   const lockAnswers = () => buttons.forEach((b) => b.setAttribute('aria-disabled', 'true'));
 
   const setHudVisible = (visible: boolean) => {
-    hudVisible = visible;
     hud.hidden = !visible;
     answers.hidden = !visible;
     buttons.forEach((b, i) => (b.hidden = options[i] === undefined));
@@ -392,11 +383,8 @@ function run(session: GameSession): void {
     obstacles.clear();
     effects.clear();
     ship.setVisible(true);
-    ship.setBlink(false);
-    safeFor = 0;
     pullBack = 0;
     shipPos.x = shipPos.y = goal.x = goal.y = 0;
-    hazardIn = 2;
     crystalIn = 5;
     flightActive = false;
     renderShields();
@@ -579,11 +567,9 @@ function run(session: GameSession): void {
     setHudVisible(false);
     if (isBoss) {
       score += BOSS_BONUS;
-      shields = restoreShield(shields);
-      renderShields();
       renderScore();
       replay(scoreValue);
-      showBanner('Boss destroyed!', `+${BOSS_BONUS} and a shield back`, 'hit');
+      showBanner('Boss destroyed!', `+${BOSS_BONUS}`, 'hit');
       sfx.chime();
     }
     after(isBoss ? NEXT_GAP + 1 : NEXT_GAP, () => phase === 'idle' && spawnTarget());
@@ -838,15 +824,7 @@ function run(session: GameSession): void {
   window.addEventListener('blur', onBlur);
 
   // ---------- Loop ----------
-  const spawnHazards = (delta: number) => {
-    hazardIn -= delta;
-    if (hazardIn <= 0) {
-      hazardIn = hazardInterval(hudVisible, Math.random(), worldSpeedFactor(destroyed));
-      obstacles.spawnHazard(
-        MathUtils.randFloatSpread(2 * fit.halfW),
-        MathUtils.randFloatSpread(2 * fit.halfH),
-      );
-    }
+  const spawnCrystals = (delta: number) => {
     crystalIn -= delta;
     if (crystalIn <= 0) {
       crystalIn = crystalInterval(Math.random());
@@ -857,7 +835,7 @@ function run(session: GameSession): void {
     }
   };
 
-  /** Hazards and crystals the ship is touching, using the span they swept this frame. */
+  /** Crystals the ship is touching, using the span they swept this frame. */
   const collide = (delta: number) => {
     const step = speed * delta;
     const touches = (object: { position: Vector3 }, radius: number) => {
@@ -876,31 +854,6 @@ function run(session: GameSession): void {
       effects.sparkle(crystal.object.position);
       sfx.chime();
       pop(`+${CRYSTAL_POINTS}`, toScreen(crystal.object.position), 'good');
-    }
-    for (const hazard of obstacles.hazards) {
-      if (!hazard.active) continue;
-      // Rocks drift round a target asteroid rather than through it.
-      if (targetAlive) {
-        const dx = hazard.object.position.x - targetPos.x;
-        const dy = hazard.object.position.y - targetPos.y;
-        const dz = hazard.object.position.z - targetPos.z;
-        const reach = hazard.radius + target.radius;
-        if (dx * dx + dy * dy + dz * dz < reach * reach) {
-          const len = Math.hypot(dx, dy) || 1;
-          hazard.object.position.x += (dx / len) * 18 * delta;
-          hazard.object.position.y += (dy / len) * 18 * delta;
-        }
-      }
-      if (safeFor > 0 || !touches(hazard.object, hazard.radius)) continue;
-      // A bump: it shakes the ship and ends the streak, but never costs a shield.
-      effects.rockBurst(hazard.object.position, 1.3, point.set(0, 0, speed));
-      obstacles.retire(hazard);
-      safeFor = BUMP_SAFE;
-      streak = nextStreak(streak, false);
-      renderScore();
-      shake = Math.max(shake, 0.6);
-      sfx.bump();
-      pop('Bump!', toScreen(ship.object.position), 'bad');
     }
   };
 
@@ -996,21 +949,15 @@ function run(session: GameSession): void {
     const goalSpeed = flightActive ? BASE_SPEED * speedFactor : IDLE_SPEED;
     speed = easeToward(speed, goalSpeed, 1.5, delta);
 
-    // --- Safe time after a bump ---
-    if (safeFor > 0) {
-      safeFor -= delta;
-      ship.setBlink(safeFor > 0);
-    }
-
     // --- The target asteroid and its clock ---
     if (targetAlive) {
       moveTarget(delta);
       if (phase === 'aiming') runClock(delta);
     }
 
-    // --- Rocks and crystals ---
+    // --- Crystals ---
     if (flightActive && phase !== 'ending') {
-      spawnHazards(delta);
+      spawnCrystals(delta);
     }
     obstacles.update(delta, speed, elapsed);
     if (flightActive && phase !== 'ending') collide(delta);

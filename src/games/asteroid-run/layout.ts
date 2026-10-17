@@ -12,7 +12,7 @@ export const LOOK_Z = -18;
 export const LOOK_FOLLOW = 0.7;
 export const LOOK_LIFT = 0.5;
 
-/** Hazards, crystals and scenery appear this far ahead, inside the fog. */
+/** Crystals and scenery appear this far ahead, inside the fog. */
 export const SPAWN_Z = -140;
 /** Things that have flown past the camera are recycled beyond this z. */
 export const PAST_Z = 12;

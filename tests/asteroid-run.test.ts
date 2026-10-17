@@ -30,14 +30,12 @@ import {
   easeIn,
   easeOut,
   easeToward,
-  hazardInterval,
   hitPoints,
   isBossTarget,
   loseShield,
   multiplierFor,
   nextStreak,
   outOfShields,
-  restoreShield,
   SHIELDS,
   SPEED_MAX,
   within,
@@ -88,7 +86,7 @@ describe('scoring', () => {
     expect(hitPoints(99, 10, 1)).toBe(150);
   });
 
-  it('counts hits and starts again after a miss or bump', () => {
+  it('counts hits and starts again after a miss', () => {
     let streak = 0;
     for (let i = 0; i < 6; i++) streak = nextStreak(streak, true);
     expect(streak).toBe(6);
@@ -115,13 +113,6 @@ describe('shields', () => {
 
   it('is out of shields at zero only', () => {
     expect([3, 2, 1, 0].map(outOfShields)).toEqual([false, false, false, true]);
-  });
-
-  it('wins one back, never above the full set', () => {
-    expect(restoreShield(1)).toBe(2);
-    expect(restoreShield(2)).toBe(3);
-    expect(restoreShield(3)).toBe(3);
-    expect(restoreShield(0)).toBe(1);
   });
 });
 
@@ -206,19 +197,7 @@ describe('world speed', () => {
   });
 });
 
-describe('hazards and crystals', () => {
-  it('are sparse while a question is open and denser between questions', () => {
-    for (const roll of [0, 0.5, 0.99]) {
-      expect(hazardInterval(true, roll)).toBeGreaterThan(hazardInterval(false, roll));
-    }
-    expect(hazardInterval(true, 0)).toBeGreaterThanOrEqual(3);
-    expect(hazardInterval(false, 0.99)).toBeLessThan(2);
-  });
-
-  it('keep the same spacing when the world speeds up', () => {
-    expect(hazardInterval(false, 0.5, 1.6)).toBeCloseTo(hazardInterval(false, 0.5) / 1.6);
-  });
-
+describe('crystals', () => {
   it('bring crystals now and then', () => {
     expect(crystalInterval(0)).toBe(5);
     expect(crystalInterval(1)).toBe(10);
@@ -558,51 +537,51 @@ describe('asteroid', () => {
 });
 
 describe('obstacles', () => {
-  it('start far ahead and stream towards the camera, spinning', () => {
+  it('start far ahead and stream towards the camera', () => {
     const obstacles = createObstacles();
-    const hazard = obstacles.spawnHazard(1, -1)!;
-    expect(hazard.active).toBe(true);
-    expect(hazard.object.position.z).toBeLessThan(-100);
-    const z = hazard.object.position.z;
+    const crystal = obstacles.spawnCrystal(1, -1)!;
+    expect(crystal.active).toBe(true);
+    expect(crystal.object.position.z).toBeLessThan(-100);
+    const z = crystal.object.position.z;
     obstacles.update(0.5, 30, 0);
-    expect(hazard.object.position.z).toBeCloseTo(z + 15);
-    expect(hazard.object.position.x).toBe(1);
-    expect(hazard.object.position.y).toBe(-1);
+    expect(crystal.object.position.z).toBeCloseTo(z + 15);
+    expect(crystal.object.position.x).toBe(1);
+    expect(crystal.object.position.y).toBe(-1);
   });
 
   it('recycle what has flown past, so the pool never runs out', () => {
     const obstacles = createObstacles();
     for (let round = 0; round < 5; round++) {
-      while (obstacles.spawnHazard(0, 0)) {
+      while (obstacles.spawnCrystal(0, 0)) {
         // fill the pool
       }
-      expect(obstacles.spawnHazard(0, 0)).toBeNull();
+      expect(obstacles.spawnCrystal(0, 0)).toBeNull();
       for (let i = 0; i < 200; i++) obstacles.update(0.05, 40, i * 0.05);
-      expect(obstacles.hazards.every((h) => !h.active && !h.object.visible)).toBe(true);
+      expect(obstacles.crystals.every((c) => !c.active && !c.object.visible)).toBe(true);
     }
   });
 
   it('shrink away once they are past the ship, instead of swelling up at the camera', () => {
     const obstacles = createObstacles();
-    const hazard = obstacles.spawnHazard(0, 0)!;
-    hazard.object.position.z = -2;
+    const crystal = obstacles.spawnCrystal(0, 0)!;
+    crystal.object.position.z = -2;
     obstacles.update(0.001, 30, 0);
-    const near = hazard.object.scale.x;
-    hazard.object.position.z = 3;
+    const near = crystal.object.scale.x;
+    crystal.object.position.z = 3;
     obstacles.update(0.001, 30, 0);
-    expect(hazard.object.scale.x).toBeLessThan(near * 0.5);
+    expect(crystal.object.scale.x).toBeLessThan(near * 0.5);
   });
 
-  it('retires a hazard or crystal, and clears everything', () => {
+  it('retires a crystal, and clears everything', () => {
     const obstacles = createObstacles();
-    const hazard = obstacles.spawnHazard(0, 0)!;
-    const crystal = obstacles.spawnCrystal(0, 0)!;
-    obstacles.retire(hazard);
-    expect(hazard.active).toBe(false);
-    expect(crystal.active).toBe(true);
+    const first = obstacles.spawnCrystal(0, 0)!;
+    const second = obstacles.spawnCrystal(0, 0)!;
+    obstacles.retire(first);
+    expect(first.active).toBe(false);
+    expect(second.active).toBe(true);
     obstacles.clear();
-    expect(crystal.active).toBe(false);
-    expect(crystal.object.visible).toBe(false);
+    expect(second.active).toBe(false);
+    expect(second.object.visible).toBe(false);
   });
 });
 

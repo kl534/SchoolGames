@@ -35,7 +35,7 @@ export function multiplierFor(streak: number): number {
   return 1;
 }
 
-/** The score streak after a hit (one more) or a miss or bump (back to zero). */
+/** The score streak after a hit (one more) or a miss (back to zero). */
 export function nextStreak(streak: number, hit: boolean): number {
   return hit ? streak + 1 : 0;
 }
@@ -52,11 +52,6 @@ export function hitPoints(timeLeft: number, timeTotal: number, streak: number): 
 /** One shield lost, never below zero. */
 export function loseShield(shields: number): number {
   return Math.max(0, shields - 1);
-}
-
-/** One shield won back, never above the full set. */
-export function restoreShield(shields: number): number {
-  return Math.min(SHIELDS, shields + 1);
 }
 
 export function outOfShields(shields: number): boolean {
@@ -96,16 +91,6 @@ export const easeIn = (t: number): number => clamp01(t) ** 2;
 /** How much faster than the base speed the world streams past after this many asteroids. */
 export function worldSpeedFactor(destroyed: number): number {
   return Math.min(1 + SPEED_STEP * Math.max(destroyed, 0), SPEED_MAX);
-}
-
-/**
- * Seconds until the next hazard rock appears. Rocks are sparse while a question is open and
- * denser between questions; `roll` is a random number in 0..1 and `speed` the world speed
- * factor, so faster flight keeps the rocks the same distance apart.
- */
-export function hazardInterval(questionOpen: boolean, roll: number, speed = 1): number {
-  const base = questionOpen ? 3 + roll * 2 : 0.8 + roll * 0.9;
-  return base / Math.max(speed, 0.1);
 }
 
 /** Seconds until the next crystal appears. */
