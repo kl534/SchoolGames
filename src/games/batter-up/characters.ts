@@ -373,6 +373,10 @@ export interface Catcher extends Actor {
   pop(): void;
   /** Where the mitt is. */
   mittPosition(out: Vector3): Vector3;
+  /** Takes the mask off and tosses it away; the falling mask is returned for the scene to keep. */
+  tossMask(): Prop | null;
+  /** Puts the mask back on. */
+  restoreMask(): void;
   update(delta: number, elapsed: number): void;
 }
 
@@ -428,6 +432,15 @@ export function createCatcher(): Catcher {
   /** Where he crouches: the mitt meets the glove spot exactly. */
   const crouchSpot: Vec = { x: person.root.position.x, y: 0, z: person.root.position.z };
   let home: Vec = crouchSpot;
+  let maskOff = false;
+  const restoreMask = () => {
+    if (!maskOff) return;
+    maskOff = false;
+    person.head.add(person.hat);
+    person.hat.position.set(0, 0, 0);
+    person.hat.rotation.set(0, 0, 0);
+    person.hat.scale.set(1, 1, 1);
+  };
 
   return {
     position: 'C',
@@ -448,8 +461,32 @@ export function createCatcher(): Catcher {
     },
     faceTo: (point) => mover.face(point),
     /** Back to the crouch behind the plate, the mitt meeting the glove spot again. */
+    restoreMask,
+    tossMask() {
+      const parent = person.root.parent;
+      if (maskOff || !parent) return null;
+      maskOff = true;
+      const mask = person.hat;
+      parent.attach(mask);
+      let vy = 3.2;
+      const vx = 1.2;
+      let age = 0;
+      return {
+        object: mask,
+        update(delta) {
+          age += delta;
+          if (!maskOff) return false;
+          vy -= 12 * delta;
+          mask.position.y = Math.max(mask.position.y + vy * delta, 0.1);
+          mask.position.x += vx * delta * (mask.position.y > 0.11 ? 1 : 0);
+          mask.rotation.z += 4 * delta;
+          return age < 3;
+        },
+      };
+    },
     goHome(speed) {
       actions.stop();
+      restoreMask();
       mover.runTo([crouchSpot], speed, () => {
         mover.place(crouchSpot.x, crouchSpot.z);
         mover.setYaw(Math.PI);

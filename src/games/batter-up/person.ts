@@ -98,6 +98,8 @@ export interface Person {
   body: Group;
   torso: Group;
   head: Group;
+  /** What is worn on the head (cap, helmet or catcher's mask); it can be taken off. */
+  hat: Group;
   /** Joints at the hands, for holding a bat, glove or ball. Left is +x. */
   handL: Group;
   handR: Group;
@@ -191,23 +193,32 @@ export function createPerson(style: PersonStyle): Person {
   smile.position.set(0, -0.045, HEAD_R - 0.005);
   smile.rotation.z = Math.PI;
 
+  /** Everything worn on the head, so a mask or cap can come off. */
+  const headWear = joint(head, 0, 0);
   const hatStyle = style.hat ?? 'cap';
   if (hatStyle === 'none') {
     mesh(
       new SphereGeometry(HEAD_R + 0.012, 24, 14, 0, Math.PI * 2, 0, 1.55),
       hair,
-      head,
+      headWear,
       0,
       0.0,
       -0.015,
     );
   } else if (hatStyle === 'cap') {
-    mesh(new SphereGeometry(HEAD_R + 0.018, 24, 12, 0, Math.PI * 2, 0, 1.3), hat, head, 0, 0.03, 0);
-    mesh(new SphereGeometry(0.03, 8, 6), hat, head, 0, HEAD_R + 0.04, 0);
+    mesh(
+      new SphereGeometry(HEAD_R + 0.018, 24, 12, 0, Math.PI * 2, 0, 1.3),
+      hat,
+      headWear,
+      0,
+      0.03,
+      0,
+    );
+    mesh(new SphereGeometry(0.03, 8, 6), hat, headWear, 0, HEAD_R + 0.04, 0);
     const brim = mesh(
       new CylinderGeometry(0.19, 0.19, 0.025, 20, 1, false, -Math.PI / 2, Math.PI),
       hat,
-      head,
+      headWear,
       0,
       0.075,
       0.1,
@@ -220,7 +231,7 @@ export function createPerson(style: PersonStyle): Person {
     mesh(
       new SphereGeometry(HEAD_R + 0.03, 24, 14, 0, Math.PI * 2, 0, wide ? 2.0 : 1.62),
       hat,
-      head,
+      headWear,
       0,
       0.0,
       -0.01,
@@ -229,16 +240,23 @@ export function createPerson(style: PersonStyle): Person {
       const brim = mesh(
         new CylinderGeometry(0.17, 0.17, 0.02, 18, 1, false, -Math.PI / 2, Math.PI),
         hat,
-        head,
+        headWear,
         0,
         0.075,
         0.1,
       );
       brim.scale.set(1.05, 1, 1.1);
-      mesh(new BoxGeometry(0.05, 0.12, 0.12), hat, head, -(HEAD_R + 0.025), -0.03, 0.0);
+      mesh(new BoxGeometry(0.05, 0.12, 0.12), hat, headWear, -(HEAD_R + 0.025), -0.03, 0.0);
     } else {
       for (const y of [-0.04, 0.05]) {
-        const bar = mesh(new TorusGeometry(0.14, 0.012, 6, 16), eyeMaterial, head, 0, y, HEAD_R);
+        const bar = mesh(
+          new TorusGeometry(0.14, 0.012, 6, 16),
+          eyeMaterial,
+          headWear,
+          0,
+          y,
+          HEAD_R,
+        );
         bar.scale.set(1, 0.8, 1);
       }
     }
@@ -297,6 +315,7 @@ export function createPerson(style: PersonStyle): Person {
     body,
     torso,
     head,
+    hat: headWear,
     handL: armL.hand,
     handR: armR.hand,
     materials: { shirt, hat },
