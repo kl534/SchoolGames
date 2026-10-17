@@ -36,17 +36,13 @@ import {
   FIREWORKS_CENTRE,
   FIRST_BASE,
   GLOVE,
-  GROUND_BALL_TIME,
   groundBallPosition,
   groundHeight,
   MOUND,
   MOUND_HEIGHT,
-  INFIELD_PLAYS,
-  INFIELD_SPEED,
   LAP,
   pitchPosition,
   POSITION_SPOTS,
-  POP_FLY_TIME,
   RELEASE,
   WALL_CENTRE,
   WALL_HEIGHT,
@@ -75,6 +71,9 @@ import {
   fitMoundView,
   fitView,
   followGoal,
+  swoopPosition,
+  SWOOP_SECONDS,
+  wideView,
   frameAction,
   FRAME_MAX_FOV,
   hitBand,
@@ -1253,26 +1252,6 @@ describe('plays in the field', () => {
       top = Math.max(top, y);
     }
     expect(top).toBeGreaterThan(BALL_RADIUS + 0.2);
-  });
-
-  it('keeps the infield plays in the strip in front of the mound that the camera sees', () => {
-    const { cam } = moundView(0.46);
-    for (const id of ['SS', '2B', '3B'] as const) {
-      for (const spot of [INFIELD_PLAYS[id].pop, INFIELD_PLAYS[id].ground]) {
-        expect(spot.z).toBeGreaterThan(cam.z + 5);
-        expect(spot.z).toBeLessThan(0);
-        expect(Math.abs(spot.x)).toBeLessThan(3);
-      }
-    }
-  });
-
-  it('has the infielder there in time to field the grounder or catch the pop fly', () => {
-    for (const id of ['SS', '2B', '3B'] as const) {
-      const home = FIELDER_SPOTS[id];
-      const trip = (spot: Vec) => Math.hypot(spot.x - home.x, spot.z - home.z) / INFIELD_SPEED;
-      expect(trip(INFIELD_PLAYS[id].ground)).toBeLessThanOrEqual(GROUND_BALL_TIME);
-      expect(trip(INFIELD_PLAYS[id].pop)).toBeLessThanOrEqual(POP_FLY_TIME);
-    }
   });
 
   it('throws to first base, which is on the first base side', () => {
@@ -2475,6 +2454,159 @@ describe('the mound and the camera frame', () => {
     const mitt = catcher.mittPosition(new Vector3());
     expect(mitt.x).toBeCloseTo(GLOVE.x, 1);
     expect(mitt.z).toBeCloseTo(GLOVE.z, 1);
+  });
+});
+
+describe('the play script for outs', () => {
+  const AIR: [OutKind, Position[]][] = [
+    ['pop', ['1B', '2B', 'SS', '3B']],
+    ['foul-pop', ['C']],
+    ['fly', ['LF', 'CF', 'RF']],
+    ['liner', ['3B', 'SS', '2B', '1B', 'P']],
+    ['diving', ['LF', 'CF', 'RF']],
+  ];
+  const GROUND: [OutKind, string, Position][] = [
+    ['ground', '6-3', 'SS'],
+    ['ground', '4-3', '2B'],
+    ['ground', '5-3', '3B'],
+    ['ground', '3U', '1B'],
+    ['ground', '3-1', '1B'],
+    ['ground', '1-3', 'P'],
+    ['double-play', '6-4-3', 'SS'],
+    ['double-play', '4-6-3', '2B'],
+    ['double-play', '5-4-3', '3B'],
+    ['double-play', '1-6-3', 'P'],
+    ['force-second', '6-4', 'SS'],
+    ['force-second', '4-6', '2B'],
+    ['force-second', '5-4', '3B'],
+  ];
+  const calls: OutCall[] = [
+    ...AIR.flatMap(([kind, fs]) =>
+      fs.map((fielder) => ({ kind, fielder, zone: 'CF' as FieldZone })),
+    ),
+    ...GROUND.map(([kind, chain, fielder]) => ({ kind, fielder, chain, zone: 'CF' as FieldZone })),
+  ];
+  const planFor = (call: OutCall, seed: number, mask: number, outs: number) => {
+    let n = seed * 7919 + 13;
+    const next = () => (n = (n * 1664525 + 1013904223) % 4294967296) / 4294967296;
+    const ball = planBatted(
+      call.kind,
+      { side: next(), a: next(), b: next() },
+      POSITION_SPOTS[call.fielder],
+    );
+    const real = { ...call, zone: ball.zone };
+    const bases: Bases = [Boolean(mask & 1), Boolean(mask & 2), Boolean(mask & 4)];
+    const state = midGame(1, 'bottom', [0], [0], { outs, bases });
+    const result = applyOut(state, real);
+    const input: PlayInput = {
+      ball,
+      moves: result.moves,
+      retired: result.retired,
+      bases,
+      outs,
+      call: real,
+      spots: POSITION_SPOTS,
+      leads: [null, BASE_SPOTS[1], BASE_SPOTS[2], BASE_SPOTS[3]],
+      runs: result.runs,
+    };
+    return { input, script: planPlay(input), result };
+  };
+
+  it('breaks no rule for any out, fielder, base state, outs or seed', () => {
+    for (const call of calls) {
+      for (let seed = 0; seed < 12; seed++) {
+        for (let mask = 0; mask < 8; mask++) {
+          // A double play and a force need a runner on first.
+          if ((call.kind === 'double-play' || call.kind === 'force-second') && !(mask & 1))
+            continue;
+          for (const outs of [0, 1, 2]) {
+            const { input, script } = planFor(call, seed, mask, outs);
+            expect(
+              checkScript(script, input),
+              `${call.kind} ${call.chain ?? call.fielder} ${seed} ${mask} ${outs}`,
+            ).toEqual([]);
+          }
+        }
+      }
+    }
+  });
+
+  it('puts the runner at second out before the batter at first on a double play', () => {
+    const call = calls.find((c) => c.chain === '6-4-3')!;
+    const { script } = planFor(call, 1, 1, 0);
+    const outs = script.events.filter((e) => e.type === 'out');
+    expect(outs.map((e) => (e.type === 'out' ? e.who : -1))).toEqual([1, 0]);
+    expect(outs[0].at).toBeLessThan(outs[1].at);
+    expect(script.runners.find((r) => r.from === 1)!.finish).toBe('out');
+  });
+
+  it('scores the run on a sacrifice fly after the catch', () => {
+    const call = calls.find((c) => c.kind === 'fly' && c.fielder === 'CF')!;
+    const { script, result } = planFor(call, 2, 4, 0);
+    expect(result.sacFly).toBe(true);
+    const run = script.events.find((e) => e.type === 'run')!;
+    const catches = script.events.filter((e) => e.type === 'catch');
+    expect(run.at).toBeGreaterThanOrEqual(catches[0].at);
+    expect(script.runners.find((r) => r.from === 3)!.holdAt!.until).toBeCloseTo(catches[0].at, 6);
+  });
+
+  it('has the pitcher cover first on a 3-1 and the catcher toss his mask on a foul pop', () => {
+    const covering = planFor(
+      calls.find((c) => c.chain === '3-1')!,
+      1,
+      0,
+      0,
+    ).script;
+    const throwLeg = covering.legs.find((l) => l.kind === 'throw');
+    expect(throwLeg && throwLeg.kind === 'throw' ? throwLeg.to_ : '').toBe('P');
+    const foul = planFor(
+      calls.find((c) => c.kind === 'foul-pop')!,
+      1,
+      0,
+      0,
+    ).script;
+    expect(foul.fielders.C.some((a) => a.do === 'pose' && a.pose === 'mask-off')).toBe(true);
+    const dive = planFor(
+      calls.find((c) => c.kind === 'diving')!,
+      1,
+      0,
+      0,
+    ).script;
+    expect(dive.fielders[dive.fielder].some((a) => a.do === 'pose' && a.pose === 'dive')).toBe(
+      true,
+    );
+  });
+});
+
+describe('the swoop to the wide view', () => {
+  it('rises and pulls back from the batting view', () => {
+    for (const aspect of [0.46, 1, 1.7]) {
+      const home = homeView(aspect);
+      const wide = wideView(aspect);
+      expect(wide.cam.y).toBeCloseTo(home.cam.y + 5, 6);
+      expect(wide.cam.z).toBeCloseTo(home.cam.z + 3, 6);
+      expect(wide.look).toEqual(home.look);
+    }
+  });
+
+  it('starts at the mound view, ends at the wide view and flies higher in between', () => {
+    const from = moundView(0.5).cam;
+    const to = wideView(0.5).cam;
+    for (const [s, want] of [
+      [0, from],
+      [1, to],
+    ] as const) {
+      const p = swoopPosition(from, to, s);
+      expect(p.x).toBeCloseTo(want.x, 9);
+      expect(p.y).toBeCloseTo(want.y, 9);
+      expect(p.z).toBeCloseTo(want.z, 9);
+    }
+    const mid = swoopPosition(from, to, 0.5);
+    expect(mid.y).toBeGreaterThan(Math.max(from.y, to.y) + 3);
+    for (let s = 0.1; s < 1; s += 0.1) {
+      expect(swoopPosition(from, to, s).y).toBeGreaterThan(Math.min(from.y, to.y));
+    }
+    expect(SWOOP_SECONDS).toBeCloseTo(0.7, 6);
   });
 });
 
