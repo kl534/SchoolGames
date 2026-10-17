@@ -23,6 +23,8 @@ import {
   type FielderId,
   type Prop,
 } from './characters';
+import { planBatted, type BattedBall } from './batted';
+import { devStart, forcedPlay } from './dev';
 import { createEffects, fireworkColour } from './effects';
 import { buildField } from './field';
 import {
@@ -33,19 +35,16 @@ import {
   CONTACT,
   dashPosition,
   FIELD_SPEED,
-  fieldAngle,
   fieldPoint,
   GLOVE,
   GLOVE_TIME,
   MISS_POINT,
   pickChasers,
   pitchPosition,
-  planHit,
   RELEASE,
   RUN_SPEED,
   wallRadius,
   ZIP_TIME,
-  type HitPlan,
   type Vec,
 } from './flight';
 import { createHud } from './hud';
@@ -78,8 +77,10 @@ import {
   halfEndTitle,
   halfOver,
   hitFor,
+  hitKindSpeech,
   hitLabel,
-  hitSpeech,
+  hitOfKind,
+  hitSubtitle,
   inningBanner,
   inningSpeech,
   INNINGS,
@@ -89,6 +90,7 @@ import {
   newGame,
   nextHalf,
   PLAY_BALL,
+  pickHitKind,
   runsText,
   strikeCall,
   totals,
@@ -224,7 +226,7 @@ function run(session: GameSession): void {
   // A hit in progress.
   /** How much the ball is scaled up now, so its trail can match. */
   let ballScaleNow = 1;
-  let plan: HitPlan | null = null;
+  let plan: BattedBall | null = null;
   let hitT = 0;
   let landed = false;
   let held: Fielder | null = null;
@@ -693,26 +695,25 @@ function run(session: GameSession): void {
 
   // ---------- Hits ----------
   /** The bat meets the ball. */
-  const contact = (hit: Hit) => {
+  const contact = (answered: Hit) => {
     sfx.bat();
     measureHit();
     effects.crack(CONTACT);
-    const outcome = applyHit(state, hit);
+    // The answer's speed picks the hit; a random kind of that hit is the play.
+    const forced = forcedPlay().hit;
+    const kind = forced ?? pickHitKind(answered, Math.random());
+    const hit = hitOfKind(kind);
+    const ballPlan = planBatted(kind, { side: Math.random(), a: Math.random(), b: Math.random() });
+    const outcome = applyHit(state, hit, { kind, zone: ballPlan.zone });
     state = outcome.state;
     saveProgress();
     refresh();
     hud.markHit(chosen);
     // The question gives way to the view of the field.
     after(0.25, () => hud.hideQuestion(true));
-    hud.showBanner(hitLabel(hit), runsText(outcome.runs), 'hit', 'top');
-    // The callout has been seen and heard; it comes down so it never hides the ball.
-    after(BANNER_FOR, () => hud.hideBanner());
-    speak(hitSpeech(hit));
-    after(0.35, hit === 'homer' ? sfx.bigCheer : sfx.cheer);
 
     // The ball's flight.
-    const side = Math.random() < 0.5 ? -1 : 1;
-    plan = planHit(hit, side, Math.random(), Math.random());
+    plan = ballPlan;
     hitT = 0;
     landed = false;
     held = null;
@@ -721,6 +722,14 @@ function run(session: GameSession): void {
     camMode = 'follow';
     dash = null;
     sendFielders(hit, plan);
+    const detail = [hitSubtitle(kind, plan.zone, chasers[0]?.id), runsText(outcome.runs)]
+      .filter(Boolean)
+      .join(' · ');
+    hud.showBanner(hitLabel(hit), detail, 'hit', 'top');
+    // The callout has been seen and heard; it comes down so it never hides the ball.
+    after(BANNER_FOR, () => hud.hideBanner());
+    speak(hitKindSpeech(kind));
+    after(0.35, hit === 'homer' ? sfx.bigCheer : sfx.cheer);
     runBases(outcome.moves, outcome.runs, RUN_SPEED);
     const dropped = batter.dropBat();
     if (dropped) {
@@ -730,14 +739,20 @@ function run(session: GameSession): void {
     resultAt = gameTime;
   };
 
-  /** The outfielders nearest the ball chase it; on a home run they only watch it go. */
-  const sendFielders = (hit: Hit, hitPlan: HitPlan) => {
-    const deep = fieldAngle(hitPlan.landing);
-    const target: Vec = hit === 'homer' ? fieldPoint(deep, wallRadius(deep) - 1.8) : hitPlan.stop;
+  /** The fielders nearest the ball chase it; on a home run they only watch it go. */
+  const sendFielders = (hit: Hit, hitPlan: BattedBall) => {
+    const deep = hitPlan.theta;
+    const target: Vec = hit === 'homer' ? fieldPoint(deep, wallRadius(deep) - 1.8) : hitPlan.rest;
+    // A ball that stays on the infield is fielded by an infielder.
+    const shallow = !hitPlan.overWall && Math.hypot(hitPlan.rest.x, hitPlan.rest.z) < 20;
     const candidates = fielders
-      .filter((f) => outfield.includes(f.id))
+      .filter((f) => shallow || outfield.includes(f.id))
       .map((f) => ({ f, x: f.mover.person.root.position.x, z: f.mover.person.root.position.z }));
-    chasers = pickChasers(candidates, hitPlan.landing, CHASERS[hit]).map((c) => c.f);
+    chasers = pickChasers(
+      candidates,
+      shallow ? hitPlan.rest : hitPlan.firstTouch.p,
+      CHASERS[hit],
+    ).map((c) => c.f);
     chasers.forEach((f, i) => {
       const spot: Vec = {
         x: target.x + (i ? (target.x > 0 ? -2 : 2) : 0),
@@ -749,13 +764,18 @@ function run(session: GameSession): void {
     // Everyone else turns to watch the ball go.
     fielders
       .filter((f) => !chasers.includes(f))
-      .forEach((f) => f.mover.face(hit === 'homer' ? hitPlan.landing : hitPlan.stop));
+      .forEach((f) => f.mover.face(hit === 'homer' ? hitPlan.firstTouch.p : hitPlan.rest));
   };
 
   /** The batter and every runner advance together, running the bases. */
-  const runBases = (moves: Move[], runs: number, speed: number): number => {
+  const runBases = (moves: Move[], runs: number, speed: number, retired: number[] = []): number => {
     const next: (Batter | null)[] = [null, null, null];
     running = [];
+    // Runners put out leave the bases; those who do not move stay where they are.
+    retired.filter((base) => base > 0).forEach(retireRunner);
+    onBase.forEach((fig, i) => {
+      if (fig && !moves.some((m) => m.from === i + 1)) next[i] = fig;
+    });
     const old = batter;
     const us = isBatting(state);
     // Runs past the mercy rule or the winning run are run, but do not count.
@@ -804,6 +824,21 @@ function run(session: GameSession): void {
     const longest = moves.reduce((m, mv) => Math.max(m, (mv.to - mv.from) * BASE_SIDE), 0);
     runTime = 0.2 + longest / speed;
     return runTime;
+  };
+
+  /** A runner who is out trudges off from the base he was on. */
+  const retireRunner = (base: number) => {
+    const gone = onBase[base - 1];
+    if (!gone) return;
+    onBase[base - 1] = null;
+    leaving.push(gone);
+    const towards = BASE_SPOTS[base % 4];
+    gone.runnerStance();
+    gone.mover.runTo([towards], 10, () => {
+      gone.slump();
+      gone.mover.runTo([{ x: -6, y: 0, z: 4.5 }], 3.2);
+    });
+    later(2.6, () => retire(gone.person.root));
   };
 
   /** Anybody still running gets where they were going, and the scorebug catches up. */
@@ -858,14 +893,14 @@ function run(session: GameSession): void {
     if (!landed && hitT >= plan.airTime) {
       landed = true;
       if (!plan.overWall) {
-        effects.dust({ x: plan.landing.x, y: 0.1, z: plan.landing.z }, 7);
+        effects.dust({ x: plan.firstTouch.p.x, y: 0.1, z: plan.firstTouch.p.z }, 7);
       }
     }
     // A fielder who gets to the ball once it has stopped scoops it up.
-    if (!held && !plan.overWall && hitT >= plan.duration - 0.1) {
+    if (!held && !plan.overWall && hitT >= plan.end - 0.1) {
       const taker = chasers.find((f) => {
         const pos = f.mover.person.root.position;
-        return Math.hypot(pos.x - plan!.stop.x, pos.z - plan!.stop.z) < 3 && !f.mover.moving;
+        return Math.hypot(pos.x - plan!.rest.x, pos.z - plan!.rest.z) < 3 && !f.mover.moving;
       });
       if (taker) {
         held = taker;
@@ -885,9 +920,9 @@ function run(session: GameSession): void {
         effects.firework({ x, y, z: centre.z }, fireworkColour(i), 0.1 + i * 0.24);
       }
     }
-    const camEnd = plan.overWall ? plan.airTime + 1.4 : plan.duration + 0.5;
+    const camEnd = plan.overWall ? plan.airTime + 1.4 : plan.end + 0.5;
     if (camMode === 'follow' && hitT > camEnd) camMode = 'home';
-    const end = Math.max(plan.duration + 0.9, runTime + 0.6, plan.overWall ? 4.2 : 2.6);
+    const end = Math.max(plan.end + 0.9, runTime + 0.6, plan.overWall ? 4.2 : 2.6);
     if (hitT >= end) endPlay();
   };
 
@@ -1061,6 +1096,7 @@ function run(session: GameSession): void {
   /** "Top of the 3rd. You're up to bat!", and then the first pitch of the half. */
   const startHalf = () => {
     setSide();
+    devRunners();
     const { inning, half } = state;
     const batting = half === 'top';
     const banner = inningBanner(inning, half);
@@ -1143,6 +1179,7 @@ function run(session: GameSession): void {
     bestAtStart = session.highScore();
     fact = undefined;
     options = [];
+    devSetup();
     setSide();
     if (!withPreview) {
       startIntro();
@@ -1150,6 +1187,37 @@ function run(session: GameSession): void {
     }
     phase = 'preview';
     showPreview({ topic: session.topic, facts: feed.peek(10), onDone: startIntro });
+  };
+
+  /** Dev only: begins the game in the half, with the outs and runners the address asks for. */
+  let devRunnersPending = false;
+  const devSetup = () => {
+    const start = devStart();
+    if (!start.half && !start.bases && !start.outs) return;
+    if (start.half === 'bottom') state = { ...state, half: 'bottom', them: [0] };
+    state = { ...state, bases: start.bases ?? state.bases, outs: start.outs ?? state.outs };
+    devRunnersPending = true;
+  };
+
+  /** Dev only: puts the runners the address asked for on their bases, once the field is set. */
+  const devRunners = () => {
+    if (!devRunnersPending) return;
+    devRunnersPending = false;
+    shown.outs = state.outs;
+    state.bases.forEach((on, i) => {
+      if (!on) return;
+      const runner = createBatter();
+      if (isBatting(state)) runner.setLook(i + 3);
+      else {
+        const colours = coloursOf(rival);
+        runner.person.recolour(colours.shirt, colours.cap);
+      }
+      runner.mover.place(BASE_SPOTS[i + 1].x, BASE_SPOTS[i + 1].z);
+      runner.runnerStance();
+      spawn(runner.person.root);
+      onBase[i] = runner;
+    });
+    refresh();
   };
 
   /** "Today you play the Toledo Mud Hens! Play ball!" and then the first inning. */

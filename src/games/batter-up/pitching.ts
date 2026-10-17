@@ -9,48 +9,50 @@ import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
 import type { Fact } from '../../shared/topics';
 import type { Ball, Batter, Catcher, Fielder, Pitcher, Prop, Umpire } from './characters';
 import type { Effects } from './effects';
+import { planBatted, type BattedBall } from './batted';
+import { forcedPlay } from './dev';
 import {
   arcPosition,
-  BALL_RADIUS,
+  BASE_SPOTS,
   CONTACT,
   FIELD_SPEED,
-  fieldAngle,
   fieldPoint,
   FIRST_BASE,
   GLOVE,
   GLOVE_TIME,
-  GROUND_BALL_TIME,
   groundBallPosition,
-  INFIELD_PLAYS,
   INFIELD_SPEED,
   MISS_POINT,
   pickChasers,
-  planHit,
-  POP_FLY_LIFT,
-  POP_FLY_TIME,
+  POSITION_SPOTS,
   RUN_SPEED,
   THROW_TIME,
   wallRadius,
   ZIP_TIME,
-  type HitPlan,
-  type InfielderId,
   type Vec,
 } from './flight';
 import type { Hud } from './hud';
 import {
-  applyFieldOut,
   applyHit,
+  applyOut,
   applyStrike,
   cpuHitFor,
   cpuHitSpeech,
-  GROUND_OUT_SPEECH,
-  hitWord,
+  hitKindWord,
+  hitOfKind,
+  outPopText,
+  outSpeech,
+  pickHitKind,
+  pickOut,
   pitchOutcomeFor,
   pitchStrikeCall,
-  POP_OUT_SPEECH,
   type GameState,
   type Hit,
+  type HitKind,
   type Move,
+  type OutCall,
+  type OutKind,
+  type Position,
 } from './rules';
 import { rivalHitTitle, type Team } from './teams';
 
@@ -68,11 +70,13 @@ const PLAY_SPEED = 1.5;
 const HIT_FOR = 2;
 /** How often the rival swings and misses a strike, rather than letting it go by. */
 const SWING_AND_MISS = 0.4;
-const INFIELDERS: InfielderId[] = ['SS', '2B', '3B'];
 
 /** What the rival's at-bat comes to on this pitch. */
 type Call =
-  { kind: 'strike' } | { kind: 'popout' } | { kind: 'groundout' } | { kind: 'hit'; hit: Hit };
+  | { kind: 'strike' }
+  | { kind: 'popout'; seconds: number; forced?: OutKind }
+  | { kind: 'groundout'; seconds: number; forced?: OutKind }
+  | { kind: 'hit'; hit: Hit; forced?: HitKind };
 
 /** What the pitching needs from the game: the people and the ball, and the game's own state. */
 export interface PitchingHost {
@@ -96,7 +100,7 @@ export interface PitchingHost {
   /** Records an answer with the feed and the session. */
   answered(fact: Fact, correct: boolean): void;
   /** Sends the batter and the runners round the bases; returns the seconds that takes. */
-  runBases(moves: Move[], runs: number, speed: number): number;
+  runBases(moves: Move[], runs: number, speed: number, retired?: number[]): number;
   /** Puts anybody still running where they were going. */
   settleRunners(): void;
   /** The batter at the plate walks off. */
@@ -159,8 +163,11 @@ export function createPitching(host: PitchingHost): Pitching {
   const here: Vec = { ...GLOVE };
   const scratch: Vec = { x: 0, y: 0, z: 0 };
   let flight: { from: Vec; legs: Leg[]; t: number } | null = null;
-  let plan: HitPlan | null = null;
+  let plan: BattedBall | null = null;
   let planT = 0;
+  /** How fast the path plays, and what happens when it ends (an out is made, or a ball caught). */
+  let planSpeed = 1;
+  let planEnded: (() => void) | null = null;
   let landed = false;
   let held: Fielder | null = null;
 
@@ -202,6 +209,7 @@ export function createPitching(host: PitchingHost): Pitching {
     ending = null;
     flight = null;
     plan = null;
+    planEnded = null;
     held = null;
     hud.setClock(1);
     hud.hideQuestion(false);
@@ -235,10 +243,23 @@ export function createPitching(host: PitchingHost): Pitching {
     hud.lock();
     hud.buttons[index].classList.add('chosen');
     host.answered(fact, correct);
-    deliver(correct ? { kind: pitchOutcomeFor(used) } : rivalHit());
+    deliver(correct ? goodPitch(used) : rivalHit());
   };
 
-  const rivalHit = (): Call => ({ kind: 'hit', hit: cpuHitFor(Math.random()) });
+  /** A right answer: an out by how fast it came, or the kind of out the dev address forces. */
+  const goodPitch = (used: number): Call => {
+    const forced = forcedPlay().out;
+    if (forced) {
+      const air = ['pop', 'foul-pop', 'fly', 'liner', 'diving'].includes(forced);
+      return { kind: air ? 'popout' : 'groundout', seconds: used, forced };
+    }
+    return { kind: pitchOutcomeFor(used), seconds: used } as Call;
+  };
+
+  const rivalHit = (): Call => {
+    const forced = forcedPlay().hit;
+    return { kind: 'hit', hit: forced ? hitOfKind(forced) : cpuHitFor(Math.random()), forced };
+  };
 
   /** The clock ran out: the pitch is a gift. */
   const timeUp = () => {
@@ -285,7 +306,7 @@ export function createPitching(host: PitchingHost): Pitching {
    * A call is up: it is over when the play, the speech and the time to read it are all done.
    * `mark` says each is; a tap (or all three) ends it.
    */
-  const startResult = (batterGone: boolean) => {
+  const startResult = (batterGone: boolean, sendOff = batterGone) => {
     phase = 'play';
     resultAt = host.now();
     const thisTurn = turn;
@@ -297,11 +318,11 @@ export function createPitching(host: PitchingHost): Pitching {
         !replaying &&
         Object.values(flags).every(Boolean)
       ) {
-        finish(batterGone);
+        finish(batterGone, sendOff);
       }
     };
     resultDone = check;
-    ending = () => finish(batterGone);
+    ending = () => finish(batterGone, sendOff);
     return (what: keyof typeof flags) => {
       flags[what] = true;
       check();
@@ -309,7 +330,7 @@ export function createPitching(host: PitchingHost): Pitching {
   };
 
   /** The call is made: on to the next pitch, or the next batter. */
-  const finish = (batterGone: boolean) => {
+  const finish = (batterGone: boolean, sendOff: boolean) => {
     if (phase !== 'play') return;
     phase = 'idle';
     stopSpeaking();
@@ -317,6 +338,7 @@ export function createPitching(host: PitchingHost): Pitching {
     hud.hideBanner();
     flight = null;
     plan = null;
+    planEnded = null;
     held = null;
     resultDone = null;
     ending = null;
@@ -326,7 +348,7 @@ export function createPitching(host: PitchingHost): Pitching {
     shown.outs = host.state().outs;
     host.settleRunners();
     fielders.forEach((f) => f.goHome(7));
-    if (batterGone) host.sendOff();
+    if (sendOff) host.sendOff();
     host.playOver(batterGone);
   };
 
@@ -375,22 +397,31 @@ export function createPitching(host: PitchingHost): Pitching {
     const batter = host.batter();
     const dropped = batter.dropBat();
     if (dropped) host.addProp(dropped);
-    if (call.kind === 'hit') rivalHits(call.hit);
-    else if (call.kind === 'popout') popOut();
-    else groundOut();
+    if (call.kind === 'hit') rivalHits(call);
+    else outPlay(call);
   };
 
+  const rolls = () => ({ side: Math.random(), a: Math.random(), b: Math.random() });
+
   /** A wrong answer: the rival hits it. The right answer and why are shown. */
-  const rivalHits = (hit: Hit) => {
+  const rivalHits = (call: Extract<Call, { kind: 'hit' }>) => {
     if (!fact) return;
     const current = fact;
-    const outcome = applyHit(host.state(), hit);
+    const kind = call.forced ?? pickHitKind(call.hit, Math.random());
+    const hit = hitOfKind(kind);
+    plan = planBatted(kind, rolls());
+    const outcome = applyHit(host.state(), hit, { kind, zone: plan.zone });
     host.commit(outcome.state);
     host.refresh();
     hud.mark(chosen, options.indexOf(current.answer), false);
-    hud.showBanner(rivalHitTitle(host.rival(), hitWord(hit)), current.statement, 'miss', 'aside');
+    hud.showBanner(
+      rivalHitTitle(host.rival(), hitKindWord(kind)),
+      current.statement,
+      'miss',
+      'aside',
+    );
     sfx.miss();
-    const mark = startResult(true);
+    const mark = startResult(true, false);
     // The hit is called, then the fact is read out, and shown for a while.
     const thisTurn = turn;
     speak(cpuHitSpeech(hit), () => {
@@ -400,29 +431,29 @@ export function createPitching(host: PitchingHost): Pitching {
     host.after(REVEAL_FOR, () => mark('hold'));
 
     // The ball flies off towards the field (and the camera); one fielder jogs after it.
-    plan = planHit(hit, Math.random() < 0.5 ? -1 : 1, Math.random(), Math.random());
     planT = 0;
+    planSpeed = PLAY_SPEED;
+    planEnded = null;
     landed = false;
-    const target =
-      hit === 'homer'
-        ? fieldPoint(fieldAngle(plan.landing), wallRadius(fieldAngle(plan.landing)) - 1.8)
-        : plan.stop;
+    const deep = plan.theta;
+    const target = hit === 'homer' ? fieldPoint(deep, wallRadius(deep) - 1.8) : plan.rest;
     const candidates = fielders.map((f) => ({
       f,
       x: f.mover.person.root.position.x,
       z: f.mover.person.root.position.z,
     }));
-    const [near] = pickChasers(candidates, plan.landing, 1);
+    const [near] = pickChasers(candidates, plan.firstTouch.p, 1);
     near?.f.chase({ ...target }, FIELD_SPEED, hit === 'homer' ? 'watch' : 'scoop');
     const runTime = host.runBases(outcome.moves, outcome.runs, RUN_SPEED * RIVAL_RUN_BOOST);
-    const play = Math.max(plan.duration / PLAY_SPEED + 0.3, runTime + 0.4, HIT_FOR);
+    const play = Math.max(plan.end / PLAY_SPEED + 0.3, runTime + 0.4, HIT_FOR);
     host.after(play, () => mark('play'));
   };
 
-  /** A fielder is the one to make the play. */
-  const pickInfielder = (): { id: InfielderId; fielder: Fielder } => {
-    const id = INFIELDERS[Math.floor(Math.random() * INFIELDERS.length)];
-    return { id, fielder: fielders.find((f) => f.id === id)! };
+  /** The fielder who plays a ball; the pitcher and catcher stand in for by an infielder here. */
+  const fielderFor = (position: Position, ball: BattedBall): Fielder => {
+    const id =
+      position === 'P' ? 'SS' : position === 'C' ? (ball.rest.x < 0 ? '3B' : '1B') : position;
+    return fielders.find((f) => f.id === id)!;
   };
 
   /** The batter starts for first, and is stopped short when the out is made. */
@@ -435,85 +466,101 @@ export function createPitching(host: PitchingHost): Pitching {
   };
 
   /** The out is made: the call, the scorebug, and the batter pulls up, beaten. */
-  const outMade = (mark: (what: 'play' | 'speech' | 'hold') => void, spoken: string) => {
+  const outMade = (
+    mark: (what: 'play' | 'speech' | 'hold') => void,
+    text: string,
+    spoken: string,
+    batterOut: boolean,
+  ) => {
     shown.outs = host.state().outs;
     host.refresh();
-    const batter = host.batter();
-    batter.mover.halt();
-    batter.slump();
-    callGood('Out!', spoken, mark);
+    if (batterOut) {
+      const batter = host.batter();
+      batter.mover.halt();
+      batter.slump();
+    }
+    callGood(text, spoken, mark);
     mark('play');
   };
 
-  /** Under 25% of the clock: a high pop-up that an infielder settles under and catches. */
-  const popOut = () => {
-    host.commit(applyFieldOut(host.state()).state);
-    hud.markHit(chosen);
-    const { id, fielder } = pickInfielder();
-    const spot = INFIELD_PLAYS[id].pop;
-    const catchAt: Vec = { x: spot.x, y: 1.5, z: spot.z };
-    fielder.chase({ ...spot }, INFIELD_SPEED, 'ready');
-    const mark = startResult(true);
-    runToFirst();
-    fly(
-      [
-        {
-          to: catchAt,
-          seconds: POP_FLY_TIME,
-          lift: POP_FLY_LIFT,
-          onEnd: () => {
-            held = fielder;
-            sfx.glove();
-            outMade(mark, POP_OUT_SPEECH);
-          },
-        },
-      ],
-      CONTACT,
-    );
+  /** A forced kind of out, or one the rules pick for this answer. */
+  const chooseOut = (call: Extract<Call, { kind: 'popout' | 'groundout' }>): OutCall => {
+    const outcome = call.kind;
+    for (let i = 0; i < 400; i++) {
+      const pick = pickOut(outcome, call.seconds, host.state(), Math.random);
+      if (!call.forced || pick.kind === call.forced) return pick;
+    }
+    // Not possible in this game state (a double play with nobody on): make one up.
+    const kind = call.forced ?? 'ground';
+    const chain = kind === 'double-play' ? '6-4-3' : kind === 'force-second' ? '6-4' : '6-3';
+    const air = kind === 'fly' || kind === 'diving';
+    const fielder: Position = kind === 'foul-pop' ? 'C' : air ? 'CF' : 'SS';
+    return { kind, fielder, zone: air ? 'CF' : 'LC', chain };
   };
 
-  /** Under 50%: a grounder to an infielder, who throws to first. */
-  const groundOut = () => {
-    host.commit(applyFieldOut(host.state()).state);
+  /** A right answer in time: the rival's batter is out, one way or another. */
+  const outPlay = (call: Extract<Call, { kind: 'popout' | 'groundout' }>) => {
+    const picked = chooseOut(call);
+    const path = planBatted(picked.kind, rolls(), POSITION_SPOTS[picked.fielder]);
+    // Where the ball really comes down is the zone that counts for the runners.
+    const out: OutCall = { ...picked, zone: path.zone };
+    const result = applyOut(host.state(), out);
+    host.commit(result.state);
     hud.markHit(chosen);
-    const { id, fielder } = pickInfielder();
-    const spot = INFIELD_PLAYS[id].ground;
-    fielder.chase({ ...spot }, INFIELD_SPEED, 'scoop');
-    const mark = startResult(true);
-    runToFirst();
-    fly(
-      [
-        {
-          to: { x: spot.x, y: BALL_RADIUS, z: spot.z },
-          seconds: GROUND_BALL_TIME,
-          ground: true,
-          onEnd: () => {
-            held = fielder;
-            sfx.glove();
-            fielder.mover.face(FIRST_BASE);
-            host.after(0.15, () => {
-              fielder.mover.person.handWorld('L', handPoint);
-              held = null;
-              fly(
-                [
-                  {
-                    to: { x: FIRST_BASE.x, y: 1.2, z: FIRST_BASE.z },
-                    seconds: THROW_TIME,
-                    lift: 0.8,
-                    onEnd: () => {
-                      sfx.glove();
-                      outMade(mark, GROUND_OUT_SPEECH);
-                    },
-                  },
-                ],
-                handPoint,
-              );
-            });
-          },
-        },
-      ],
-      CONTACT,
-    );
+    const fielder = fielderFor(out.fielder, path);
+    const spoken = outSpeech(out, result.sacFly);
+    const text = outPopText(out, result.sacFly);
+    const batterOut = result.retired.includes(0);
+    const mark = startResult(true, batterOut);
+    const sendRunners = () => {
+      if (result.moves.length || result.retired.some((r) => r > 0)) {
+        host.runBases(result.moves, result.runs, RUN_SPEED * RIVAL_RUN_BOOST, result.retired);
+      }
+    };
+    plan = path;
+    planT = 0;
+    planSpeed = 1;
+    landed = true;
+    if (batterOut) runToFirst();
+    const air = path.firstTouch.what === 'air-catch';
+    if (air) {
+      const under = path.firstTouch.p;
+      fielder.chase({ x: under.x, y: 0, z: under.z }, INFIELD_SPEED, 'ready');
+      planEnded = () => {
+        held = fielder;
+        sfx.glove();
+        sendRunners();
+        outMade(mark, text, spoken, batterOut);
+      };
+      return;
+    }
+    // A grounder: the fielder gets to it, and throws to first (or to second on a force).
+    fielder.chase({ ...path.rest }, INFIELD_SPEED, 'scoop');
+    sendRunners();
+    const base = out.kind === 'force-second' ? BASE_SPOTS[2] : FIRST_BASE;
+    planEnded = () => {
+      held = fielder;
+      sfx.glove();
+      fielder.mover.face(base);
+      host.after(0.15, () => {
+        fielder.mover.person.handWorld('L', handPoint);
+        held = null;
+        fly(
+          [
+            {
+              to: { x: base.x, y: 1.2, z: base.z },
+              seconds: THROW_TIME,
+              lift: 0.8,
+              onEnd: () => {
+                sfx.glove();
+                outMade(mark, text, spoken, batterOut);
+              },
+            },
+          ],
+          handPoint,
+        );
+      });
+    };
   };
 
   // ---------- Frame ----------
@@ -553,7 +600,7 @@ export function createPitching(host: PitchingHost): Pitching {
       put({ x: handPoint.x, y: handPoint.y + 0.05, z: handPoint.z });
     }
     if (plan) {
-      planT += delta * PLAY_SPEED;
+      planT += delta * planSpeed;
       const gone = plan.overWall && planT > plan.airTime;
       if (gone) {
         ball.setVisible(false);
@@ -565,7 +612,16 @@ export function createPitching(host: PitchingHost): Pitching {
       }
       if (!landed && planT >= plan.airTime) {
         landed = true;
-        if (!plan.overWall) effects.dust({ x: plan.landing.x, y: 0.1, z: plan.landing.z }, 7);
+        if (!plan.overWall) {
+          effects.dust({ x: plan.firstTouch.p.x, y: 0.1, z: plan.firstTouch.p.z }, 7);
+        }
+      }
+      if (planEnded && planT >= plan.end) {
+        const done = planEnded;
+        planEnded = null;
+        plan = null;
+        ball.setGlow(false);
+        done();
       }
     }
   };
@@ -600,6 +656,7 @@ export function createPitching(host: PitchingHost): Pitching {
     phase = 'idle';
     flight = null;
     plan = null;
+    planEnded = null;
     held = null;
     resultDone = null;
     ending = null;

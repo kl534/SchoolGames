@@ -44,7 +44,7 @@ import {
   LAP,
   pickChasers,
   pitchPosition,
-  planHit,
+  POSITION_SPOTS,
   POP_FLY_TIME,
   RELEASE,
   WALL_CENTRE,
@@ -53,6 +53,7 @@ import {
   wallRadius,
   type Vec,
 } from '../src/games/batter-up/flight';
+import { isFair, planBatted, type BattedBall } from '../src/games/batter-up/batted';
 import {
   ballRadiusPx,
   ballScale,
@@ -84,7 +85,10 @@ import { createMover } from '../src/games/batter-up/mover';
 import { createPerson, mixPose, neutralPose } from '../src/games/batter-up/person';
 import {
   advance,
+  advanceOnHit,
+  AIR_OUTS,
   applyFieldOut,
+  applyOut,
   applyHit,
   applyStrike,
   BASES_FOR,
@@ -93,6 +97,17 @@ import {
   cpuHitSpeech,
   CPU_HIT_WEIGHTS,
   dots,
+  DOUBLE_PLAYS,
+  DP_UNDER_SECONDS,
+  GROUND_OUTS,
+  hitOfKind,
+  hitSubtitle,
+  isRightSide,
+  LINER_FIELDERS,
+  outPopText,
+  pickHitKind,
+  pickOut,
+  zoneOf,
   easeToward,
   EMPTY_BASES,
   EXTRA_INNINGS,
@@ -104,9 +119,11 @@ import {
   halfOver,
   DOUBLE_UNDER_SECONDS,
   hitFor,
+  HIT_KINDS,
   HOMER_UNDER_SECONDS,
   hitLabel,
-  hitSpeech,
+  hitKindSpeech,
+  hitKindWord,
   hitWord,
   inningBanner,
   inningSpeech,
@@ -115,6 +132,7 @@ import {
   MAX_OUTS,
   MAX_SPOKEN_RUNS,
   MERCY_RUNS,
+  outSpeech,
   newGame,
   nextHalf,
   ordinal,
@@ -132,6 +150,11 @@ import {
   type Bases,
   type GameState,
   type Hit,
+  type HitKind,
+  type FieldZone,
+  type OutCall,
+  type OutKind,
+  type Position,
 } from '../src/games/batter-up/rules';
 import {
   coloursOf,
@@ -152,6 +175,22 @@ import { VOICE_LINES } from '../src/games/batter-up/voice';
 import { normalizeSpeech } from '../src/shared/voice';
 
 const at = (x: number, y: number, z: number): Vec => ({ x, y, z });
+const ALL_HIT_KINDS: HitKind[] = Object.values(HIT_KINDS).flatMap((list) =>
+  list.map((k) => k.kind),
+);
+const ALL_OUT_KINDS: OutKind[] = [
+  'pop',
+  'foul-pop',
+  'fly',
+  'liner',
+  'diving',
+  'ground',
+  'double-play',
+  'force-second',
+];
+/** The path of the first kind of a hit (or the `index`th), to the left (-1) or right (1). */
+const battedHit = (hit: Hit, side: -1 | 1, roll: number, index = 0): BattedBall =>
+  planBatted(HIT_KINDS[hit][index].kind, { side: side < 0 ? 0.25 : 0.75, a: roll, b: roll });
 const MOUND_Z = -8.2;
 
 describe('hit tiers', () => {
@@ -182,8 +221,8 @@ describe('hit tiers', () => {
     expect(hitLabel('double')).toBe('DOUBLE!');
     expect(hitLabel('single')).toBe('SINGLE!');
     expect(hitLabel('triple')).toBe('TRIPLE!');
-    expect(hitSpeech('homer')).toBe('Home run!');
-    expect(hitSpeech('double')).toBe('Double!');
+    expect(hitKindSpeech('homer-moonshot')).toBe('Way up, and gone! Home run!');
+    expect(hitKindSpeech('double-gap')).toBe('Into the gap! Double!');
   });
 
   it('says how many runs scored', () => {
@@ -720,7 +759,13 @@ describe('the announcer', () => {
   it('has a recorded clip for every line it can say', () => {
     const lines = new Set(VOICE_LINES.map(normalizeSpeech));
     const said: string[] = [PLAY_BALL, EXTRA_INNINGS, YOU_WIN, POP_OUT_SPEECH, GROUND_OUT_SPEECH];
-    for (const hit of Object.keys(BASES_FOR) as Hit[]) said.push(hitSpeech(hit), cpuHitSpeech(hit));
+    for (const hit of Object.keys(BASES_FOR) as Hit[]) said.push(cpuHitSpeech(hit));
+    for (const kind of ALL_HIT_KINDS) said.push(hitKindSpeech(kind));
+    for (const kind of ALL_OUT_KINDS) {
+      for (const sac of [false, true]) {
+        said.push(outSpeech({ kind, fielder: 'SS', zone: 'LC' }, sac));
+      }
+    }
     for (let n = 0; n <= 4; n++) {
       for (const called of [true, false]) said.push(strikeCall(n, called).spoken);
       said.push(pitchStrikeCall(n).spoken);
@@ -835,8 +880,6 @@ describe('the umpire', () => {
 });
 
 describe('pitches and hits in flight', () => {
-  const hits: Hit[] = ['single', 'double', 'triple', 'homer'];
-
   it('floats the pitch from the hand to the plate in an arc', () => {
     const start = at(0.2, 2, -7);
     const out = at(0, 0, 0);
@@ -880,100 +923,6 @@ describe('pitches and hits in flight', () => {
     expect(fieldAngle(p)).toBeCloseTo(0.4, 6);
     expect(fieldPoint(0, 10).z).toBeCloseTo(-10, 6);
     expect(fieldPoint(0.5, 10).x).toBeGreaterThan(0);
-  });
-
-  it.each(hits)('starts a %s at the bat and lands where it says', (hit) => {
-    for (const side of [-1, 1] as const) {
-      const plan = planHit(hit, side, 0.5, 0.5);
-      const out = at(0, 0, 0);
-      expect(plan.position(0, out)).toMatchObject(CONTACT);
-      const down = plan.position(plan.airTime, out);
-      expect(down.x).toBeCloseTo(plan.landing.x, 6);
-      expect(down.z).toBeCloseTo(plan.landing.z, 6);
-      expect(Math.sign(plan.landing.x)).toBe(side);
-      expect(plan.duration).toBeGreaterThanOrEqual(plan.airTime);
-    }
-  });
-
-  it('hits a single into shallow outfield, past the infield and short of the wall', () => {
-    for (const roll of [0, 0.5, 1]) {
-      const plan = planHit('single', 1, roll, roll);
-      const reach = Math.hypot(plan.landing.x, plan.landing.z);
-      expect(reach).toBeGreaterThan(19);
-      expect(reach).toBeLessThan(24);
-      expect(plan.overWall).toBe(false);
-      expect(plan.lift).toBeLessThan(4);
-    }
-  });
-
-  it('puts a double in the gap between the fielders and rolls it towards the wall', () => {
-    for (const side of [-1, 1] as const) {
-      const plan = planHit('double', side, 0.5, 0.5);
-      const angle = Math.abs(fieldAngle(plan.landing));
-      expect(angle).toBeGreaterThan((14 * Math.PI) / 180);
-      expect(angle).toBeLessThan((25 * Math.PI) / 180);
-      const stop = Math.hypot(plan.stop.x, plan.stop.z);
-      expect(stop).toBeGreaterThan(Math.hypot(plan.landing.x, plan.landing.z));
-      expect(stop).toBeLessThan(wallRadius(fieldAngle(plan.stop)));
-    }
-  });
-
-  it('drives a triple deep down the line and rolls it into the corner', () => {
-    for (const side of [-1, 1] as const) {
-      const plan = planHit('triple', side, 0.5, 0.5);
-      expect(Math.abs(fieldAngle(plan.landing))).toBeGreaterThan((34 * Math.PI) / 180);
-      expect(Math.abs(fieldAngle(plan.landing))).toBeLessThan(FOUL_ANGLE);
-      expect(Math.abs(fieldAngle(plan.stop))).toBeGreaterThan((41 * Math.PI) / 180);
-      expect(Math.hypot(plan.stop.x, plan.stop.z)).toBeLessThan(wallRadius(fieldAngle(plan.stop)));
-    }
-  });
-
-  it('sends a home run high over the wall', () => {
-    for (const side of [-1, 1] as const) {
-      for (const roll of [0, 0.5, 1]) {
-        const plan = planHit('homer', side, roll, roll);
-        expect(plan.overWall).toBe(true);
-        const angle = fieldAngle(plan.landing);
-        expect(Math.hypot(plan.landing.x, plan.landing.z)).toBeGreaterThan(wallRadius(angle) + 4);
-        // Find the moment the ball is over the wall and check it is well above it.
-        const out = at(0, 0, 0);
-        let clearance = Infinity;
-        for (let t = 0; t <= plan.airTime; t += 0.01) {
-          plan.position(t, out);
-          if (Math.hypot(out.x, out.z) >= wallRadius(fieldAngle(out))) {
-            clearance = out.y;
-            break;
-          }
-        }
-        expect(clearance).toBeGreaterThan(WALL_HEIGHT + 3);
-      }
-    }
-  });
-
-  it('flies further and higher the better the hit', () => {
-    const lifts = hits.map((h) => planHit(h, 1, 0.5, 0.5).lift);
-    expect(lifts).toEqual([...lifts].sort((a, b) => a - b));
-    const reach = Object.fromEntries(
-      hits.map((h) => {
-        const p = planHit(h, 1, 0.5, 0.5).landing;
-        return [h, Math.hypot(p.x, p.z)];
-      }),
-    );
-    expect(reach.single).toBeLessThan(reach.double);
-    expect(reach.homer).toBeGreaterThan(reach.triple + 10);
-  });
-
-  it('keeps a rolling ball on the ground, slowing down to a stop', () => {
-    const plan = planHit('double', 1, 0.5, 0.5);
-    const out = at(0, 0, 0);
-    plan.position(plan.airTime + 0.5, out);
-    expect(out.y).toBeGreaterThanOrEqual(BALL_RADIUS - 1e-9);
-    expect(out.y).toBeLessThan(1);
-    const end = plan.position(plan.duration, at(0, 0, 0));
-    expect(end.x).toBeCloseTo(plan.stop.x, 6);
-    expect(end.z).toBeCloseTo(plan.stop.z, 6);
-    const later = plan.position(plan.duration + 3, at(0, 0, 0));
-    expect(later.x).toBeCloseTo(plan.stop.x, 6);
   });
 
   it('sends the nearest outfielders after the ball', () => {
@@ -1417,29 +1366,31 @@ describe('the view of a hit', () => {
       for (const hit of HITS) {
         for (const side of [-1, 1] as const) {
           for (const roll of [0, 0.5, 1]) {
-            const plan = planHit(hit, side, roll, roll);
-            const ball = at(0, 0, 0);
-            const cam = at(0, 0, 0);
-            const look = at(0, 0, 0);
-            const free = at(0, 0, 0);
-            for (let t = 0; t <= plan.duration + 0.5; t += 0.1) {
-              plan.position(t, ball);
-              followGoal(ball, cam, look, home);
-              Object.assign(free, look);
-              keepBoardClear(ball, cam, look, fit.fov, w, h, band);
-              // Tilting for the scoreboard never loses a ball that was in view.
-              const before = ballRow(ball, cam, free);
-              if (before >= band.top && before <= band.bottom) {
-                expect(ballRow(ball, cam, look)).toBeGreaterThanOrEqual(band.top);
-                expect(ballRow(ball, cam, look)).toBeLessThanOrEqual(band.bottom);
+            for (const index of HIT_KINDS[hit].keys()) {
+              const plan = battedHit(hit, side, roll, index);
+              const ball = at(0, 0, 0);
+              const cam = at(0, 0, 0);
+              const look = at(0, 0, 0);
+              const free = at(0, 0, 0);
+              for (let t = 0; t <= plan.end + 0.5; t += 0.1) {
+                plan.position(t, ball);
+                followGoal(ball, cam, look, home);
+                Object.assign(free, look);
+                keepBoardClear(ball, cam, look, fit.fov, w, h, band);
+                // Tilting for the scoreboard never loses a ball that was in view.
+                const before = ballRow(ball, cam, free);
+                if (before >= band.top && before <= band.bottom) {
+                  expect(ballRow(ball, cam, look)).toBeGreaterThanOrEqual(band.top);
+                  expect(ballRow(ball, cam, look)).toBeLessThanOrEqual(band.bottom);
+                }
+                if (t < plan.end) continue;
+                // Once the ball has come to rest the scoreboard is clear of the HUD: wholly in the
+                // band below the scorebug, or at least not under the scorebug or the buttons.
+                expect(boardIsClear(cam, look, fit.fov, w, h, band)).toBe(true);
+                // And the ball is in the band.
+                expect(ballRow(ball, cam, look)).toBeGreaterThan(band.top);
+                expect(ballRow(ball, cam, look)).toBeLessThan(band.bottom);
               }
-              if (t < plan.duration) continue;
-              // Once the ball has come to rest the scoreboard is clear of the HUD: wholly in the
-              // band below the scorebug, or at least not under the scorebug or the buttons.
-              expect(boardIsClear(cam, look, fit.fov, w, h, band)).toBe(true);
-              // And the ball is in the band.
-              expect(ballRow(ball, cam, look)).toBeGreaterThan(band.top);
-              expect(ballRow(ball, cam, look)).toBeLessThan(band.bottom);
             }
           }
         }
@@ -1534,27 +1485,31 @@ describe('seeing the ball', () => {
     for (const fov of fovs) {
       for (const roll of [0, 0.5, 1]) {
         for (const side of [-1, 1] as const) {
-          const plan = planHit('homer', side, roll, roll);
-          const cam = at(0, 0, 0);
-          const look = at(0, 0, 0);
-          const far = at(0, 0, 0);
-          let farthest = 0;
-          for (let t = 0; t <= plan.airTime; t += 0.05) {
-            const ball = plan.position(t, at(0, 0, 0));
-            followGoal(ball, cam, look, homeView(w / h));
-            const d = Math.hypot(ball.x - cam.x, ball.y - cam.y, ball.z - cam.z);
-            // Every point of the flight is at least 7px across, and within the world cap.
-            const scale = ballScale(d, fov, h);
-            expect(ballRadiusPx(d, fov, h) * scale).toBeGreaterThanOrEqual(MIN_BALL_PX - 1e-9);
-            expect(BALL_RADIUS * scale).toBeLessThanOrEqual(MAX_BALL_WORLD_RADIUS + 1e-9);
-            if (d > farthest) {
-              farthest = d;
-              Object.assign(far, ball);
+          for (const kindIndex of HIT_KINDS.homer.keys()) {
+            const plan = battedHit('homer', side, roll, kindIndex);
+            const cam = at(0, 0, 0);
+            const look = at(0, 0, 0);
+            const far = at(0, 0, 0);
+            let farthest = 0;
+            for (let t = 0; t <= plan.airTime; t += 0.05) {
+              const ball = plan.position(t, at(0, 0, 0));
+              followGoal(ball, cam, look, homeView(w / h));
+              const d = Math.hypot(ball.x - cam.x, ball.y - cam.y, ball.z - cam.z);
+              // Every point of the flight is at least 7px across, and within the world cap.
+              const scale = ballScale(d, fov, h);
+              expect(ballRadiusPx(d, fov, h) * scale).toBeGreaterThanOrEqual(MIN_BALL_PX - 1e-9);
+              expect(BALL_RADIUS * scale).toBeLessThanOrEqual(MAX_BALL_WORLD_RADIUS + 1e-9);
+              if (d > farthest) {
+                farthest = d;
+                Object.assign(far, ball);
+              }
             }
+            expect(farthest).toBeGreaterThan(40);
+            const scale = ballScale(farthest, fov, h);
+            expect(ballRadiusPx(farthest, fov, h) * scale).toBeGreaterThanOrEqual(
+              MIN_BALL_PX - 1e-9,
+            );
           }
-          expect(farthest).toBeGreaterThan(40);
-          const scale = ballScale(farthest, fov, h);
-          expect(ballRadiusPx(farthest, fov, h) * scale).toBeGreaterThanOrEqual(MIN_BALL_PX - 1e-9);
         }
       }
     }
@@ -1566,7 +1521,7 @@ describe('seeing the ball', () => {
     [768, 1024],
   ])('keeps a ball at the top of a home run clearly visible at %ix%i', (w, h) => {
     const fit = fitView(w, h);
-    const plan = planHit('homer', 1, 0.5, 0.5);
+    const plan = battedHit('homer', 1, 0.5, 1);
     const cam = at(0, 0, 0);
     const look = at(0, 0, 0);
     const top = at(0, 0, 0);
@@ -1766,6 +1721,566 @@ describe('the people', () => {
     expect(shadow.position.y).toBeLessThan(0.1);
     ball.setVisible(false);
     expect(ball.object.visible).toBe(false);
+  });
+});
+
+// ---------- Kinds of play ----------
+
+const ZONES: FieldZone[] = ['LL', 'LF', 'LC', 'CF', 'RC', 'RF', 'RL'];
+const ALL_BASES: Bases[] = Array.from({ length: 8 }, (_, i) => [
+  Boolean(i & 1),
+  Boolean(i & 2),
+  Boolean(i & 4),
+]);
+const bottomOf = (more: Partial<GameState> = {}) => midGame(1, 'bottom', [0], [0], more);
+
+describe('kinds of hit', () => {
+  it('weights the kinds of each hit so they add up to one', () => {
+    for (const hit of Object.keys(HIT_KINDS) as Hit[]) {
+      const total = HIT_KINDS[hit].reduce((n, k) => n + k.weight, 0);
+      expect(total).toBeCloseTo(1, 9);
+      for (const k of HIT_KINDS[hit]) expect(hitOfKind(k.kind)).toBe(hit);
+    }
+  });
+
+  it('picks every kind of every hit across the range of the random number', () => {
+    for (const hit of Object.keys(HIT_KINDS) as Hit[]) {
+      const seen = new Set<HitKind>();
+      for (let r = 0; r < 1; r += 0.005) seen.add(pickHitKind(hit, r));
+      expect([...seen].sort()).toEqual(HIT_KINDS[hit].map((k) => k.kind).sort());
+      expect(pickHitKind(hit, 0)).toBe(HIT_KINDS[hit][0].kind);
+      expect(pickHitKind(hit, 0.9999999)).toBe(HIT_KINDS[hit].at(-1)!.kind);
+    }
+  });
+
+  it('names a speech line, a banner word and a subtitle for every kind', () => {
+    for (const kind of ALL_HIT_KINDS) {
+      expect(hitKindSpeech(kind).length).toBeGreaterThan(5);
+      expect(hitKindWord(kind).length).toBeGreaterThan(3);
+      for (const zone of ZONES) expect(hitSubtitle(kind, zone, '3B').length).toBeGreaterThan(5);
+    }
+    expect(hitKindWord('single-bloop')).toBe('bloop single');
+    expect(rivalHitTitle(TEAMS[0], hitKindWord('single-bloop'))).toBe('Mud Hens bloop single!');
+    expect(hitSubtitle('homer-moonshot', 'CF')).toBe('A towering moonshot');
+  });
+
+  it('splits the field into zones by angle', () => {
+    const z = (d: number) => zoneOf((d * Math.PI) / 180);
+    expect([-45, -36.5, -30, -22.5, -15, -7.5, 0, 7.5, 15, 22.5, 30, 36.5, 45].map(z)).toEqual([
+      'LL',
+      'LL',
+      'LF',
+      'LF',
+      'LC',
+      'LC',
+      'CF',
+      'RC',
+      'RC',
+      'RF',
+      'RF',
+      'RL',
+      'RL',
+    ]);
+    expect(ZONES.filter(isRightSide)).toEqual(['RC', 'RF', 'RL']);
+  });
+});
+
+describe('realistic advancing on a hit', () => {
+  const play = (kind: HitKind, zone: FieldZone, bases: Bases) => advanceOnHit(bases, kind, zone);
+  const to = (result: ReturnType<typeof advanceOnHit>, from: number) =>
+    result.moves.find((m) => m.from === from)?.to;
+
+  it('gives the grounder and the liner an extra base from second, and from first on the right', () => {
+    for (const kind of ['single-grounder', 'single-liner'] as const) {
+      const left = play(kind, 'LF', [true, true, false]);
+      expect(to(left, 1)).toBe(2);
+      expect(to(left, 2)).toBe(4);
+      expect(left.runs).toBe(1);
+      const right = play(kind, 'RF', [true, false, false]);
+      expect(to(right, 1)).toBe(3);
+      expect(right.bases).toEqual([true, false, true]);
+    }
+  });
+
+  it('moves runners only as far as forced on a chopper and a bloop', () => {
+    for (const kind of ['single-chopper', 'single-bloop'] as const) {
+      for (const zone of ZONES) {
+        expect(play(kind, zone, [true, true, false]).moves).toEqual(
+          advance([true, true, false], 1).moves,
+        );
+        expect(play(kind, zone, [true, false, true]).moves).toEqual(
+          advance([true, false, true], 1).moves,
+        );
+      }
+    }
+  });
+
+  it('sends a runner on first home on a double, but to third on a carom off the wall', () => {
+    for (const kind of ['double-gap', 'double-line'] as const) {
+      expect(to(play(kind, 'LC', [true, false, false]), 1)).toBe(4);
+    }
+    const wall = play('double-wall', 'CF', [true, false, false]);
+    expect(to(wall, 1)).toBe(3);
+    expect(to(play('double-wall', 'CF', [false, true, false]), 2)).toBe(4);
+  });
+
+  it('scores everybody on a triple and a home run', () => {
+    for (const kind of ['triple-corner', 'triple-gap', 'homer-liner'] as const) {
+      const r = play(kind, 'CF', [true, true, true]);
+      expect(r.runs).toBe(kind.startsWith('homer') ? 4 : 3);
+      expect(r.moves.filter((m) => m.from > 0).every((m) => m.to === 4)).toBe(true);
+    }
+    expect(play('triple-gap', 'CF', EMPTY_BASES).bases).toEqual([false, false, true]);
+  });
+
+  it('lists the lead runner first and the batter last', () => {
+    const r = play('double-gap', 'RC', [true, true, true]);
+    expect(r.moves.map((m) => m.from)).toEqual([3, 2, 1, 0]);
+  });
+
+  it('always takes the batter exactly as far as the hit, never past the runner ahead, and never short of the force', () => {
+    for (const bases of ALL_BASES) {
+      for (const kind of ALL_HIT_KINDS) {
+        for (const zone of ZONES) {
+          const result = advanceOnHit(bases, kind, zone);
+          const count = BASES_FOR[hitOfKind(kind)];
+          const forced = advance(bases, count);
+          const batter = result.moves.find((m) => m.from === 0)!;
+          expect(batter.to).toBe(Math.min(count, 4));
+          expect(result.runs).toBeGreaterThanOrEqual(forced.runs);
+          const finals: number[] = [];
+          for (const m of result.moves) {
+            const least = forced.moves.find((f) => f.from === m.from)!.to;
+            expect(m.to).toBeGreaterThanOrEqual(least);
+            expect(m.to).toBeGreaterThan(m.from);
+            if (m.to < 4) finals.push(m.to);
+          }
+          // Nobody shares a base, and the bases say who is where.
+          expect(new Set(finals).size).toBe(finals.length);
+          expect(result.bases.filter(Boolean)).toHaveLength(finals.length);
+          for (const f of finals) expect(result.bases[f - 1]).toBe(true);
+          expect(result.runs).toBe(result.moves.filter((m) => m.to >= 4).length);
+        }
+      }
+    }
+  });
+
+  it('uses the extra bases in applyHit when told the play, and the forced ones when not', () => {
+    const s = midGame(1, 'top', [0], [], { bases: [false, true, false] });
+    expect(applyHit(s, 'single').runs).toBe(0);
+    expect(applyHit(s, 'single', { kind: 'single-liner', zone: 'LF' }).runs).toBe(1);
+    expect(applyHit(s, 'single', { kind: 'single-bloop', zone: 'LF' }).runs).toBe(0);
+  });
+
+  it('stops the mercy rule and the walk-off counting runs that are run', () => {
+    const s = midGame(1, 'top', [3], [], { bases: [true, true, false], runs: 3 });
+    const r = applyHit(s, 'single', { kind: 'single-grounder', zone: 'RF' });
+    expect(r.moves.filter((m) => m.to >= 4)).toHaveLength(1);
+    expect(r.runs).toBe(1);
+    const mercy = applyHit(
+      midGame(1, 'top', [4], [], { bases: [true, true, true], runs: 4 }),
+      'double',
+      { kind: 'double-gap', zone: 'LC' },
+    );
+    expect(mercy.runs).toBe(1);
+    expect(halfOver(mercy.state)).toBe('mercy');
+    const walk = applyHit(
+      midGame(6, 'bottom', [0, 0, 0, 0, 0, 2], [0, 0, 0, 0, 0, 0], { bases: [true, true, false] }),
+      'single',
+      { kind: 'single-liner', zone: 'RF' },
+    );
+    expect(walk.runs).toBe(1);
+    expect(walk.state.over).toBe(false);
+    const win = applyHit(
+      midGame(6, 'bottom', [0, 0, 0, 0, 0, 1], [0, 0, 0, 0, 0, 0], { bases: [true, true, false] }),
+      'double',
+      { kind: 'double-gap', zone: 'RF' },
+    );
+    expect(win.state).toMatchObject({ over: true, winner: 'them', walkOff: true });
+    expect(win.runs).toBe(2);
+  });
+});
+
+describe('outs when we pitch', () => {
+  const call = (kind: OutKind, zone: FieldZone = 'CF', fielder: Position = 'CF'): OutCall => ({
+    kind,
+    fielder,
+    zone,
+  });
+  const bases = (...on: number[]): Bases => [on.includes(1), on.includes(2), on.includes(3)];
+
+  it('weights every pick so they add up to one', () => {
+    for (const list of [AIR_OUTS, LINER_FIELDERS, DOUBLE_PLAYS, GROUND_OUTS]) {
+      expect(list.reduce((n, item) => n + item.weight, 0)).toBeCloseTo(1, 9);
+    }
+  });
+
+  it('picks every kind of out across the random numbers', () => {
+    const seen = new Set<OutKind>();
+    const sequence = (values: number[]) => {
+      let i = 0;
+      return () => values[i++ % values.length];
+    };
+    for (let r = 0; r < 1; r += 0.01) {
+      seen.add(pickOut('popout', 0.3, bottomOf(), sequence([r, 0.5, 0.5, 0.5])).kind);
+      seen.add(pickOut('groundout', 0.9, bottomOf(), sequence([r, 0.5])).kind);
+      seen.add(pickOut('groundout', 0.6, bottomOf({ bases: bases(1) }), sequence([r, 0.5])).kind);
+      seen.add(
+        pickOut('groundout', 0.9, bottomOf({ bases: bases(1), outs: 2 }), sequence([0.1, r])).kind,
+      );
+    }
+    expect([...seen].sort()).toEqual([...ALL_OUT_KINDS].sort());
+  });
+
+  it('picks a fielder who makes sense for each kind', () => {
+    for (let r = 0; r < 1; r += 0.013) {
+      const rnd = () => (r += 0.37) % 1;
+      const air = pickOut('popout', 0.2, bottomOf(), rnd);
+      if (air.kind === 'pop') expect(['1B', '2B', 'SS', '3B']).toContain(air.fielder);
+      if (air.kind === 'foul-pop') expect(air.fielder).toBe('C');
+      if (air.kind === 'fly' || air.kind === 'diving')
+        expect(['LF', 'CF', 'RF']).toContain(air.fielder);
+      if (air.kind === 'liner') expect(['3B', 'SS', '2B', '1B', 'P']).toContain(air.fielder);
+      const ground = pickOut('groundout', 0.9, bottomOf(), rnd);
+      expect(ground.kind).toBe('ground');
+      expect(ground.chain).toBeTruthy();
+      const first = ground.chain![0];
+      expect({ '1': 'P', '3': '1B', '4': '2B', '5': '3B', '6': 'SS' }[first]).toBe(ground.fielder);
+    }
+  });
+
+  it('turns a double play only with a runner on first, fewer than two outs and a quick answer', () => {
+    const quick = (state: GameState, seconds: number) => {
+      const kinds = new Set<OutKind>();
+      for (let r = 0; r < 1; r += 0.05)
+        kinds.add(pickOut('groundout', seconds, state, () => r).kind);
+      return kinds;
+    };
+    expect(quick(bottomOf({ bases: bases(1) }), 0.6).has('double-play')).toBe(true);
+    expect(quick(bottomOf({ bases: bases(1, 2) }), 0.74).has('double-play')).toBe(true);
+    expect(quick(bottomOf({ bases: bases(1) }), DP_UNDER_SECONDS).has('double-play')).toBe(false);
+    expect(quick(bottomOf({ bases: bases(1) }), 0.9).has('double-play')).toBe(false);
+    expect(quick(bottomOf({ bases: bases(2) }), 0.6).has('double-play')).toBe(false);
+    expect(quick(bottomOf({ bases: bases(1), outs: 2 }), 0.6).has('double-play')).toBe(false);
+    expect(quick(bottomOf({ bases: bases(1), outs: 2 }), 0.6).has('force-second')).toBe(true);
+    expect(quick(bottomOf({ bases: bases(1), outs: 1 }), 0.9).has('force-second')).toBe(false);
+  });
+
+  it('holds the runners on a pop, a foul pop, a line out and a diving catch', () => {
+    for (const kind of ['pop', 'foul-pop', 'liner', 'diving'] as const) {
+      const r = applyOut(bottomOf({ bases: bases(1, 2, 3) }), call(kind));
+      expect(r.state.outs).toBe(1);
+      expect(r.state.bases).toEqual(bases(1, 2, 3));
+      expect(r).toMatchObject({ runs: 0, retired: [0], sacFly: false, out: true, moves: [] });
+    }
+  });
+
+  it('scores the runner from third on a fly ball with fewer than two outs', () => {
+    for (const outs of [0, 1]) {
+      const r = applyOut(bottomOf({ bases: bases(3), outs }), call('fly'));
+      expect(r).toMatchObject({ runs: 1, sacFly: true });
+      expect(r.state.bases).toEqual(EMPTY_BASES);
+      expect(r.state.outs).toBe(outs + 1);
+      expect(r.moves).toEqual([{ from: 3, to: 4 }]);
+    }
+    const third = applyOut(bottomOf({ bases: bases(3), outs: 2 }), call('fly'));
+    expect(third).toMatchObject({ runs: 0, sacFly: false });
+    expect(third.state.outs).toBe(3);
+  });
+
+  it('tags the runner from second to third on a deep fly, if third is free', () => {
+    const deep = applyOut(bottomOf({ bases: bases(2) }), call('fly', 'RF'));
+    expect(deep.state.bases).toEqual(bases(3));
+    expect(deep.moves).toEqual([{ from: 2, to: 3 }]);
+    const shallow = applyOut(bottomOf({ bases: bases(2) }), call('fly', 'LF'));
+    expect(shallow.state.bases).toEqual(bases(2));
+    const both = applyOut(bottomOf({ bases: bases(2, 3) }), call('fly', 'CF'));
+    expect(both.state.bases).toEqual(bases(3));
+    expect(both.runs).toBe(1);
+    expect(applyOut(bottomOf({ bases: bases(1) }), call('fly', 'CF')).state.bases).toEqual(
+      bases(1),
+    );
+  });
+
+  it('moves runners up one base on a ground out, into free bases, lead first', () => {
+    const r = applyOut(bottomOf({ bases: bases(1, 2, 3) }), call('ground', 'LC', 'SS'));
+    expect(r.runs).toBe(1);
+    expect(r.state.bases).toEqual(bases(2, 3));
+    // First moved to second only because second emptied when its runner moved to third.
+    expect(r.moves).toEqual([
+      { from: 3, to: 4 },
+      { from: 2, to: 3 },
+      { from: 1, to: 2 },
+    ]);
+    expect(applyOut(bottomOf({ bases: bases(2) }), call('ground')).state.bases).toEqual(bases(3));
+    expect(applyOut(bottomOf({ bases: bases(1) }), call('ground')).state.bases).toEqual(bases(2));
+  });
+
+  it('keeps the infield in: nobody moves from third on a grounder with first empty', () => {
+    for (const set of [bases(3), bases(2, 3)]) {
+      const r = applyOut(bottomOf({ bases: set }), call('ground'));
+      expect(r.runs).toBe(set[1] ? 0 : 0);
+      if (!set[0] && set[2]) {
+        // Third is on, first is empty: infield in (a runner on second moves up only behind it).
+        expect(r.state.bases[2]).toBe(true);
+      }
+    }
+    const inIn = applyOut(bottomOf({ bases: bases(3) }), call('ground'));
+    expect(inIn).toMatchObject({ runs: 0, moves: [] });
+    expect(inIn.state.bases).toEqual(bases(3));
+    // With first on as well, the runner from third scores.
+    expect(applyOut(bottomOf({ bases: bases(1, 3) }), call('ground')).runs).toBe(1);
+  });
+
+  it('does not move anybody, or score, on a ground out that is the third out', () => {
+    const r = applyOut(bottomOf({ bases: bases(1, 3), outs: 2 }), call('ground'));
+    expect(r).toMatchObject({ runs: 0, moves: [] });
+    expect(r.state.outs).toBe(3);
+  });
+
+  it('puts out the runner from first and the batter on a double play, in that order', () => {
+    const r = applyOut(bottomOf({ bases: bases(1, 3) }), call('double-play', 'LC', 'SS'));
+    expect(r.state.outs).toBe(2);
+    expect(r.retired).toEqual([1, 0]);
+    expect(r.runs).toBe(1);
+    expect(r.state.bases).toEqual(EMPTY_BASES);
+    const moved = applyOut(bottomOf({ bases: bases(1, 2) }), call('double-play'));
+    expect(moved.state.bases).toEqual(bases(3));
+  });
+
+  it('scores no run on a double play that is the third out', () => {
+    const r = applyOut(bottomOf({ bases: bases(1, 3), outs: 1 }), call('double-play'));
+    expect(r.state.outs).toBe(3);
+    expect(r).toMatchObject({ runs: 0, moves: [], retired: [1, 0] });
+    expect(halfOver(r.state)).toBe('outs');
+  });
+
+  it('forces the runner at second and lets the batter take first', () => {
+    const r = applyOut(bottomOf({ bases: bases(1), outs: 2 }), call('force-second', 'LC', 'SS'));
+    expect(r.retired).toEqual([1]);
+    expect(r.out).toBe(false);
+    expect(r.state.outs).toBe(3);
+    expect(r.runs).toBe(0);
+    const early = applyOut(bottomOf({ bases: bases(1, 2, 3), outs: 0 }), call('force-second'));
+    expect(early.state.outs).toBe(1);
+    expect(early.runs).toBe(1);
+    expect(early.state.bases).toEqual(bases(1, 3));
+  });
+
+  it('steps up the next batter and clears the strikes, whatever the out', () => {
+    for (const kind of ALL_OUT_KINDS) {
+      const r = applyOut(bottomOf({ strikes: 2 }), call(kind));
+      expect(r.state.strikes).toBe(0);
+      expect(r.state.rivalBatter).toBe(2);
+    }
+  });
+
+  it('ends the game on a sacrifice fly that wins it in the bottom of the 6th', () => {
+    const s = midGame(6, 'bottom', [0, 0, 0, 0, 0, 1], [0, 0, 0, 0, 0, 0], {
+      bases: bases(3),
+      outs: 1,
+    });
+    const r = applyOut(s, call('fly'));
+    expect(r.state.over).toBe(false);
+    const tied = totals(r.state);
+    expect(tied).toEqual({ us: 1, them: 1 });
+    const ahead = applyOut({ ...s, us: [0, 0, 0, 0, 0, 0] }, call('fly'));
+    expect(ahead.state).toMatchObject({ over: true, winner: 'them', walkOff: true });
+    expect(ahead.sacFly).toBe(true);
+  });
+
+  it('counts a sacrifice fly towards the mercy rule', () => {
+    const s = midGame(1, 'bottom', [0], [4], { bases: bases(3), runs: 4 });
+    const r = applyOut(s, call('fly'));
+    expect(r.runs).toBe(1);
+    expect(halfOver(r.state)).toBe('mercy');
+  });
+
+  it('says a line and a word for every out', () => {
+    for (const kind of ALL_OUT_KINDS) {
+      expect(outSpeech(call(kind), false).length).toBeGreaterThan(5);
+      expect(outPopText(call(kind)).length).toBeGreaterThan(2);
+    }
+    expect(outSpeech(call('fly'), true)).toBe('Sacrifice fly! The run scores.');
+    expect(outSpeech(call('fly'), false)).toBe('Fly ball! Caught for the out!');
+    expect(outSpeech(call('double-play'), false)).toBe('Double play!');
+    expect(outPopText(call('fly'), true)).toBe('Out! Run scores');
+    expect(outPopText(call('diving'))).toBe('Diving catch!');
+  });
+});
+
+describe('batted ball paths', () => {
+  const rollSets = [0, 0.13, 0.5, 0.87, 1 - 1e-9].flatMap((side) =>
+    [0, 0.5, 1 - 1e-9].flatMap((a) => [0, 0.5, 1 - 1e-9].map((b) => ({ side, a, b }))),
+  );
+  const KINDS = [...ALL_HIT_KINDS, ...ALL_OUT_KINDS];
+  const spots: Record<string, Vec> = {
+    pop: POSITION_SPOTS.SS,
+    fly: POSITION_SPOTS.RF,
+    liner: POSITION_SPOTS['3B'],
+    diving: POSITION_SPOTS.LF,
+    ground: POSITION_SPOTS['2B'],
+    'double-play': POSITION_SPOTS.SS,
+    'force-second': POSITION_SPOTS.P,
+  };
+
+  it('starts every path at the bat and ends at rest', () => {
+    for (const kind of KINDS) {
+      for (const rolls of rollSets) {
+        const ball = planBatted(kind, rolls, spots[kind]);
+        expect(ball.position(0, at(0, 0, 0))).toMatchObject(CONTACT);
+        expect(ball.end).toBeGreaterThan(0);
+        expect(ball.airTime).toBeGreaterThan(0);
+        expect(ball.airTime).toBeLessThanOrEqual(ball.end + 1e-9);
+        const end = ball.position(ball.end, at(0, 0, 0));
+        expect(end.x).toBeCloseTo(ball.rest.x, 6);
+        expect(end.z).toBeCloseTo(ball.rest.z, 6);
+        const later = ball.position(ball.end + 5, at(0, 0, 0));
+        expect(later).toEqual(ball.rest);
+        // The path is continuous and never goes below the ground.
+        const p = at(0, 0, 0);
+        let last = { ...CONTACT };
+        for (let t = 0; t <= ball.end; t += 0.02) {
+          ball.position(t, p);
+          expect(p.y).toBeGreaterThanOrEqual(BALL_RADIUS - 0.05);
+          expect(Math.hypot(p.x - last.x, p.y - last.y, p.z - last.z)).toBeLessThan(2.5);
+          last = { ...p };
+        }
+        expect(ball.zone).toBe(zoneOf(ball.theta));
+      }
+    }
+  });
+
+  it('clears the wall on a home run by the margin each kind promises', () => {
+    const margins = { 'homer-liner': 0.4, 'homer-moonshot': 3, 'homer-scraper': 0.9 } as const;
+    for (const kind of ['homer-liner', 'homer-moonshot', 'homer-scraper'] as const) {
+      for (const rolls of rollSets) {
+        const ball = planBatted(kind, rolls);
+        expect(ball.overWall).toBe(true);
+        expect(ball.firstTouch.what).toBe('stands');
+        const rest = Math.hypot(ball.rest.x, ball.rest.z);
+        expect(rest).toBeGreaterThan(wallRadius(ball.theta) + 1);
+        const out = at(0, 0, 0);
+        let height = Infinity;
+        for (let t = 0; t <= ball.airTime; t += 0.002) {
+          ball.position(t, out);
+          if (Math.hypot(out.x, out.z) >= wallRadius(fieldAngle(out))) {
+            height = out.y;
+            break;
+          }
+        }
+        expect(height).toBeGreaterThanOrEqual(WALL_HEIGHT + margins[kind] - 0.05);
+        if (kind === 'homer-scraper') expect(height).toBeLessThan(WALL_HEIGHT + 1.3);
+        // The wall is cleared in fair ground.
+        expect(Math.abs(ball.theta)).toBeLessThan(FOUL_ANGLE);
+      }
+    }
+  });
+
+  it('keeps every ball that stays in the park in fair ground and inside the wall', () => {
+    const inPlay = KINDS.filter((k) => !k.startsWith('homer') && k !== 'foul-pop');
+    for (const kind of inPlay) {
+      for (const rolls of rollSets) {
+        const ball = planBatted(kind, rolls, spots[kind]);
+        expect(ball.overWall).toBe(false);
+        const out = at(0, 0, 0);
+        for (let t = 0; t <= ball.end; t += 0.02) {
+          ball.position(t, out);
+          expect(isFair(out), `${kind} ${JSON.stringify(rolls)} ${t} ${JSON.stringify(out)}`).toBe(
+            true,
+          );
+          expect(Math.hypot(out.x, out.z)).toBeLessThanOrEqual(wallRadius(fieldAngle(out)) + 1e-6);
+        }
+        expect(Math.hypot(ball.rest.x, ball.rest.z)).toBeLessThan(wallRadius(ball.theta));
+      }
+    }
+  });
+
+  it('hits the wall below its top on a double off the wall, and caroms back', () => {
+    for (const rolls of rollSets) {
+      const ball = planBatted('double-wall', rolls);
+      expect(ball.firstTouch.what).toBe('wall');
+      expect(ball.firstTouch.p.y).toBeGreaterThanOrEqual(1.4 - 1e-9);
+      expect(ball.firstTouch.p.y).toBeLessThanOrEqual(2.2 + 1e-9);
+      expect(ball.firstTouch.p.y).toBeLessThan(WALL_HEIGHT);
+      const at0 = ball.firstTouch.p;
+      expect(Math.hypot(at0.x, at0.z)).toBeCloseTo(wallRadius(ball.theta), 6);
+      const back = wallRadius(ball.theta) - Math.hypot(ball.rest.x, ball.rest.z);
+      expect(back).toBeGreaterThan(4);
+      expect(back).toBeLessThan(9);
+      // It meets the wall at its first touch time, below the top, and not before.
+      const out = at(0, 0, 0);
+      ball.position(ball.firstTouch.t - 0.001, out);
+      expect(Math.hypot(out.x, out.z)).toBeLessThanOrEqual(wallRadius(fieldAngle(out)) + 1e-6);
+      expect(out.y).toBeLessThan(WALL_HEIGHT);
+    }
+  });
+
+  it('puts a foul pop in foul ground behind or beside the plate, and a pop on the infield', () => {
+    for (const rolls of rollSets) {
+      const foul = planBatted('foul-pop', rolls);
+      expect(Math.abs(fieldAngle(foul.rest))).toBeGreaterThan(FOUL_ANGLE);
+      expect(foul.rest.z).toBeGreaterThanOrEqual(1);
+      expect(foul.rest.z).toBeLessThanOrEqual(3.5);
+      expect(foul.rest.y).toBeCloseTo(1.6, 6);
+      expect(foul.firstTouch.what).toBe('air-catch');
+      const pop = planBatted('pop', rolls, POSITION_SPOTS['2B']);
+      expect(
+        Math.hypot(pop.rest.x - POSITION_SPOTS['2B'].x, pop.rest.z - POSITION_SPOTS['2B'].z),
+      ).toBeLessThan(3);
+      expect(pop.rest.y).toBeCloseTo(1.8, 6);
+    }
+  });
+
+  it('catches a fly near the outfielder and a diving catch low and to his side', () => {
+    for (const rolls of rollSets) {
+      const fly = planBatted('fly', rolls, POSITION_SPOTS.CF);
+      expect(
+        Math.hypot(fly.rest.x - POSITION_SPOTS.CF.x, fly.rest.z - POSITION_SPOTS.CF.z),
+      ).toBeLessThan(6.5);
+      expect(Math.hypot(fly.rest.x, fly.rest.z)).toBeGreaterThanOrEqual(26 - 1e-6);
+      expect(Math.hypot(fly.rest.x, fly.rest.z)).toBeLessThanOrEqual(33 + 1e-6);
+      expect(fly.rest.y).toBeCloseTo(2, 6);
+      const dive = planBatted('diving', rolls, POSITION_SPOTS.CF);
+      expect(dive.rest.y).toBeCloseTo(0.3, 6);
+      const r = Math.hypot(dive.rest.x, dive.rest.z);
+      expect(r).toBeGreaterThanOrEqual(20 - 1e-6);
+      expect(r).toBeLessThanOrEqual(24 + 1e-6);
+    }
+  });
+
+  it('plays a ground ball to the fielder and a comebacker faster than the rest', () => {
+    for (const rolls of rollSets) {
+      const ground = planBatted('ground', rolls, POSITION_SPOTS.SS);
+      expect(
+        Math.hypot(ground.rest.x - POSITION_SPOTS.SS.x, ground.rest.z - POSITION_SPOTS.SS.z),
+      ).toBeLessThan(3.1);
+      expect(ground.end).toBeGreaterThanOrEqual(0.55);
+      expect(ground.end).toBeLessThanOrEqual(0.8);
+      const dp = planBatted('double-play', rolls, POSITION_SPOTS.SS);
+      expect(dp.end).toBeLessThanOrEqual(0.65);
+      expect(planBatted('ground', rolls, POSITION_SPOTS.P).end).toBeCloseTo(0.35, 6);
+    }
+  });
+
+  it('puts the kinds of single where the design says', () => {
+    for (const rolls of rollSets) {
+      const liner = planBatted('single-liner', rolls);
+      expect(Math.hypot(liner.firstTouch.p.x, liner.firstTouch.p.z)).toBeGreaterThan(17.9);
+      expect(Math.hypot(liner.firstTouch.p.x, liner.firstTouch.p.z)).toBeLessThan(22.1);
+      const bloop = planBatted('single-bloop', rolls);
+      expect(bloop.firstTouch.t).toBeCloseTo(1.35, 6);
+      const chopper = planBatted('single-chopper', rolls);
+      expect(Math.hypot(chopper.firstTouch.p.x, chopper.firstTouch.p.z)).toBeLessThan(2);
+      const hole = Math.abs(zoneOf(planBatted('single-grounder', rolls).theta) === 'CF' ? 0 : 30);
+      expect([0, 30]).toContain(hole);
+    }
+    const left = planBatted('single-grounder', { side: 0.1, a: 0.5, b: 0.5 });
+    const middle = planBatted('single-grounder', { side: 0.5, a: 0.5, b: 0.5 });
+    const right = planBatted('single-grounder', { side: 0.9, a: 0.5, b: 0.5 });
+    expect(left.rest.x).toBeLessThan(-5);
+    expect(Math.abs(middle.rest.x)).toBeLessThan(2);
+    expect(right.rest.x).toBeGreaterThan(5);
   });
 });
 
