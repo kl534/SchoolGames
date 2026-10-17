@@ -1,8 +1,7 @@
 import { PerspectiveCamera, Vector3 } from 'three';
 import {
   BOARD,
-  FT_SPOT,
-  GUARD_R,
+  guardSpot,
   OFFENSE_R,
   RIM,
   RIM_GROUND,
@@ -145,6 +144,15 @@ export function popPosition(
 
 // ---------- The two views ----------
 
+/**
+ * Where the offense camera sits relative to the shooter: back along u, to the right along p and
+ * up. Far enough back, and high and to the side enough, that the defender stays in view over the
+ * shooter's shoulder.
+ */
+const CAM_BACK = 7;
+const CAM_SIDE = 1.2;
+const CAM_HEIGHT = 4.2;
+
 /** Shooter's head height, for the key points. */
 const HEAD_Y = 2.1;
 
@@ -156,9 +164,9 @@ export function offenseCam(shooter: Vec): Vec {
   const u = dirXZ(RIM_GROUND, shooter);
   const p = rightOf(u);
   return {
-    x: shooter.x + 5.5 * u.x + 0.6 * p.x,
-    y: shooter.y + 3.4,
-    z: shooter.z + 5.5 * u.z + 0.6 * p.z,
+    x: shooter.x + CAM_BACK * u.x + CAM_SIDE * p.x,
+    y: shooter.y + CAM_HEIGHT,
+    z: shooter.z + CAM_BACK * u.z + CAM_SIDE * p.z,
   };
 }
 
@@ -173,27 +181,30 @@ export function offenseKeys(shooter: Vec): Vec[] {
   ];
 }
 
-/** High behind the baseline, on the ball's side, so the backboard never hides the players. */
+/**
+ * High behind the baseline, on the ball's side, so the backboard never hides the players. Straight
+ * out (angle 0) it is on the left, the side our defender stands on (see `guardSpot`).
+ */
 export function defenseCam(angleDeg: number): Vec {
-  const side = angleDeg < 0 ? -1 : 1;
+  const side = angleDeg > 0 ? 1 : -1;
   return { x: 2.6 * side, y: 5.4, z: -3.2 };
 }
 
-/** What the defense view must hold: the rim, the rival, our defender and the floor under the rim. */
+/**
+ * What the defense view must hold: the rim, the rival, our defender, and the top of the rival's
+ * shot (the point over the middle of the flight), so a shot never leaves the picture.
+ */
 export function defenseKeys(angleDeg: number): Vec[] {
   const s = spotPos(angleDeg, OFFENSE_R);
-  const g = spotPos(angleDeg, GUARD_R);
+  const g = guardSpot(angleDeg);
   return [
     { ...RIM },
     { x: s.x, y: 0, z: s.z },
     { x: s.x, y: HEAD_Y, z: s.z },
     { x: g.x, y: 0, z: g.z },
-    { x: 0, y: 0, z: 2.5 },
+    { x: (s.x + RIM.x) / 2, y: 4.7, z: (s.z + RIM.z) / 2 },
   ];
 }
-
-/** The view for a free throw by us. */
-export const ftCam = (): Vec => offenseCam(FT_SPOT);
 
 const probe = new PerspectiveCamera();
 const scratch = new Vector3();
@@ -224,11 +235,11 @@ const MIN_FOV = 30;
 const MAX_FOV = 85;
 /** Share of the band kept clear at each end, and of the width at each side. */
 const BAND_MARGIN = 0.06;
-const SIDE_MARGIN = 0.04;
+const SIDE_MARGIN = 0.1;
 
 /**
  * Fits a view: the look point and the vertical FOV that put every key point inside the play band
- * (with ~6% margins) and inside the screen's width (~4% margins). The camera looks towards the
+ * (with ~6% margins) and inside the screen's width (~10% margins, so a player is not cut off). The camera looks towards the
  * mean of the points, turned and tilted so the points' middle is in the middle of the screen; the
  * FOV is the narrowest (30 to 85 degrees) that fits. `shift` is `centreShift(height, band)` for
  * `camera.setViewOffset`.

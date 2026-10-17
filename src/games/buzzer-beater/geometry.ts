@@ -41,6 +41,20 @@ export function spotPos(angleDeg: number, radius: number): Vec {
   };
 }
 
+/**
+ * How far to the shooter's left the defender stands off the line from the rim, so a camera behind
+ * the shooter still sees the defender instead of a shooter covering them.
+ */
+export const GUARD_SIDE = 1.0;
+
+/** Where the defender stands for a spot angle: GUARD_R out, GUARD_SIDE to the shooter's left. */
+export function guardSpot(angleDeg: number): Vec {
+  const g = spotPos(angleDeg, GUARD_R);
+  const u = dirXZ(RIM_GROUND, g);
+  const p = rightOf(u);
+  return { x: g.x - p.x * GUARD_SIDE, y: 0, z: g.z - p.z * GUARD_SIDE };
+}
+
 export const vec = (x = 0, y = 0, z = 0): Vec => ({ x, y, z });
 export const add = (a: Vec, b: Vec): Vec => ({ x: a.x + b.x, y: a.y + b.y, z: a.z + b.z });
 export const sub = (a: Vec, b: Vec): Vec => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });

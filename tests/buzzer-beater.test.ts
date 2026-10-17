@@ -16,7 +16,7 @@ import {
   BALL_RADIUS,
   FENCE,
   FT_SPOT,
-  GUARD_R,
+  guardSpot,
   OFFENSE_R,
   RIM,
   RIM_RADIUS,
@@ -602,7 +602,7 @@ describe('plays', () => {
   it('starts the play from the spots', () => {
     const script = planPlay({ kind: 'violation' }, 30, Math.random);
     const s = spotPos(30, OFFENSE_R);
-    const g = spotPos(30, GUARD_R);
+    const g = guardSpot(30);
     expect(script.actors.us[0].pos).toEqual(s);
     expect(script.actors.them[0].pos).toEqual(g);
     const ft = planPlay({ kind: 'free-throw', shooter: 'us', made: true }, 0, Math.random);
@@ -615,7 +615,7 @@ describe('layout', () => {
     for (const angle of SPOT_ANGLES) {
       const cam = defenseCam(angle);
       const s = spotPos(angle, OFFENSE_R);
-      const g = spotPos(angle, GUARD_R);
+      const g = guardSpot(angle);
       for (const p of [
         { ...s, y: 0 },
         { ...s, y: 2.1 },
@@ -623,6 +623,33 @@ describe('layout', () => {
         { ...g, y: 0 },
       ]) {
         expect(boardBlocks(cam, p), `angle ${angle}`).toBe(false);
+      }
+    }
+  });
+
+  it('keeps our defender in view while the rival plays', () => {
+    const rivalPlays: PlayInput[] = [
+      ...SHOTS.map((shot) => ({ kind: 'make', shooter: 'them', shot, andOne: false }) as PlayInput),
+      { kind: 'make', shooter: 'them', shot: 'layup', andOne: true },
+      { kind: 'miss', shooter: 'them', rebound: 'us' },
+      { kind: 'block' },
+      { kind: 'steal' },
+    ];
+    for (const input of rivalPlays) {
+      for (const angle of SPOT_ANGLES) {
+        for (const seed of [1, 2, 3]) {
+          const script = planPlay(input, angle, seededRandom(seed));
+          const cam = defenseCam(angle);
+          for (let t = 0; t < script.duration; t += 1 / 30) {
+            const { pos } = actorAt(script.actors.us, t);
+            for (const y of [1, 1.8]) {
+              const blocked = boardBlocks(cam, { x: pos.x, y, z: pos.z });
+              expect(blocked, `${JSON.stringify(input)} at ${angle}, t ${t.toFixed(2)}`).toBe(
+                false,
+              );
+            }
+          }
+        }
       }
     }
   });

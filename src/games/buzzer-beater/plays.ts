@@ -6,7 +6,7 @@ import {
   BALL_RADIUS,
   FT_DEFENDER,
   FT_SPOT,
-  GUARD_R,
+  guardSpot,
   OFFENSE_R,
   RIM,
   RIM_GROUND,
@@ -393,7 +393,7 @@ interface Spots {
 
 function spots(angle: number): Spots {
   const s = spotPos(angle, OFFENSE_R);
-  const g = spotPos(angle, GUARD_R);
+  const g = guardSpot(angle);
   const u = dirXZ(RIM_GROUND, s);
   return { s, g, u, p: rightOf(u) };
 }
@@ -497,12 +497,22 @@ function planMake(
   }
 }
 
-function planMiss(b: Builder, sh: Who, rb: Who, { s, g, u, p }: Spots, random: () => number) {
+function planMiss(
+  b: Builder,
+  sh: Who,
+  rb: Who,
+  angle: number,
+  { s, g, u, p }: Spots,
+  random: () => number,
+) {
   const df = other(sh);
   const rim = RIM_GROUND;
-  const side = random() < 0.5 ? -1 : 1;
+  // The rebound goes to either side. When the rival shoots we watch from behind the hoop on the
+  // ball's side (see `defenseCam`), so it goes to that side, where the backboard hides nobody.
+  const cameraSide = angle > 0 ? 1 : -1;
+  const side = sh === 'them' ? (cameraSide * p.x >= 0 ? 1 : -1) : random() < 0.5 ? -1 : 1;
   const r = add(at(RIM_GROUND, u, 2.0), scale(p, 1.2 * side));
-  const r2 = add(at(RIM_GROUND, u, 2.6), scale(p, -0.5 * side));
+  const r2 = add(at(RIM_GROUND, u, 2.6), scale(p, (sh === 'them' ? 0.4 : -0.5) * side));
   b.key(sh, 0, s, rim, 'jump-shot');
   b.key(sh, 0.8, s, rim, 'run');
   b.key(df, 0, g, s, 'guard');
@@ -616,7 +626,7 @@ export function planPlay(input: PlayInput, spotAngle: number, random: () => numb
       planMake(b, input.shooter, input.shot, input.andOne, sp, random);
       break;
     case 'miss':
-      planMiss(b, input.shooter, input.rebound, sp, random);
+      planMiss(b, input.shooter, input.rebound, spotAngle, sp, random);
       break;
     case 'violation':
       planViolation(b, sp);
