@@ -38,8 +38,6 @@ export interface Ship {
   flashShield(): void;
   /** Hides the ship (it has blown up) or brings it back. */
   setVisible(visible: boolean): void;
-  /** Blinking while the ship is briefly safe after a bump. */
-  setBlink(blinking: boolean): void;
   /**
    * `speed` is the world speed factor (the flames stretch with it) and `worldSpeed` how fast the
    * world streams past, in units per second, which carries the exhaust away behind the ship.
@@ -222,11 +220,9 @@ export function createShip(): Ship {
   // Ease the tilt so quick drags don't snap the ship about.
   const here = new Vector3();
   let visible = true;
-  let blinking = false;
-  let blinkClock = 0;
 
   const showBody = () => {
-    body.visible = visible && (!blinking || Math.floor(blinkClock * 12) % 2 === 0);
+    body.visible = visible;
   };
 
   return {
@@ -241,14 +237,7 @@ export function createShip(): Ship {
       trail.visible = value;
       showBody();
     },
-    setBlink(value) {
-      blinking = value;
-      showBody();
-    },
     update(delta, elapsed, speed, worldSpeed) {
-      blinkClock += delta;
-      showBody();
-
       // Flames stretch with speed and flicker.
       flames.forEach((flame, i) => {
         const flicker =
