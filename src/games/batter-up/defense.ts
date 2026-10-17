@@ -323,3 +323,53 @@ export function wallSpot(theta: number): Vec {
 
 /** The height the glove reaches at the wall on a leap. */
 export const LEAP_REACH = WALL_HEIGHT + 0.6;
+
+// ---------- Where everybody stands before a pitch ----------
+
+/** Double-play depth for the shortstop and second baseman, with a runner on first. */
+const DP_SS: Vec = { x: -3.6, y: 0, z: -13.6 };
+const DP_2B: Vec = { x: 3.2, y: 0, z: -14.2 };
+/** The first baseman holds the runner: beside the bag on the fair side, facing the mound. */
+const HOLD_1B: Vec = { x: 8.1, y: 0, z: -8.9 };
+
+/** A spot pulled in towards home: `scale` of its distance, along the line to home. */
+const pulledIn = (p: Vec, scale: number): Vec => ({ x: p.x * scale, y: 0, z: p.z * scale });
+
+/**
+ * Where every fielder starts the next pitch, for the runners on and the outs: double-play depth
+ * with a runner on first (fewer than two out), the first baseman holding a lone runner on first,
+ * and the infield in with a runner on third and first empty (fewer than two out).
+ */
+export function fieldingSpots(
+  bases: readonly [boolean, boolean, boolean],
+  outs: number,
+): Record<Position, Vec> {
+  const spots = {} as Record<Position, Vec>;
+  for (const p of POSITIONS) spots[p] = { ...POSITION_SPOTS[p] };
+  const [first, second, third] = bases;
+  if (first && outs < 2) {
+    spots.SS = { ...DP_SS };
+    spots['2B'] = { ...DP_2B };
+  }
+  if (first && !second) spots['1B'] = { ...HOLD_1B };
+  if (third && !first && outs < 2) {
+    spots['2B'] = pulledIn(POSITION_SPOTS['2B'], 0.75);
+    spots.SS = pulledIn(POSITION_SPOTS.SS, 0.75);
+    spots['3B'] = pulledIn(POSITION_SPOTS['3B'], 0.75);
+    spots['1B'] = pulledIn(POSITION_SPOTS['1B'], 0.9);
+  }
+  return spots;
+}
+
+/** Where a runner takes his lead before the pitch: a few steps off the bag towards the next. */
+export function leadSpot(base: 1 | 2 | 3): Vec {
+  const from = baseSpot(base);
+  if (base === 3) {
+    // Towards home, and a little into foul ground.
+    const home = baseSpot(4);
+    const d = unit(from, home);
+    const away = unit(DIAMOND_CENTRE, from);
+    return { x: from.x + d.x * 1.6 + away.x * 0.5, y: 0, z: from.z + d.z * 1.6 + away.z * 0.5 };
+  }
+  return along(from, unit(from, baseSpot(base + 1)), base === 1 ? 1.8 : 2.4);
+}

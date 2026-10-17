@@ -26,7 +26,7 @@ import {
 } from './characters';
 import { planBatted, type BattedBall } from './batted';
 import { planPlay, type PlayEvent, type PlayScript } from './choreo';
-import { POSITIONS } from './defense';
+import { fieldingSpots, leadSpot, POSITIONS } from './defense';
 import { createPlayRunner } from './play';
 import { devStart, forcedPlay } from './dev';
 import { createEffects, fireworkColour } from './effects';
@@ -62,6 +62,7 @@ import {
   hudRects,
   keepBoardClear,
   moundView,
+  popPosition,
   type HomeView,
   type PlayBand,
   type Rect,
@@ -353,12 +354,19 @@ function run(session: GameSession): void {
     applyView();
   };
 
+  /**
+   * Where a pop-up for a spot in the world goes, through the live camera, kept inside the part of
+   * the screen the play is shown in (clear of the scorebug and the answers).
+   */
   const toScreen = (world: Vec) => {
     const p = point.set(world.x, world.y, world.z).project(camera);
-    return {
-      x: MathUtils.clamp(((p.x + 1) / 2) * viewW, 40, viewW - 40),
-      y: MathUtils.clamp(((1 - p.y) / 2) * viewH, 90, viewH - 90),
-    };
+    const band = isBatting(state) ? hitFrame.band : playBandNow();
+    return popPosition(
+      { x: ((p.x + 1) / 2) * viewW, y: ((1 - p.y) / 2) * viewH },
+      p.z > 1,
+      viewW,
+      band,
+    );
   };
 
   // ---------- Saving ----------
@@ -503,6 +511,7 @@ function run(session: GameSession): void {
     phase = 'release';
     pitcher.release(() => {
       if (turn !== thisTurn || phase !== 'release') return;
+      pitchReleased();
       pitcher.handPosition(handPoint);
       pitchStart.x = handPoint.x;
       pitchStart.y = handPoint.y;
@@ -548,7 +557,7 @@ function run(session: GameSession): void {
     // A tap before the question has been read out counts as no time used at all.
     const used = speechDone ? answerTime : 0;
     if (phase === 'windup') {
-      pitcher.release(() => {});
+      pitcher.release(() => pitchReleased());
     }
     if (phase !== 'pitch') {
       pitcher.handPosition(handPoint);
@@ -600,6 +609,7 @@ function run(session: GameSession): void {
     catcher.pop();
     effects.pop(GLOVE);
     const call = strikeCall(state.strikes + 1, called);
+    resetLeads();
     const outcome = applyStrike(state);
     state = outcome.state;
     saveProgress();
@@ -903,14 +913,84 @@ function run(session: GameSession): void {
     stopSpeaking();
     hud.hideBanner();
     effects.onBurst = null;
-    goHomeAll(7);
+    positionField(true);
     pending = [];
     afterPlay(true, 0.7);
   };
 
-  /** Everybody in the field jogs back to where they stand. */
-  const goHomeAll = (speed: number) => {
-    for (const p of POSITIONS) actors[p].goHome(speed);
+  /** How fast the fielders and runners jog to their places while the next question is read. */
+  const JOG_SPEED = 5;
+
+  /**
+   * Everybody takes up the spot the bases and outs call for: the fielders where they play (double-play
+   * depth, the infield in, the first baseman holding a runner), the runners off their bags. With
+   * `jog` they walk there; otherwise they are just put there (a new half-inning).
+   */
+  const positionField = (jog: boolean) => {
+    const spots = fieldingSpots(state.bases, state.outs);
+    for (const p of POSITIONS) {
+      const actor = actors[p];
+      // The catcher always goes back to his crouch behind the plate.
+      if (p !== 'C') actor.setHome(spots[p]);
+      if (jog) actor.goHome(JOG_SPEED);
+      else {
+        actor.mover.halt();
+        actor.mover.place(actor.home.x, actor.home.z);
+        actor.mover.face(p === 'C' ? { x: 0, y: 0, z: -10 } : { x: 0, y: 0, z: 0 });
+      }
+    }
+    onBase.forEach((fig, i) => {
+      if (!fig) return;
+      const lead = leadSpot((i + 1) as 1 | 2 | 3);
+      fig.lead();
+      if (jog) fig.mover.runTo([lead], JOG_SPEED, () => fig.lead());
+      else {
+        fig.mover.halt();
+        fig.mover.place(lead.x, lead.z);
+      }
+    });
+  };
+
+  /** The pitcher lets go: runners edge a step further off their bags, the first baseman shuffles. */
+  const pitchReleased = () => {
+    onBase.forEach((fig, i) => {
+      if (!fig) return;
+      const base = (i + 1) as 1 | 2 | 3;
+      const lead = leadSpot(base);
+      const next = BASE_SPOTS[(base + 1) % 4];
+      const d = Math.hypot(next.x - lead.x, next.z - lead.z);
+      fig.mover.runTo(
+        [
+          {
+            x: lead.x + ((next.x - lead.x) / d) * 1,
+            y: 0,
+            z: lead.z + ((next.z - lead.z) / d) * 1,
+          },
+        ],
+        4,
+      );
+    });
+    if (state.bases[0] && !state.bases[1]) {
+      const first = actors['1B'];
+      const to = BASE_SPOTS[2];
+      const from = first.mover.person.root.position;
+      const d = Math.hypot(to.x - from.x, to.z - from.z);
+      first.run(
+        { x: from.x + ((to.x - from.x) / d) * 2, y: 0, z: from.z + ((to.z - from.z) / d) * 2 },
+        4,
+        { x: 0, y: 0, z: 0 },
+      );
+    }
+  };
+
+  /** After a pitch that is not put in play, the runners are back at their leads. */
+  const resetLeads = () => {
+    onBase.forEach((fig, i) => {
+      if (!fig) return;
+      const lead = leadSpot((i + 1) as 1 | 2 | 3);
+      fig.mover.runTo([lead], 5, () => fig.lead());
+    });
+    actors['1B'].goHome(4);
   };
 
   const updateHit = (delta: number) => {
@@ -976,8 +1056,10 @@ function run(session: GameSession): void {
       camMode = 'mound';
       ball.setVisible(false);
       ball.setGlow(false);
-      goHomeAll(7);
+      positionField(true);
     },
+    pitchReleased,
+    resetLeads,
     sendOff,
     addProp: (prop) => {
       props.push(prop);
@@ -1097,9 +1179,9 @@ function run(session: GameSession): void {
       a.setColours(wear);
       a.mover.halt();
       a.actions.stop();
-      a.mover.place(a.home.x, a.home.z);
-      a.mover.face(p === 'C' ? { x: 0, y: 0, z: -10 } : { x: 0, y: 0, z: 0 });
     }
+    catcher.restoreMask();
+    positionField(false);
     newBatter();
     pitcher.reset();
     umpire.reset();
@@ -1243,6 +1325,7 @@ function run(session: GameSession): void {
       spawn(runner.person.root);
       onBase[i] = runner;
     });
+    positionField(false);
     refresh();
   };
 

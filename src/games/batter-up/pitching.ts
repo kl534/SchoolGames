@@ -88,6 +88,10 @@ export interface PitchingHost {
   ): void;
   /** Settles a play that is over (or skipped): everybody to where they finish, camera back. */
   endPlay(): void;
+  /** The pitcher lets go: runners edge off their bags. */
+  pitchReleased(): void;
+  /** The pitch was not put in play: runners are back at their leads. */
+  resetLeads(): void;
   /** Where every fielder stands and where each runner stands now. */
   snapshot(): { spots: Record<Position, Vec>; leads: (Vec | null)[] };
   /** The batter at the plate walks off. */
@@ -257,6 +261,7 @@ export function createPitching(host: PitchingHost): Pitching {
     const thisTurn = turn;
     pitcher.release(() => {
       if (turn !== thisTurn || phase !== 'delivery') return;
+      host.pitchReleased();
       pitcher.handPosition(handPoint);
       put(handPoint);
       ball.setVisible(true);
@@ -352,6 +357,7 @@ export function createPitching(host: PitchingHost): Pitching {
     sfx.glove();
     catcher.pop();
     effects.pop(GLOVE);
+    host.resetLeads();
     const before = host.state();
     const outcome = applyStrike(before);
     host.commit(outcome.state);
