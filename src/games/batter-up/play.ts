@@ -20,6 +20,10 @@ export interface PlayHost {
   hideBall(): void;
   /** A runner has scored and finished celebrating; take the figure away. */
   scored(from: number): void;
+  /** A runner (or the batter) is out and leaves the field. */
+  retired(from: number): void;
+  /** The catcher takes his mask off and throws it. */
+  maskOff?(): void;
 }
 
 export interface PlayRunner {
@@ -62,6 +66,9 @@ export function createPlayRunner(host: PlayHost): PlayRunner {
       if (r.finish === 'score') {
         later(time + (r.slides ? 0.45 : 0), () => figure.cheer());
         later(time + (r.slides ? 0.45 : 0) + 0.7, () => host.scored(r.from));
+      } else if (r.finish === 'out') {
+        figure.slump();
+        later(time + 0.5, () => host.retired(r.from));
       } else if (r.finish === 'slide') {
         later(time + 0.5, () => figure.runnerStance());
       } else {
@@ -165,8 +172,10 @@ export function createPlayRunner(host: PlayHost): PlayRunner {
           const a = list[nextAction[p]++];
           const actor = host.actor(p);
           if (a.do === 'run') actor.run(a.to, a.speed, a.face);
-          else if (a.do === 'pose') actor.act(a.pose, { toward: a.toward, side: a.side });
-          else actor.faceTo(a.point);
+          else if (a.do === 'pose') {
+            actor.act(a.pose, { toward: a.toward, side: a.side });
+            if (a.pose === 'mask-off') host.maskOff?.();
+          } else actor.faceTo(a.point);
         }
       }
       // Runners leave on cue.
@@ -217,6 +226,7 @@ export function createPlayRunner(host: PlayHost): PlayRunner {
         const end = r.route[r.route.length - 1];
         if (end) figure.mover.place(end.x, end.z);
         if (r.finish === 'score') host.scored(r.from);
+        else if (r.finish === 'out') host.retired(r.from);
         else figure.runnerStance();
       }
       // Fielders to the end of their last run, ready.

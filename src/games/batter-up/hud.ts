@@ -105,6 +105,8 @@ export interface Hud {
   measureBand(): { top: number; bottom: number };
   /** The scorebug's rectangle on screen, in px. */
   bugRect(): { left: number; top: number; right: number; bottom: number };
+  /** The card beside the plate, when one is up (on a wide screen); otherwise null. */
+  bannerRect(): { left: number; top: number; right: number; bottom: number } | null;
   /** Bottom edge of the scorebug, in px from the top of the screen. */
   bugBottom(): number;
   /** Makes a team's runs jump, as they are scored. */
@@ -289,6 +291,11 @@ export function createHud(): Hud {
     },
     bugRect() {
       const r = bug.getBoundingClientRect();
+      return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+    },
+    bannerRect() {
+      if (banner.hidden || !banner.classList.contains('aside')) return null;
+      const r = banner.getBoundingClientRect();
       return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
     },
     bugBottom() {

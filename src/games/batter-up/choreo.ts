@@ -7,6 +7,7 @@ import type { BattedBall } from './batted';
 import {
   assignDefense,
   baseSpot,
+  coverSpot,
   pickFielder,
   POSITIONS,
   REACTION,
@@ -15,6 +16,10 @@ import {
   wallFielder,
   wallSpot,
   OUTFIELDERS,
+  BACKUP_FIRST_C,
+  BACKUP_FIRST_RF,
+  BACKUP_THIRD_LF,
+  LEAP_REACH,
   type Assignment,
 } from './defense';
 import {
@@ -60,6 +65,8 @@ export const RELEASE_IF = 0.22;
 export const RELEASE_FLIP = 0.12;
 /** A relay man catches, turns and throws. */
 export const RELAY_TRANSFER = 0.18;
+/** At second on a double play: catch, step across the bag, throw. */
+export const RELEASE_PIVOT = 0.34;
 /** On a close play the ball arrives this long after the runner. */
 export const SAFE_MARGIN = 0.2;
 /** A runner slides if the ball arrives within this of him; otherwise he goes in standing. */
@@ -363,7 +370,7 @@ export function planPlay(input: PlayInput): PlayScript {
   if (typeof input.call === 'string') {
     return planHit(input, kind);
   }
-  throw new Error('Outs are planned by planOut');
+  return planOut(input, input.call);
 }
 
 /** The rules' moves for a scoring cap: the first `runs` scorers by arrival count. */
@@ -843,6 +850,428 @@ function planHit(input: PlayInput, kind: HitKind): PlayScript {
   };
 }
 
+// ---------- Outs ----------
+
+const CHAIN_POSITION: Record<string, Position> = {
+  '1': 'P',
+  '3': '1B',
+  '4': '2B',
+  '5': '3B',
+  '6': 'SS',
+};
+
+/** A runner who is put out: he runs to the base and is there after the ball. */
+function outRunner(
+  from: number,
+  toBase: number,
+  start: Vec,
+  leaveAt: number,
+  speed: number,
+): RunnerScript {
+  const r = runRunner({
+    move: { from, to: toBase },
+    start,
+    leaveAt,
+    speed,
+    tail: 'none',
+  });
+  return { ...r, finish: 'out' };
+}
+
+/** Speed that gets a runner from `start` along a route to a base at `arrive`, between 3 and 12. */
+function speedFor(
+  from: number,
+  toBase: number,
+  start: Vec,
+  leaveAt: number,
+  arrive: number,
+): number {
+  const probe = runRunner({ move: { from, to: toBase }, start, leaveAt, speed: 12, tail: 'none' });
+  const length = (probe.arriveAt - leaveAt) * 12;
+  return Math.min(Math.max(length / Math.max(arrive - leaveAt, 0.05), 3), 12);
+}
+
+/** Plans an out when we pitch: the catch or the throws, the runners tagging or forced. */
+function planOut(input: PlayInput, call: OutCall): PlayScript {
+  const { ball, moves, spots } = input;
+  const fielders = emptyFielders();
+  const events: PlayEvent[] = [];
+  const legs: BallLeg[] = [];
+  const frames: { from: number; points: Vec[] }[] = [{ from: 0, points: [] }];
+  const agent: Record<string, { pos: Vec; t: number }> = {};
+  for (const p of POSITIONS) agent[p] = { pos: spots[p], t: 0 };
+  const run = (p: Position, to: Vec, startAt = REACTION, minSpeed = 0): number => {
+    const a = agent[p];
+    const begin = Math.max(startAt, a.t);
+    const d = dist(a.pos, to);
+    if (d < 0.05) return Math.max(begin, a.t);
+    const speed = Math.max(speedOf(p), minSpeed);
+    fielders[p].push({ at: begin, do: 'run', to: at(to.x, to.z), speed });
+    a.pos = at(to.x, to.z);
+    a.t = begin + d / speed;
+    return a.t;
+  };
+  const pose = (p: Position, time: number, which: FielderPose, towardPoint?: Vec, side?: -1 | 1) =>
+    fielders[p].push({ at: Math.max(time, 0), do: 'pose', pose: which, toward: towardPoint, side });
+  const face = (p: Position, time: number, point: Vec) =>
+    fielders[p].push({ at: Math.max(time, 0), do: 'face', point });
+  const F = call.fielder;
+  const air = ['pop', 'foul-pop', 'fly', 'liner', 'diving'].includes(call.kind);
+  const cap = input.runs ?? moves.filter((m) => m.to >= 4).length;
+  const runners: RunnerScript[] = [];
+  const plate = input.leads[0] ?? baseSpot(0);
+  const firstBag = baseSpot(1);
+  let ballEnd: number;
+  const tp = ball.end;
+  const pickup = at(ball.rest.x, ball.rest.z);
+  const sliders: RunnerScript[] = [];
+
+  // Jobs everybody else has: covers for the bases runners go to, then backups.
+  const busy = new Set<Position>([F]);
+  const jobs: Partial<Record<Position, Vec>> = {};
+  const give = (p: Position, to: Vec) => {
+    busy.add(p);
+    jobs[p] = to;
+  };
+
+  if (air) {
+    const stopShort = call.kind === 'diving' ? 1.2 : 0;
+    const from = spots[F];
+    const dir = toward(from, pickup, 1);
+    const stop = stopShort
+      ? at(pickup.x - (dir.x - from.x) * stopShort, pickup.z - (dir.z - from.z) * stopShort)
+      : pickup;
+    const lead = call.kind === 'diving' ? 0.4 : 0.1;
+    const needed = dist(from, stop) / Math.max(tp - lead - REACTION, 0.2);
+    const arrive = run(F, stop, REACTION, needed);
+    const ready = Math.min(arrive, tp - lead);
+    if (call.kind === 'pop') {
+      pose(F, REACTION + 0.05, 'call-for-it', pickup);
+      pose(F, Math.max(ready, REACTION + 0.4), 'settle', pickup);
+      if (F !== 'P') pose('P', REACTION + 0.1, 'point-up', pickup);
+    } else if (call.kind === 'foul-pop') {
+      pose(F, REACTION, 'mask-off', pickup);
+      pose(F, Math.max(ready, REACTION + 0.35), 'settle', pickup);
+    } else if (call.kind === 'fly') {
+      pose(F, Math.max(ready, REACTION), 'settle', pickup);
+    } else if (call.kind === 'liner') {
+      pose(F, Math.max(tp - 0.2, 0), 'receive', pickup);
+    } else {
+      const f = at(-(pickup.z - from.z) / 1, 0);
+      const d = toward(stop, pickup, 1);
+      // Face so that his glove side points at the ball, then dive.
+      const facePoint = at(stop.x + -(d.z - stop.z) * 5, stop.z + (d.x - stop.x) * 5);
+      void f;
+      face(F, Math.max(arrive, tp - 0.35), facePoint);
+      pose(F, tp - 0.3, 'dive', facePoint, 1);
+    }
+    events.push({ at: tp, type: 'catch', by: F });
+    legs.push({ kind: 'batted', start: 0, end: tp, ball });
+    // The batter starts for first and is stopped short.
+    const stopAt = toward(plate, firstBag, 4);
+    runners.push({
+      from: 0,
+      route: [stopAt],
+      leaveAt: BATTER_START,
+      speed: RUN_SPEED,
+      arriveAt: BATTER_START + dist(plate, stopAt) / RUN_SPEED,
+      touches: [],
+      doneAt: BATTER_START + dist(plate, stopAt) / RUN_SPEED,
+      finish: 'out',
+    });
+    events.push({ at: tp, type: 'out', who: 0 });
+    // Runners tagging up: they go back to the bag and leave at the catch.
+    const tagging = moves.filter((m) => m.from > 0);
+    if (tagging.length) {
+      const lead = Math.max(...tagging.map((m) => m.to));
+      const target = lead >= 4 ? 4 : lead;
+      for (const m of tagging) {
+        const start = input.leads[m.from] ?? baseSpot(m.from);
+        runners.push(
+          runRunner({
+            move: m,
+            start,
+            leaveAt: RUNNER_START,
+            speed: RUN_SPEED,
+            hold: { p: at(baseSpot(m.from).x, baseSpot(m.from).z), until: tp },
+            tail: m.to >= 4 ? 'none' : 'turn',
+          }),
+        );
+      }
+      const man =
+        target === 4
+          ? ball.theta < 0
+            ? '3B'
+            : '1B'
+          : target === 3
+            ? 'SS'
+            : ball.theta < 0
+              ? 'SS'
+              : '2B';
+      const baseman: Position = target === 4 ? 'C' : target === 3 ? '3B' : '2B';
+      give(baseman, coverSpot(target));
+      give(man as Position, toward(baseSpot(target), pickup, 9));
+      const ready = Math.max(run(baseman, coverSpot(target)), 0);
+      const arrival = Math.max(
+        ...runners.filter((r) => r.from > 0).map((r) => touchAt(r, target) ?? 0),
+      );
+      const d = dist(pickup, throwSpot(target));
+      const timing = throwTiming(F, d);
+      let start = tp + timing.release;
+      let end = start + dist3(at(pickup.x, pickup.z, 1.3), throwSpot(target)) / timing.speed;
+      if (end < arrival + SAFE_MARGIN) {
+        const extra = arrival + SAFE_MARGIN - end;
+        start += extra;
+        end += extra;
+      }
+      start = Math.max(start, ready - (end - start));
+      if (end - arrival > SLIDE_IF_WITHIN) {
+        // No play: the ball goes to the cutoff man, who holds it.
+        const cutAt = toward(baseSpot(target), pickup, 9);
+        run(man as Position, cutAt);
+        const dd = dist(pickup, cutAt);
+        const tm = throwTiming(F, dd);
+        start = Math.max(tp + tm.release, 0);
+        end = start + dist3(at(pickup.x, pickup.z, 1.3), at(cutAt.x, cutAt.z, 1.3)) / tm.speed;
+        legs.push({ kind: 'held', start: tp, end: start, by: F, hand: 'L' });
+        legs.push({
+          kind: 'throw',
+          start,
+          end,
+          from: at(pickup.x, pickup.z, 1.3),
+          to: at(cutAt.x, cutAt.z, 1.3),
+          lift: throwLift(dd),
+          by: F,
+          to_: man as Position,
+          style: tm.style,
+        });
+        pose(F, start - RELEASE_OF, 'throw', cutAt);
+        pose(man as Position, end - 0.3, 'receive', pickup);
+        events.push({ at: end, type: 'catch', by: man as Position });
+        ballEnd = end;
+      } else {
+        const slow = [...runners]
+          .filter((r) => r.from > 0 && touchAt(r, target) !== undefined)
+          .sort((a, b) => (touchAt(b, target) ?? 0) - (touchAt(a, target) ?? 0))[0];
+        if (slow) {
+          slow.slides = true;
+          if (slow.finish !== 'score') slow.finish = 'slide';
+          sliders.push(slow);
+        }
+        legs.push({ kind: 'held', start: tp, end: start, by: F, hand: 'L' });
+        legs.push({
+          kind: 'throw',
+          start,
+          end,
+          from: at(pickup.x, pickup.z, 1.3),
+          to: throwSpot(target),
+          lift: throwLift(d),
+          by: F,
+          to_: baseman,
+          style: 'overhand',
+        });
+        pose(F, start - RELEASE_OF, 'throw', throwSpot(target));
+        pose(baseman, end - 0.3, 'receive', pickup);
+        pose(man as Position, start + 0.1, 'let-go', throwSpot(target));
+        events.push({ at: end, type: 'catch', by: baseman });
+        ballEnd = end;
+      }
+      frames.push({ from: tp, points: [pickup, throwSpot(target), baseSpot(target)] });
+    } else {
+      legs.push({ kind: 'held', start: tp, end: tp + 0.8, by: F, hand: 'L' });
+      ballEnd = tp + 0.8;
+    }
+    for (const r of sliders) {
+      events.push({ at: r.arriveAt, type: 'safe', base: moves.find((m) => m.from === r.from)!.to });
+    }
+  } else {
+    // ---- A ground ball: the fielder gets to it and the throws go round ----
+    const chain = call.chain ?? '6-3';
+    const unassisted = chain.endsWith('U');
+    const players: Position[] = chain
+      .replace('U', '')
+      .split('-')
+      .map((c) => CHAIN_POSITION[c]);
+    if (unassisted) players.length = 1;
+    // The base each receiver takes the ball at: second for the middle man of a double play.
+    const bases: number[] = players.map((_, i) => {
+      if (i === 0) return 0;
+      if (call.kind === 'double-play') return i === 1 ? 2 : 1;
+      if (call.kind === 'force-second') return 2;
+      return 1;
+    });
+    const arrive = run(
+      F,
+      pickup,
+      REACTION,
+      dist(spots[F], pickup) / Math.max(tp - 0.1 - REACTION, 0.2),
+    );
+    pose(F, Math.max(Math.min(arrive, tp - 0.1), 0), 'scoop', pickup);
+    legs.push({ kind: 'batted', start: 0, end: tp, ball });
+    events.push({ at: tp, type: 'catch', by: F });
+    const ready: Record<string, number> = {};
+    // Receivers go to their bags (the pitcher covering first on a 3-1 breaks that way).
+    players.forEach((p, i) => {
+      if (i === 0) return;
+      give(p, coverSpot(bases[i]));
+      ready[p] = run(p, coverSpot(bases[i]));
+    });
+    let t = tp;
+    let holder: Position = F;
+    let holdSpot = at(pickup.x, pickup.z, 1.3);
+    const hops: { start: number; end: number; by: Position; to_: Position; base: number }[] = [];
+    for (let i = 1; i < players.length; i++) {
+      const to_ = players[i];
+      const target = throwSpot(bases[i]);
+      const d = dist(holdSpot, target);
+      const timing = throwTiming(holder, d);
+      const release =
+        i === 1 && call.kind === 'double-play'
+          ? RELEASE_PIVOT
+          : i === 1
+            ? timing.release
+            : RELEASE_PIVOT;
+      const dur = dist3(holdSpot, target) / timing.speed;
+      const start = Math.max(t + (i === 1 ? timing.release : release), ready[to_] - dur);
+      legs.push({ kind: 'held', start: t, end: start, by: holder, hand: i === 1 ? 'L' : 'R' });
+      legs.push({
+        kind: 'throw',
+        start,
+        end: start + dur,
+        from: holdSpot,
+        to: target,
+        lift: throwLift(d),
+        by: holder,
+        to_,
+        style: timing.style,
+      });
+      pose(
+        holder,
+        start -
+          (i === 1 ? (timing.style === 'flip' ? RELEASE_FLIP : RELEASE_IF) : RELEASE_PIVOT + 0),
+        i === 1 ? (timing.style === 'flip' ? 'flip' : 'throw') : 'pivot',
+        target,
+      );
+      pose(
+        to_,
+        start + dur - 0.3,
+        to_ === '1B' && bases[i] === 1 ? 'stretch' : 'receive',
+        holdSpot,
+      );
+      events.push({ at: start + dur, type: 'catch', by: to_ });
+      hops.push({ start, end: start + dur, by: holder, to_, base: bases[i] });
+      t = start + dur;
+      holder = to_;
+      holdSpot = at(target.x, target.z, 1.3);
+    }
+    let lastOut = t;
+    if (unassisted) {
+      // He takes it to the bag himself.
+      const bag = coverSpot(1);
+      const reach = tp + 0.15 + dist(pickup, bag) / speedOf(F);
+      agent[F] = { pos: pickup, t: tp };
+      run(F, bag, tp + 0.15);
+      pose(F, tp + 0.15, 'stretch', bag);
+      lastOut = reach;
+      t = reach;
+    } else {
+      legs.push({ kind: 'held', start: t, end: t + 0.4, by: holder, hand: 'L' });
+    }
+    ballEnd = t + (unassisted ? 0 : 0.4);
+    if (unassisted) legs.push({ kind: 'held', start: tp, end: ballEnd + 0.4, by: F, hand: 'L' });
+    const firstOut = hops[0] ? hops[0].end : lastOut;
+
+    // ---- The runners: who is out when, and who runs on ----
+    const retiredSet = new Set(input.retired);
+    for (const who of input.retired) {
+      if (who === 0) {
+        const speed = speedFor(0, 1, plate, BATTER_START, lastOut + OUT_MARGIN);
+        runners.push(outRunner(0, 1, plate, BATTER_START, Math.min(speed, 12)));
+        events.push({ at: lastOut, type: 'out', who: 0 });
+      } else {
+        const start = input.leads[who] ?? baseSpot(who);
+        const outAt =
+          call.kind === 'double-play' || call.kind === 'force-second' ? firstOut : lastOut;
+        const speed = speedFor(who, who + 1, start, RUNNER_START, outAt + OUT_MARGIN);
+        runners.push(outRunner(who, who + 1, start, RUNNER_START, speed));
+        events.push({ at: outAt, type: 'out', who });
+      }
+    }
+    for (const m of moves) {
+      const batter = m.from === 0;
+      const start = input.leads[m.from] ?? baseSpot(m.from);
+      const r = runRunner({
+        move: m,
+        start,
+        leaveAt: batter ? BATTER_START : RUNNER_START,
+        speed: RUN_SPEED,
+        tail: m.to >= 4 ? 'none' : 'turn',
+      });
+      runners.push(r);
+      if (batter && !retiredSet.has(0)) events.push({ at: r.arriveAt, type: 'safe', base: 1 });
+    }
+    frames.push({
+      from: Math.max(tp - 0.2, 0),
+      points: [pickup, ...players.slice(1).map((_, i) => throwSpot(bases[i + 1]))],
+    });
+    for (const p of players) busy.add(p);
+  }
+
+  // ---------- Everybody else ----------
+  const finals = moves.map((m) => m.to);
+  const coverFor = (base: number, order: Position[]) => {
+    const p = order.find((x) => !busy.has(x));
+    if (p) give(p, coverSpot(base));
+  };
+  if (finals.includes(4)) coverFor(4, ['C']);
+  if (finals.includes(3)) coverFor(3, ['3B', 'SS']);
+  if (finals.includes(2)) coverFor(2, ['2B', 'SS', '1B']);
+  if (finals.includes(1) && !air) coverFor(1, ['1B', '2B', 'P']);
+  if (!air) {
+    const lastBase = call.kind === 'force-second' ? 2 : 1;
+    if (lastBase === 1) {
+      if (!busy.has('RF')) give('RF', BACKUP_FIRST_RF);
+      if (!busy.has('C') && !moves.some((m) => m.from >= 2)) give('C', BACKUP_FIRST_C);
+    } else if (!busy.has('CF')) {
+      give('CF', at(0, -24));
+    }
+    if (call.kind !== 'force-second' && !busy.has('LF') && moves.some((m) => m.from === 2)) {
+      give('LF', BACKUP_THIRD_LF);
+    }
+  } else if (!busy.has('C')) {
+    give('C', coverSpot(4));
+  }
+  for (const p of POSITIONS) {
+    const job = jobs[p];
+    if (job && p !== F && !fielders[p].some((a) => a.do === 'run')) {
+      const arrive = run(p, job);
+      pose(p, arrive, 'cover', pickup);
+    }
+  }
+  // Those who are left turn to the play.
+  for (const p of POSITIONS) if (!fielders[p].length) face(p, REACTION, pickup);
+
+  // ---------- Runs, outs in order, and the finish ----------
+  let credited = 0;
+  for (const r of [...runners].sort((a, b) => a.arriveAt - b.arriveAt)) {
+    if (r.finish === 'score' && credited < cap) {
+      credited++;
+      events.push({ at: r.arriveAt, type: 'run', who: r.from });
+    }
+  }
+  const done = Math.max(...runners.map((r) => r.doneAt));
+  void LEAP_REACH;
+  return {
+    legs,
+    fielders,
+    runners,
+    events: events.sort((a, b) => a.at - b.at),
+    frames,
+    duration: Math.min(PLAY_MAX, Math.max(ballEnd + 0.5, done + 0.4)),
+    fielder: F,
+  };
+}
+
 // ---------- Checking a script ----------
 
 /** Every rule of the design's section 6.4 that the script breaks; empty when it is good. */
@@ -891,7 +1320,17 @@ export function checkScript(script: PlayScript, input: PlayInput): string[] {
   }
   for (const who of input.retired) {
     const r = runners.find((x) => x.from === who);
-    if (!r || r.finish !== 'out') bad.push(`${who} is retired but does not finish out`);
+    if (!r || r.finish !== 'out') {
+      bad.push(`${who} is retired but does not finish out`);
+      continue;
+    }
+    // The ball beats him to the base, by at least the margin.
+    const outAt = script.events.find((e) => e.type === 'out' && e.who === who)?.at;
+    const reached = touchAt(r, who + 1);
+    if (outAt === undefined) bad.push(`no out event for ${who}`);
+    else if (reached !== undefined && reached < outAt + OUT_MARGIN - 1e-6) {
+      bad.push(`${who} is out only ${(reached - outAt).toFixed(2)} s before the ball`);
+    }
   }
 
   // 4. On hits, runners reach each base the ball is thrown to before the ball does.

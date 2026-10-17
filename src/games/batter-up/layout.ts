@@ -22,6 +22,33 @@ export function homeView(aspect: number): HomeView {
 }
 
 /**
+ * The high wide shot behind the plate that a rival's ball in play swoops up to: the batting view
+ * raised and pulled back a little, so every fielder can be seen.
+ */
+export function wideView(aspect: number): HomeView {
+  const home = homeView(aspect);
+  return {
+    cam: { x: home.cam.x, y: home.cam.y + 5, z: home.cam.z + 3 },
+    look: { ...home.look },
+  };
+}
+
+/** Seconds the camera takes to swoop from the mound up to the wide view. */
+export const SWOOP_SECONDS = 0.7;
+
+/**
+ * Where the camera is `s` (0 to 1) of the way through a swoop: a straight line from `from` to
+ * `to`, with an arc that peaks 8 units higher in the middle, so it flies over the players.
+ */
+export function swoopPosition(from: Vec, to: Vec, s: number, out: Vec = { x: 0, y: 0, z: 0 }): Vec {
+  const k = clamp(s, 0, 1);
+  out.x = lerp(from.x, to.x, k);
+  out.y = lerp(from.y, to.y, k) + 8 * 4 * k * (1 - k);
+  out.z = lerp(from.z, to.z, k);
+  return out;
+}
+
+/**
  * The pitching view: back and a little above the mound, looking over the pitcher's shoulder at
  * the plate, the batter, the catcher and the umpire. Wide screens have less height, so the camera
  * comes down and in a little.
