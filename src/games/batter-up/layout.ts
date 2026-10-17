@@ -48,6 +48,9 @@ export interface PlayBand {
   /** Screen rows (px from the top) the question and score leave clear, and the answers leave clear. */
   top: number;
   bottom: number;
+  /** Screen columns the action may use, when something (a card beside the field) takes the rest. */
+  left?: number;
+  right?: number;
 }
 
 /**
@@ -493,4 +496,89 @@ export function ballScale(distance: number, fov: number, height: number): number
   const px = ballRadiusPx(distance, fov, height);
   const most = Math.max(MAX_BALL_WORLD_RADIUS / BALL_RADIUS, 1);
   return clamp(MIN_BALL_PX / Math.max(px, 1e-6), 1, most);
+}
+
+// ---------- Framing a play ----------
+
+/** The widest field of view a framed play may use. */
+export const FRAME_MAX_FOV = 75;
+/** Room kept between everything framed and the edges of the band, in CSS px. */
+export const FRAME_MARGIN = 28;
+
+/**
+ * Where to look and how wide to see so that every point lands inside the band (with a margin),
+ * seen from a camera at `cam`: never narrower than `minFov`, never wider than `FRAME_MAX_FOV`.
+ * The rows are those after the usual shift that centres the band, as `project` plus the band's
+ * lift. If they cannot all fit, the first two (the ball and the next receiver) win, then the rest.
+ */
+export function frameAction(
+  points: Vec[],
+  cam: Vec,
+  minFov: number,
+  width: number,
+  height: number,
+  band: PlayBand,
+): { look: Vec; fov: number } {
+  const left = (band.left ?? 0) + FRAME_MARGIN;
+  const right = (band.right ?? width) - FRAME_MARGIN;
+  const top = band.top + FRAME_MARGIN;
+  const bottom = band.bottom - FRAME_MARGIN;
+  const centreX = (left + right) / 2;
+  const centreY = height / 2;
+  const lift = (band.top + band.bottom) / 2 - height / 2;
+  const camera = new Vector3(cam.x, cam.y, cam.z);
+
+  /** Aims at the middle of the points and then slides the aim so their box is centred. */
+  const aimAt = (set: Vec[], fov: number): { look: Vec; box: Rect } => {
+    const look = new Vector3();
+    set.forEach((p) => look.add(new Vector3(p.x, p.y, p.z)));
+    look.multiplyScalar(1 / set.length);
+    const focal = height / 2 / Math.tan((fov * Math.PI) / 360);
+    for (let i = 0; i < 6; i++) {
+      const shown = set.map((p) => project(p, camera, look, fov, width, height));
+      const box = {
+        left: Math.min(...shown.map((s) => s.x)),
+        right: Math.max(...shown.map((s) => s.x)),
+        top: Math.min(...shown.map((s) => s.y)),
+        bottom: Math.max(...shown.map((s) => s.y)),
+      };
+      const dx = centreX - (box.left + box.right) / 2;
+      const dy = centreY - (box.top + box.bottom) / 2;
+      if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) break;
+      const forward = look.clone().sub(camera);
+      const distance = forward.length();
+      forward.normalize();
+      const rightV = new Vector3().crossVectors(forward, new Vector3(0, 1, 0)).normalize();
+      const upV = new Vector3().crossVectors(rightV, forward).normalize();
+      // The picture should move right by dx and down by dy: the aim goes the other way.
+      look.addScaledVector(rightV, (-dx / focal) * distance);
+      look.addScaledVector(upV, (dy / focal) * distance);
+    }
+    const shown = set.map((p) => project(p, camera, look, fov, width, height));
+    const box: Rect = {
+      left: Math.min(...shown.map((s) => s.x)),
+      right: Math.max(...shown.map((s) => s.x)),
+      top: Math.min(...shown.map((s) => s.y)),
+      bottom: Math.max(...shown.map((s) => s.y)),
+    };
+    return { look: { x: look.x, y: look.y, z: look.z }, box };
+  };
+
+  const fits = (box: Rect) =>
+    box.left >= left - 0.5 &&
+    box.right <= right + 0.5 &&
+    box.top + lift >= top - 0.5 &&
+    box.bottom + lift <= bottom + 0.5;
+
+  const least = Math.min(2, points.length);
+  let best = { look: { ...points[0] }, fov: minFov };
+  for (let n = points.length; n >= least; n--) {
+    const set = points.slice(0, n);
+    for (let fov = minFov; fov <= FRAME_MAX_FOV + 1e-9; fov += 1) {
+      const { look, box } = aimAt(set, fov);
+      best = { look, fov };
+      if (fits(box)) return best;
+    }
+  }
+  return best;
 }
