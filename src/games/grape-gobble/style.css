@@ -270,6 +270,166 @@
   color: #4a0c0c;
 }
 
+.gg-answer {
+  position: relative;
+}
+
+/* The right answer is marked for the whole gag: pulsing, with a tick in its corner. */
+.gg-answer.reveal {
+  animation: gg-pulse 0.6s ease-in-out infinite;
+}
+
+.gg-answer.reveal::after,
+.gg-answer.wrong::after {
+  position: absolute;
+  top: 2px;
+  right: 8px;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.gg-answer.reveal::after {
+  content: '✓';
+  color: #0c6b2b;
+}
+
+.gg-answer.wrong::after {
+  content: '✗';
+  color: #8c1d1d;
+}
+
+@keyframes gg-pulse {
+  50% {
+    scale: 1.08;
+  }
+}
+
+/* A wrong answer shakes the answer bar sideways. */
+.gg-answers.shake {
+  animation: gg-shake 0.3s linear;
+}
+
+@keyframes gg-shake {
+  0%,
+  100% {
+    transform: translateX(-50%);
+  }
+  20% {
+    transform: translateX(calc(-50% - 10px));
+  }
+  40% {
+    transform: translateX(calc(-50% + 10px));
+  }
+  60% {
+    transform: translateX(calc(-50% - 7px));
+  }
+  80% {
+    transform: translateX(calc(-50% + 7px));
+  }
+}
+
+.gg-problem.wrong {
+  background: rgba(150, 24, 40, 0.92);
+  border-color: #ff8787;
+}
+
+/* The tapped answer's verdict: a big tick or cross that floats up from the button. */
+.gg-badge {
+  position: fixed;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  font-weight: 900;
+  -webkit-text-stroke: 3px rgba(20, 20, 20, 0.7);
+  paint-order: stroke fill;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  animation: gg-badge 0.7s ease-out forwards;
+}
+
+.gg-badge-mark {
+  font-size: 72px;
+  line-height: 1;
+}
+
+.gg-badge-plus {
+  font-size: 28px;
+  line-height: 1.1;
+  color: #c9f27a;
+}
+
+.gg-badge.right .gg-badge-mark {
+  color: #5cf2b0;
+}
+
+.gg-badge.wrong .gg-badge-mark {
+  color: #ff6b6b;
+}
+
+@keyframes gg-badge {
+  0% {
+    transform: translate(-50%, -50%) scale(0.4);
+    opacity: 0;
+  }
+  20% {
+    transform: translate(-50%, -80%) scale(1.2);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -190%) scale(1);
+    opacity: 0;
+  }
+}
+
+/* Screen edges flash green for a right answer and red for a wrong one. */
+.gg-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.gg-flash.right {
+  box-shadow:
+    inset 0 0 0 10px rgba(40, 220, 120, 0.95),
+    inset 0 0 110px 34px rgba(60, 230, 140, 0.9);
+}
+
+.gg-flash.wrong {
+  box-shadow:
+    inset 0 0 0 10px rgba(235, 40, 50, 0.95),
+    inset 0 0 120px 38px rgba(255, 50, 60, 0.9);
+}
+
+.gg-flash.right.on {
+  animation: gg-flash 0.35s ease-out;
+}
+
+.gg-flash.wrong.on {
+  animation: gg-flash 0.45s ease-out;
+}
+
+@keyframes gg-flash {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 .gg-answer.gone {
   opacity: 0.25;
 }
@@ -404,7 +564,15 @@
 @media (prefers-reduced-motion: reduce) {
   .gg-banner,
   .gg-count.on,
-  .gg-pop {
+  .gg-pop,
+  .gg-answers.shake,
+  .gg-answer.reveal {
     animation: none;
+  }
+
+  /* The verdict badge only fades: no pop, no rise. */
+  .gg-badge {
+    animation: gg-flash 0.7s ease-out forwards;
+    transform: translate(-50%, -80%);
   }
 }
