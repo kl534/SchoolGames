@@ -91,7 +91,7 @@ describe('scoring', () => {
   it('adds the 10th frame bonus balls to the 9th', () => {
     // Nine strikes, then a 10th of 7, 3, 10: the 9th strike gets 10 + 7 + 3.
     const rolls = [...Array<number>(9).fill(10), 7, 3, 10];
-    const totals = runningTotals(rolls);
+    const totals = runningTotals(rolls) as number[];
     expect(totals[8] - totals[7]).toBe(20);
     expect(totals[9]).toBe(totals[8] + 20);
     expect(frameMarks(rolls)[9]).toEqual(['7', '/', 'X']);
