@@ -944,7 +944,7 @@ const rampCrash1: Def = (() => {
 
 // ----- Ring of fire -----
 
-const ringKicker: Surface = (x) => (x <= 0 ? 0 : x <= 3 ? kicker(x, 1.0, 3) : 0);
+export const ringKicker: Surface = (x) => (x <= 0 ? 0 : x <= 3 ? kicker(x, 1.0, 3) : 0);
 export const RING_X = 7;
 export const RING_Y = 2.6;
 export const RING_R = 1.7;
