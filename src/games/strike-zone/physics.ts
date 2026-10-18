@@ -98,7 +98,9 @@ export function createPhysics(): Physics {
   contact(ballMat, laneMat, 0.04, 0);
   contact(pinMat, laneMat, 0.3, 0.25);
   contact(pinMat, pinMat, 0.25, 0.5);
-  contact(ballMat, pinMat, 0.12, 0.5);
+  // No friction between ball and pins: with any, cannon-es kicks the ball up off the lane at the
+  // first pin and it sails over the back row.
+  contact(ballMat, pinMat, 0, 0.5);
   contact(pinMat, wallMat, 0.2, 0.45);
   contact(ballMat, wallMat, 0.2, 0.3);
 

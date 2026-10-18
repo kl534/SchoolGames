@@ -70,9 +70,10 @@ export function aimThrough(startX: number, pin: PinId): Aim {
 /**
  * Most a right answer can drift: the line's offset at the head-pin row. The design said 12 cm, but
  * a lone 7 or 10 pin, aimed at as far as the lane allows, was only grazed by a 12 cm drift
- * inwards (16.7 cm off its centre); 11 cm knocks every lone pin down (see the physics test).
+ * inwards (16.7 cm off its centre); 11 cm still grazed the 10 once ball and pins had no friction,
+ * and 10 cm knocks every lone pin down (see the physics test).
  */
-export const MAX_DRIFT = 0.11;
+export const MAX_DRIFT = 0.1;
 /** Answers faster than this go exactly where aimed. */
 export const PERFECT_UNDER_SECONDS = 1;
 
