@@ -1,0 +1,8 @@
+{
+  "id": "strike-zone",
+  "title": "Strike Zone",
+  "description": "Aim, answer fast, and knock 'em down — quick answers roll right on target!",
+  "thumbnail": "thumbnail.svg",
+  "tags": ["sports", "3d"],
+  "scoring": "score"
+}
