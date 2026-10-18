@@ -1589,13 +1589,10 @@ describe('the people', () => {
     expect(prop!.object.position.y).toBeLessThan(0.2);
   });
 
-  it('gives each batter their own colours', () => {
+  it('dresses the batter in our team colours, like the fielders', () => {
     const batter = createBatter();
-    const before = batter.person.materials.shirt.color.getHex();
-    batter.setLook(1);
-    expect(batter.person.materials.shirt.color.getHex()).not.toBe(before);
-    batter.setLook(1 + 9);
-    expect(batter.person.materials.shirt.color.getHex()).not.toBe(before);
+    expect(batter.person.materials.shirt.color.getHex()).toBe(OUR_COLOURS.shirt);
+    expect(batter.person.materials.hat.color.getHex()).toBe(OUR_COLOURS.cap);
   });
 
   it('holds the catcher behind the plate with the mitt under the ball', () => {
