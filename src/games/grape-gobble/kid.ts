@@ -319,7 +319,11 @@ export function createKid(): Kid {
   const apply = (f: KidFrame) => {
     frame = f;
     const dive = Math.min(0, f.head.y) * DIVE_FOLLOW;
-    torso.position.y = 0.98 + dive;
+    // The body ducks with the head, but never pokes out under the cloth: it squashes instead.
+    const torsoBottom = 0.39 + 0.06 * Math.min(1, -dive);
+    const torsoLength = Math.max(1.57 + dive - torsoBottom, 0.3);
+    torso.position.y = torsoBottom + torsoLength / 2;
+    torso.scale.y = torsoLength / 1.18;
     neck.position.y = 1.4 + Math.min(0, f.head.y) * 0.9;
     head.position.set(HEAD_REST.x + f.head.x, HEAD_REST.y + f.head.y, HEAD_REST.z + f.head.z);
     head.rotation.set(f.pitch, f.yaw, -f.roll);
@@ -351,7 +355,7 @@ export function createKid(): Kid {
       grape.position.set(f.grape.pos.x, f.grape.pos.y, f.grape.pos.z);
       const s = Math.max(f.grape.squash, 0.05);
       const wide = 1 / Math.sqrt(s);
-      grape.scale.set(wide, s, wide);
+      grape.scale.set(wide, wide, s);
     } else {
       grape.visible = false;
     }

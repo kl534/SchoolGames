@@ -41,6 +41,13 @@ const READ_AFTER = 0.5;
 const ENDING_FOR = 1.8;
 /** Seconds the tapped answer flashes green after a right answer. */
 const FLASH_FOR = 0.18;
+/** Where the words of a gag appear, relative to the kid's head, in turn. */
+const POP_SPOTS: [number, number][] = [
+  [0, -50],
+  [80, 0],
+  [-80, 0],
+  [0, 50],
+];
 
 type Phase = 'preview' | 'countdown' | 'asking' | 'gag' | 'ending' | 'done';
 
@@ -129,6 +136,9 @@ function run(session: GameSession): void {
   /** Ticks up for each question and round, so late callbacks can tell they are stale. */
   let turn = 0;
   let shake = 0;
+  let popIndex = 0;
+  /** Game time at which the "Eat!" word goes away. */
+  let countHideAt = Infinity;
 
   // Delayed actions run on game time so pausing freezes them too.
   let gameTime = 0;
@@ -262,6 +272,7 @@ function run(session: GameSession): void {
     renderClock(roundSeconds);
     setHudVisible(false);
     count.hidden = true;
+    countHideAt = Infinity;
     if (!withPreview) {
       startCountdown();
       return;
@@ -289,7 +300,8 @@ function run(session: GameSession): void {
         sfx.goal();
         roundTime = 0;
         askQuestion();
-        after(EAT_WORD, () => (count.hidden = true));
+        // Not an `after`: the first question may be answered (clearing `pending`) before it runs out.
+        countHideAt = gameTime + EAT_WORD;
       });
     });
   };
@@ -359,7 +371,10 @@ function run(session: GameSession): void {
   const onCue = (cue: Cue) => {
     if (cue.sfx) (sfx[cue.sfx] as () => void)();
     if (cue.pop) {
-      pop(cue.pop, toScreen(HEAD_REST), 'plain');
+      // Words from one gag land a little apart so they never sit on top of each other.
+      const spot = toScreen(HEAD_REST);
+      const [dx, dy] = POP_SPOTS[popIndex++ % POP_SPOTS.length];
+      pop(cue.pop, { x: spot.x + dx, y: spot.y + dy }, 'plain');
       if (cue.pop === 'Bonk!' || cue.pop === 'Splat!' || cue.pop === 'Squirt!') shake = 1;
     }
     if (cue.burst) effects.burst(cue.burst.kind, cue.burst.at);
@@ -373,6 +388,7 @@ function run(session: GameSession): void {
     session.recordAnswer(current, false);
     const gag = forcedGag() ?? pickGag(lastGag, Math.random());
     lastGag = gag;
+    popIndex = 0;
     phase = 'gag';
     pending = [];
     const thisTurn = ++turn;
@@ -463,6 +479,11 @@ function run(session: GameSession): void {
     if (due.length) {
       pending = pending.filter((p) => p.at > gameTime);
       due.forEach((p) => p.fn());
+    }
+
+    if (gameTime >= countHideAt) {
+      count.hidden = true;
+      countHideAt = Infinity;
     }
 
     // --- The round clock: always running while a question or a gag is on ---

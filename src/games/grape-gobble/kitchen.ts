@@ -62,7 +62,7 @@ const woodTexture = () =>
         g.fillRect(0, (i * 128) / 8, 128, 2);
       }
     },
-    [3, 1.5],
+    [6, 6],
   );
 
 const ginghamTexture = (repeat: [number, number]) =>
@@ -93,18 +93,19 @@ export function createKitchen(): Kitchen {
   const root = new Group();
 
   // ---------- Lights ----------
-  root.add(new HemisphereLight(0xffffff, 0xffd9a8, 1.0));
-  const sun = new DirectionalLight(0xfff1d6, 1.4);
+  root.add(new HemisphereLight(0xffffff, 0xffd9a8, 3.0));
+  const sun = new DirectionalLight(0xfff1d6, 1.3);
   sun.position.set(-3, 5, 5);
   root.add(sun);
 
   // ---------- Room ----------
-  const floor = new Mesh(new PlaneGeometry(12, 8), flat(0xffffff, { map: woodTexture() }));
+  const floor = new Mesh(new PlaneGeometry(24, 30), flat(0xffffff, { map: woodTexture() }));
   floor.rotation.x = -Math.PI / 2;
+  floor.position.z = 10;
   root.add(floor);
 
-  const wall = new Mesh(new PlaneGeometry(12, 4), flat(0xffe9bf));
-  wall.position.set(0, 2, -2.4);
+  const wall = new Mesh(new PlaneGeometry(24, 12), flat(0xffe9bf));
+  wall.position.set(0, 6, -2.4);
   root.add(wall);
 
   const windowGroup = new Group();
@@ -151,19 +152,16 @@ export function createKitchen(): Kitchen {
   ]);
   top.position.set(0, 0.76, 0.55);
   root.add(top);
-  const front = new Mesh(
-    new PlaneGeometry(3.8, TABLE_Y - 0.42),
-    flat(0xffffff, { map: ginghamTexture([6, 1]), side: DoubleSide }),
-  );
-  front.position.set(0, (TABLE_Y + 0.42) / 2, 1.16);
+  // The cloth hangs to the floor on every side, so whatever is under the table stays hidden.
+  const skirt = flat(0xffffff, { map: ginghamTexture([6, 1]), side: DoubleSide });
+  const front = new Mesh(new PlaneGeometry(3.8, TABLE_Y), skirt);
+  front.position.set(0, TABLE_Y / 2, 1.16);
   root.add(front);
-  const legMat = flat(0x8a5a2b);
-  for (const x of [-1.75, 1.75]) {
-    for (const z of [0.0, 1.1]) {
-      const leg = new Mesh(new BoxGeometry(0.1, 0.72, 0.1), legMat);
-      leg.position.set(x, 0.36, z);
-      root.add(leg);
-    }
+  for (const side of [-1, 1]) {
+    const end = new Mesh(new PlaneGeometry(1.2, TABLE_Y), skirt);
+    end.rotation.y = Math.PI / 2;
+    end.position.set(side * 1.91, TABLE_Y / 2, 0.55);
+    root.add(end);
   }
 
   // ---------- Chair ----------
@@ -216,14 +214,14 @@ export function createKitchen(): Kitchen {
   rim.rotation.x = Math.PI / 2;
   rim.position.y = 0.03;
   plate.add(dish, rim);
-  const skinGeometry = new SphereGeometry(0.05, 10, 8);
-  const skinMaterial = flat(0x6f9e3a);
+  const skinGeometry = new SphereGeometry(0.085, 10, 8);
+  const skinMaterial = flat(0x4f8a2b);
   const skins: Mesh[] = [];
   for (let i = 0; i < PLATE_MAX; i++) {
     const spot = plateSpot(i);
     const skin = new Mesh(skinGeometry, skinMaterial);
-    skin.scale.set(1.3, 0.4, 1.3);
-    skin.position.set(spot.x * 0.34, 0.04 + spot.layer * 0.03, spot.z * 0.34);
+    skin.scale.set(1.2, 0.6, 1.2);
+    skin.position.set(spot.x * 0.34, 0.05 + spot.layer * 0.07, spot.z * 0.34);
     skin.rotation.y = ((i * 7919) % 100) / 16;
     skin.visible = false;
     plate.add(skin);

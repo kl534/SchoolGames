@@ -420,8 +420,8 @@ function underTable(t: number, f: KidFrame) {
       [
         [0, 0],
         [1.5, 0],
-        [2.0, -1.05],
-        [2.6, -1.05],
+        [2.0, -1.12],
+        [2.6, -1.12],
         [3.0, 0],
       ],
       t,
@@ -682,8 +682,24 @@ function faceSplat(t: number, f: KidFrame) {
 }
 
 function airChomp(t: number, f: KidFrame) {
-  const left = vec3(0.3, 1.31, -0.06);
-  const right = vec3(-0.3, 1.31, -0.06);
+  const left = vec3(0.42, 1.31, -0.06);
+  const right = vec3(-0.42, 1.31, -0.06);
+  // The head snaps after the grape each time it is yanked away.
+  f.yaw = track(
+    [
+      [0, 0],
+      [0.5, 0],
+      [0.58, 0.25],
+      [0.78, 0],
+      [0.9, 0],
+      [0.95, -0.25],
+      [1.12, 0],
+      [1.22, 0],
+      [1.3, 0.25],
+      [1.6, 0],
+    ],
+    t,
+  );
   f.handR = track3(
     [
       ...WIND,
@@ -948,7 +964,7 @@ function hair(t: number, f: KidFrame) {
     ],
     t,
   );
-  const inHair = vec3(0.05, 0.4, -0.1);
+  const inHair = vec3(0.06, 0.5, 0);
   const hairWorld = add(HEAD_REST, inHair);
   const table = vec3(0.1, TABLE_GRAPE_Y, 0.05);
   if (t <= 0.45) {
