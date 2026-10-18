@@ -64,6 +64,66 @@ describe('LEVELS', () => {
     }
   });
 
+  it('keeps what each level holds, in the same order', () => {
+    const range = (from: number, to: number) =>
+      Array.from({ length: to - from + 1 }, (_, i) => from + i);
+    const str = (kind: string, a: number, b: number) => `${kind},${a},${b}`;
+    const times = (t: number, ns: number[]) => ns.map((n) => str('multiply', n, t));
+    const divide = (t: number, ns: number[]) => ns.map((n) => str('divide', n * t, t));
+    // Each group of tables gives a times level, then a divide level.
+    const levelsOf = (groups: number[][], ns: number[]) =>
+      groups.flatMap((g) => [g.flatMap((t) => times(t, ns)), g.flatMap((t) => divide(t, ns))]);
+    const actual = (from: number, to: number) =>
+      LEVELS.slice(from, to).map((l) =>
+        l.facts.map(({ fact }) => str(fact.visual!.kind, fact.visual!.a, fact.visual!.b)),
+      );
+    // Levels 5 to 12: tables up to x 10; levels 19 to 24: x 11 to x 16; levels 25 to 30: tables 11 to 16.
+    expect(actual(4, 12)).toEqual(
+      levelsOf(
+        [
+          [1, 2, 5, 10],
+          [3, 4],
+          [6, 7],
+          [8, 9],
+        ],
+        range(1, 10),
+      ),
+    );
+    expect(actual(18, 24)).toEqual(
+      levelsOf(
+        [
+          [1, 2, 5, 10],
+          [3, 4],
+          [6, 7, 8, 9],
+        ],
+        range(11, 16),
+      ),
+    );
+    expect(actual(24, 30)).toEqual(
+      levelsOf(
+        [
+          [11, 12],
+          [13, 14],
+          [15, 16],
+        ],
+        range(1, 16),
+      ),
+    );
+  });
+
+  it('reads the table facts from the topics that hold them', () => {
+    LEVELS.slice(4, 12).forEach((level, i) => {
+      const prefix = i % 2 === 0 ? 'times-' : 'divide-by-';
+      for (const { fact } of level.facts) {
+        expect(topicOfFact(fact).id).toBe(`${prefix}${fact.visual!.b}`);
+      }
+    });
+    LEVELS.slice(18).forEach((level, i) => {
+      const id = i % 2 === 0 ? 'multiplication-11-16' : 'division-11-16';
+      for (const { fact } of level.facts) expect(topicOfFact(fact).id).toBe(id);
+    });
+  });
+
   it('puts the bigger sums and take-aways after the tables up to 10 and before the 11s', () => {
     const biggest = (fact: Parameters<typeof topicOfFact>[0]) => {
       const { kind, a, b } = fact.visual!;

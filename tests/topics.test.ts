@@ -88,40 +88,103 @@ describe('built-in topics', () => {
     expect(new Set(pairs).size).toBe(256);
   });
 
-  it('has one topic per times table, 1 to 16, each running from 1 × n to 16 × n', () => {
-    expect(TOPICS.filter((t) => t.subject === 'Multiplication')).toHaveLength(16);
-    for (let n = 1; n <= 16; n++) {
+  it('lists the up-to-10 tables, then one 11-16 card, under Multiplication and Division', () => {
+    const ids = (subject: string) => TOPICS.filter((t) => t.subject === subject).map((t) => t.id);
+    expect(ids('Multiplication')).toEqual([
+      ...Array.from({ length: 10 }, (_, i) => `times-${i + 1}`),
+      'multiplication-11-16',
+    ]);
+    expect(ids('Division')).toEqual([
+      ...Array.from({ length: 10 }, (_, i) => `divide-by-${i + 1}`),
+      'division-11-16',
+    ]);
+    expect(getTopic('times-11')).toBeUndefined();
+    expect(getTopic('times-16')).toBeUndefined();
+    expect(getTopic('divide-by-12')).toBeUndefined();
+  });
+
+  it('has times tables 1 to 10, each running from 1 × n to 10 × n', () => {
+    for (let n = 1; n <= 10; n++) {
       const topic = getTopic(`times-${n}`)!;
       expect(topic.facts.map((f) => f.answer)).toEqual(
-        Array.from({ length: 16 }, (_, i) => String((i + 1) * n)),
+        Array.from({ length: 10 }, (_, i) => String((i + 1) * n)),
+      );
+      expect(topic.facts.map((f) => f.id)).toEqual(
+        Array.from({ length: 10 }, (_, i) => `${i + 1}x${n}`),
       );
     }
   });
 
-  it('has one topic per divisor, mirroring the times tables', () => {
-    expect(TOPICS.filter((t) => t.subject === 'Division')).toHaveLength(16);
-    for (let n = 1; n <= 16; n++) {
+  it('has divisors 1 to 10, mirroring the times tables', () => {
+    for (let n = 1; n <= 10; n++) {
       const topic = getTopic(`divide-by-${n}`)!;
       expect(topic.facts.map((f) => f.answer)).toEqual(
-        Array.from({ length: 16 }, (_, i) => String(i + 1)),
+        Array.from({ length: 10 }, (_, i) => String(i + 1)),
+      );
+      expect(topic.facts.map((f) => f.id)).toEqual(
+        Array.from({ length: 10 }, (_, i) => `${(i + 1) * n}/${n}`),
       );
       expect(topic.facts[1].statement).toBe(`${2 * n} ÷ ${n} = 2`);
     }
   });
 
-  it('keeps the fact ids that existed before the tables went up to 16', () => {
-    expect(
-      getTopic('times-3')!
-        .facts.slice(0, 10)
-        .map((f) => f.id),
-    ).toEqual(Array.from({ length: 10 }, (_, i) => `${i + 1}x3`));
-    expect(
-      getTopic('divide-by-3')!
-        .facts.slice(0, 10)
-        .map((f) => f.id),
-    ).toEqual(Array.from({ length: 10 }, (_, i) => `${(i + 1) * 3}/3`));
-    expect(getTopic('times-16')!.facts[15].statement).toBe('16 × 16 = 256');
-    expect(getTopic('divide-by-16')!.facts[15].statement).toBe('256 ÷ 16 = 16');
+  it('multiplication 11-16 holds every product with a number over 10', () => {
+    const big = getTopic('multiplication-11-16')!;
+    const small = Array.from({ length: 10 }, (_, i) => getTopic(`times-${i + 1}`)!);
+    expect(big.facts).toHaveLength(156);
+    for (const { visual } of big.facts) {
+      expect(visual!.kind).toBe('multiply');
+      expect(Math.max(visual!.a, visual!.b)).toBeGreaterThanOrEqual(11);
+      expect(Math.max(visual!.a, visual!.b)).toBeLessThanOrEqual(16);
+      expect(Math.min(visual!.a, visual!.b)).toBeGreaterThanOrEqual(1);
+    }
+    expect(big.facts.find((f) => f.id === '12x7')?.statement).toBe('12 × 7 = 84');
+    expect(big.facts.find((f) => f.id === '7x12')?.statement).toBe('7 × 12 = 84');
+    expect(big.facts.find((f) => f.id === '16x16')?.statement).toBe('16 × 16 = 256');
+    expect(big.facts.find((f) => f.id === '3x7')).toBeUndefined();
+    const pairs = [...small, big]
+      .flatMap((t) => t.facts)
+      .map((f) => `${f.visual!.a},${f.visual!.b}`);
+    expect(pairs).toHaveLength(256);
+    expect(new Set(pairs).size).toBe(256);
+  });
+
+  it('division 11-16 mirrors multiplication 11-16', () => {
+    const big = getTopic('division-11-16')!;
+    const small = Array.from({ length: 10 }, (_, i) => getTopic(`divide-by-${i + 1}`)!);
+    expect(big.facts).toHaveLength(156);
+    for (const { visual, answer } of big.facts) {
+      expect(visual!.kind).toBe('divide');
+      expect(Math.max(Number(answer), visual!.b)).toBeGreaterThanOrEqual(11);
+      expect(Math.max(Number(answer), visual!.b)).toBeLessThanOrEqual(16);
+    }
+    const fact = big.facts.find((f) => f.id === '84/7')!;
+    expect(fact.answer).toBe('12');
+    expect(fact.statement).toBe('84 ÷ 7 = 12');
+    expect(big.facts.find((f) => f.id === '182/14')).toBeDefined();
+    expect(big.facts.find((f) => f.id === '256/16')?.answer).toBe('16');
+    expect(big.facts.find((f) => f.id === '70/7')).toBeUndefined();
+    const pairs = [...small, big].flatMap((t) => t.facts).map((f) => `${f.answer},${f.visual!.b}`);
+    expect(pairs).toHaveLength(256);
+    expect(new Set(pairs).size).toBe(256);
+  });
+
+  it('keeps every times and divide fact id, each in exactly one topic', () => {
+    const topicsOf = (id: string) => TOPICS.filter((t) => t.facts.some((f) => f.id === id));
+    for (let n = 1; n <= 16; n++) {
+      for (let table = 1; table <= 16; table++) {
+        expect(topicsOf(`${n}x${table}`)).toHaveLength(1);
+        expect(topicsOf(`${n * table}/${table}`)).toHaveLength(1);
+      }
+    }
+    const timesIds = TOPICS.filter((t) => t.subject === 'Multiplication').flatMap((t) =>
+      t.facts.map((f) => f.id),
+    );
+    const divideIds = TOPICS.filter((t) => t.subject === 'Division').flatMap((t) =>
+      t.facts.map((f) => f.id),
+    );
+    expect(timesIds).toHaveLength(256);
+    expect(divideIds).toHaveLength(256);
   });
 
   it('groups by subject in order', () => {
@@ -137,6 +200,8 @@ describe('built-in topics', () => {
         .topics.map((t) => t.id);
     expect(ids('Addition')).toEqual(['addition-1-10', 'addition-11-16']);
     expect(ids('Subtraction')).toEqual(['subtraction-1-10', 'subtraction-11-16']);
+    expect(ids('Multiplication')).toHaveLength(11);
+    expect(ids('Division')).toHaveLength(11);
   });
 
   it('returns undefined for unknown topics', () => {
