@@ -495,4 +495,41 @@ export const sfx = {
       }
       tone(ctx, 'sine', 180, 70, t, 0.25, 0.7);
     }),
+  /** A motorbike revving up: a rising engine growl over a rush of low noise. */
+  rev: () =>
+    play((ctx, t) => {
+      tone(ctx, 'sawtooth', 90, 260, t, 0.6, 0.25);
+      noise(ctx, 'lowpass', 400, 900, t, 0.6, 0.3);
+    }),
+  /** A big spring: a sine sliding up and down, with a second tone a few Hz away for the wobble. */
+  boing: () =>
+    play((ctx, t) => {
+      for (const detune of [0, 6]) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(220 + detune, t);
+        osc.frequency.exponentialRampToValueAtTime(520 + detune, t + 0.15);
+        osc.frequency.exponentialRampToValueAtTime(180 + detune, t + 0.45);
+        gain.gain.setValueAtTime(0.22, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.47);
+      }
+    }),
+  /** Something wet hitting something hard: a slap of noise over a soft thump. */
+  splat: () =>
+    play((ctx, t) => {
+      noise(ctx, 'lowpass', 1400, 200, t, 0.25, 0.9);
+      tone(ctx, 'sine', 150, 50, t, 0.25, 0.8);
+    }),
+  /** A cartoon fall: a whistle sliding from high to low. */
+  slideWhistle: () => play((ctx, t) => tone(ctx, 'sine', 1500, 250, t, 0.9, 0.2)),
+  /** A clown horn: two short square-wave honks, the second a fourth lower. */
+  honk: () =>
+    play((ctx, t) => {
+      tone(ctx, 'square', 330, 330, t, 0.18, 0.18);
+      tone(ctx, 'square', 247, 247, t + 0.18, 0.18, 0.18);
+    }),
 };

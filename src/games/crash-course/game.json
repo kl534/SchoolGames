@@ -1,0 +1,8 @@
+{
+  "id": "crash-course",
+  "title": "Crash Course",
+  "description": "Ride a stunt bike through loops, jumps and flaming hoops. Answer right to clear each stunt. Answer wrong and it's a hilarious crash!",
+  "thumbnail": "thumbnail.svg",
+  "tags": ["motorcycle", "action", "3d"],
+  "scoring": "score"
+}
