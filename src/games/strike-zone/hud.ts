@@ -68,6 +68,8 @@ export interface Hud {
   renderCard(info: CardInfo): void;
   /** The big scorecard in the middle of the screen, for the end of the game. */
   setCardBig(big: boolean): void;
+  /** Hides the scorecard (behind the results screen) or shows it again. */
+  showCard(visible: boolean): void;
   renderPins(info: PinsInfo): void;
   /** The pin diagram (and the best score under the card); hidden while a question shows. */
   showSide(visible: boolean): void;
@@ -274,6 +276,10 @@ export function createHud(): Hud {
     setCardBig(big) {
       card.classList.toggle('big', big);
       place();
+    },
+
+    showCard(visible) {
+      card.hidden = !visible;
     },
 
     renderPins(info) {

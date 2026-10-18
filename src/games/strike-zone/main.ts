@@ -697,6 +697,7 @@ function run(session: GameSession): void {
     pending = [];
     stopSpeaking();
     hud.hideBanner();
+    hud.showCard(false);
     const total = totalScore(rolls);
     const stars = starsFor(feed.correct, feed.answered);
     session.recordStars(stars);
@@ -742,6 +743,7 @@ function run(session: GameSession): void {
     physics.rack(standing);
     pins.rack(standing, where.fullRack);
     hud.setCardBig(false);
+    hud.showCard(true);
     hud.hideBanner();
     hud.hidePill();
     hud.hideScreen();
