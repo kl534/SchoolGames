@@ -354,6 +354,27 @@ function moan(ctx: AudioContext, start: number, duration: number, volume: number
   vibrato.stop(start + duration + 0.02);
 }
 
+/** Low rumbling noise: it swells in over 0.15 s, holds, and fades out over the last 0.3 s. */
+function rumble(ctx: AudioContext, start: number, duration: number, volume: number): void {
+  const length = Math.floor(ctx.sampleRate * duration);
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 180;
+  const gain = ctx.createGain();
+  const fade = Math.min(0.3, duration / 2);
+  gain.gain.setValueAtTime(0.001, start);
+  gain.gain.exponentialRampToValueAtTime(volume, start + Math.min(0.15, duration / 2));
+  gain.gain.setValueAtTime(volume, start + duration - fade);
+  gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+  source.connect(filter).connect(gain).connect(ctx.destination);
+  source.start(start);
+}
+
 function play(fn: (ctx: AudioContext, now: number) => void): void {
   if (muted) return;
   const ctx = audioContext();
@@ -462,5 +483,16 @@ export const sfx = {
     play((ctx, t) => {
       noise(ctx, 'lowpass', 1800, 200, t, 0.3, 0.7);
       tone(ctx, 'sine', 150, 50, t, 0.25, 0.6);
+    }),
+  /** A bowling ball rumbling down the lane: low noise held for `seconds`, then fading. */
+  roll: (seconds: number) => play((ctx, t) => rumble(ctx, t, seconds, 0.35)),
+  /** Pins crashing: a burst of short wooden clacks over a low thump. */
+  pins: () =>
+    play((ctx, t) => {
+      for (let i = 0; i < 14; i++) {
+        const f = 1800 + Math.random() * 1800;
+        noise(ctx, 'bandpass', f, f, t + Math.random() * 0.35, 0.04 + Math.random() * 0.04, 0.5);
+      }
+      tone(ctx, 'sine', 180, 70, t, 0.25, 0.7);
     }),
 };
