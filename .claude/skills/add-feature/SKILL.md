@@ -60,7 +60,8 @@ does is left**. A big feature usually takes 4–8 rounds.
   clips for every fixed spoken line, never renaming topic or fact ids, the `/schoolgames/` base.
 - Don't ask about things the owner wouldn't care about. Decide those yourself (section 4).
 - If an answer opens a new question, ask it. If two answers conflict, point it out and ask again.
-- Finish with a short recap round: "Here is what I've got: … Anything to change or add?"
+- Don't end with a recap or "anything to change?" round. When the last real question is answered,
+  move straight on to the design. The owner will correct the PR if something is off.
 
 ## 4. Work out the technical design
 
@@ -99,9 +100,9 @@ Write `docs/<feature-slug>.md` and follow `.claude/skills/add-feature/design-tem
   Name each branch.
 - `docs/` is not committed. Leave it untracked.
 
-Then give the owner a short summary: the paragraph from section 1, the decisions table, the
-milestones, and the doc's path. Ask with `AskUserQuestion`: **Start building** / **Change
-something**. Revise until they pick Start building.
+Then go straight to the hand-off. Do not ask the owner to approve the design or the doc, and do not
+ask "Start building?". Give a one-line note with the doc's path as you start. The owner reviews the
+result in the PR and asks for changes there.
 
 ## 6. Hand off to Sonnet
 
@@ -126,8 +127,9 @@ Hand off one milestone at a time, in order. For each one:
 4. If something is wrong or missing, send the same agent back with `SendMessage` and say exactly
    what to fix (load it with `ToolSearch` `select:SendMessage` first). Use a fresh `Agent` call only
    if the first one can't continue. Then check again.
-5. Tell the owner the result for that milestone before you start the next one: the PR link, what
-   was built, any **(default)** that changed and why, and what wasn't tested (for example a real
-   phone or real speech timing).
+5. Tell the owner the result for that milestone: the PR link, what was built, any **(default)**
+   that changed and why, and what wasn't tested (for example a real phone or real speech timing).
+   This is a report, not a question: start the next milestone right away without waiting for a
+   reply.
 
 When every milestone is done, give the owner a final summary with every PR link.
