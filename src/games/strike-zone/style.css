@@ -1,0 +1,989 @@
+.sz-card,
+.sz-side,
+.sz-controls,
+.sz-q,
+.sz-answers,
+.sz-banner,
+.sz-pill,
+.sz-screen,
+.sz-hint {
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  color: #fff;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/*
+ * The layouts mirror hudLayout in views.ts: "standard" is the default here, "stacked" is any
+ * screen held upright (aspect <= 6/5) and "compact" a short landscape phone.
+ */
+
+/* ---------- The scorecard: ten frames across the top ---------- */
+.sz-card {
+  --sz-mark: 15px;
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 10;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: repeat(9, 1fr) 1.5fr;
+  gap: 3px;
+  width: min(640px, calc(100vw - 280px));
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(12, 18, 40, 0.82);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.sz-card.with-best {
+  grid-template-columns: repeat(9, 1fr) 1.5fr 1fr;
+}
+
+.sz-f,
+.sz-best {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 1px 0 2px;
+  border: 2px solid transparent;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.07);
+  text-align: center;
+}
+
+.sz-f.cur {
+  border-color: #ffd166;
+}
+
+.sz-f.flash {
+  animation: sz-pulse 0.35s ease-out;
+}
+
+@keyframes sz-pulse {
+  0% {
+    transform: scale(1.22);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.sz-fn {
+  color: #9db3e8;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 11px;
+}
+
+.sz-m {
+  display: flex;
+  gap: 1px;
+  padding: 0 1px;
+}
+
+.sz-b {
+  flex: 1;
+  min-width: 0;
+  height: 21px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 3px;
+  font-size: var(--sz-mark);
+  font-weight: 800;
+  line-height: 19px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sz-t {
+  height: 20px;
+  font-size: var(--sz-mark);
+  font-weight: 900;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sz-best .sz-t {
+  color: #ffd166;
+}
+
+/* The big scorecard at the end of the game: two rows of five, the 10th double width. */
+.sz-card.big,
+.sz-card.big.with-best {
+  --sz-mark: 22px;
+  top: 50%;
+  z-index: 12;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  width: min(92vw, 560px);
+  padding: 10px;
+  transform: translate(-50%, -50%);
+}
+
+.sz-card.big .sz-f:nth-child(10) {
+  grid-column: span 2;
+}
+
+.sz-card.big .sz-best {
+  display: none;
+}
+
+.sz-card.big .sz-fn {
+  font-size: 13px;
+  line-height: 15px;
+}
+
+.sz-card.big .sz-b {
+  height: 32px;
+  line-height: 30px;
+}
+
+.sz-card.big .sz-t {
+  height: 30px;
+  line-height: 30px;
+}
+
+/* ---------- The pin diagram (and the best score on a tall screen) ---------- */
+.sz-side {
+  position: fixed;
+  top: 72px;
+  right: max(12px, env(safe-area-inset-right));
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.sz-bestpill {
+  display: none;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: rgba(12, 18, 40, 0.82);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.sz-pins {
+  padding: 4px 4px 3px;
+  border-radius: 12px;
+  background: rgba(12, 18, 40, 0.7);
+}
+
+.sz-pins-svg {
+  display: block;
+  width: 132px;
+  height: 112px;
+}
+
+.sz-pins-caption {
+  margin-top: 1px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+.sz-pin-ring {
+  fill: transparent;
+  stroke: rgba(255, 255, 255, 0.4);
+  stroke-width: 0.014;
+}
+
+.sz-pin-dot {
+  fill: transparent;
+}
+
+.up .sz-pin-ring {
+  fill: #fff;
+  stroke: none;
+}
+
+.up .sz-pin-dot {
+  fill: #d62828;
+}
+
+.sz-band {
+  fill: rgba(255, 209, 102, 0.55);
+}
+
+.sz-band-line {
+  stroke: #ffd166;
+  stroke-width: 0.012;
+}
+
+/* ---------- The aim controls: nudge buttons and Bowl! ---------- */
+.sz-controls {
+  position: fixed;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  left: max(12px, env(safe-area-inset-left));
+  z-index: 11;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-areas:
+    'move aim'
+    'bowl bowl';
+  row-gap: 10px;
+  pointer-events: none;
+}
+
+.sz-controls > * {
+  pointer-events: auto;
+}
+
+.sz-move {
+  grid-area: move;
+  justify-self: start;
+}
+
+.sz-aim {
+  grid-area: aim;
+  justify-self: end;
+}
+
+.sz-bowl {
+  grid-area: bowl;
+  justify-self: center;
+  min-width: 200px;
+  height: 68px;
+  padding: 0 36px;
+  border: 3px solid #ffd2a8;
+  border-radius: 34px;
+  background: linear-gradient(#ff9a3c, #ff7a1a);
+  color: #fff;
+  font:
+    800 26px system-ui,
+    sans-serif;
+  text-shadow: 0 2px 0 rgba(120, 50, 0, 0.5);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 6px 18px rgba(4, 12, 40, 0.5);
+}
+
+.sz-bowl:active {
+  scale: 0.96;
+}
+
+.sz-nudge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 32px;
+  background: rgba(12, 18, 40, 0.72);
+}
+
+.sz-nudge-btn {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: 2px solid #9cc2ff;
+  border-radius: 50%;
+  background: linear-gradient(#2f66d0, #1c3f96);
+  color: #fff;
+  font-size: 22px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sz-nudge-btn:active {
+  scale: 0.92;
+}
+
+.sz-nudge-label {
+  min-width: 42px;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.sz-bowl:focus-visible,
+.sz-nudge-btn:focus-visible,
+.sz-answer:focus-visible,
+.sz-hear:focus-visible {
+  outline: 4px solid #ffd43b;
+  outline-offset: 2px;
+}
+
+.sz-hint {
+  position: fixed;
+  left: 50%;
+  z-index: 9;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  font-size: 16px;
+  font-weight: 800;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: sz-nudge 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes sz-nudge {
+  from {
+    opacity: 0.7;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---------- The question, the clock and the four answers ---------- */
+.sz-q {
+  position: fixed;
+  top: calc(var(--sz-card-bottom, 70px) + 8px);
+  left: 50%;
+  z-index: 10;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(560px, calc(100vw - 24px));
+  padding: 6px 6px 22px 20px;
+  border-radius: 20px;
+  background: rgba(12, 28, 56, 0.88);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  transform: translateX(-50%);
+}
+
+.sz-q-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 30px;
+  font-weight: 800;
+  text-wrap: balance;
+}
+
+.sz-hear {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 22px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.sz-clock {
+  position: absolute;
+  right: 16px;
+  bottom: 6px;
+  left: 16px;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.sz-clock i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 5px;
+  background: #5cf2b0;
+}
+
+.sz-clock.urgent i {
+  background: #ff6b6b;
+}
+
+.sz-answers {
+  position: fixed;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 50%;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  width: min(760px, calc(100vw - 24px));
+  transform: translateX(-50%);
+}
+
+.sz-answer {
+  min-width: 0;
+  height: 72px;
+  padding: 0 8px;
+  overflow: hidden;
+  border: 3px solid #9cc2ff;
+  border-radius: 20px;
+  background: linear-gradient(#2f66d0, #1c3f96);
+  color: #fff;
+  font:
+    800 clamp(24px, 6vmin, 38px) system-ui,
+    sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 6px 18px rgba(4, 12, 40, 0.5);
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    opacity 0.3s;
+}
+
+.sz-answer:active:not([aria-disabled='true']) {
+  scale: 0.96;
+}
+
+.sz-answer[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.sz-answer.chosen {
+  opacity: 1;
+  border-color: #fff;
+}
+
+.sz-answer.right {
+  opacity: 1;
+  border-color: #1b6b2b;
+  background: #5cf2b0;
+  color: #0c3a1d;
+  box-shadow:
+    0 0 0 5px rgba(92, 242, 176, 0.5),
+    0 0 26px 8px rgba(92, 242, 176, 0.7);
+}
+
+.sz-answer.wrong {
+  opacity: 1;
+  border-color: #8c1d1d;
+  background: #ff8787;
+  color: #4a0c0c;
+}
+
+/* ---------- Messages: the banner, the pill and the alley screen ---------- */
+.sz-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 120px;
+  z-index: 12;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: max-content;
+  max-width: 92%;
+  padding: 8px 22px;
+  border-radius: 20px;
+  background: rgba(12, 28, 56, 0.9);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.sz-banner-title {
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.sz-banner.info .sz-banner-title {
+  color: #ffe066;
+}
+
+.sz-banner.miss .sz-banner-title {
+  color: #ffa8a8;
+}
+
+.sz-banner.good {
+  background: rgba(14, 84, 52, 0.9);
+  border-color: #5cf2b0;
+}
+
+.sz-banner-detail {
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.sz-pill {
+  position: fixed;
+  left: 50%;
+  z-index: 12;
+  padding: 7px 22px;
+  border-radius: 999px;
+  background: rgba(12, 18, 40, 0.88);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  font-size: 22px;
+  font-weight: 900;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.sz-pill.on {
+  animation: sz-pill 1.6s ease-out forwards;
+}
+
+@keyframes sz-pill {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -10px);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* The alley screen: a monitor over the pins with a cartoon and the name of the moment. */
+.sz-screen {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 12;
+  box-sizing: border-box;
+  width: min(86vw, 360px);
+  max-height: 200px;
+  padding: 10px 12px 12px;
+  border: 4px solid #7fd0ff;
+  border-radius: 18px;
+  background: linear-gradient(#10224f, #08122e);
+  box-shadow:
+    0 0 24px #4aa8ff,
+    inset 0 0 18px rgba(74, 168, 255, 0.5);
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.sz-screen.on {
+  animation: sz-screen 1.8s ease-out forwards;
+}
+
+@keyframes sz-screen {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.7);
+  }
+  10% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.04);
+  }
+  16% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.sz-screen-title {
+  color: #ffd166;
+  font-size: clamp(30px, 11vw, 44px);
+  font-weight: 900;
+  line-height: 1.05;
+  text-shadow: 0 3px 0 #7a4a00;
+}
+
+.sz-screen-art {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 78px;
+  font-size: 60px;
+  line-height: 1;
+}
+
+.sz-art-pins {
+  display: inline-block;
+}
+
+.strike .sz-art-pins {
+  animation: sz-shake 0.45s linear 2;
+}
+
+@keyframes sz-shake {
+  0%,
+  100% {
+    transform: translateX(0) rotate(0);
+  }
+  25% {
+    transform: translateX(-8px) rotate(-10deg);
+  }
+  75% {
+    transform: translateX(8px) rotate(10deg);
+  }
+}
+
+.sz-art-burst {
+  position: absolute;
+  opacity: 0;
+  animation: sz-burst 0.5s ease-out 0.45s forwards;
+}
+
+.double .sz-art-burst.b1 {
+  left: calc(50% - 70px);
+  animation-delay: 0.15s;
+}
+
+.double .sz-art-burst.b2 {
+  left: calc(50% + 10px);
+  animation-delay: 0.6s;
+}
+
+@keyframes sz-burst {
+  0% {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.5);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+.sz-art-turkey {
+  display: inline-block;
+  animation: sz-strut 1.5s ease-in-out forwards;
+}
+
+@keyframes sz-strut {
+  0% {
+    transform: translateX(-110px) rotate(-6deg);
+  }
+  25% {
+    transform: translateX(-55px) rotate(6deg);
+  }
+  50% {
+    transform: translateX(0) rotate(-6deg);
+  }
+  75% {
+    transform: translateX(55px) rotate(6deg);
+  }
+  100% {
+    transform: translateX(110px) rotate(0);
+  }
+}
+
+.sz-art-trophy {
+  display: inline-block;
+  animation: sz-rise 0.7s ease-out forwards;
+}
+
+.sz-art-party {
+  display: inline-block;
+  animation: sz-party 0.6s ease-out 0.3s both;
+}
+
+@keyframes sz-rise {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sz-party {
+  from {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.sz-art-slash {
+  width: 48px;
+  height: 64px;
+  margin-left: 4px;
+  overflow: visible;
+}
+
+.sz-art-slash-path {
+  fill: none;
+  stroke: #ffd166;
+  stroke-width: 9;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: sz-draw 0.6s ease-out 0.15s forwards;
+}
+
+@keyframes sz-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.split .sz-art-pins.apart {
+  position: absolute;
+  left: calc(50% - 30px);
+}
+
+.split .sz-art-pins.left {
+  animation: sz-apart-left 0.8s ease-out 0.2s forwards;
+}
+
+.split .sz-art-pins.right {
+  animation: sz-apart-right 0.8s ease-out 0.2s forwards;
+}
+
+@keyframes sz-apart-left {
+  to {
+    transform: translateX(-50px);
+  }
+}
+
+@keyframes sz-apart-right {
+  to {
+    transform: translateX(50px);
+  }
+}
+
+/* ---------- Confetti ---------- */
+.sz-confetti {
+  position: fixed;
+  inset: 0;
+  z-index: 13;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.sz-piece {
+  position: absolute;
+  top: -20px;
+  width: 8px;
+  height: 14px;
+  animation: sz-fall 1.8s ease-in forwards;
+}
+
+@keyframes sz-fall {
+  to {
+    transform: translate(var(--sz-drift, 0), 105vh) rotate(var(--sz-spin, 360deg));
+  }
+}
+
+/* ---------- Any screen held upright (aspect <= 6/5), phone or tablet ---------- */
+@media (max-aspect-ratio: 6/5) {
+  .sz-card {
+    top: calc(max(12px, env(safe-area-inset-top)) + 58px);
+    left: max(12px, env(safe-area-inset-left));
+    right: max(12px, env(safe-area-inset-right));
+    width: auto;
+    transform: none;
+  }
+
+  .sz-card.with-best {
+    grid-template-columns: repeat(9, 1fr) 1.5fr;
+  }
+
+  .sz-best {
+    display: none;
+  }
+
+  .sz-side {
+    top: calc(var(--sz-card-bottom, 130px) + 6px);
+  }
+
+  .sz-bestpill {
+    display: block;
+  }
+
+  .sz-q {
+    width: calc(100vw - 24px);
+  }
+
+  .sz-hint {
+    font-size: 15px;
+  }
+}
+
+@media (max-aspect-ratio: 6/5) and (max-width: 400px) {
+  .sz-card {
+    --sz-mark: 13px;
+  }
+}
+
+/* The big scorecard keeps its own place whatever the screen. */
+@media (max-aspect-ratio: 6/5) {
+  .sz-card.big,
+  .sz-card.big.with-best {
+    top: 50%;
+    right: auto;
+    left: 50%;
+    width: min(92vw, 560px);
+    transform: translate(-50%, -50%);
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .sz-answers {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .sz-answer {
+    height: 64px;
+  }
+}
+
+/* ---------- Landscape: the nudge buttons share a row with Bowl! ---------- */
+@media (min-aspect-ratio: 6/5) {
+  .sz-controls {
+    bottom: max(16px, env(safe-area-inset-bottom));
+    grid-template-columns: 1fr auto 1fr;
+    grid-template-areas: 'move bowl aim';
+    align-items: end;
+  }
+
+  .sz-bestpill {
+    display: none;
+  }
+}
+
+/* ---------- A phone on its side (844x390 and shorter) ---------- */
+@media (max-height: 380px) and (min-aspect-ratio: 6/5) {
+  .sz-card {
+    width: min(572px, calc(100vw - 260px));
+    gap: 2px;
+    padding: 3px;
+  }
+
+  .sz-fn {
+    font-size: 9px;
+    line-height: 10px;
+  }
+
+  .sz-b {
+    height: 19px;
+    line-height: 17px;
+  }
+
+  .sz-t {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  .sz-pins-svg {
+    width: 112px;
+    height: 96px;
+  }
+
+  .sz-controls {
+    bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .sz-bowl {
+    height: 56px;
+  }
+
+  .sz-q {
+    width: min(520px, calc(100vw - 24px));
+    padding: 4px 4px 20px 16px;
+    border-radius: 16px;
+  }
+
+  .sz-q-text {
+    font-size: 22px;
+  }
+
+  .sz-answers {
+    bottom: max(8px, env(safe-area-inset-bottom));
+    gap: 8px;
+  }
+
+  .sz-answer {
+    height: 56px;
+    border-width: 2px;
+    border-radius: 16px;
+    font-size: clamp(22px, 7vmin, 30px);
+  }
+
+  .sz-screen {
+    width: min(86vw, 320px);
+    max-height: 180px;
+    padding: 6px 10px 8px;
+  }
+
+  .sz-screen-title {
+    font-size: 34px;
+  }
+
+  .sz-screen-art {
+    height: 62px;
+    font-size: 48px;
+  }
+
+  .sz-banner-title {
+    font-size: 22px;
+  }
+
+  .sz-banner-detail {
+    font-size: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sz-f.flash,
+  .sz-hint,
+  .sz-pill.on,
+  .sz-screen.on,
+  .sz-art-pins,
+  .sz-art-turkey,
+  .sz-art-trophy,
+  .sz-art-party,
+  .sz-art-slash-path,
+  .split .sz-art-pins.left,
+  .split .sz-art-pins.right {
+    animation: none;
+  }
+
+  .sz-art-burst {
+    animation: none;
+    opacity: 1;
+  }
+
+  .sz-art-slash-path {
+    stroke-dashoffset: 0;
+  }
+
+  .split .sz-art-pins.left {
+    transform: translateX(-50px);
+  }
+
+  .split .sz-art-pins.right {
+    transform: translateX(50px);
+  }
+
+  .sz-confetti {
+    display: none;
+  }
+}
