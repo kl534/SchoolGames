@@ -1,0 +1,410 @@
+.gg-hud,
+.gg-time,
+.gg-score,
+.gg-answers,
+.gg-banner,
+.gg-count {
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  color: #fff;
+}
+
+/* The question and its clock bar, centred at the top. */
+.gg-hud {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  max-width: calc(100vw - 300px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* Leave room for the menu, sound and pause buttons, and the clock and grape badges, on narrow screens. */
+@media (max-width: 640px) {
+  .gg-hud {
+    top: calc(max(12px, env(safe-area-inset-top)) + 116px);
+    max-width: calc(100vw - 24px);
+  }
+}
+
+.gg-hud[hidden],
+.gg-time[hidden],
+.gg-score[hidden],
+.gg-answers[hidden],
+.gg-answer[hidden],
+.gg-banner[hidden],
+.gg-banner-detail[hidden],
+.gg-count[hidden] {
+  display: none;
+}
+
+.gg-problem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px 6px 22px;
+  border-radius: 20px;
+  background: rgba(46, 20, 78, 0.88);
+  border: 2px solid rgba(183, 140, 255, 0.7);
+  pointer-events: auto;
+}
+
+.gg-problem-text {
+  font-size: clamp(28px, 7vmin, 56px);
+  font-weight: 800;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.gg-problem.statement .gg-problem-text {
+  font-size: clamp(20px, 4.6vmin, 36px);
+}
+
+.gg-hear {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.gg-clock {
+  width: 100%;
+  min-width: 200px;
+  height: 10px;
+  border-radius: 5px;
+  background: rgba(46, 20, 78, 0.7);
+  overflow: hidden;
+}
+
+.gg-clock-fill {
+  height: 100%;
+  width: 100%;
+  background: #5cf2b0;
+  transform-origin: left;
+}
+
+.gg-clock.urgent .gg-clock-fill {
+  background: #ff6b6b;
+}
+
+/* The clock badge, under the menu button. */
+.gg-time,
+.gg-score {
+  position: fixed;
+  top: calc(max(12px, env(safe-area-inset-top)) + 58px);
+  z-index: 10;
+  padding: 4px 12px 5px;
+  border-radius: 16px;
+  background: rgba(46, 20, 78, 0.82);
+  pointer-events: none;
+}
+
+.gg-time {
+  left: max(12px, env(safe-area-inset-left));
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 84px;
+}
+
+.gg-time-value {
+  font-size: clamp(26px, 6.5vmin, 36px);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.gg-time.urgent {
+  background: rgba(150, 20, 40, 0.92);
+}
+
+.gg-time.urgent .gg-time-value {
+  color: #ffb3b3;
+}
+
+.gg-time.on {
+  animation: gg-score 0.5s ease-out;
+}
+
+/* Grapes eaten, and the best so far, under the sound and pause buttons. */
+.gg-score {
+  right: max(12px, env(safe-area-inset-right));
+  min-width: 96px;
+  text-align: right;
+}
+
+.gg-score-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.gg-score-icon {
+  font-size: clamp(22px, 5.5vmin, 30px);
+  line-height: 1;
+}
+
+.gg-score-value {
+  font-size: clamp(26px, 6.5vmin, 36px);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  color: #c9f27a;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+}
+
+.gg-score-value.on {
+  animation: gg-score 0.3s ease-out;
+}
+
+@keyframes gg-score {
+  0% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.gg-best {
+  font-size: 13px;
+  font-weight: 700;
+  color: #d9c2ff;
+}
+
+/* The four answers along the bottom: two rows of two on a narrow phone. */
+.gg-answers {
+  position: fixed;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 50%;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  width: min(760px, calc(100vw - 24px));
+  transform: translateX(-50%);
+}
+
+@media (max-width: 560px) {
+  .gg-answers {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.gg-answer {
+  min-width: 0;
+  height: 72px;
+  padding: 0 8px;
+  border: 3px solid #b78cff;
+  border-radius: 20px;
+  background: linear-gradient(#7d4fb8, #5a3290);
+  color: #fff;
+  font:
+    800 clamp(28px, 6.5vmin, 40px) system-ui,
+    sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 6px 18px rgba(40, 14, 70, 0.45);
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    opacity 0.3s;
+}
+
+@media (max-height: 460px) {
+  .gg-answer {
+    height: 64px;
+  }
+}
+
+.gg-answer:active:not([aria-disabled='true']) {
+  scale: 0.96;
+}
+
+.gg-answer:focus-visible {
+  outline: 4px solid #ffd43b;
+  outline-offset: 2px;
+}
+
+.gg-answer[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.gg-answer.right {
+  opacity: 1;
+  border-color: #1b6b2b;
+  background: #5cf2b0;
+  color: #0c3a1d;
+  box-shadow:
+    0 0 0 5px rgba(92, 242, 176, 0.5),
+    0 0 26px 8px rgba(92, 242, 176, 0.7);
+}
+
+.gg-answer.wrong {
+  opacity: 1;
+  border-color: #8c1d1d;
+  background: #ff8787;
+  color: #4a0c0c;
+}
+
+.gg-answer.gone {
+  opacity: 0.25;
+}
+
+/* Big messages in the clear space between the question and the answers. */
+.gg-banner {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: min(92vw, 680px);
+  padding: 12px 28px;
+  border-radius: 24px;
+  background: rgba(46, 20, 78, 0.92);
+  border: 2px solid rgba(183, 140, 255, 0.7);
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: gg-pop 0.35s ease-out;
+}
+
+.gg-banner-title {
+  font-size: clamp(32px, 9vmin, 68px);
+  font-weight: 900;
+  line-height: 1.1;
+  color: #ffe066;
+}
+
+.gg-banner-detail {
+  font-size: clamp(26px, 7vmin, 48px);
+  font-weight: 800;
+}
+
+@keyframes gg-pop {
+  from {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+/* 3, 2, 1, Eat! */
+.gg-count {
+  position: fixed;
+  left: 50%;
+  top: 38%;
+  z-index: 12;
+  font-size: clamp(90px, 26vmin, 200px);
+  font-weight: 900;
+  color: #ffe066;
+  text-shadow:
+    0 6px 0 rgba(60, 20, 90, 0.55),
+    0 0 40px rgba(255, 224, 102, 0.6);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.gg-count.on {
+  animation: gg-count 0.7s ease-out;
+}
+
+@keyframes gg-count {
+  from {
+    transform: translate(-50%, -50%) scale(1.8);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Gag words and milestones floating up from where they happened. */
+.gg-pop {
+  position: fixed;
+  z-index: 14;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  font-size: clamp(30px, 7.5vmin, 52px);
+  font-weight: 900;
+  white-space: nowrap;
+  color: #fff;
+  -webkit-text-stroke: 2px rgba(60, 20, 90, 0.85);
+  paint-order: stroke fill;
+  text-shadow:
+    0 3px 0 rgba(60, 20, 90, 0.6),
+    0 0 12px rgba(0, 0, 0, 0.35);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: gg-rise 1.3s ease-out forwards;
+}
+
+.gg-pop.good {
+  color: #c9f27a;
+}
+
+.gg-pop.bad {
+  color: #ff8787;
+}
+
+.gg-pop.plain {
+  color: #ffe066;
+}
+
+@keyframes gg-rise {
+  0% {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0;
+  }
+  15% {
+    transform: translate(-50%, -80%) scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -200%) scale(1);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gg-banner,
+  .gg-count.on,
+  .gg-pop {
+    animation: none;
+  }
+}
