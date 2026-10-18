@@ -407,10 +407,11 @@ export function createEffects(): Effects {
         -speed * 0.5 + random(-0.4, 0.4),
         random(-0.2, 0.6),
         spec,
-        spec.colors[Math.floor(Math.random() * spec.colors.length)],
+        flame ? spec.colors[Math.floor(Math.random() * spec.colors.length)] : 0xdcdce6,
         random(spec.size[0], spec.size[1]) * (flame ? 0.8 : 0.5),
         random(spec.life[0], spec.life[1]) * 0.6,
       );
+      if (!flame) alpha0[i] = 0.4;
       position[i * 3 + 2] = Z - 0.5;
     },
     sparkle(x, y) {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { parseDev } from '../src/games/crash-course/dev';
 import {
   BIKE_COL,
   FOV,
@@ -311,5 +312,28 @@ describe('voice', () => {
     expect(VOICE_LINES).toEqual([OUT_OF_BIKES_SPEECH, NEW_HIGH_SCORE_SPEECH, GREAT_RIDING_SPEECH]);
     expect(VOICE_LINES.length).toBeGreaterThan(0);
     for (const line of VOICE_LINES) expect(line.trim().length).toBeGreaterThan(0);
+  });
+});
+
+describe('dev hooks', () => {
+  it('reads the kinds, mega, bikes and stunt lab from the address', () => {
+    const dev = parseDev(
+      '?topic=my-level&kinds=loop,ramp,nope&mega=1&bikes=2&lab=ring:crash:1&at=1.5&nitro=1',
+    );
+    expect(dev).toEqual({
+      kinds: ['loop', 'ramp'],
+      mega: true,
+      bikes: 2,
+      lab: { kind: 'ring', outcome: 'crash', variant: 1 },
+      at: 1.5,
+      nitro: true,
+    });
+  });
+
+  it('ignores anything malformed', () => {
+    const dev = parseDev('?bikes=9&lab=ring:crash:7&at=soon');
+    expect(dev).toEqual({ kinds: [], mega: false, bikes: null, lab: null, at: null, nitro: false });
+    expect(parseDev('?lab=nothing:clear:0').lab).toBeNull();
+    expect(parseDev('').bikes).toBeNull();
   });
 });

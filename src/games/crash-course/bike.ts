@@ -3,6 +3,7 @@ import {
   BoxGeometry,
   CapsuleGeometry,
   CylinderGeometry,
+  DoubleSide,
   Group,
   Mesh,
   MeshBasicMaterial,
@@ -171,4 +172,58 @@ export function createShadowMaterial(): MeshBasicMaterial {
     opacity: 0.3,
     depthWrite: false,
   });
+}
+
+export interface Parachute {
+  /** Origin at the bike it carries; the canopy floats above. */
+  object: Group;
+  dispose(): void;
+}
+
+/** A red and white parachute for the new bike floating in. */
+export function createParachute(): Parachute {
+  const object = new Group();
+  const geometries: BufferGeometry[] = [];
+  const materials: Material[] = [];
+  const red = new MeshStandardMaterial({ color: 0xe8403a, roughness: 0.7, side: DoubleSide });
+  const white = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.7, side: DoubleSide });
+  materials.push(red, white);
+  const canopy = new Group();
+  canopy.position.y = 3.6;
+  object.add(canopy);
+  for (let i = 0; i < 8; i++) {
+    const g = new SphereGeometry(1.7, 8, 8, (i * Math.PI) / 4, Math.PI / 4, 0, Math.PI / 2);
+    geometries.push(g);
+    const wedge = new Mesh(g, i % 2 ? white : red);
+    wedge.scale.set(1.15, 0.8, 0.8);
+    canopy.add(wedge);
+  }
+  const lineMaterial = new MeshBasicMaterial({ color: 0x555555 });
+  materials.push(lineMaterial);
+  const cord = new CylinderGeometry(0.02, 0.02, 1, 4);
+  geometries.push(cord);
+  for (const [x, z] of [
+    [-1.8, 0.5],
+    [1.8, 0.5],
+    [-1.8, -0.5],
+    [1.8, -0.5],
+  ] as const) {
+    const line = new Mesh(cord, lineMaterial);
+    const from = new Vector3(x, 3.6, z);
+    const to = new Vector3(x * 0.1, 0.9, 0);
+    const mid = from.clone().add(to).multiplyScalar(0.5);
+    line.position.copy(mid);
+    line.scale.y = from.distanceTo(to);
+    line.rotation.z = Math.atan2(to.x - from.x, from.y - to.y);
+    object.add(line);
+  }
+  object.visible = false;
+  return {
+    object,
+    dispose() {
+      geometries.forEach((g) => g.dispose());
+      materials.forEach((m) => m.dispose());
+      object.removeFromParent();
+    },
+  };
 }

@@ -559,7 +559,7 @@ const loopCrash1: Def = (() => {
   const riderX = track([
     [tOff, start.x],
     [tLand, hayX, 'l'],
-    [2.6, hayX + 0.7, 'o'],
+    [2.6, hayX + 2.3, 'o'],
   ]);
   const riderRot = track([
     [tOff, Math.PI / 2],
@@ -568,7 +568,7 @@ const loopCrash1: Def = (() => {
   ]);
   const riderY = (t: number) =>
     t < tLand
-      ? arc(start.y, 2.2, 9, prog(t, tOff, tLand, 'l'))
+      ? arc(start.y, 2.2, 7.2, prog(t, tOff, tLand, 'l'))
       : lerp(2.2, 0.25, prog(t, tLand + 0.05, 2.6, 'i'));
   const bikeX = track([
     [2.35, 8],
@@ -617,7 +617,7 @@ const loopCrash1: Def = (() => {
       [tLand, 'sfx:splat', hayX, 1.5],
       [tLand, 'dust', hayX, 1.4],
       [2.5, 'dust', 10.4, 0.2],
-      [2.7, 'stars', hayX + 0.7, 1.6],
+      [2.7, 'stars', hayX + 2.3, 1.6],
     ],
   };
 })();

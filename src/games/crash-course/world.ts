@@ -246,6 +246,8 @@ export function createWorld(scene: Scene): World {
     z: number;
     /** Screen speed as a fraction of the road's; null = fixed in the world. */
     pt: number | null;
+    /** How big the layer is drawn, as a fraction of its natural size. */
+    size: number;
     wheels: Group[];
   }
   const layers: Layer[] = [];
@@ -256,6 +258,7 @@ export function createWorld(scene: Scene): World {
     pt: number | null,
     build: (tile: Group) => void,
     count = 4,
+    size = 1,
   ) => {
     const group = new Group();
     const tiles: Group[] = [];
@@ -272,7 +275,7 @@ export function createWorld(scene: Scene): World {
     }
     group.position.z = z;
     scene.add(group);
-    layers.push({ group, tiles, tileW, z, pt, wheels });
+    layers.push({ group, tiles, tileW, z, pt, size, wheels });
   };
 
   // Soft clouds.
@@ -318,101 +321,122 @@ export function createWorld(scene: Scene): World {
   makeLayer(-62, 70, 0.1, (tile) => hillTile(tile, 0x7bd07a, 9, 2.4, 70));
 
   // The big top and the ferris wheel.
-  makeLayer(-48, 80, 0.2, (tile) => {
-    const tent = new Group();
-    const stripeA = lit(0xe8403a, 0.8);
-    const stripeB = lit(0xffffff, 0.8);
-    add(tent, new CylinderGeometry(6, 6.4, 4.4, 20), stripeB, 0, 2.2, 0);
-    for (let i = 0; i < 10; i++) {
-      const a = (i / 10) * Math.PI * 2;
-      add(
-        tent,
-        new BoxGeometry(2.4, 4.45, 0.3),
-        stripeA,
-        Math.sin(a) * 6.05,
-        2.2,
-        Math.cos(a) * 6.05,
-      ).rotation.y = a;
-    }
-    add(tent, new ConeGeometry(7, 4.5, 20), stripeA, 0, 6.65, 0);
-    add(tent, new CylinderGeometry(0.1, 0.1, 2.6, 6), lit(0x444444), 0, 10.1, 0);
-    const flag = add(tent, new ConeGeometry(0.6, 1.2, 3), stripeA, 0.7, 11, 0);
-    flag.rotation.z = -Math.PI / 2;
-    tent.position.set(-14, 0, 0);
-    tile.add(tent);
+  makeLayer(
+    -48,
+    120,
+    0.2,
+    (tile) => {
+      const tent = new Group();
+      const stripeA = lit(0xe8403a, 0.8);
+      const stripeB = lit(0xffffff, 0.8);
+      add(tent, new CylinderGeometry(6, 6.4, 4.4, 20), stripeB, 0, 2.2, 0);
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2;
+        add(
+          tent,
+          new BoxGeometry(2.4, 4.45, 0.3),
+          stripeA,
+          Math.sin(a) * 6.05,
+          2.2,
+          Math.cos(a) * 6.05,
+        ).rotation.y = a;
+      }
+      add(tent, new ConeGeometry(7, 4.5, 20), stripeA, 0, 6.65, 0);
+      add(tent, new CylinderGeometry(0.1, 0.1, 2.6, 6), lit(0x444444), 0, 10.1, 0);
+      const flag = add(tent, new ConeGeometry(0.6, 1.2, 3), stripeA, 0.7, 11, 0);
+      flag.rotation.z = -Math.PI / 2;
+      tent.position.set(-14, 0, 0);
+      tile.add(tent);
 
-    const wheel = new Group();
-    wheel.position.set(22, 8.6, 0);
-    const steel = lit(0xdfe6ee, 0.5);
-    const spin = new Group();
-    spin.name = 'wheel';
-    wheel.add(spin);
-    add(spin, new TorusGeometry(7, 0.22, 8, 36), steel);
-    add(spin, new TorusGeometry(3, 0.18, 8, 24), steel);
-    const colors = [0xff5a5a, 0xffd43b, 0x4dd0e1, 0x7be07b, 0xff8fd0, 0xb28dff];
-    for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * Math.PI * 2;
-      const spoke = add(spin, new BoxGeometry(14, 0.1, 0.1), steel);
-      spoke.rotation.z = a;
-      if (i < 6) continue;
-    }
-    for (let i = 0; i < 10; i++) {
-      const a = (i / 10) * Math.PI * 2;
-      const pod = new Group();
-      pod.userData.angle = a;
-      pod.position.set(Math.cos(a) * 7, Math.sin(a) * 7, 0);
-      add(pod, new BoxGeometry(1.5, 1.1, 1.1), lit(colors[i % colors.length], 0.6), 0, -0.7, 0);
-      spin.add(pod);
-    }
-    for (const side of [-1, 1]) {
-      const leg = add(wheel, new BoxGeometry(0.45, 10.4, 0.45), lit(0x7a8696), side * 3.6, -4.2, 0);
-      leg.rotation.z = -side * 0.34;
-    }
-    tile.add(wheel);
-  });
-
-  // Trees and balloon clusters.
-  makeLayer(-26, 36, 0.45, (tile) => {
-    const trunk = lit(0x7a5230);
-    const leaves = [lit(0x3fae52), lit(0x58c46a), lit(0x2f9a4a)];
-    for (const [x, h] of [
-      [-12, 5],
-      [4, 6.5],
-      [14, 4.2],
-    ] as const) {
-      add(tile, new CylinderGeometry(0.28, 0.35, h * 0.4, 8), trunk, x, h * 0.2, 0);
-      add(
-        tile,
-        new SphereGeometry(h * 0.38, 12, 10),
-        leaves[(Math.abs(x) % 3) | 0],
-        x,
-        h * 0.62,
-        0,
-      );
-      add(tile, new SphereGeometry(h * 0.28, 12, 10), leaves[1], x + h * 0.2, h * 0.45, 0.4);
-    }
-    const strings = flat(0x666666);
-    const balloonColors = [0xff5a5a, 0xffd43b, 0x4dd0e1, 0xff8fd0, 0x7be07b];
-    for (const [cx, cy] of [
-      [-4, 11],
-      [20, 13],
-    ] as const) {
-      for (let i = 0; i < 5; i++) {
-        const bx = cx + (i - 2) * 1.1;
-        const by = cy + (i % 2) * 0.8;
-        const balloon = add(
-          tile,
-          new SphereGeometry(0.75, 12, 10),
-          lit(balloonColors[i], 0.35),
-          bx,
-          by,
+      const wheel = new Group();
+      wheel.position.set(22, 8.6, 0);
+      const steel = lit(0xdfe6ee, 0.5);
+      const spin = new Group();
+      spin.name = 'wheel';
+      wheel.add(spin);
+      add(spin, new TorusGeometry(7, 0.22, 8, 36), steel);
+      add(spin, new TorusGeometry(3, 0.18, 8, 24), steel);
+      const colors = [0xff5a5a, 0xffd43b, 0x4dd0e1, 0x7be07b, 0xff8fd0, 0xb28dff];
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        const spoke = add(spin, new BoxGeometry(14, 0.1, 0.1), steel);
+        spoke.rotation.z = a;
+        if (i < 6) continue;
+      }
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2;
+        const pod = new Group();
+        pod.userData.angle = a;
+        pod.position.set(Math.cos(a) * 7, Math.sin(a) * 7, 0);
+        add(pod, new BoxGeometry(1.5, 1.1, 1.1), lit(colors[i % colors.length], 0.6), 0, -0.7, 0);
+        spin.add(pod);
+      }
+      for (const side of [-1, 1]) {
+        const leg = add(
+          wheel,
+          new BoxGeometry(0.45, 10.4, 0.45),
+          lit(0x7a8696),
+          side * 3.6,
+          -4.2,
           0,
         );
-        balloon.scale.y = 1.2;
-        add(tile, new BoxGeometry(0.03, 3.4, 0.03), strings, cx + (i - 2) * 0.3, by - 2.2, 0);
+        leg.rotation.z = -side * 0.34;
       }
-    }
-  });
+      tile.add(wheel);
+    },
+    4,
+    0.5,
+  );
+
+  // Trees and balloon clusters.
+  makeLayer(
+    -26,
+    36,
+    0.45,
+    (tile) => {
+      const trunk = lit(0x7a5230);
+      const leaves = [lit(0x3fae52), lit(0x58c46a), lit(0x2f9a4a)];
+      for (const [x, h] of [
+        [-12, 5],
+        [4, 6.5],
+        [14, 4.2],
+      ] as const) {
+        add(tile, new CylinderGeometry(0.28, 0.35, h * 0.4, 8), trunk, x, h * 0.2, 0);
+        add(
+          tile,
+          new SphereGeometry(h * 0.38, 12, 10),
+          leaves[(Math.abs(x) % 3) | 0],
+          x,
+          h * 0.62,
+          0,
+        );
+        add(tile, new SphereGeometry(h * 0.28, 12, 10), leaves[1], x + h * 0.2, h * 0.45, 0.4);
+      }
+      const strings = flat(0x666666);
+      const balloonColors = [0xff5a5a, 0xffd43b, 0x4dd0e1, 0xff8fd0, 0x7be07b];
+      for (const [cx, cy] of [
+        [-4, 11],
+        [20, 13],
+      ] as const) {
+        for (let i = 0; i < 5; i++) {
+          const bx = cx + (i - 2) * 1.1;
+          const by = cy + (i % 2) * 0.8;
+          const balloon = add(
+            tile,
+            new SphereGeometry(0.75, 12, 10),
+            lit(balloonColors[i], 0.35),
+            bx,
+            by,
+            0,
+          );
+          balloon.scale.y = 1.2;
+          add(tile, new BoxGeometry(0.03, 3.4, 0.03), strings, cx + (i - 2) * 0.3, by - 2.2, 0);
+        }
+      }
+    },
+    4,
+    0.65,
+  );
 
   // Bunting along a line above the road, fixed in the world.
   makeLayer(
@@ -473,15 +497,7 @@ export function createWorld(scene: Scene): World {
     box.position.set(0, height / 2, tierZ[t]);
     tiers.push(box);
   }
-  const standBack = add(
-    stands,
-    new BoxGeometry(SLOTS * TILE_W, 8, 0.3),
-    lit(0xd9e3ee, 1),
-    0,
-    4,
-    -9.7,
-  );
-  void standBack;
+
   const headMesh = new InstancedMesh(
     track(new SphereGeometry(0.2, 10, 8)),
     lit(0xf1b48a, 0.8),
@@ -601,7 +617,7 @@ export function createWorld(scene: Scene): World {
       // Scenery layers: far ones are scaled up so they look the same size, and slide slower.
       for (const layer of layers) {
         const depth = -layer.z;
-        const s = layer.pt === null ? 1 : (distance + depth) / distance;
+        const s = layer.pt === null ? 1 : ((distance + depth) / distance) * layer.size;
         const natural = distance / (distance + depth);
         const follow = layer.pt === null ? 0 : Math.min(Math.max(1 - layer.pt / natural, 0), 1);
         const tileWorld = layer.tileW * s;
@@ -629,7 +645,6 @@ export function createWorld(scene: Scene): World {
       // Spectator positions are in world space, so undo the group's offset.
       stands.position.x = 0;
       for (const tier of tiers) tier.position.x = centre;
-      standBack.position.x = centre;
       animateCrowd(first);
     },
     setMood(next, seconds) {

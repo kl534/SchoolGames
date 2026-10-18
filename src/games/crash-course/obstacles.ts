@@ -315,7 +315,7 @@ function buildLoop(kit: Kit): Built {
   const strawLight = kit.lit(0xe9c45a, 1);
   const strawDark = kit.lit(0xc79a35, 1);
   const mound = kit.mesh(new SphereGeometry(1, 16, 12), strawLight, hay, 0, 0.35, 0);
-  mound.scale.set(1.9, 1.45, 1.5);
+  mound.scale.set(1.6, 1.25, 1.3);
   for (let i = 0; i < 22; i++) {
     const a = (i / 22) * TAU;
     const straw = kit.box(0.05, 0.7, 0.05, i % 2 ? strawDark : strawLight, hay);
@@ -443,7 +443,10 @@ function buildRamp(kit: Kit): Built {
   duck.visible = false;
   group.add(duck);
   const sunk = stuntBeats('ramp', 'crash', 0);
+  /** The shark circles on the clock of the page; a stunt starts it from where it was. */
   let sharkTime = 0;
+  let clock = 0;
+  let stuntActive = false;
 
   const snap = (outcome: Outcome, variant: Variant) => stuntBeats('ramp', outcome, variant).snap;
 
@@ -457,6 +460,7 @@ function buildRamp(kit: Kit): Built {
   return {
     group,
     update(outcome, variant, t) {
+      stuntActive = true;
       hat.visible = false;
       duck.visible = false;
       const circle = (time: number) => 8.5 + 3.3 * Math.sin(1.3 * time);
@@ -515,13 +519,16 @@ function buildRamp(kit: Kit): Built {
       }
     },
     ambient(time) {
-      sharkTime = time;
+      clock = time;
+      if (stuntActive) return;
       const x = 8.5 + 3.3 * Math.sin(1.3 * time);
       place(x, 0, 0, 0, Math.cos(1.3 * time) < 0);
       hat.visible = false;
       duck.visible = false;
     },
     reset() {
+      stuntActive = false;
+      sharkTime = clock;
       hat.visible = false;
       duck.visible = false;
     },
@@ -529,6 +536,9 @@ function buildRamp(kit: Kit): Built {
 }
 
 // ---------- Ring of fire ----------
+
+/** The water trough waits behind the road, out of the bike's way. */
+const TUB_Z = -1.6;
 
 function buildRing(kit: Kit): Built {
   const group = new Group();
@@ -570,7 +580,7 @@ function buildRing(kit: Kit): Built {
     const a = (i / FLAMES) * TAU;
     const big = i % 2 === 0;
     const flame = kit.mesh(
-      new ConeGeometry(big ? 0.24 : 0.17, big ? 0.9 : 0.6, 6),
+      new ConeGeometry(big ? 0.28 : 0.2, big ? 1.0 : 0.7, 6),
       big ? outer : inner,
       ringYaw,
     );
@@ -582,7 +592,7 @@ function buildRing(kit: Kit): Built {
   }
   // A water trough with a rubber duck, beyond the bike's path.
   const tub = new Group();
-  tub.position.set(13, 0, 0);
+  tub.position.set(13, 0, TUB_Z);
   group.add(tub);
   const board = kit.lit(0x9a6a3a, 0.8);
   kit.box(1.9, 1.0, 0.14, board, tub, 0, 0.5, 0.8);
@@ -615,6 +625,7 @@ function buildRing(kit: Kit): Built {
     flare = 1;
     fire = 1;
     duck.position.set(-0.45, 0.85, 0.25);
+    tub.position.z = TUB_Z;
   };
 
   return {
@@ -644,6 +655,8 @@ function buildRing(kit: Kit): Built {
           fire = 1.3;
         }
         // The duck pops up when the rider splashes in.
+        // The trough is wheeled into the runner's path just before he jumps in.
+        tub.position.z = lerp(TUB_Z, 0, smooth((t - bonk.jump + 0.55) / 0.4));
         const jump = (t - bonk.tub) / 0.5;
         if (jump > 0 && jump < 1) duck.position.y = 0.85 + 1.4 * Math.sin(Math.PI * jump);
         return;
@@ -662,7 +675,7 @@ function buildRing(kit: Kit): Built {
           lerp(topY, scratch.rider.y + 0.15, a),
           0,
         );
-        ringRoot.rotation.set(a * (Math.PI / 2), 0, tip * (1 - a));
+        ringRoot.rotation.set(a * 1.15, 0, tip * (1 - a));
         ringRoot.scale.setScalar(lerp(1, 0.46, a));
         fire = 1 - a;
       }
@@ -708,7 +721,7 @@ function buildCrates(kit: Kit): Built {
       g.lineTo(8, 120);
       g.stroke();
       g.fillStyle = ink;
-      g.font = '800 26px system-ui, sans-serif';
+      g.font = '800 19px system-ui, sans-serif';
       g.textAlign = 'center';
       g.textBaseline = 'middle';
       if (face === 'smile') {
@@ -1037,15 +1050,15 @@ function buildCoaster(kit: Kit): Built {
 
   // Giant inflatable duck (it catches the rider in "Roll out").
   const duck = new Group();
-  duck.position.set(15.6, 0, -1.2);
+  duck.position.set(15.6, 0, -1.4);
   group.add(duck);
   const yellow = kit.lit(0xffd43b, 0.35);
-  kit.mesh(new SphereGeometry(1, 20, 14), yellow, duck, 0, 1.3, 0).scale.set(1.9, 1.3, 1.3);
-  kit.mesh(new SphereGeometry(0.8, 16, 12), yellow, duck, 1.6, 2.6, 0);
-  kit.box(0.7, 0.18, 0.6, kit.lit(0xff9f1c, 0.4), duck, 2.35, 2.5, 0);
-  kit.mesh(new SphereGeometry(0.1, 8, 6), kit.lit(0x111111, 0.3), duck, 1.95, 2.8, 0.55);
+  kit.mesh(new SphereGeometry(1, 20, 14), yellow, duck, 0, 1.5, 0).scale.set(1.55, 1.0, 1.1);
+  kit.mesh(new SphereGeometry(0.65, 16, 12), yellow, duck, 1.35, 2.7, 0);
+  kit.box(0.6, 0.15, 0.5, kit.lit(0xff9f1c, 0.4), duck, 1.95, 2.6, 0);
+  kit.mesh(new SphereGeometry(0.09, 8, 6), kit.lit(0x111111, 0.3), duck, 1.65, 2.9, 0.5);
   kit
-    .mesh(new SphereGeometry(0.7, 12, 10), kit.lit(0xffe066, 0.35), duck, -0.3, 1.7, 1.0)
+    .mesh(new SphereGeometry(0.6, 12, 10), kit.lit(0xffe066, 0.35), duck, -0.3, 1.7, 0.9)
     .scale.set(1.3, 0.8, 0.4);
   duck.visible = false;
   const roll = stuntBeats('coaster', 'crash', 1);
