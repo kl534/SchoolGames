@@ -287,9 +287,14 @@ export function createPhysics(): Physics {
       const passed = ball.position.z < DECK_BACK_Z || ballSpeed() < BALL_STOPPED;
       if (!passed) return false;
       const bodies = [...racked].map((id) => pins.get(id)!);
+      // A pin that has dropped into the pit is out of play: it may roll about down there for
+      // seconds, and that must not hold up the count.
+      const inPlay = bodies.filter(
+        (b) => b.position.z > DECK_BACK_Z - 0.02 && b.position.y > -0.05,
+      );
       if (
         since >= SETTLE_MIN &&
-        bodies.every(
+        inPlay.every(
           (b) => b.velocity.length() < STILL_SPEED && b.angularVelocity.length() < STILL_SPIN,
         )
       ) {
