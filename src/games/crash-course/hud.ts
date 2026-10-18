@@ -269,6 +269,12 @@ export function createHud(avatar: string): Hud {
       word.style.top = `${at.y}px`;
       word.style.setProperty('--tilt', `${(Math.random() * 10 - 5).toFixed(1)}deg`);
       word.hidden = false;
+      // A long word shrinks to fit the screen (the CSS size is clamp(34px, 9vmin, 76px)).
+      const base = Math.min(
+        Math.max(Math.min(window.innerWidth, window.innerHeight) * 0.09, 34),
+        76,
+      );
+      word.style.fontSize = `${Math.min(base, (window.innerWidth - 24) / (text.length * 0.66)).toFixed(1)}px`;
       // Keep the whole word on screen, whatever its length.
       const half = word.offsetWidth / 2 + 8;
       word.style.left = `${Math.min(Math.max(at.x, half), Math.max(window.innerWidth - half, half))}px`;
