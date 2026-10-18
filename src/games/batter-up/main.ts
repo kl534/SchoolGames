@@ -72,7 +72,6 @@ import { createPitching, REVEAL_FOR, SKIP_AFTER } from './pitching';
 import {
   applyHit,
   applyStrike,
-  batterNumber,
   easeToward,
   EXTRA_INNINGS,
   finalSpeech,
@@ -675,12 +674,8 @@ function run(session: GameSession): void {
   /** A new batter for the side at bat: ours in their own colours, the rival's in theirs. */
   const newBatter = () => {
     batter = createBatter();
-    if (isBatting(state)) {
-      batter.setLook(batterNumber(state) - 1);
-    } else {
-      const colours = coloursOf(rival);
-      batter.person.recolour(colours.shirt, colours.cap);
-    }
+    const colours = isBatting(state) ? OUR_COLOURS : coloursOf(rival);
+    batter.person.recolour(colours.shirt, colours.cap);
     spawn(batter.person.root);
   };
 
@@ -1315,11 +1310,8 @@ function run(session: GameSession): void {
     state.bases.forEach((on, i) => {
       if (!on) return;
       const runner = createBatter();
-      if (isBatting(state)) runner.setLook(i + 3);
-      else {
-        const colours = coloursOf(rival);
-        runner.person.recolour(colours.shirt, colours.cap);
-      }
+      const colours = isBatting(state) ? OUR_COLOURS : coloursOf(rival);
+      runner.person.recolour(colours.shirt, colours.cap);
       runner.mover.place(BASE_SPOTS[i + 1].x, BASE_SPOTS[i + 1].z);
       runner.runnerStance();
       spawn(runner.person.root);

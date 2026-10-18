@@ -28,7 +28,7 @@ import {
 } from './flight';
 import type { Position } from './rules';
 import { createMover, type Mover } from './mover';
-import type { Colours } from './teams';
+import { OUR_COLOURS, type Colours } from './teams';
 import {
   clamp01,
   createAnimator,
@@ -42,6 +42,8 @@ import {
 } from './person';
 
 const NAVY = 0x1c2f6b;
+/** Every player, ours or the rival's, wears the same pants; only shirt and cap tell teams apart. */
+const TEAM_PANTS = 0xe6eaf2;
 
 /** Seconds from the start of a swing to the bat meeting the ball. */
 export const SWING_CONTACT = 0.3;
@@ -211,7 +213,7 @@ export interface Pitcher extends Actor {
 export function createPitcher(): Pitcher {
   const person = createPerson({
     shirt: 0xf3f4f8,
-    pants: 0xaab3c4,
+    pants: TEAM_PANTS,
     hatColor: NAVY,
     hat: 'cap',
     glove: 'left',
@@ -391,7 +393,7 @@ function alignHand(person: Person, side: 'L' | 'R', target: Vec): void {
 export function createCatcher(): Catcher {
   const person = createPerson({
     shirt: NAVY,
-    pants: 0x2b3245,
+    pants: TEAM_PANTS,
     hat: 'catcher',
     hatColor: 0x23262e,
     glove: 'left',
@@ -602,19 +604,6 @@ export function createUmpire(): Umpire {
 
 // ---------- The batter ----------
 
-/** Shirt and helmet colours for each batter in turn. */
-const BATTER_LOOKS: [number, number][] = [
-  [0xe8453c, 0xb02a24],
-  [0x2f8cff, 0x1a5fc0],
-  [0x32b868, 0x1d7d44],
-  [0xffa726, 0xc9741b],
-  [0x9b5de5, 0x6b3aae],
-  [0xf15bb5, 0xb23a84],
-  [0x00bbf9, 0x0383b3],
-  [0xfee440, 0xc2a817],
-  [0xff6b6b, 0xc24545],
-];
-
 export interface Batter {
   mover: Mover;
   person: Person;
@@ -622,8 +611,6 @@ export interface Batter {
   swing(): void;
   /** Drops the bat where he stands. Returns the falling bat for the scene to keep. */
   dropBat(): Prop | null;
-  /** Gives the next batter their own colours. */
-  setLook(index: number): void;
   /** Stands dejected after a strike (or a strikeout), holding the bat low. */
   slump(): void;
   /** Back in the stance, ready for the next pitch. */
@@ -649,12 +636,11 @@ const SWEET = 0.68;
 const BAT_YAW = (130 * Math.PI) / 180;
 
 export function createBatter(): Batter {
-  const [shirt, hat] = BATTER_LOOKS[0];
   const person = createPerson({
-    shirt,
-    pants: 0xf4f4f6,
+    shirt: OUR_COLOURS.shirt,
+    pants: TEAM_PANTS,
     hat: 'helmet',
-    hatColor: hat,
+    hatColor: OUR_COLOURS.cap,
     hair: 0x3a2312,
   });
   const mover = createMover(person);
@@ -876,10 +862,6 @@ export function createBatter(): Batter {
         },
       };
     },
-    setLook(index) {
-      const [s, h] = BATTER_LOOKS[index % BATTER_LOOKS.length];
-      person.recolour(s, h);
-    },
   };
 }
 
@@ -910,7 +892,7 @@ export function createFielder(id: FielderId, index: number): Fielder {
   const outfield = id === 'LF' || id === 'CF' || id === 'RF';
   const person = createPerson({
     shirt: 0xe3e7ee,
-    pants: 0xcfd5e0,
+    pants: TEAM_PANTS,
     hat: 'cap',
     hatColor: outfield ? 0x2c6e49 : NAVY,
     glove: 'left',
