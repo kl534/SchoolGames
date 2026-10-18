@@ -50,14 +50,7 @@ export function milestoneLine(grapes: number): string | null {
 }
 
 export type Gag =
-  | 'forehead'
-  | 'under-table'
-  | 'dog'
-  | 'face-splat'
-  | 'air-chomp'
-  | 'cheek'
-  | 'hair'
-  | 'juice';
+  'forehead' | 'under-table' | 'dog' | 'face-splat' | 'air-chomp' | 'cheek' | 'hair' | 'juice';
 
 export const GAGS: readonly Gag[] = [
   'forehead',

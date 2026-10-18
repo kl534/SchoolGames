@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" font-family="system-ui, sans-serif" font-weight="900">
+  <defs>
+    <radialGradient id="bg" cx=".5" cy=".4" r=".8">
+      <stop offset="0" stop-color="#8d5bd6"/>
+      <stop offset="1" stop-color="#3b1c6e"/>
+    </radialGradient>
+    <radialGradient id="grape" cx=".35" cy=".3" r=".8">
+      <stop offset="0" stop-color="#d4f7a8"/>
+      <stop offset=".45" stop-color="#9be15d"/>
+      <stop offset="1" stop-color="#4f9a2a"/>
+    </radialGradient>
+    <radialGradient id="skin" cx=".4" cy=".35" r=".8">
+      <stop offset="0" stop-color="#f1c298"/>
+      <stop offset="1" stop-color="#d89a6c"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="640" height="360" fill="url(#bg)"/>
+
+  <!-- Speed lines behind the grape -->
+  <g stroke="#d9c2ff" stroke-width="5" stroke-linecap="round" opacity=".55">
+    <path d="M420 62 L500 94"/><path d="M400 100 L486 120"/><path d="M432 30 L510 66"/>
+  </g>
+
+  <!-- The kid -->
+  <ellipse cx="230" cy="330" rx="120" ry="60" fill="#ffc83d"/>
+  <rect x="150" y="318" width="160" height="14" fill="#7a4dd8"/>
+  <circle cx="230" cy="180" r="118" fill="url(#skin)"/>
+  <path d="M112 170 C112 70 175 50 230 50 C295 50 350 80 348 170 C320 118 280 100 230 100 C180 100 140 120 112 170Z" fill="#3b2417"/>
+  <circle cx="122" cy="188" r="20" fill="#e0ac7e"/><circle cx="338" cy="188" r="20" fill="#e0ac7e"/>
+  <circle cx="170" cy="222" r="20" fill="#ff9aa8" opacity=".75"/><circle cx="290" cy="222" r="20" fill="#ff9aa8" opacity=".75"/>
+  <circle cx="186" cy="168" r="22" fill="#fff"/><circle cx="274" cy="168" r="22" fill="#fff"/>
+  <circle cx="192" cy="170" r="11" fill="#111"/><circle cx="280" cy="170" r="11" fill="#111"/>
+  <circle cx="195" cy="166" r="3.5" fill="#fff"/><circle cx="283" cy="166" r="3.5" fill="#fff"/>
+  <path d="M160 138 L206 146" stroke="#3b2417" stroke-width="7" stroke-linecap="round"/>
+  <path d="M300 138 L254 146" stroke="#3b2417" stroke-width="7" stroke-linecap="round"/>
+  <!-- Mouth wide open -->
+  <ellipse cx="230" cy="248" rx="44" ry="38" fill="#4a1a1a"/>
+  <ellipse cx="230" cy="268" rx="26" ry="14" fill="#ff7a8a"/>
+
+  <!-- The flying grape -->
+  <circle cx="385" cy="150" r="32" fill="url(#grape)"/>
+  <circle cx="373" cy="138" r="8" fill="#e6ffbf" opacity=".85"/>
+
+  <text x="470" y="258" text-anchor="middle" font-size="64" fill="#fff" stroke="#2b1055" stroke-width="10" paint-order="stroke" transform="rotate(-6 470 258)">Grape</text>
+  <text x="470" y="322" text-anchor="middle" font-size="64" fill="#c9f27a" stroke="#2b1055" stroke-width="10" paint-order="stroke" transform="rotate(-6 470 322)">Gobble</text>
+</svg>

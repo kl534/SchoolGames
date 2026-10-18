@@ -24,7 +24,7 @@ export const TABLE_GRAPE_Y = TABLE_Y + GRAPE_R;
 /** Where in the bowl the grape for a pick-up comes from (the bunch's near side). */
 export const PICK_FROM = vec3(-1.0, 1.15, 0.4);
 /** The puppy's mouth, relative to its feet, when it faces +z. */
-export const DOG_MOUTH = vec3(0, 0.5, 0.36);
+export const DOG_MOUTH = vec3(0, 0.46, 0.48);
 
 /** Seconds a chew takes, from the grab to being back at rest. */
 export const EAT_SECONDS = 0.6;
@@ -281,7 +281,12 @@ export const GAG_CUES: Record<Gag, Cue[]> = {
     { at: 2.6, sfx: 'bump' },
   ],
   juice: [
-    { at: 0.7, sfx: 'splat', pop: 'Squirt!', burst: { kind: 'juice', at: vec3(-0.15, 1.65, -0.2) } },
+    {
+      at: 0.7,
+      sfx: 'splat',
+      pop: 'Squirt!',
+      burst: { kind: 'juice', at: vec3(-0.15, 1.65, -0.2) },
+    },
     { at: 1.2, sfx: 'whoosh' },
     { at: 1.5, sfx: 'bump' },
   ],
@@ -333,17 +338,7 @@ function forehead(t: number, f: KidFrame) {
     t,
   );
   f.roll = 0.12 * Math.sin(18 * (t - 2.3)) * (t > 2.3 ? 1 - ramp(t, 2.3, 3.0) : 0);
-  f.mouth = track(
-    [
-      ...WIND_MOUTH,
-      [0.4, 1],
-      [0.9, 1],
-      [0.95, 0.5],
-      [1.5, 0.5],
-      [1.8, 0],
-    ],
-    t,
-  );
+  f.mouth = track([...WIND_MOUTH, [0.4, 1], [0.9, 1], [0.95, 0.5], [1.5, 0.5], [1.8, 0]], t);
   f.eyes = step<Eyes>(
     [
       [0, 'open'],
@@ -378,7 +373,10 @@ function forehead(t: number, f: KidFrame) {
     const u = (t - 1.45) / 0.55;
     f.grape = { pos: vec3(0, TABLE_GRAPE_Y, 0.1 + 1.1 * u * u), squash: 1 };
   } else if (t < 2.3) {
-    f.grape = { pos: drop(vec3(0, TABLE_GRAPE_Y, 1.2), vec3(0, 0.45, 1.3), (t - 2.0) / 0.3), squash: 1 };
+    f.grape = {
+      pos: drop(vec3(0, TABLE_GRAPE_Y, 1.2), vec3(0, 0.45, 1.3), (t - 2.0) / 0.3),
+      squash: 1,
+    };
   }
 }
 
@@ -412,7 +410,10 @@ function underTable(t: number, f: KidFrame) {
     t,
   );
   f.handL = add(f.handL, vec3(0, pat, 0));
-  const sway = 0.15 * Math.sin((t - 2.0) * 10.5) * (t > 2.0 && t < 2.6 ? Math.sin(((t - 2.0) / 0.6) * Math.PI) : 0);
+  const sway =
+    0.15 *
+    Math.sin((t - 2.0) * 10.5) *
+    (t > 2.0 && t < 2.6 ? Math.sin(((t - 2.0) / 0.6) * Math.PI) : 0);
   f.head = vec3(
     sway,
     track(
@@ -441,15 +442,7 @@ function underTable(t: number, f: KidFrame) {
   );
   f.roll = 0.08 * Math.sin((t - 3.1) * 18) * (t > 3.1 ? 1 - ramp(t, 3.1, 3.4) : 0);
   f.mouth = track(
-    [
-      ...WIND_MOUTH,
-      [0.5, 0.7],
-      [1.5, 0.7],
-      [1.9, 0.2],
-      [2.6, 0.2],
-      [3.0, 0.6],
-      [3.3, 0],
-    ],
+    [...WIND_MOUTH, [0.5, 0.7], [1.5, 0.7], [1.9, 0.2], [2.6, 0.2], [3.0, 0.6], [3.3, 0]],
     t,
   );
   f.eyes = step<Eyes>(
@@ -492,7 +485,10 @@ function underTable(t: number, f: KidFrame) {
     const u = (t - 0.6) / 0.9;
     f.grape = { pos: vec3(0.3 * u, TABLE_GRAPE_Y, 0.1 + 1.1 * u), squash: 1 };
   } else if (t < 1.7) {
-    f.grape = { pos: drop(vec3(0.3, TABLE_GRAPE_Y, 1.2), vec3(0.3, 0.45, 1.3), (t - 1.5) / 0.2), squash: 1 };
+    f.grape = {
+      pos: drop(vec3(0.3, TABLE_GRAPE_Y, 1.2), vec3(0.3, 0.45, 1.3), (t - 1.5) / 0.2),
+      squash: 1,
+    };
   }
   if (t >= 2.6 && t < 3.1) f.hairProp = { kind: 'dust', pos: vec3(0, 0.43, -0.05) };
 }
@@ -502,17 +498,11 @@ function dog(t: number, f: KidFrame) {
   const fist = 0.06 * Math.sin(Math.PI * span(t, 1.85, 2.5));
   const turn = (t - 1.85) * 18;
   f.handR = track3(
-    [
-      ...WIND,
-      [1.0, MOUTH_FRONT],
-      [1.7, MOUTH_FRONT],
-      [1.85, circle],
-      [2.5, circle],
-      [3.0, REST_R],
-    ],
+    [...WIND, [1.0, MOUTH_FRONT], [1.7, MOUTH_FRONT], [1.85, circle], [2.5, circle], [3.0, REST_R]],
     t,
   );
-  if (t > 1.85 && t < 2.5) f.handR = add(f.handR, vec3(fist * Math.cos(turn), fist * Math.sin(turn), 0));
+  if (t > 1.85 && t < 2.5)
+    f.handR = add(f.handR, vec3(fist * Math.cos(turn), fist * Math.sin(turn), 0));
   f.head = vec3(
     0,
     track(
@@ -555,16 +545,7 @@ function dog(t: number, f: KidFrame) {
     t,
   );
   f.mouth = track(
-    [
-      ...WIND_MOUTH,
-      [0.8, 0.8],
-      [0.99, 0.8],
-      [1.0, 0],
-      [1.1, 0],
-      [1.3, 0.6],
-      [2.5, 0.6],
-      [3.0, 0],
-    ],
+    [...WIND_MOUTH, [0.8, 0.8], [0.99, 0.8], [1.0, 0], [1.1, 0], [1.3, 0.6], [2.5, 0.6], [3.0, 0]],
     t,
   );
   f.eyes = step<Eyes>(
@@ -587,7 +568,7 @@ function dog(t: number, f: KidFrame) {
     t,
   );
   // The puppy runs along the table from the right, leaps at the grape, trots off to the left.
-  const snatch = vec3(0.36, 0.94, -0.13);
+  const snatch = vec3(0.48, 0.98, -0.13);
   const run0 = vec3(1.9, TABLE_Y, 0.5);
   const run1 = vec3(0.95, TABLE_Y, 0.1);
   const land = vec3(0.0, TABLE_Y, 0.55);
@@ -601,7 +582,8 @@ function dog(t: number, f: KidFrame) {
     else if (t < 1.15) pos = drop(snatch, land, (t - 1.0) / 0.15);
     else if (t < 1.55) pos = lerp3(land, trot, (t - 1.15) / 0.4);
     else pos = lob(trot, away, 1.2, (t - 1.55) / 0.4);
-    const bob = t >= 0.45 && t < 0.75 || (t >= 1.15 && t < 1.55) ? 0.05 * Math.abs(Math.sin(t * 22)) : 0;
+    const bob =
+      (t >= 0.45 && t < 0.75) || (t >= 1.15 && t < 1.55) ? 0.05 * Math.abs(Math.sin(t * 22)) : 0;
     pos.y += bob;
     f.dog = {
       pos,
@@ -627,15 +609,7 @@ function dog(t: number, f: KidFrame) {
 
 function faceSplat(t: number, f: KidFrame) {
   const toss = vec3(0, 1.62, -0.06);
-  f.handR = track3(
-    [
-      ...WIND,
-      [0.45, toss],
-      [0.7, vec3(-0.3, 1.25, 0)],
-      [1.3, REST_R],
-    ],
-    t,
-  );
+  f.handR = track3([...WIND, [0.45, toss], [0.7, vec3(-0.3, 1.25, 0)], [1.3, REST_R]], t);
   f.head = vec3(
     track(
       [
@@ -667,15 +641,7 @@ function faceSplat(t: number, f: KidFrame) {
     t,
   );
   f.mouth = track(
-    [
-      ...WIND_MOUTH,
-      [0.5, 1],
-      [1.1, 1],
-      [1.15, 0.35],
-      [2.3, 0.35],
-      [2.6, 0.1],
-      [2.8, 0],
-    ],
+    [...WIND_MOUTH, [0.5, 1], [1.1, 1], [1.15, 0.35], [2.3, 0.35], [2.6, 0.1], [2.8, 0]],
     t,
   );
   f.eyes = step<Eyes>(
@@ -808,12 +774,18 @@ function airChomp(t: number, f: KidFrame) {
   } else if (t < 1.8) {
     f.grape = { pos: drop(add(left, HELD), table, (t - 1.6) / 0.2), squash: 1 };
   } else if (t < 2.5) {
-    f.grape = { pos: lerp3(table, vec3(0.5, TABLE_GRAPE_Y, 0.3), smooth((t - 1.8) / 0.4)), squash: 1 };
+    f.grape = {
+      pos: lerp3(table, vec3(0.5, TABLE_GRAPE_Y, 0.3), smooth((t - 1.8) / 0.4)),
+      squash: 1,
+    };
   } else if (t < 2.7) {
     const u = (t - 2.5) / 0.2;
     f.grape = { pos: vec3(0.5, TABLE_GRAPE_Y, 0.3 + 0.9 * u), squash: 1 };
   } else if (t < 2.78) {
-    f.grape = { pos: drop(vec3(0.5, TABLE_GRAPE_Y, 1.2), vec3(0.5, 0.45, 1.3), (t - 2.7) / 0.08), squash: 1 };
+    f.grape = {
+      pos: drop(vec3(0.5, TABLE_GRAPE_Y, 1.2), vec3(0.5, 0.45, 1.3), (t - 2.7) / 0.08),
+      squash: 1,
+    };
   }
 }
 
@@ -865,15 +837,7 @@ function cheek(t: number, f: KidFrame) {
   );
   f.mouth =
     track(
-      [
-        ...WIND_MOUTH,
-        [0.55, 0.2],
-        [2.0, 0.2],
-        [2.25, 0.3],
-        [2.3, 1],
-        [2.45, 1],
-        [2.65, 0],
-      ],
+      [...WIND_MOUTH, [0.55, 0.2], [2.0, 0.2], [2.25, 0.3], [2.3, 1], [2.45, 1], [2.65, 0]],
       t,
     ) +
     0.08 * Math.sin(t * 25) * rolling;
@@ -890,11 +854,17 @@ function cheek(t: number, f: KidFrame) {
   if (t <= 0.55) {
     holdGrape(f, t, 0.55);
   } else if (t >= 2.3 && t < 2.55) {
-    f.grape = { pos: lob(vec3(0, 1.3, -0.3), vec3(0, TABLE_GRAPE_Y, 0.5), 1.5, (t - 2.3) / 0.25), squash: 1 };
+    f.grape = {
+      pos: lob(vec3(0, 1.3, -0.3), vec3(0, TABLE_GRAPE_Y, 0.5), 1.5, (t - 2.3) / 0.25),
+      squash: 1,
+    };
   } else if (t >= 2.55 && t < 2.85) {
     f.grape = { pos: vec3(0, TABLE_GRAPE_Y, 0.5 + 0.7 * ((t - 2.55) / 0.3)), squash: 1 };
   } else if (t >= 2.85 && t < 2.98) {
-    f.grape = { pos: drop(vec3(0, TABLE_GRAPE_Y, 1.2), vec3(0, 0.45, 1.3), (t - 2.85) / 0.13), squash: 1 };
+    f.grape = {
+      pos: drop(vec3(0, TABLE_GRAPE_Y, 1.2), vec3(0, 0.45, 1.3), (t - 2.85) / 0.13),
+      squash: 1,
+    };
   }
 }
 
@@ -956,17 +926,7 @@ function hair(t: number, f: KidFrame) {
     ),
     0,
   );
-  f.mouth = track(
-    [
-      ...WIND_MOUTH,
-      [0.5, 0.7],
-      [2.3, 0.5],
-      [2.6, 0.5],
-      [3.0, 0.5],
-      [3.2, 0],
-    ],
-    t,
-  );
+  f.mouth = track([...WIND_MOUTH, [0.5, 0.7], [2.3, 0.5], [2.6, 0.5], [3.0, 0.5], [3.2, 0]], t);
   f.eyes = step<Eyes>(
     [
       [0, 'open'],
@@ -1006,7 +966,10 @@ function hair(t: number, f: KidFrame) {
     const u = (t - 2.7) / 0.35;
     f.grape = { pos: vec3(0.1 + 1.85 * u, TABLE_GRAPE_Y, 0.05 - 0.05 * u), squash: 1 };
   } else if (t < 3.18) {
-    f.grape = { pos: drop(vec3(1.95, TABLE_GRAPE_Y, 0), vec3(2.1, 0.45, 0.1), (t - 3.05) / 0.13), squash: 1 };
+    f.grape = {
+      pos: drop(vec3(1.95, TABLE_GRAPE_Y, 0), vec3(2.1, 0.45, 0.1), (t - 3.05) / 0.13),
+      squash: 1,
+    };
   }
 }
 
@@ -1029,7 +992,8 @@ function juice(t: number, f: KidFrame) {
     ),
     vec3(tremble, tremble * 0.7, 0),
   );
-  if (t > 1.5 && t < 2.6) f.handR = add(f.handR, vec3(0.03 * Math.sin(t * 14), 0.03 * Math.cos(t * 11), 0));
+  if (t > 1.5 && t < 2.6)
+    f.handR = add(f.handR, vec3(0.03 * Math.sin(t * 14), 0.03 * Math.cos(t * 11), 0));
   const dab = vec3(-0.12, 1.62, -0.1);
   f.handL = track3(
     [
@@ -1042,7 +1006,8 @@ function juice(t: number, f: KidFrame) {
     ],
     t,
   );
-  if (t > 1.7 && t < 2.6) f.handL = add(f.handL, vec3(0.025 * Math.sin(t * 16), 0.025 * Math.cos(t * 16), 0));
+  if (t > 1.7 && t < 2.6)
+    f.handL = add(f.handL, vec3(0.025 * Math.sin(t * 16), 0.025 * Math.cos(t * 16), 0));
   f.pitch = track(
     [
       [0, 0],
@@ -1074,17 +1039,7 @@ function juice(t: number, f: KidFrame) {
     ],
     t,
   );
-  f.mouth = track(
-    [
-      ...WIND_MOUTH,
-      [0.45, 0.1],
-      [0.7, 0.5],
-      [1.5, 0.3],
-      [2.6, 0.2],
-      [2.9, 0],
-    ],
-    t,
-  );
+  f.mouth = track([...WIND_MOUTH, [0.45, 0.1], [0.7, 0.5], [1.5, 0.3], [2.6, 0.2], [2.9, 0]], t);
   f.eyes = step<Eyes>(
     [
       [0, 'open'],
