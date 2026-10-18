@@ -117,6 +117,63 @@ export function countMastered(
   return factIds.filter((id) => isMastered(stats[id])).length;
 }
 
+/** Topics that hold the times and divide facts with a number above 10 (see `migrateAboveTenTables`). */
+const BIG_TIMES_TOPIC = 'multiplication-11-16';
+const BIG_DIVIDE_TOPIC = 'division-11-16';
+/** The small tables stop here; a fact with a bigger number moved to the topics above. */
+const SMALL_TABLE_LIMIT = 10;
+
+/**
+ * Brings progress saved before the above-10 times and divide facts got their own topics up to
+ * date: copies those facts' stats, and the stars and high scores of the tables 11 to 16, to
+ * `multiplication-11-16` and `division-11-16`. Copies only (the old entries stay), never
+ * overwrites what the new topic already has, so running it again changes nothing. Returns true
+ * when it changed something.
+ */
+export function migrateAboveTenTables(progress: PlayerProgress): boolean {
+  let changed = false;
+
+  const tableOfTopic = (topicId: string) => {
+    const times = /^times-(\d+)$/.exec(topicId);
+    if (times) return { big: BIG_TIMES_TOPIC, table: Number(times[1]), times: true };
+    const divide = /^divide-by-(\d+)$/.exec(topicId);
+    if (divide) return { big: BIG_DIVIDE_TOPIC, table: Number(divide[1]), times: false };
+    return null;
+  };
+
+  for (const [topicId, stats] of Object.entries(progress.facts)) {
+    const old = tableOfTopic(topicId);
+    if (!old) continue;
+    for (const [factId, stat] of Object.entries(stats)) {
+      const parts = (old.times ? /^(\d+)x(\d+)$/ : /^(\d+)\/(\d+)$/).exec(factId);
+      if (!parts || Number(parts[2]) !== old.table) continue;
+      const first = Number(parts[1]);
+      if (!old.times && first % old.table !== 0) continue;
+      const n = old.times ? first : first / old.table;
+      if (n <= SMALL_TABLE_LIMIT && old.table <= SMALL_TABLE_LIMIT) continue;
+      const target = (progress.facts[old.big] ??= {});
+      if (target[factId] === undefined) {
+        target[factId] = { ...stat };
+        changed = true;
+      }
+    }
+  }
+
+  for (const records of [progress.best, progress.highScores]) {
+    for (const [topicId, games] of Object.entries(records)) {
+      const old = tableOfTopic(topicId);
+      if (!old || old.table <= SMALL_TABLE_LIMIT) continue;
+      for (const [gameId, value] of Object.entries(games)) {
+        if (value > (records[old.big]?.[gameId] ?? 0)) {
+          (records[old.big] ??= {})[gameId] = value;
+          changed = true;
+        }
+      }
+    }
+  }
+  return changed;
+}
+
 const PLAYERS_KEY = 'sg:players';
 const CURRENT_KEY = 'sg:current-player';
 const progressKey = (playerId: string) => `sg:progress:${playerId}`;
@@ -174,6 +231,7 @@ export function createProgressStore(store: KeyValueStore = deviceStore()): Progr
         highScores: data.highScores ?? {},
       };
       if (typeof data.levelsOpen === 'number') progress.levelsOpen = data.levelsOpen;
+      migrateAboveTenTables(progress);
       return progress;
     },
     save(playerId, progress) {

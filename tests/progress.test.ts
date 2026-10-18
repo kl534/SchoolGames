@@ -5,11 +5,16 @@ import {
   createProgressStore,
   emptyProgress,
   factWeight,
+  isMastered,
+  migrateAboveTenTables,
   recordAnswer,
   recordBest,
   recordHighScore,
   timerSecondsFor,
+  type FactStat,
+  type PlayerProgress,
 } from '../src/shared/progress';
+import { LEVELS, levelPassed, levelsOpen, topicOfFact, type LevelFact } from '../src/shared/levels';
 import { memoryStore } from '../src/shared/storage';
 
 describe('recordAnswer', () => {
@@ -174,5 +179,171 @@ describe('createProgressStore', () => {
     raw.setItem('sg:players', '{not json');
     const store = createProgressStore(raw);
     expect(store.listPlayers()).toEqual([]);
+  });
+});
+
+describe('migrateAboveTenTables', () => {
+  const stat = (): FactStat => ({ correct: 3, wrong: 0, streak: 3, lastSeen: 1 });
+  const withFacts = (facts: PlayerProgress['facts']): PlayerProgress => ({
+    ...emptyProgress(),
+    facts,
+  });
+
+  it('copies the times facts with a number over 10 and leaves the others', () => {
+    const p = withFacts({
+      'times-7': { '3x7': stat(), '12x7': stat(), '7x7': stat() },
+      'times-12': { '5x12': stat() },
+    });
+    expect(migrateAboveTenTables(p)).toBe(true);
+    expect(Object.keys(p.facts['multiplication-11-16']).sort()).toEqual(['12x7', '5x12']);
+    expect(Object.keys(p.facts['times-7']).sort()).toEqual(['12x7', '3x7', '7x7']);
+    expect(p.facts['times-12']['5x12']).toEqual(stat());
+    // A copy, not the same object.
+    p.facts['multiplication-11-16']['12x7'].correct = 9;
+    expect(p.facts['times-7']['12x7'].correct).toBe(3);
+  });
+
+  it('copies the divide facts with a quotient or divisor over 10', () => {
+    const p = withFacts({
+      'divide-by-13': { '130/13': stat() },
+      'divide-by-5': { '60/5': stat(), '50/5': stat() },
+    });
+    expect(migrateAboveTenTables(p)).toBe(true);
+    expect(Object.keys(p.facts['division-11-16']).sort()).toEqual(['130/13', '60/5']);
+    expect(p.facts['multiplication-11-16']).toBeUndefined();
+    expect(p.facts['divide-by-5']['60/5']).toEqual(stat());
+  });
+
+  it('skips ids that do not parse or do not match their topic', () => {
+    const p = withFacts({
+      'times-7': { weird: stat(), '3x4': stat() },
+      'divide-by-3': { '10/3': stat() },
+    });
+    expect(migrateAboveTenTables(p)).toBe(false);
+    expect(p.facts['multiplication-11-16']).toBeUndefined();
+    expect(p.facts['division-11-16']).toBeUndefined();
+  });
+
+  it('never overwrites what the new topic has, and a second run changes nothing', () => {
+    const mine: FactStat = { correct: 1, wrong: 2, streak: 0, lastSeen: 9 };
+    const p = withFacts({
+      'times-7': { '12x7': stat(), '14x7': stat() },
+      'multiplication-11-16': { '12x7': mine },
+    });
+    expect(migrateAboveTenTables(p)).toBe(true);
+    expect(p.facts['multiplication-11-16']['12x7']).toEqual(mine);
+    expect(p.facts['multiplication-11-16']['14x7']).toEqual(stat());
+    const after = structuredClone(p);
+    expect(migrateAboveTenTables(p)).toBe(false);
+    expect(p).toEqual(after);
+  });
+
+  it('carries the highest stars and high scores of the tables 11 to 16', () => {
+    const p = emptyProgress();
+    p.best = {
+      'times-12': { g: 2, h: 1 },
+      'times-14': { g: 3 },
+      'times-3': { g: 2 },
+      'divide-by-13': { g: 1 },
+      'divide-by-16': { g: 2 },
+    };
+    p.highScores = {
+      'times-11': { g: 500 },
+      'times-16': { g: 900 },
+      'times-5': { g: 700 },
+      'divide-by-15': { g: 40 },
+    };
+    expect(migrateAboveTenTables(p)).toBe(true);
+    expect(p.best['multiplication-11-16']).toEqual({ g: 3, h: 1 });
+    expect(p.best['division-11-16']).toEqual({ g: 2 });
+    expect(p.best['times-3']).toEqual({ g: 2 });
+    expect(p.best['times-12']).toEqual({ g: 2, h: 1 });
+    expect(p.highScores['multiplication-11-16']).toEqual({ g: 900 });
+    expect(p.highScores['division-11-16']).toEqual({ g: 40 });
+    expect(p.highScores['times-5']).toEqual({ g: 700 });
+  });
+
+  it('keeps a higher value the new topic already has', () => {
+    const p = emptyProgress();
+    p.best = { 'times-12': { g: 2 }, 'multiplication-11-16': { g: 3 } };
+    p.highScores = { 'divide-by-12': { g: 10 }, 'division-11-16': { g: 20 } };
+    expect(migrateAboveTenTables(p)).toBe(false);
+    expect(p.best['multiplication-11-16']).toEqual({ g: 3 });
+    expect(p.highScores['division-11-16']).toEqual({ g: 20 });
+  });
+
+  it('leaves levelsOpen, My Level, addition data and empty progress alone', () => {
+    const empty = emptyProgress();
+    expect(migrateAboveTenTables(empty)).toBe(false);
+    expect(empty).toEqual(emptyProgress());
+
+    const p = withFacts({ 'addition-11-16': { '3+12': stat() }, 'times-12': { '5x12': stat() } });
+    p.levelsOpen = 25;
+    p.best['my-level'] = { g: 3 };
+    p.highScores['my-level'] = { g: 80 };
+    migrateAboveTenTables(p);
+    expect(p.levelsOpen).toBe(25);
+    expect(p.best['my-level']).toEqual({ g: 3 });
+    expect(p.highScores['my-level']).toEqual({ g: 80 });
+    expect(p.facts['addition-11-16']).toEqual({ '3+12': stat() });
+    expect(Object.keys(p.facts).sort()).toEqual([
+      'addition-11-16',
+      'multiplication-11-16',
+      'times-12',
+    ]);
+  });
+
+  it('is applied when the store loads a player', () => {
+    const raw = memoryStore();
+    const store = createProgressStore(raw);
+    const old = withFacts({ 'times-12': { '5x12': stat() }, 'divide-by-13': { '130/13': stat() } });
+    old.best = { 'times-12': { g: 3 } };
+    old.levelsOpen = 25;
+    raw.setItem('sg:progress:p1', JSON.stringify(old));
+    const loaded = store.load('p1');
+    expect(loaded.facts['multiplication-11-16']['5x12']).toEqual(stat());
+    expect(loaded.facts['division-11-16']['130/13']).toEqual(stat());
+    expect(loaded.best['multiplication-11-16']).toEqual({ g: 3 });
+    expect(loaded.facts['times-12']['5x12']).toEqual(stat());
+    expect(loaded.levelsOpen).toBe(25);
+  });
+
+  describe('with the real levels', () => {
+    /** The topic id a fact was saved under before the 11 to 16 cards. */
+    const oldTopicId = ({ topic, fact }: LevelFact) => {
+      const visual = fact.visual!;
+      if (visual.kind === 'multiply') return `times-${visual.b}`;
+      if (visual.kind === 'divide') return `divide-by-${visual.b}`;
+      return topic.id;
+    };
+    const oldProgress = (levels: number) => {
+      const p = emptyProgress();
+      for (const lf of LEVELS.slice(0, levels).flatMap((l) => l.facts)) {
+        for (let i = 0; i < 3; i++) recordAnswer(p, oldTopicId(lf), lf.fact.id, true);
+      }
+      return p;
+    };
+    const loadOld = (old: PlayerProgress) => {
+      const raw = memoryStore();
+      raw.setItem('sg:progress:p1', JSON.stringify(old));
+      return createProgressStore(raw).load('p1');
+    };
+
+    it('keeps every level open and every fact learned', () => {
+      const loaded = loadOld(oldProgress(LEVELS.length));
+      expect(levelsOpen(loaded)).toBe(30);
+      for (const lf of LEVELS.flatMap((l) => l.facts)) {
+        expect(isMastered(loaded.facts[topicOfFact(lf.fact).id]?.[lf.fact.id])).toBe(true);
+      }
+    });
+
+    it('keeps the player at level 19 after answering the first 24 levels', () => {
+      const old = oldProgress(24);
+      old.levelsOpen = 19;
+      const loaded = loadOld(old);
+      expect(loaded.levelsOpen).toBeGreaterThanOrEqual(19);
+      expect(levelPassed(LEVELS[18], loaded.facts)).toBe(true);
+      expect(levelsOpen(loaded)).toBeGreaterThanOrEqual(25);
+    });
   });
 });

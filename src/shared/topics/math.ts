@@ -132,25 +132,53 @@ const bigSubtraction: Topic = {
 
 /** Tables run from 1 to this number, and each table has this many facts. */
 export const MAX_TABLE = 16;
+/** Tables up to this number stay one card each; the rest of the facts have their own card. */
+export const BASE_TABLE = 10;
 
-const timesTables: Topic[] = range(1, MAX_TABLE).map((table) => ({
+// Each card holds one table up to × 10: 1 × n up to 10 × n.
+const timesTables: Topic[] = range(1, BASE_TABLE).map((table) => ({
   id: `times-${table}`,
   title: `${table} times table`,
   subject: 'Multiplication',
-  description: `1 × ${table} up to ${MAX_TABLE} × ${table}.`,
-  facts: range(1, MAX_TABLE).map((n) => mathFact('multiply', n, table)),
+  description: `1 × ${table} up to ${BASE_TABLE} × ${table}.`,
+  facts: range(1, BASE_TABLE).map((n) => mathFact('multiply', n, table)),
   distractors: mathDistractors,
 }));
 
-// Each table is the times table run backwards: 1 × n up to 16 × n, divided by n.
-const divisionTables: Topic[] = range(1, MAX_TABLE).map((divisor) => ({
+// Each table is the times table run backwards: 1 × n up to 10 × n, divided by n.
+const divisionTables: Topic[] = range(1, BASE_TABLE).map((divisor) => ({
   id: `divide-by-${divisor}`,
   title: `Divide by ${divisor}`,
   subject: 'Division',
-  description: `${divisor} ÷ ${divisor} up to ${divisor * MAX_TABLE} ÷ ${divisor}.`,
-  facts: range(1, MAX_TABLE).map((n) => mathFact('divide', n * divisor, divisor)),
+  description: `${divisor} ÷ ${divisor} up to ${divisor * BASE_TABLE} ÷ ${divisor}.`,
+  facts: range(1, BASE_TABLE).map((n) => mathFact('divide', n * divisor, divisor)),
   distractors: mathDistractors,
 }));
+
+/** Pairs (n, table) from 1 to MAX_TABLE where at least one number is above BASE_TABLE, table by table. */
+const bigTablePairs = range(1, MAX_TABLE).flatMap((table) =>
+  range(1, MAX_TABLE)
+    .filter((n) => Math.max(n, table) > BASE_TABLE)
+    .map((n) => [n, table] as const),
+);
+
+const bigMultiplication: Topic = {
+  id: 'multiplication-11-16',
+  title: 'Multiplication 11–16',
+  subject: 'Multiplication',
+  description: 'Times tables with a number from 11 to 16, like 12 × 7 and 15 × 14.',
+  facts: bigTablePairs.map(([n, table]) => mathFact('multiply', n, table)),
+  distractors: mathDistractors,
+};
+
+const bigDivision: Topic = {
+  id: 'division-11-16',
+  title: 'Division 11–16',
+  subject: 'Division',
+  description: 'Dividing with a number from 11 to 16, like 84 ÷ 7 and 210 ÷ 14.',
+  facts: bigTablePairs.map(([n, divisor]) => mathFact('divide', n * divisor, divisor)),
+  distractors: mathDistractors,
+};
 
 export const MATH_TOPICS: Topic[] = [
   addition,
@@ -158,5 +186,7 @@ export const MATH_TOPICS: Topic[] = [
   subtraction,
   bigSubtraction,
   ...timesTables,
+  bigMultiplication,
   ...divisionTables,
+  bigDivision,
 ];

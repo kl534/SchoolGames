@@ -103,6 +103,24 @@ describe('high score', () => {
   });
 });
 
+describe('progress saved before the 11 to 16 cards', () => {
+  it('carries the old stats over, so the timer follows the carried streak', () => {
+    const store = createProgressStore();
+    const player = store.addPlayer('Old timer', AVATARS[0]);
+    store.setCurrentPlayer(player.id);
+    store.save(player.id, {
+      facts: { 'times-15': { '12x15': { correct: 3, wrong: 0, streak: 3, lastSeen: 1 } } },
+      best: {},
+      highScores: {},
+      levelsOpen: 25,
+    });
+    const session = startGameSession('test', '?topic=multiplication-11-16');
+    if (!session) throw new Error('topic not found');
+    const fact = session.topic.facts.find((f) => f.id === '12x15')!;
+    expect(session.timerSecondsFor(fact)).toBe(5);
+  });
+});
+
 describe('My Level session', () => {
   const search = `?topic=${MY_LEVEL_ID}`;
 
@@ -152,8 +170,12 @@ describe('My Level session', () => {
     session.recordAnswer(bigTimes, false);
     session.recordAnswer(bigDivide, true);
     const saved = store.load(id);
-    expect(saved.facts['times-15']['12x15']).toMatchObject({ correct: 1, wrong: 1, streak: 0 });
-    expect(saved.facts['divide-by-11']['176/11']).toMatchObject({ correct: 2, streak: 2 });
+    expect(saved.facts['multiplication-11-16']['12x15']).toMatchObject({
+      correct: 1,
+      wrong: 1,
+      streak: 0,
+    });
+    expect(saved.facts['division-11-16']['176/11']).toMatchObject({ correct: 2, streak: 2 });
     expect(saved.facts[MY_LEVEL_ID]).toBeUndefined();
     expect(saved.levelsOpen).toBe(LEVELS.length);
   });
