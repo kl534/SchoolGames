@@ -112,6 +112,8 @@ function run(session: GameSession): void {
   count.setAttribute('aria-live', 'assertive');
   count.hidden = true;
 
+  const flash = el('div', 'gg-flash', document.body);
+
   createBackButton();
   const mute = createMuteButton();
   const pause = createPauseOverlay({
@@ -240,6 +242,24 @@ function run(session: GameSession): void {
     setTimeout(() => node.remove(), 1600);
   };
 
+  /** A big ✓ or ✗ over the tapped button. Its own element, so it outlives the button swap. */
+  const badge = (kind: 'right' | 'wrong', button: HTMLElement) => {
+    const rect = button.getBoundingClientRect();
+    const node = el('div', `gg-badge ${kind}`, document.body);
+    el('span', 'gg-badge-mark', node).textContent = kind === 'right' ? '✓' : '✗';
+    if (kind === 'right') el('span', 'gg-badge-plus', node).textContent = '+1 🍇';
+    node.style.left = `${rect.left + rect.width / 2}px`;
+    node.style.top = `${rect.top + rect.height / 2}px`;
+    node.addEventListener('animationend', () => node.remove());
+    setTimeout(() => node.remove(), 1200);
+  };
+
+  /** A colour flash round the screen edges. */
+  const edgeFlash = (kind: 'right' | 'wrong') => {
+    flash.className = `gg-flash ${kind}`;
+    replay(flash);
+  };
+
   /** Centres the banner in the clear band. */
   const showBanner = (title: string, detail: string) => {
     bannerTitle.textContent = title;
@@ -323,7 +343,8 @@ function run(session: GameSession): void {
       button.className = 'gg-answer';
     });
     problemText.textContent = next.prompt;
-    problem.classList.remove('statement');
+    problem.classList.remove('statement', 'wrong');
+    answers.classList.remove('shake');
     phase = 'asking';
     askedAt = gameTime;
     setHudVisible(true);
@@ -359,8 +380,12 @@ function run(session: GameSession): void {
     renderScore();
     replay(scoreValue);
     const milestone = milestoneLine(grapes);
+    // Every right answer chimes; the 10th, 20th ... grape cheers instead.
+    if (milestone) sfx.cheer();
+    else sfx.chime();
+    badge('right', buttons[index]);
+    edgeFlash('right');
     if (milestone) {
-      sfx.chime();
       pop(milestone, toScreen({ x: HEAD_REST.x, y: HEAD_REST.y + 0.2, z: HEAD_REST.z }), 'good');
     }
     askQuestion();
@@ -398,9 +423,16 @@ function run(session: GameSession): void {
       else if (options[i] === current.answer) button.classList.add('right');
       else button.classList.add('gone');
     });
-    buttons[options.indexOf(current.answer)]?.classList.add('right');
-    problemText.textContent = current.statement;
-    problem.classList.add('statement');
+    buttons[options.indexOf(current.answer)]?.classList.add('right', 'reveal');
+    problemText.textContent = `✗ ${current.statement}`;
+    problem.classList.add('statement', 'wrong');
+    // At the instant of the tap, so a wrong answer never looks like eating.
+    sfx.miss();
+    badge('wrong', buttons[index]);
+    edgeFlash('wrong');
+    answers.classList.remove('shake');
+    void answers.offsetWidth;
+    answers.classList.add('shake');
     refit = true;
     after(READ_AFTER, () => speak(current.spokenStatement ?? current.statement));
     kid.playGag(gag, onCue, () => {
