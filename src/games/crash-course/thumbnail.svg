@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" font-family="system-ui, sans-serif" font-weight="800">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4fb8f4"/>
+      <stop offset="1" stop-color="#bfeaff"/>
+    </linearGradient>
+    <radialGradient id="flame" cx=".5" cy=".6" r=".6">
+      <stop offset="0" stop-color="#fff3a6"/>
+      <stop offset=".5" stop-color="#ffb02e"/>
+      <stop offset="1" stop-color="#ff5a1f"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="640" height="360" fill="url(#sky)"/>
+
+  <!-- Sun and clouds -->
+  <circle cx="560" cy="64" r="34" fill="#fff4a8"/>
+  <g fill="#fff" opacity=".9">
+    <ellipse cx="96" cy="84" rx="44" ry="14"/><ellipse cx="124" cy="72" rx="28" ry="14"/>
+    <ellipse cx="420" cy="58" rx="40" ry="12"/><ellipse cx="444" cy="48" rx="24" ry="12"/>
+  </g>
+
+  <!-- Hills and the big top -->
+  <path d="M0 250C90 190 170 190 250 238S420 200 520 226 610 214 640 224V300H0Z" fill="#7bd36b"/>
+  <path d="M0 270C110 232 220 240 320 262S520 244 640 262V300H0Z" fill="#58b84f"/>
+  <g transform="translate(470 150)">
+    <path d="M-52 70v-46L0 -4l52 28v46Z" fill="#fff"/>
+    <path d="M-52 24 0 -4l52 28Z" fill="#e8403a"/>
+    <path d="M-26 70v-34l26 -14 26 14v34Z" fill="#ffd43b"/>
+    <path d="M0 -4v-22" stroke="#444" stroke-width="3"/>
+    <path d="M0 -26l16 5-16 5Z" fill="#e8403a"/>
+  </g>
+
+  <!-- Bunting -->
+  <path d="M0 40Q160 90 320 44T640 52" fill="none" stroke="#7a5230" stroke-width="3"/>
+  <g>
+    <path d="M30 56l12 6 8 -18Z" fill="#ff5a5a"/><path d="M90 66l12 2 6 -20Z" fill="#ffd43b"/>
+    <path d="M150 72l12 -2 4 -20Z" fill="#4dd0e1"/><path d="M210 70l12 -6 0 -20Z" fill="#ff5a5a"/>
+    <path d="M270 62l12 -8 -4 -20Z" fill="#ffd43b"/><path d="M350 54l12 4 8 -18Z" fill="#4dd0e1"/>
+    <path d="M410 58l12 6 8 -18Z" fill="#ff5a5a"/><path d="M470 66l12 4 6 -20Z" fill="#ffd43b"/>
+    <path d="M530 70l12 2 4 -20Z" fill="#4dd0e1"/><path d="M590 64l12 -2 0 -20Z" fill="#ff5a5a"/>
+  </g>
+
+  <!-- Road -->
+  <rect y="300" width="640" height="60" fill="#4b4f5c"/>
+  <rect y="296" width="640" height="8" fill="#6c7183"/>
+  <g fill="#ffe066"><rect x="20" y="326" width="48" height="6" rx="3"/><rect x="120" y="326" width="48" height="6" rx="3"/><rect x="220" y="326" width="48" height="6" rx="3"/><rect x="420" y="326" width="48" height="6" rx="3"/><rect x="520" y="326" width="48" height="6" rx="3"/></g>
+
+  <!-- The loop-the-loop -->
+  <g fill="none" stroke-linecap="round">
+    <circle cx="218" cy="170" r="104" stroke="#1e66d6" stroke-width="22"/>
+    <circle cx="218" cy="170" r="104" stroke="#69a8ff" stroke-width="6" opacity=".7"/>
+    <circle cx="218" cy="170" r="104" stroke="#ffd43b" stroke-width="5" stroke-dasharray="3 24"/>
+  </g>
+
+  <!-- Flaming ring on its stand -->
+  <g transform="translate(540 238)">
+    <rect x="-8" y="30" width="16" height="30" fill="#fff"/>
+    <rect x="-8" y="38" width="16" height="6" fill="#e8403a"/><rect x="-8" y="50" width="16" height="6" fill="#e8403a"/>
+    <circle r="40" fill="none" stroke="#ffcf33" stroke-width="12"/>
+    <circle r="40" fill="none" stroke="url(#flame)" stroke-width="7"/>
+    <path d="M-38 -14q-10 -20 4 -34q2 14 12 12q-6 12 -16 22Z" fill="#ff8a1f"/>
+    <path d="M30 -28q10 -22 -2 -34q-2 14 -12 14q8 8 14 20Z" fill="#ffb02e"/>
+    <path d="M-4 -44q-4 -22 10 -30q0 14 8 14q-6 8 -18 16Z" fill="#ff5a1f"/>
+  </g>
+
+  <!-- The bike coming out of the loop, with a grinning rider -->
+  <g transform="translate(150 292) rotate(-10)">
+    <ellipse cx="0" cy="26" rx="62" ry="6" fill="#000" opacity=".2"/>
+    <circle cx="-38" cy="6" r="22" fill="#2b2b36"/><circle cx="-38" cy="6" r="10" fill="#d9dde8"/>
+    <circle cx="40" cy="6" r="22" fill="#2b2b36"/><circle cx="40" cy="6" r="10" fill="#d9dde8"/>
+    <path d="M-30 -8 8 -14 40 6 36 12 4 4Z" fill="#e8403a"/>
+    <ellipse cx="2" cy="-18" rx="22" ry="12" fill="#ffd43b"/>
+    <path d="M-34 -10h-14l-6 -8h22Z" fill="#c03028"/>
+    <rect x="-30" y="-20" width="38" height="8" rx="4" fill="#2b2b36"/>
+    <path d="M30 -34l14 -2 4 6" fill="none" stroke="#2b2b36" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="50" cy="-8" r="7" fill="#fff6c4"/>
+    <!-- rider -->
+    <path d="M-10 -22 -2 -54h18l4 22Z" fill="#2fa4e7"/>
+    <path d="M14 -48 36 -34" stroke="#f1b48a" stroke-width="8" stroke-linecap="round"/>
+    <path d="M-2 -22 12 -4" stroke="#f1b48a" stroke-width="8" stroke-linecap="round"/>
+    <circle cx="8" cy="-68" r="21" fill="#f1b48a"/>
+    <path d="M-14 -70a22 22 0 0 1 44 -4v8h-44Z" fill="#e8403a"/>
+    <path d="M20 -70h14" stroke="#b22" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="-4" cy="-76" r="8" fill="#fff"/><circle cx="-4" cy="-76" r="4.5" fill="#ffb02e"/>
+    <circle cx="18" cy="-62" r="2.8" fill="#222"/>
+    <path d="M6 -52q10 10 22 -2" fill="#fff" stroke="#5b2a22" stroke-width="2.5"/>
+  </g>
+
+  <!-- Speed lines -->
+  <g stroke="#fff" stroke-width="4" stroke-linecap="round" opacity=".85">
+    <path d="M30 276h44M10 296h40M36 316h36"/>
+  </g>
+</svg>
