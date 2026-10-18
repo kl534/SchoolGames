@@ -73,6 +73,10 @@ const STILL_SPIN = 0.25;
 /** A ball slower than this has stopped. */
 const BALL_STOPPED = 0.2;
 
+/** The ball's damping on the lane, and in the pit where it must come quickly to rest. */
+const BALL_DAMPING = 0.01;
+const PIT_DAMPING = 0.9;
+
 const pose = (body: Body): BodyPose => ({
   x: body.position.x,
   y: body.position.y,
@@ -93,6 +97,8 @@ export function createPhysics(): Physics {
   const wallMat = new Material('wall');
   const pinMat = new Material('pin');
   const ballMat = new Material('ball');
+  const pitMat = new Material('pit');
+  const cushionMat = new Material('cushion');
   const contact = (a: Material, b: Material, friction: number, restitution: number) =>
     world.addContactMaterial(new ContactMaterial(a, b, { friction, restitution }));
   contact(ballMat, laneMat, 0.04, 0);
@@ -103,6 +109,13 @@ export function createPhysics(): Physics {
   contact(ballMat, pinMat, 0, 0.5);
   contact(pinMat, wallMat, 0.2, 0.45);
   contact(ballMat, wallMat, 0.2, 0.3);
+  // The pit is padded: a ball that drops in stops dead on the floor and against the cushion, and
+  // a pin that lands there stays down. Only a pin thrown hard into the cushion rebounds across the
+  // pit, and it only gets back over the lip if it was struck hard.
+  contact(ballMat, pitMat, 0.1, 0);
+  contact(ballMat, cushionMat, 0.1, 0);
+  contact(pinMat, pitMat, 0.6, 0.1);
+  contact(pinMat, cushionMat, 0.3, 0.5);
 
   // ---------- The lane, the gutters and the pit ----------
   const staticBox = (
@@ -135,9 +148,9 @@ export function createPhysics(): Physics {
   // Kickbacks beside the deck.
   staticBox(wallMat, KICKBACK_X, KICKBACK_X + 0.04, 0.6, 0, HEAD_Z + 0.5, PIT_BACK_Z);
   staticBox(wallMat, -KICKBACK_X - 0.04, -KICKBACK_X, 0.6, 0, HEAD_Z + 0.5, PIT_BACK_Z);
-  // Pit floor and back cushion.
-  staticBox(wallMat, -1.0, 1.0, -0.25, -0.25 - SLAB, DECK_BACK_Z, PIT_BACK_Z);
-  staticBox(wallMat, -1.0, 1.0, 0.7, -0.3, PIT_BACK_Z, PIT_BACK_Z - 0.1);
+  // Pit floor and back cushion (tall enough that nothing sails out over the top).
+  staticBox(pitMat, -1.0, 1.0, -0.25, -0.25 - SLAB, DECK_BACK_Z, PIT_BACK_Z);
+  staticBox(cushionMat, -1.0, 1.0, 2.4, -0.3, PIT_BACK_Z, PIT_BACK_Z - 0.1);
 
   // ---------- Pins ----------
   const makePin = (): Body => {
@@ -162,8 +175,8 @@ export function createPhysics(): Physics {
   const ball = new Body({
     mass: BALL_MASS,
     shape: new Sphere(BALL_R),
-    linearDamping: 0.01,
-    angularDamping: 0.01,
+    linearDamping: BALL_DAMPING,
+    angularDamping: BALL_DAMPING,
     material: ballMat,
   });
   ball.allowSleep = false;
@@ -186,6 +199,16 @@ export function createPhysics(): Physics {
     ball.position.y = BALL_R;
     ball.velocity.copy(launchVelocity);
     ball.angularVelocity.set(launchVelocity.z / BALL_R, 0, -launchVelocity.x / BALL_R);
+  });
+
+  // Past the edge of the deck the ball is in the pit: it loses its speed quickly and stays there.
+  world.addEventListener('postStep', () => {
+    if (!launched) return;
+    const inPit = ball.position.z < DECK_BACK_Z - BALL_R;
+    ball.linearDamping = inPit ? PIT_DAMPING : BALL_DAMPING;
+    ball.angularDamping = inPit ? PIT_DAMPING : BALL_DAMPING;
+    // Whatever shoves it (the cushion, a falling pin), it never rolls back towards the lane.
+    if (inPit && ball.velocity.z > 0) ball.velocity.z = 0;
   });
 
   const upTilt = (body: Body): number => {
