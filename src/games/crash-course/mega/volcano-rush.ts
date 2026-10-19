@@ -262,6 +262,10 @@ const bouldersClear = [
   ]),
 ] as const;
 
+/** When the third boulder meets the bike in the crash, and when the bike drops off it. */
+const BONK = { hit: 1.9, drop: 2.75 };
+/** How far in front of the boulder's middle (in depth) the stuck bike is held. */
+const STICK_Z = BOULDER_R + 0.3;
 /** In the crash the third boulder meets the bike a little further along. */
 const boulderCrashC = route([
   [0, BOULDER_PARK[2], PARK_Y],
@@ -269,8 +273,10 @@ const boulderCrashC = route([
   [1.1, edge[0], PARK_Y],
   [1.45, HILL.foot, R],
   [1.9, 18.4, R],
-  [3.1, 8.8, R],
-  [4.2, -4, R],
+  [BONK.drop, 11.6, R],
+  // After it drops the bike it bounces away over the road, high above the rider.
+  [BONK.drop + 0.65, 6.0, 3.8, 3.8],
+  [BONK.drop + 1.5, -6, R, 3.8],
 ]);
 
 const boulderZ = (x: number, road: number): number =>
@@ -293,8 +299,6 @@ export function boulderAt(
   return out;
 }
 
-/** When the third boulder meets the bike in the crash, and when the bike drops off it. */
-const BONK = { hit: 1.9, drop: 2.75 };
 const bikeX2 = track([
   [0, 0, 'l'],
   [1.07, 10, 'l'],
@@ -323,7 +327,7 @@ const clear2: Def = (() => {
     if (t >= duckFrom && t < duckTo) f.rider.pose = 'duck';
     if (t > asideFrom && t < asideTo) {
       const u = (t - asideFrom) / (asideTo - asideFrom);
-      f.bike.z = -1.0 * Math.sin(Math.PI * u);
+      f.bike.z = -1.2 * Math.sin(Math.PI * u);
       f.bike.roll = 0.18 * Math.sin(2 * Math.PI * u);
     }
     if (t >= asideTo && t < duration - 0.2) f.rider.pose = 'thumbs';
@@ -382,11 +386,11 @@ const crash2: Def = (() => {
     [drop + 0.2, 0.3],
     [drop + 0.4, 1, 'o'],
   ]);
-  // The rider is shot over the handlebars, over the boulder, and sits down behind it.
+  // The rider is shot over the handlebars, over the boulder, and sits down on the road behind it.
   const seat = hipOf(bikeX2(hit), BIKE_Y, 0);
   const hips0 = { x: seat.x, y: seat.y };
-  const tSit = 2.5;
-  const sit = { x: 21.8, y: 0.25 };
+  const tSit = 2.9;
+  const sit = { x: 6.6, y: 0.25 };
   const rider = route([
     [hit, hips0.x, hips0.y],
     [tSit, sit.x, sit.y, 5.0],
@@ -416,12 +420,15 @@ const crash2: Def = (() => {
       f.bike.x = lerp(bikeX2(hit), here.x, u);
       f.bike.y = Math.max(t < hit + 0.15 ? lift(t) + (here.y - 1.0) * u : here.y, 0.75);
       f.bike.pitch = pitchNow * u;
+      // Stuck to the front of the boulder like a sticker.
+      f.bike.z = STICK_Z * smooth((t - hit) / 0.2);
       f.bike.grounded = false;
     } else {
       const q = fall(t);
       f.bike.x = q.x;
       f.bike.y = q.y;
       f.bike.pitch = lerp(stuckAtDrop.pitch, TAU, smooth((t - drop) / 0.25));
+      f.bike.z = STICK_Z * (1 - smooth((t - drop) / 0.25));
       f.bike.grounded = t >= drop + 0.25;
     }
     if (t >= hit) f.bike.squash = squash(t);
