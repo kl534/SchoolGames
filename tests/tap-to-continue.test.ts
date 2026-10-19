@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 const gamesDir = resolve(import.meta.dirname, '../src/games');
 
 /** The games that wait for a tap on the green answer after a miss, so far. */
-const CONVERTED = ['penalty-kick', 'grape-gobble'];
+const CONVERTED = ['penalty-kick', 'grape-gobble', 'asteroid-run', 'zombie-blast', 'crash-course'];
 
 function sources(id: string): Record<string, string> {
   const dir = resolve(gamesDir, id);

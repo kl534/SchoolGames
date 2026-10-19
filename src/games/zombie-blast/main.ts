@@ -8,6 +8,7 @@ import { showResults } from '../../shared/results';
 import { starsFor } from '../../shared/round';
 import { createScene } from '../../shared/scene';
 import { startGameSession, type GameSession } from '../../shared/session';
+import { createTapFlow } from '../../shared/tapflow';
 import { answerOptions, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
 import { BOMB_RADIUS, createBomb } from './bomb';
@@ -47,10 +48,8 @@ const GAME_ID = 'zombie-blast';
 const KID_Z = 1.5;
 /** Seconds a thrown bomb is in the air. */
 const BOMB_TIME = 0.7;
-/** Seconds a result stays up before a tap can skip it. */
-const SKIP_AFTER = 0.6;
-/** Least seconds the correct fact stays up after a wrong answer. */
-const REVEAL_FOR = 2.6;
+/** Room kept under the "Dud!" banner for the finger and caption that point at the green answer. */
+const TAP_ROOM = 104;
 /** Seconds each step of the 3, 2, 1, Go! lasts. */
 const COUNT_STEP = 0.75;
 /** How quickly the shared walking pace follows a new question (1/seconds): about half a second. */
@@ -163,6 +162,7 @@ function run(session: GameSession): void {
     button.type = 'button';
     return button;
   });
+  const tapFlow = createTapFlow();
   const banner = el('div', 'zb-banner', document.body);
   banner.setAttribute('role', 'status');
   const bannerTitle = el('div', 'zb-banner-title', banner);
@@ -199,8 +199,7 @@ function run(session: GameSession): void {
   /** Seconds the current question gives, and the shared walking pace (units/s) following it. */
   let paceSeconds = 10;
   let pace = 0;
-  /** Game time at which the wrong-answer reveal appeared, and whether it has been read out. */
-  let revealAt = 0;
+  /** Whether the wrong-answer reveal has been read out. */
   let revealSpoken = false;
   /** Between the tap and the bomb leaving the hand. */
   let releasePending = false;
@@ -377,9 +376,10 @@ function run(session: GameSession): void {
     banner.className = `zb-banner ${kind}`;
     banner.hidden = false;
     const top = hud.hidden ? 20 : hud.getBoundingClientRect().bottom + 8;
-    const bottom = answers.classList.contains('off')
-      ? viewH - 20
-      : answers.getBoundingClientRect().top - 8;
+    const room = kind === 'miss' ? TAP_ROOM : 0;
+    const bottom =
+      (answers.classList.contains('off') ? viewH - 20 : answers.getBoundingClientRect().top - 8) -
+      room;
     const half = banner.offsetHeight / 2;
     const wish = place === 'kid' ? toScreen(point.set(0, 0.6, KID_Z)).y : (top + bottom) / 2;
     banner.style.top = `${Math.min(Math.max(wish, top + half), Math.max(bottom - half, top + half))}px`;
@@ -390,6 +390,7 @@ function run(session: GameSession): void {
   const startRun = (withPreview: boolean) => {
     pending = [];
     epoch++;
+    tapFlow.disarm();
     feed = createFactFeed(() => session.chooseFacts());
     spawner = createWaveSpawner();
     score = 0;
@@ -456,6 +457,7 @@ function run(session: GameSession): void {
   /** Shows the next question with its four answers and reads it out. The zombies keep walking. */
   const openQuestion = (locked = false) => {
     const fact = feed.take();
+    tapFlow.disarm();
     const q: Question = {
       fact,
       options: answerOptions(session.topic, fact, buttons.length),
@@ -622,34 +624,29 @@ function run(session: GameSession): void {
     startWaveBreak(true);
   };
 
-  /** The wrong answer's explanation: shown and read out, then on to the next question. */
+  /**
+   * The wrong answer's explanation: shown and read out. The game then waits for a tap on the
+   * green answer, with the zombies standing still.
+   */
   const startReveal = (q: Question) => {
     q.state = 'reveal';
-    revealAt = gameTime;
     revealSpoken = false;
     showBanner('Dud!', q.fact.statement, 'miss');
     sfx.miss();
+    tapFlow.arm(buttons, q.options.indexOf(q.fact.answer), [hud, banner]);
     const id = epoch;
-    let shown = false;
-    const next = () => {
-      if (revealSpoken && shown && epoch === id && question === q && q.state === 'reveal') {
-        endReveal();
-      }
-    };
     after(0.6, () => {
       if (question !== q || q.state !== 'reveal') return;
       speak(q.fact.spokenStatement ?? q.fact.statement, () => {
+        if (epoch !== id || question !== q || q.state !== 'reveal') return;
         revealSpoken = true;
-        next();
+        tapFlow.readFinished();
       });
-    });
-    after(REVEAL_FOR, () => {
-      shown = true;
-      next();
     });
   };
 
   const endReveal = () => {
+    tapFlow.disarm();
     stopSpeaking();
     banner.hidden = true;
     horde.unlaugh();
@@ -702,6 +699,7 @@ function run(session: GameSession): void {
   /** The wave is over: the question goes away, then "Wave N" and the next wave. */
   const startWaveBreak = (bossDown: boolean) => {
     phase = 'waveBreak';
+    tapFlow.disarm();
     const thisEpoch = ++epoch;
     question = null;
     flight = null;
@@ -731,6 +729,7 @@ function run(session: GameSession): void {
   /** The last brain is gone: the zombies finish the walk and swarm the barricade. */
   const endRun = () => {
     phase = 'ending';
+    tapFlow.disarm();
     const thisEpoch = ++epoch;
     pending = [];
     question = null;
@@ -789,15 +788,13 @@ function run(session: GameSession): void {
   };
 
   // ---------- Input ----------
-  /** A tap while the wrong answer is being explained skips ahead, so it never feels ignored. */
-  const skip = () => {
-    if (phase === 'playing' && question?.state === 'reveal' && gameTime - revealAt >= SKIP_AFTER) {
-      endReveal();
-    }
-  };
+  /** After a dud, only the green answer moves on; any other answer is ignored. */
   const onAnswer = (index: number) => {
+    if (tapFlow.armed) {
+      if (tapFlow.tap(index)) endReveal();
+      return;
+    }
     if (phase === 'playing' && question?.state === 'open') select(index);
-    else skip();
   };
   const unpress = buttons.map((button, i) => {
     // A touch press doesn't count as a user gesture for iOS audio; the release does.
@@ -809,10 +806,7 @@ function run(session: GameSession): void {
     if (question) speak(question.fact.spokenPrompt ?? question.fact.prompt);
   });
   const stopPointer = createPointerInput(ctx.renderer.domElement, {
-    onDragStart: () => {
-      unlockAudio();
-      skip();
-    },
+    onDragStart: () => unlockAudio(),
   });
 
   // Keys 1-4 pick the answers from left to right.
@@ -833,6 +827,7 @@ function run(session: GameSession): void {
     layout();
 
     gameTime += delta;
+    tapFlow.update(delta);
     const due = pending.filter((p) => p.at <= gameTime);
     if (due.length) {
       pending = pending.filter((p) => p.at > gameTime);
@@ -847,15 +842,17 @@ function run(session: GameSession): void {
       field.repairFence();
     }
 
-    // The zombies' pace follows the current question, and drops while a wrong answer is explained.
-    const goal = walkSpeed(paceSeconds, false, question?.state === 'reveal');
-    pace = easeToward(pace, goal, PACE_RATE, delta);
+    // The zombies' pace follows the current question. While a wrong answer is explained they stand
+    // still at once, and nothing new spawns, until the player taps the green answer.
+    const revealing = question?.state === 'reveal';
+    const goal = walkSpeed(paceSeconds, false, revealing);
+    pace = revealing ? 0 : easeToward(pace, goal, PACE_RATE, delta);
 
-    if (phase === 'playing') {
+    if (phase === 'playing' && !revealing) {
       const spawns = spawner.update(delta, horde.walkingCount);
       for (let i = 0; i < spawns; i++) horde.spawn();
       // The boss waits for a wrong answer's explanation to finish rather than hide it.
-      if (spawner.bossDue && !bossActive && question?.state !== 'reveal') startBoss();
+      if (spawner.bossDue && !bossActive) startBoss();
     }
 
     horde.update(delta, pace);
@@ -899,6 +896,7 @@ function run(session: GameSession): void {
     stopSpeaking();
     window.removeEventListener('keydown', onKey);
     stopPointer();
+    tapFlow.dispose();
     unpress.forEach((fn) => fn());
     pause.dispose();
     mute.dispose();

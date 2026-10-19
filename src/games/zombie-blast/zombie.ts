@@ -131,7 +131,8 @@ export interface Zombie {
   feetPosition(out: Vector3): Vector3;
   /** Back to standing upright, facing the camera, ready for the next wave. */
   reset(look?: ZombieLook): void;
-  update(delta: number): void;
+  /** `still` holds the pose instead of advancing the walk cycle (the effects keep playing). */
+  update(delta: number, still?: boolean): void;
   readonly brute: boolean;
   /** The armour pieces (none on a regular zombie), in the order they come off. */
   readonly armour: readonly ArmourPiece[];
@@ -921,7 +922,7 @@ export function createZombie(
       applyLook(next);
       neutral();
     },
-    update(delta) {
+    update(delta, still = false) {
       if (flashLeft > 0) {
         flashLeft -= delta;
         if (flashLeft <= 0) setEmissive(false);
@@ -932,7 +933,7 @@ export function createZombie(
       const target = mode === 'run' ? Math.PI : 0;
       yaw = MathUtils.damp(yaw, target, 14, delta);
       root.rotation.y = yaw;
-      if (mode === 'freeze') return;
+      if (mode === 'freeze' || still) return;
       pose(delta);
     },
   };

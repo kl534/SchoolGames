@@ -7,6 +7,7 @@ import { showResults } from '../../shared/results';
 import { starsFor } from '../../shared/round';
 import { createScene } from '../../shared/scene';
 import { startGameSession, type GameSession } from '../../shared/session';
+import { createTapFlow } from '../../shared/tapflow';
 import { answerOptions, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
 import { createAsteroid, type Asteroid } from './asteroid';
@@ -64,10 +65,10 @@ const BOSS_ARRIVE_TIME = 2.6;
 /** Seconds the laser bolts take to reach the asteroid, and a thrown chunk to reach the ship. */
 const LASER_TIME = 0.32;
 const DEBRIS_TIME = 0.5;
-/** Seconds a result stays up before a tap can skip to the next question. */
-const SKIP_AFTER = 0.6;
-/** Least seconds the correct fact stays up after a miss. */
-const REVEAL_FOR = 2.2;
+/** Seconds a boss's direct hit stays up before a tap can skip to its next question. */
+const HIT_SKIP = 0.6;
+/** Room kept under a miss banner for the finger and caption that point at the green answer, px. */
+const TAP_ROOM = 104;
 /** Seconds each step of the 3, 2, 1, Go! lasts. */
 const COUNT_STEP = 0.75;
 /** Gap between a destroyed asteroid and the next one appearing. */
@@ -152,6 +153,7 @@ function run(session: GameSession): void {
     button.type = 'button';
     return button;
   });
+  const tapFlow = createTapFlow();
   const banner = el('div', 'ar-banner', document.body);
   banner.setAttribute('role', 'status');
   const bannerTitle = el('div', 'ar-banner-title', banner);
@@ -205,6 +207,8 @@ function run(session: GameSession): void {
   let lockZ = LOCK_Z;
   let hitZ = -3.5;
   let ram: { t: number; duration: number; from: number } | null = null;
+  /** The boss's thrown chunk is in the air; set while its landing is still to happen. */
+  let debrisInAir = false;
 
   /** The question has been read out. */
   let speechDone = false;
@@ -355,7 +359,8 @@ function run(session: GameSession): void {
     banner.className = `ar-banner ${kind}`;
     banner.hidden = false;
     const top = hud.hidden ? 130 : hud.getBoundingClientRect().bottom + 8;
-    const bottom = answers.hidden ? viewH - 20 : answers.getBoundingClientRect().top - 8;
+    const room = kind === 'miss' || kind === 'out' ? TAP_ROOM : 0;
+    const bottom = (answers.hidden ? viewH - 20 : answers.getBoundingClientRect().top - 8) - room;
     const half = banner.offsetHeight / 2;
     const centre = (top + bottom) / 2;
     banner.style.top = `${Math.min(Math.max(centre, top + half), Math.max(bottom - half, top + half))}px`;
@@ -365,6 +370,7 @@ function run(session: GameSession): void {
   const startRun = (withPreview: boolean) => {
     pending = [];
     turn++;
+    tapFlow.disarm();
     feed = createFactFeed(() => session.chooseFacts());
     score = 0;
     streak = nextStreak(streak, false);
@@ -378,6 +384,7 @@ function run(session: GameSession): void {
     options = [];
     targetAlive = false;
     ram = null;
+    debrisInAir = false;
     rockTarget.object.visible = false;
     bossTarget.object.visible = false;
     obstacles.clear();
@@ -427,6 +434,7 @@ function run(session: GameSession): void {
   const spawnTarget = () => {
     if (phase === 'ending' || phase === 'done') return;
     pending = [];
+    tapFlow.disarm();
     stopSpeaking();
     banner.hidden = true;
     const thisTurn = ++turn;
@@ -462,6 +470,7 @@ function run(session: GameSession): void {
   /** Shows a question with its four answers and reads it out; the clock waits for the reading. */
   const askQuestion = (next: Fact, readAfter = 0) => {
     pending = [];
+    tapFlow.disarm();
     fact = next;
     banner.hidden = true;
     const thisTurn = ++turn;
@@ -582,13 +591,24 @@ function run(session: GameSession): void {
     resolveMiss('Deflected!');
     if (isBoss) {
       // The boss flings a chunk at the ship.
-      effects.throwDebris(targetPos, point.set(shipPos.x, shipPos.y, SHIP_Z), DEBRIS_TIME, () => {
-        effects.rockBurst(point.set(shipPos.x, shipPos.y, SHIP_Z - 0.5), 1.4);
-        shieldHit();
-      });
+      debrisInAir = true;
+      effects.throwDebris(
+        targetPos,
+        point.set(shipPos.x, shipPos.y, SHIP_Z),
+        DEBRIS_TIME,
+        landDebris,
+      );
     } else {
       startRam();
     }
+  };
+
+  /** The thrown chunk reaches the ship. Does nothing a second time, so a tap can land it early. */
+  const landDebris = () => {
+    if (!debrisInAir) return;
+    debrisInAir = false;
+    effects.rockBurst(point.set(shipPos.x, shipPos.y, SHIP_Z - 0.5), 1.4);
+    shieldHit();
   };
 
   const timeUp = () => {
@@ -632,7 +652,10 @@ function run(session: GameSession): void {
     if (outOfShields(shields)) endRun();
   };
 
-  /** Shows the right answer and reads the fact out before moving on (misses and time-outs). */
+  /**
+   * Shows the right answer and reads the fact out; the game then waits for a tap on the green
+   * answer (misses and time-outs).
+   */
   const resolveMiss = (title: string) => {
     if (!fact) return;
     const current = fact;
@@ -658,26 +681,18 @@ function run(session: GameSession): void {
     showBanner(title, current.statement, 'miss');
     sfx.miss();
     // Move on once the correct fact has been read out and shown for a bit.
+    tapFlow.arm(buttons, options.indexOf(current.answer), [hud, banner]);
     const thisTurn = turn;
-    let spoken = false;
-    let shown = false;
-    const next = () => {
-      if (spoken && shown && turn === thisTurn && phase === 'result') advance();
-    };
     after(0.6, () =>
       speak(current.spokenStatement ?? current.statement, () => {
-        spoken = true;
-        next();
+        if (turn === thisTurn && phase === 'result') tapFlow.readFinished();
       }),
     );
-    after(REVEAL_FOR, () => {
-      shown = true;
-      next();
-    });
   };
 
   /** After a reveal: the boss's next question, or the next asteroid. */
   const advance = () => {
+    tapFlow.disarm();
     stopSpeaking();
     pending = [];
     const next = isBoss && targetAlive ? bossFacts.shift() : undefined;
@@ -703,26 +718,24 @@ function run(session: GameSession): void {
     effects.explosion(point.set(shipPos.x, shipPos.y, SHIP_Z), 2.6);
     sfx.boom();
     shake = 1.2;
-    setHudVisible(false);
-    showBanner(SHIP_DESTROYED_SPEECH, last?.statement ?? '', 'out');
+    debrisInAir = false;
+    tapFlow.disarm();
+    if (!last) {
+      // No fact to wait on: show the end at once.
+      setHudVisible(false);
+      showBanner(SHIP_DESTROYED_SPEECH, '', 'out');
+      speak(SHIP_DESTROYED_SPEECH, () => phase === 'ending' && finishRun());
+      return;
+    }
+    // The answers stay up: the player taps the green one before the results appear.
+    showBanner(SHIP_DESTROYED_SPEECH, last.statement, 'out');
+    tapFlow.arm(buttons, options.indexOf(last.answer), [hud, banner]);
     const thisTurn = turn;
-    let spoken = false;
-    let shown = false;
-    const next = () => {
-      if (spoken && shown && turn === thisTurn && phase === 'ending') finishRun();
-    };
-    const done = () => {
-      spoken = true;
-      next();
-    };
     speak(SHIP_DESTROYED_SPEECH, () => {
       if (turn !== thisTurn || phase !== 'ending') return;
-      if (last) speak(last.spokenStatement ?? last.statement, done);
-      else done();
-    });
-    after(REVEAL_FOR, () => {
-      shown = true;
-      next();
+      speak(last.spokenStatement ?? last.statement, () => {
+        if (turn === thisTurn && phase === 'ending') tapFlow.readFinished();
+      });
     });
   };
 
@@ -756,11 +769,26 @@ function run(session: GameSession): void {
   };
 
   // ---------- Input ----------
-  /** A tap while a result is showing skips ahead, so it never feels ignored. */
+  /** A tap after a boss's direct hit skips ahead to its next question. */
   const skip = () => {
-    if (phase === 'result' && gameTime - resultAt >= SKIP_AFTER && !ram) advance();
+    if (!tapFlow.armed && phase === 'result' && gameTime - resultAt >= HIT_SKIP) advance();
+  };
+  /** The player tapped the green answer: land what is still in flight, then move on. */
+  const proceed = () => {
+    if (phase === 'ending') {
+      finishRun();
+      return;
+    }
+    if (ram) rammed();
+    landDebris();
+    // If that took the last shield, `endRun` is waiting for its own tap.
+    if (phase === 'result') advance();
   };
   const onAnswer = (index: number) => {
+    if (tapFlow.armed) {
+      if (tapFlow.tap(index)) proceed();
+      return;
+    }
     if (phase === 'aiming') select(index);
     else skip();
   };
@@ -908,6 +936,7 @@ function run(session: GameSession): void {
     layout();
 
     gameTime += delta;
+    tapFlow.update(delta);
     const due = pending.filter((p) => p.at <= gameTime);
     if (due.length) {
       pending = pending.filter((p) => p.at > gameTime);
@@ -956,11 +985,11 @@ function run(session: GameSession): void {
     }
 
     // --- Crystals ---
-    if (flightActive && phase !== 'ending') {
-      spawnCrystals(delta);
-    }
+    // While the game waits for the tap, nothing new appears and nothing can hit the ship.
+    const hazards = flightActive && phase !== 'ending' && !tapFlow.armed;
+    if (hazards) spawnCrystals(delta);
     obstacles.update(delta, speed, elapsed);
-    if (flightActive && phase !== 'ending') collide(delta);
+    if (hazards) collide(delta);
 
     ship.update(delta, elapsed, speed / BASE_SPEED, speed);
     rockTarget.update(delta, elapsed);
@@ -1008,6 +1037,7 @@ function run(session: GameSession): void {
     window.removeEventListener('keyup', onKeyUp);
     window.removeEventListener('blur', onBlur);
     stopPointer();
+    tapFlow.dispose();
     unpress.forEach((fn) => fn());
     pause.dispose();
     mute.dispose();

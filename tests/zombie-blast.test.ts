@@ -1,4 +1,12 @@
-import { Box3, Group, MeshStandardMaterial, PerspectiveCamera, Raycaster, Vector3 } from 'three';
+import {
+  Box3,
+  Group,
+  MeshStandardMaterial,
+  PerspectiveCamera,
+  Raycaster,
+  Vector3,
+  type Object3D,
+} from 'three';
 import { describe, expect, it } from 'vitest';
 import { createHorde } from '../src/games/zombie-blast/horde';
 import { createEffects } from '../src/games/zombie-blast/effects';
@@ -31,6 +39,7 @@ import {
   pickLane,
   plankFlight,
   planksInReach,
+  REVEAL_PACE,
   spawnInterval,
   walkSpeed,
   wrapAngle,
@@ -375,10 +384,15 @@ describe('walk pace', () => {
     for (const seconds of [15, 10, 5]) expect(walkSpeed(seconds) * seconds).toBeCloseTo(path);
   });
 
-  it('is slower for the boss and slower still while a wrong answer is explained', () => {
+  it('is slower for the boss', () => {
     expect(walkSpeed(10, true)).toBeCloseTo(walkSpeed(10) * 0.5);
-    expect(walkSpeed(10, false, true)).toBeCloseTo(walkSpeed(10) * 0.25);
-    expect(walkSpeed(10, true, true)).toBeCloseTo(walkSpeed(10) * 0.125);
+  });
+
+  it('stops dead while a wrong answer is explained, until the player taps the green answer', () => {
+    expect(REVEAL_PACE).toBe(0);
+    expect(walkSpeed(10, false, true)).toBe(0);
+    expect(walkSpeed(10, true, true)).toBe(0);
+    expect(walkSpeed(0, false, true)).toBe(0);
   });
 
   it('copes with a zero question time', () => {
@@ -707,6 +721,26 @@ describe('horde', () => {
     expect(Math.abs(slot.zombie.object.position.x - laneX(slot.lane, slot.z, 1.2))).toBeLessThan(
       0.15 * 1.2 * 4 + 1e-6,
     );
+  });
+
+  it('stands still, mid-stride, when the pace is zero (a wrong answer is being explained)', () => {
+    const { horde } = make();
+    const slot = horde.spawn()!;
+    const boss = horde.spawnBoss();
+    run(horde, 1, 3);
+    const pose = (node: Object3D) => {
+      const out: number[] = [];
+      node.traverse((child) => out.push(child.rotation.x, child.rotation.z, child.position.y));
+      return out.join(',');
+    };
+    const before = [slot.z, boss.z, pose(slot.zombie.object), pose(boss.zombie.object)];
+    run(horde, 2, REVEAL_PACE);
+    expect([slot.z, boss.z, pose(slot.zombie.object), pose(boss.zombie.object)]).toEqual(before);
+    expect(slot.state).toBe('walking');
+    // Walking again picks the march up where it stopped.
+    run(horde, 1, 3);
+    expect(slot.z).toBeGreaterThan(before[0] as number);
+    expect(pose(slot.zombie.object)).not.toBe(before[2]);
   });
 
   it('walks the boss at half pace down the middle', () => {

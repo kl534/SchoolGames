@@ -44,7 +44,10 @@ export interface Horde {
   spawn(): Slot | null;
   /** Sends the boss out of the mist in the middle of the field. */
   spawnBoss(): Slot;
-  /** Moves everyone along; `speed` is the shared pace in world units per second. */
+  /**
+   * Moves everyone along; `speed` is the shared pace in world units per second. At 0 the walking
+   * zombies stand still, mid-stride, instead of marching on the spot.
+   */
   update(delta: number, speed: number): void;
   /** The walking zombie nearest the barricade, boss included. */
   closest(): Slot | null;
@@ -202,7 +205,8 @@ export function createHorde(
         }
         if ((slot.state as SlotState) !== 'idle') {
           place(slot);
-          slot.zombie.update(delta);
+          // At speed 0 the walkers hold their pose instead of marching on the spot.
+          slot.zombie.update(delta, speed <= 0 && slot.state === 'walking');
         }
       }
     },
