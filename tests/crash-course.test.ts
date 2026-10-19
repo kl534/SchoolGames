@@ -8,6 +8,8 @@ import {
   MIN_VIEW_W,
   OBSTACLE_MAX_H,
   playBand,
+  RISE_FROM,
+  riseFor,
 } from '../src/games/crash-course/layout';
 import {
   approach,
@@ -323,6 +325,21 @@ describe('layout', () => {
     expect(playBand(844, 390)).toEqual({ top: 96, bottom: 306 });
     expect(playBand(390, 844)).toEqual({ top: 250, bottom: 674 });
     expect(playBand(1024, 768)).toEqual({ top: 118, bottom: 668 });
+  });
+});
+
+describe('riseFor', () => {
+  it('raises the camera by how far the action is above RISE_FROM, within limits', () => {
+    expect(riseFor(5, 1, 5.6)).toBe(0);
+    expect(riseFor(RISE_FROM + 2, 9, 5.6)).toBe(2);
+    expect(riseFor(99, 99, 5.6)).toBe(5.6);
+    expect(riseFor(12, 1.6, 5.6)).toBeCloseTo(1.6 + GROUND_MARGIN - 0.5, 9);
+    expect(riseFor(12, 9, 0)).toBe(0);
+    expect(riseFor(Number.NaN, 1, 5)).toBe(0);
+    for (let i = 0; i < 500; i++) {
+      const r = riseFor(Math.random() * 40 - 10, Math.random() * 20 - 10, Math.random() * 8);
+      expect(r).toBeGreaterThanOrEqual(0);
+    }
   });
 });
 
