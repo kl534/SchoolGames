@@ -64,7 +64,7 @@ describe.each(MEGA_IDS)('the %s course', (id) => {
     expect(spec.elements).toHaveLength(3);
     for (const element of spec.elements) {
       expect(element.name.length).toBeGreaterThan(0);
-      expect(element.length).toBeGreaterThanOrEqual(14);
+      expect(element.length).toBeGreaterThanOrEqual(6);
       expect(element.length).toBeLessThanOrEqual(28);
       expect(element.height).toBeLessThanOrEqual(MEGA_MAX_H);
       expect(element.floorY).toBeLessThanOrEqual(0);
@@ -88,9 +88,10 @@ describe.each(MEGA_IDS)('the %s course', (id) => {
     expect(megaCuts(id)).toEqual(expected);
   });
 
-  it('keeps the elements getting bigger', () => {
+  it('keeps the elements getting bigger (the Triple Loop: smaller)', () => {
     const heights = spec.elements.map((e) => e.height);
-    expect(heights).toEqual([...heights].sort((x, y) => x - y));
+    const sorted = [...heights].sort((x, y) => x - y);
+    expect(heights).toEqual(id === 'triple-loop' ? sorted.reverse() : sorted);
   });
 });
 

@@ -1,6 +1,6 @@
 /**
- * Mega course 1: the Triple Loop. Three loop-the-loops that grow (a little, a middle and a GIANT
- * one) with a bit of flat road between them. Pure animation data like stunts.ts: obstacle-local
+ * Mega course 1: the Triple Loop. Three loop-the-loops that shrink (a GIANT, a middle and a little
+ * one) standing right next to each other with only a hand's width of road between the hoops. Pure animation data like stunts.ts: obstacle-local
  * coordinates per element, x = 0 at the element's entry line, the road at y = 0.
  *
  * Every element starts as the standard arrival pose and a cleared one ends riding on the road at
@@ -36,11 +36,23 @@ export interface LoopShape {
   length: number;
 }
 
-/** The three loops: radius 1.8, 2.4 and 3.0 (the size of the regular loop). */
+/** Half the thickness of a hoop's rim: the hoops stand R + RIM from their centre line. */
+export const RIM = 0.4;
+/** Clear space between the rims of two neighbouring hoops; the element boundary is in the middle. */
+export const HOOP_GAP = 1.0;
+/** The run-up before the first hoop and the road after the last one. */
+const RUN_UP = 8;
+const RUN_OUT = 11;
+
+/** The three loops: radius 3.0 (the size of the regular loop), 2.4 and 1.8, tight together. */
 export const LOOPS: readonly [LoopShape, LoopShape, LoopShape] = [
-  { R: 1.8, cx: 10, length: 17 },
-  { R: 2.4, cx: 11.5, length: 21 },
-  { R: 3.0, cx: 11.5, length: 26 },
+  { R: 3.0, cx: RUN_UP, length: RUN_UP + 3.0 + RIM + HOOP_GAP / 2 },
+  {
+    R: 2.4,
+    cx: 2.4 + RIM + HOOP_GAP / 2,
+    length: 2.4 + RIM + HOOP_GAP / 2 + 2.4 + RIM + HOOP_GAP / 2,
+  },
+  { R: 1.8, cx: 1.8 + RIM + HOOP_GAP / 2, length: 1.8 + RIM + HOOP_GAP / 2 + RUN_OUT },
 ];
 
 /** Track distance of a loop: the circle's circumference, where it ends, where the element ends. */
@@ -111,15 +123,16 @@ function pointOn(g: LoopShape, phi: number): { x: number; y: number } {
   return { x: f.bike.x, y: f.bike.y };
 }
 
-// ---------- Element 1: Little Loop ----------
+// ---------- Element 1: GIANT Loop ----------
 
 const clear1: Def = (() => {
   const g = LOOPS[0];
-  const duration = 2.7;
+  const duration = 3.2;
   const s = pace(g, duration);
   const top = timeAt(s, duration, g.cx + circ(g) / 2);
   const waveA = g.cx + 0.75 * Math.PI * g.R;
   const waveB = g.cx + 1.3 * Math.PI * g.R;
+  const exit = g.length - g.cx;
   const enter = timeAt(s, duration, g.cx);
   const out = timeAt(s, duration, sOut(g));
   const at = (t: number, f: Frame) => {
@@ -128,7 +141,7 @@ const clear1: Def = (() => {
     if (d > waveA && d < waveB) f.rider.pose = 'wave';
     if (d > sOut(g)) {
       // A small hop on the way out.
-      const hop = Math.sin(Math.PI * Math.min((d - sOut(g)) / 4, 1));
+      const hop = Math.sin(Math.PI * Math.min((d - sOut(g)) / exit, 1));
       f.bike.y = BIKE_Y + 0.28 * hop;
       f.bike.pitch = TAU + 0.25 * hop;
     }
@@ -142,7 +155,7 @@ const clear1: Def = (() => {
       [0.3, 'sfx:whoosh', 3, 0.5],
       ...trail(enter + 0.1, out, 0.12, 'spark', bike),
       [top, 'word', g.cx, 2 * g.R + 0.6],
-      [duration * 0.86, 'dust', g.length - 4, 0.1],
+      [duration * 0.86, 'dust', g.length - 2, 0.1],
       [duration * 0.88, 'cheer', g.length - 3, 2],
     ],
   };
@@ -150,11 +163,11 @@ const clear1: Def = (() => {
 
 const crash1: Def = (() => {
   const g = LOOPS[0];
-  const duration = 4.7;
   // Rolls in at speed, climbs, loses it just past the 3 o'clock side and hangs there.
   const phiStall = 1.62;
-  const tEnter = 1.15;
-  const climb = (2 * g.R * phiStall) / (g.cx / tEnter);
+  const speed = 10;
+  const tEnter = g.cx / speed;
+  const climb = (2 * g.R * phiStall) / speed;
   const tStall = tEnter + climb;
   const tSlide = tStall + 0.3;
   const slide = 0.75;
@@ -192,6 +205,7 @@ const crash1: Def = (() => {
     [tLand, -1.6, 'q'],
     [tLand + 0.25, 0, 'o'],
   ]);
+  const duration = tLand + 1.4;
   const at = (t: number, f: Frame) => {
     if (t < tStall) {
       loopAt(f, g, lead(t));
@@ -238,18 +252,18 @@ const crash1: Def = (() => {
 
 const clear2: Def = (() => {
   const g = LOOPS[1];
-  const duration = 3.3;
+  const duration = 2.4;
   const s = pace(g, duration);
   const enter = timeAt(s, duration, g.cx);
   const out = timeAt(s, duration, sOut(g));
   const top = timeAt(s, duration, g.cx + circ(g) / 2);
   const exit = g.length - g.cx;
-  // The wheelie out of the loop: up over a unit and a half, held, then down well before the end.
+  // The wheelie out of the loop: up over a unit, held, then down well before the next hoop.
   const wheelie = track([
     [0, 0],
-    [1.5, 0.5],
-    [exit - 4.5, 0.5, 'l'],
-    [exit - 2.5, 0],
+    [0.8, 0.5],
+    [exit - 1.3, 0.5, 'l'],
+    [exit - 0.2, 0],
     [exit, 0],
   ]);
   const at = (t: number, f: Frame) => {
@@ -262,7 +276,7 @@ const clear2: Def = (() => {
       f.bike.pitch = TAU + w;
       f.bike.y = BIKE_Y + REAR * Math.sin(w);
       f.rider.pose = w > 0.2 ? 'wheelie' : 'armsUp';
-      if (e > exit - 2.5) f.rider.pose = 'ride';
+      if (e > exit - 1.2) f.rider.pose = 'ride';
     }
   };
   return {
@@ -283,10 +297,9 @@ const clear2: Def = (() => {
 
 const crash2: Def = (() => {
   const g = LOOPS[1];
-  const duration = 4.9;
   const phiHang = Math.PI + 0.1;
-  const tEnter = 1.1;
-  const tTop = 2.3;
+  const tEnter = g.cx / 9;
+  const tTop = tEnter + 1.2;
   const tDrop = tTop + 0.3;
   const tLand = tDrop + 0.45;
   const hang = pointOn(g, phiHang);
@@ -324,9 +337,10 @@ const crash2: Def = (() => {
   const hips0 = hipsOn(landX, BIKE_Y, TAU);
   const riderX = track([
     [tLand, hips0.x],
-    [tSit, landX + 4.0, 'l'],
-    [tSit + 0.3, landX + 4.5, 'o'],
+    [tSit, landX + 2.6, 'l'],
+    [tSit + 0.3, landX + 3.0, 'o'],
   ]);
+  const duration = tSit + 1.3;
   const riderY = (t: number) =>
     t < tSit ? arc(hips0.y, 0.25, 2.6, prog(t, tLand, tSit, 'l')) : 0.25;
   const riderRot = track([
@@ -382,18 +396,18 @@ const crash2: Def = (() => {
       [tLand, 'sfx:boing', landX, 0.6],
       [tB1, 'sfx:boing', landX + 0.8, 0.6],
       [tB1, 'dust', landX + 0.8, 0.1],
-      [tSit, 'sfx:splat', landX + 4, 0.4],
-      [tSit, 'dust', landX + 4, 0.1],
-      [tSit + 0.3, 'stars', landX + 4.3, 1.4],
+      [tSit, 'sfx:splat', landX + 2.6, 0.4],
+      [tSit, 'dust', landX + 2.6, 0.1],
+      [tSit + 0.3, 'stars', landX + 2.9, 1.4],
     ],
   };
 })();
 
-// ---------- Element 3: the GIANT Loop (the finale) ----------
+// ---------- Element 3: the Little Loop (the finale) ----------
 
 const clear3: Def = (() => {
   const g = LOOPS[2];
-  const duration = 4.6;
+  const duration = 3.4;
   const s = pace(g, duration);
   const enter = timeAt(s, duration, g.cx);
   const out = timeAt(s, duration, sOut(g));
@@ -449,14 +463,15 @@ const clear3: Def = (() => {
 
 const crash3: Def = (() => {
   const g = LOOPS[2];
-  const duration = 4.9;
   const phiOff = 0.72 * Math.PI;
-  const tEnter = 1.1;
-  const climb = (2 * g.R * phiOff) / (g.cx / tEnter);
+  const speed = 10;
+  const tEnter = g.cx / speed;
+  const climb = (2 * g.R * phiOff) / speed;
   const tOff = tEnter + climb;
   const flight = 0.8;
   const tLand = tOff + flight;
   const tRest = tLand + 0.7;
+  const duration = tRest + 1.1;
   const lead = track([
     [0, 0],
     [tEnter, g.cx, 'l'],
@@ -535,10 +550,10 @@ export const TRIPLE_LOOP: MegaSpec = {
   emoji: '🌀',
   elements: [
     {
-      name: 'Little Loop',
+      name: 'GIANT LOOP',
       length: LOOPS[0].length,
       floorY: 0,
-      height: 4.2,
+      height: 6.4,
       cuts: [],
       clear: clear1,
       crash: crash1,
@@ -553,10 +568,10 @@ export const TRIPLE_LOOP: MegaSpec = {
       crash: crash2,
     },
     {
-      name: 'GIANT LOOP',
+      name: 'Little Loop',
       length: LOOPS[2].length,
       floorY: 0,
-      height: 6.4,
+      height: 4.2,
       cuts: [],
       clear: clear3,
       crash: crash3,
