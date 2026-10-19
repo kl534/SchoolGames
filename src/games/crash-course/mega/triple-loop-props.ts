@@ -1,7 +1,8 @@
 /**
- * The props of the Triple Loop: three bright track hoops (blue, orange, red) on pillars with
- * chequered bases, each with a ring of bulbs that light up as the bike goes round (the GIANT one
- * flashes all of them when the bike gets to the top), and a number sign saying which loop it is.
+ * The props of the Triple Loop: three bright track hoops (blue, orange, red), biggest first and
+ * standing nearly touching, on legs with chequered bases, each with a ring of bulbs that light up as
+ * the bike goes round (the last one flashes all of them when the bike gets to the top), and a number
+ * sign in the middle saying which loop it is.
  * Bright painted primitives like obstacles.ts; everything is built once and only moved.
  */
 import {
@@ -14,7 +15,7 @@ import {
 } from 'three';
 import { clamp01, type Kit } from '../kit';
 import { createFrame, TAU, type Frame } from '../stunts';
-import { LOOPS, TRIPLE_LOOP } from './triple-loop';
+import { LOOPS, RIM, TRIPLE_LOOP } from './triple-loop';
 
 /** One element's props, in element-local coordinates (origin at its entry line on the road). */
 export interface MegaBuilt {
@@ -80,7 +81,8 @@ function buildLoop(kit: Kit, index: 0 | 1 | 2): MegaBuilt {
   // Legs holding the hoop up behind it, on chequered bases.
   const legH = 1.5 * g.R;
   for (const side of [-1, 1]) {
-    const foot = g.cx + side * (g.R + 0.9);
+    // The feet stay inside the width of the hoop so that neighbouring hoops never overlap.
+    const foot = g.cx + side * (0.85 * g.R + 0.3);
     const leg = kit.box(0.28, legH, 0.28, steel, group, foot - side * 0.25, legH / 2, -1.4);
     leg.rotation.z = side * 0.18;
     kit.box(0.2, 0.2, 1.8, steel, group, g.cx + side * (g.R * 0.92), cy * 0.9, -0.95);
@@ -100,12 +102,11 @@ function buildLoop(kit: Kit, index: 0 | 1 | 2): MegaBuilt {
       }
     }
   }
-  kit.box(2 * g.R + 1.8, 0.22, 0.22, steel, group, g.cx, 2 * g.R + 0.35, -1.4);
+  kit.box(2 * (g.R + RIM), 0.22, 0.22, steel, group, g.cx, 2 * g.R + 0.35, -1.4);
 
-  // The GIANT loop also has two tall lit pillars either side.
+  // The finale loop also has two tall lit pillars past its far side, where the road is clear.
   if (finale) {
-    for (const side of [-1, 1]) {
-      const px = g.cx + side * (g.R + 2.2);
+    for (const px of [g.cx + g.R + 1.3, g.cx + g.R + 2.9]) {
       kit.box(0.4, 6.0, 0.4, white, group, px, 3.0, -1.1);
       kit.mesh(new SphereGeometry(0.22, 12, 8), kit.basic(0xffe066), group, px, 6.2, -1.1);
       for (let k = 1; k <= 4; k++) {
@@ -114,18 +115,17 @@ function buildLoop(kit: Kit, index: 0 | 1 | 2): MegaBuilt {
     }
   }
 
-  // The number sign on its own post, to the left of the hoop.
-  const signX = g.cx - g.R - 2.0;
-  kit.box(0.14, 2.0, 0.14, steel, group, signX, 1.0, -0.95);
+  // The number sign hangs in the middle of the hoop, behind the track.
+  const signR = Math.min(0.8, 0.36 * g.R);
   kit.mesh(
-    new CircleGeometry(0.8, 32),
+    new CircleGeometry(signR, 32),
     numberSign(kit, index + 1, HOOP_COLORS[index]),
     group,
-    signX,
-    2.5,
+    g.cx,
+    cy,
     -0.9,
   );
-  kit.box(1.7, 1.7, 0.08, white, group, signX, 2.5, -0.97);
+  kit.box(2.15 * signR, 2.15 * signR, 0.08, white, group, g.cx, cy, -0.97);
 
   // The ring of bulbs on the front of the hoop.
   const count = Math.round(g.R * BULBS_PER_UNIT * 2);
