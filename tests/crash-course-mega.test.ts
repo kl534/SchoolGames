@@ -8,11 +8,31 @@ import {
   megaLength,
   megaLocate,
   megaOffsets,
+  megaRate,
   megaSegments,
   megaWord,
   MEGA_MAX_H,
   MEGA_SPECS,
+  SLOW_RATE,
 } from '../src/games/crash-course/mega/mega';
+import { pchip } from '../src/games/crash-course/mega/anim';
+import {
+  CUSHION,
+  FOAM_FROM,
+  FOAM_TO,
+  FOAM_FLOOR,
+  FOAM_Y,
+  HOOK,
+  RAMP_LIP,
+  RING_R,
+  RINGS,
+  SPIN_PHI0,
+  SPIN_R,
+  T_END,
+  T_LIP,
+  T_RING,
+  towerRamp,
+} from '../src/games/crash-course/mega/inferno-drop';
 import { createMegaCoursePool } from '../src/games/crash-course/mega/mega-obstacles';
 import {
   ferrisPivot,
@@ -31,7 +51,7 @@ import {
   LAVA_TO,
 } from '../src/games/crash-course/mega/volcano-rush';
 import { MEGA_IDS, type MegaId, type Passed } from '../src/games/crash-course/rules';
-import { BIKE_Y, TAU, type Frame } from '../src/games/crash-course/stunts';
+import { BIKE_Y, REAR, TAU, type Frame } from '../src/games/crash-course/stunts';
 
 const PASSED: Passed[] = [0, 1, 2, 3];
 const FPS = 60;
@@ -66,7 +86,7 @@ describe.each(MEGA_IDS)('the %s course', (id) => {
       expect(element.name.length).toBeGreaterThan(0);
       expect(element.length).toBeGreaterThanOrEqual(6);
       expect(element.length).toBeLessThanOrEqual(28);
-      expect(element.height).toBeLessThanOrEqual(MEGA_MAX_H);
+      expect(element.height).toBeLessThanOrEqual(MEGA_MAX_H + (spec.rise ?? 0));
       expect(element.floorY).toBeLessThanOrEqual(0);
       for (const [from, to] of element.cuts) {
         expect(from).toBeGreaterThanOrEqual(0);
@@ -91,7 +111,8 @@ describe.each(MEGA_IDS)('the %s course', (id) => {
   it('keeps the elements getting bigger (the Triple Loop: smaller)', () => {
     const heights = spec.elements.map((e) => e.height);
     const sorted = [...heights].sort((x, y) => x - y);
-    expect(heights).toEqual(id === 'triple-loop' ? sorted.reverse() : sorted);
+    const descending = ['triple-loop', 'inferno-drop'].includes(id);
+    expect(heights).toEqual(descending ? sorted.reverse() : sorted);
   });
 });
 
@@ -136,13 +157,19 @@ describe.each(cases)('%s with %i right', (id, passed) => {
         expect(seg.duration).toBeGreaterThanOrEqual(2.5);
         expect(seg.duration).toBeLessThanOrEqual(5.0);
       } else if (seg.index === 2) {
-        expect(seg.duration).toBeGreaterThanOrEqual(3.0);
+        expect(seg.duration).toBeGreaterThanOrEqual(spec.airborne ? 2.0 : 3.0);
         expect(seg.duration).toBeLessThanOrEqual(5.5);
       } else {
-        expect(seg.duration).toBeGreaterThanOrEqual(2.0);
+        expect(seg.duration).toBeGreaterThanOrEqual(spec.airborne ? 0.5 : 2.0);
         expect(seg.duration).toBeLessThanOrEqual(4.0);
       }
     }
+  });
+
+  it('lasts at most 15 s of real time, slow motion included', () => {
+    let real = 0;
+    for (let t = 0; t < duration; t += 1 / 240) real += 1 / 240 / megaRate(id, passed, t);
+    expect(real).toBeLessThanOrEqual(15);
   });
 
   it('finds the right segment and local time, clamped', () => {
@@ -218,19 +245,36 @@ describe.each(cases)('%s with %i right', (id, passed) => {
     const offsets = megaOffsets(id);
     for (const seg of plan.slice(1)) {
       const f = frame(seg.start);
-      expect(f.bike.x).toBeCloseTo(offsets[seg.index], 9);
-      expect(f.bike.y).toBeCloseTo(BIKE_Y, 9);
-      expect(f.bike.grounded).toBe(true);
+      if (spec.airborne) {
+        // Mid-flight: the frame is continuous across the boundary and the rider is seated.
+        const before = frame(seg.start - 1e-6);
+        expect(Math.abs(f.bike.x - before.bike.x)).toBeLessThan(0.05);
+        expect(Math.abs(f.bike.y - before.bike.y)).toBeLessThan(0.05);
+        expect(Math.abs(f.bike.pitch - before.bike.pitch)).toBeLessThan(0.05);
+        expect(f.bike.grounded).toBe(false);
+        expect(f.bike.y).toBeGreaterThan(2);
+      } else {
+        expect(f.bike.x).toBeCloseTo(offsets[seg.index], 9);
+        expect(f.bike.y).toBeCloseTo(BIKE_Y, 9);
+        expect(f.bike.grounded).toBe(true);
+      }
       expect(f.rider).toMatchObject({ mode: 'seated', pose: 'ride', face: 'happy' });
     }
     for (const seg of plan.filter((s) => s.outcome === 'clear')) {
+      // An airborne course rolls only at the start of element 1 and the end of the finale.
+      const checkStart = !spec.airborne || seg.index === 0;
+      const checkEnd = !spec.airborne || seg.index === 2;
       const startSpeed = (frame(seg.start + 0.15).bike.x - frame(seg.start).bike.x) / 0.15;
       const e = seg.start + seg.duration - 1e-3;
       const endSpeed = (frame(e).bike.x - frame(e - 0.15).bike.x) / 0.15;
-      expect(startSpeed, `start of ${seg.index}`).toBeGreaterThanOrEqual(5);
-      expect(startSpeed, `start of ${seg.index}`).toBeLessThanOrEqual(14);
-      expect(endSpeed, `end of ${seg.index}`).toBeGreaterThanOrEqual(5);
-      expect(endSpeed, `end of ${seg.index}`).toBeLessThanOrEqual(14);
+      if (checkStart) {
+        expect(startSpeed, `start of ${seg.index}`).toBeGreaterThanOrEqual(5);
+        expect(startSpeed, `start of ${seg.index}`).toBeLessThanOrEqual(14);
+      }
+      if (checkEnd) {
+        expect(endSpeed, `end of ${seg.index}`).toBeGreaterThanOrEqual(5);
+        expect(endSpeed, `end of ${seg.index}`).toBeLessThanOrEqual(14);
+      }
     }
   });
 
@@ -435,5 +479,188 @@ describe('Volcano Rush specifics', () => {
       expect(d, `at ${t}`).toBeGreaterThan(BOULDER_R);
       expect(d, `at ${t}`).toBeLessThan(BOULDER_R + 1.0);
     }
+  });
+});
+
+describe('megaRate', () => {
+  it('is 1 for the courses without slow motion', () => {
+    for (const id of ['triple-loop', 'sky-circus', 'volcano-rush'] as const) {
+      for (const passed of PASSED) {
+        const total = megaDuration(id, passed);
+        for (let i = 0; i < 200; i++) expect(megaRate(id, passed, Math.random() * total)).toBe(1);
+      }
+    }
+  });
+
+  it('slows to SLOW_RATE at each ring of Inferno Drop and is continuous', () => {
+    const total = megaDuration('inferno-drop', 3);
+    const plan = megaSegments('inferno-drop', 3);
+    for (const seg of plan) {
+      const beat = MEGA_SPECS['inferno-drop'].elements[seg.index].clear.slow![0];
+      expect(megaRate('inferno-drop', 3, seg.start + beat)).toBe(SLOW_RATE);
+    }
+    expect(megaRate('inferno-drop', 3, 0)).toBe(1);
+    expect(megaRate('inferno-drop', 3, total)).toBe(1);
+    for (let i = 0; i <= 2000; i++) {
+      const r = megaRate('inferno-drop', 3, (i / 2000) * total);
+      expect(r).toBeGreaterThanOrEqual(SLOW_RATE);
+      expect(r).toBeLessThanOrEqual(1);
+    }
+    let last = megaRate('inferno-drop', 3, 0);
+    for (let t = 1 / 240; t <= total; t += 1 / 240) {
+      const r = megaRate('inferno-drop', 3, t);
+      expect(Math.abs(r - last)).toBeLessThan(0.05);
+      last = r;
+    }
+  });
+
+  it.each([
+    [0, 1],
+    [1, 2],
+    [2, 3],
+    [3, 3],
+  ] as const)('has the right number of slow beats with %i right', (passed, beats) => {
+    const total = megaDuration('inferno-drop', passed);
+    let minima = 0;
+    let wasLow = false;
+    for (let t = 0; t <= total; t += 1 / 1000) {
+      const low = megaRate('inferno-drop', passed, t) === SLOW_RATE;
+      if (low && !wasLow) minima++;
+      wasLow = low;
+    }
+    expect(minima).toBe(beats);
+  });
+
+  it('is 1 for NaN', () => {
+    for (const id of MEGA_IDS) expect(megaRate(id, 3, Number.NaN)).toBe(1);
+  });
+});
+
+describe('pchip', () => {
+  const xs = [0, 1, 2.5, 3, 6];
+  const ys = [0, 2, 2.2, 5, 4];
+  const f = pchip(xs, ys);
+
+  it('passes through every knot and holds the ends', () => {
+    xs.forEach((x, i) => expect(f(x)).toBeCloseTo(ys[i], 9));
+    expect(f(-3)).toBe(ys[0]);
+    expect(f(30)).toBe(ys[4]);
+  });
+
+  it('never overshoots between two knots', () => {
+    for (let i = 0; i < xs.length - 1; i++) {
+      const lo = Math.min(ys[i], ys[i + 1]);
+      const hi = Math.max(ys[i], ys[i + 1]);
+      for (let k = 0; k <= 1000; k++) {
+        const y = f(xs[i] + ((xs[i + 1] - xs[i]) * k) / 1000);
+        expect(y).toBeGreaterThanOrEqual(lo - 1e-9);
+        expect(y).toBeLessThanOrEqual(hi + 1e-9);
+      }
+    }
+  });
+});
+
+describe('Inferno Drop specifics', () => {
+  const id = 'inferno-drop';
+  const offsets = megaOffsets(id);
+  const startOf = (passed: Passed, index: number) => megaSegments(id, passed)[index].start;
+  const ringTime = (i: number) => T_RING[i];
+  const spec = MEGA_SPECS[id];
+
+  it('flies through the middle of each ring and never touches one', () => {
+    for (const i of [0, 1, 2]) {
+      const f = megaFrame(id, 3, ringTime(i));
+      expect(Math.abs(f.bike.x - RINGS[i].x)).toBeLessThan(0.1);
+      expect(Math.abs(f.bike.y - (RINGS[i].y - 0.45))).toBeLessThan(0.1);
+      expect(f.rider.mode).toBe('seated');
+      for (let t = ringTime(i) - 0.25; t <= ringTime(i) + 0.25; t += 1 / 120) {
+        const g = megaFrame(id, 3, t);
+        if (Math.abs(g.bike.x - RINGS[i].x) < 0.4) {
+          expect(Math.hypot(g.bike.x - RINGS[i].x, g.bike.y - RINGS[i].y)).toBeLessThan(
+            RING_R - 0.6,
+          );
+        }
+      }
+    }
+    for (let t = 0; t <= megaDuration(id, 3); t += 1 / 120) {
+      const g = megaFrame(id, 3, t);
+      for (const r of RINGS) {
+        if (Math.abs(g.bike.x - r.x) < 0.3) {
+          expect(Math.hypot(g.bike.x - r.x, g.bike.y - r.y)).toBeLessThan(RING_R - 0.6);
+        }
+      }
+    }
+  });
+
+  it('climbs the ramp, grounded and high, until the lip', () => {
+    const f = megaFrame(id, 3, T_LIP - 0.01);
+    expect(f.bike.grounded).toBe(true);
+    // The frame origin is the middle of the bike, about 0.6 below the lip's height.
+    expect(f.bike.y).toBeGreaterThan(8.3);
+    expect(f.bike.x).toBeLessThan(RAMP_LIP);
+    expect(towerRamp(RAMP_LIP + 1e-12)).toBeGreaterThan(8);
+  });
+
+  it('does one backflip after ring 3 and lands on a whole turn', () => {
+    const total = megaDuration(id, 3);
+    const after = megaFrame(id, 3, T_RING[2] + 0.05).bike.pitch;
+    const near = megaFrame(id, 3, total - 1e-3).bike.pitch;
+    expect(Math.abs(near - after - TAU)).toBeLessThan(0.3);
+    expect(megaFrame(id, 3, total).bike.pitch).toBe(TAU);
+  });
+
+  it('hangs from ring 1 with its front axle and drops the rider on the cushion', () => {
+    const total = megaDuration(id, 0);
+    for (let t = 4.0; t <= total; t += 0.05) {
+      const f = megaFrame(id, 0, t);
+      expect(Math.abs(f.bike.pitch - Math.PI / 2)).toBeLessThan(0.02);
+      const ax = f.bike.x + REAR * Math.cos(f.bike.pitch);
+      const ay = f.bike.y + REAR * Math.sin(f.bike.pitch);
+      expect(Math.hypot(ax - HOOK.x, ay - HOOK.y)).toBeLessThan(0.1);
+    }
+    const end = megaFrame(id, 0, total);
+    expect(end.rider.mode).toBe('free');
+    expect(end.rider.pose).toBe('dizzy');
+    expect(Math.abs(end.rider.y - (CUSHION.top + 0.25))).toBeLessThan(0.1);
+    expect(end.rider.x).toBeGreaterThan(CUSHION.from);
+    expect(end.rider.x).toBeLessThan(CUSHION.to);
+  });
+
+  it('spins twice inside ring 2, then both land on the road', () => {
+    const plan = megaSegments(id, 1);
+    const seg = plan[1];
+    const c = RINGS[1];
+    const beats = spec.elements[1].crash.beats;
+    let first = Number.NaN;
+    let lastPitch = 0;
+    for (let t = beats.catch + 1e-3; t < beats.drop - 1e-3; t += 1 / 120) {
+      const f = megaFrame(id, 1, seg.start + t);
+      expect(Math.abs(Math.hypot(f.bike.x - c.x, f.bike.y - c.y) - SPIN_R)).toBeLessThan(0.05);
+      if (Number.isNaN(first)) first = f.bike.pitch;
+      lastPitch = f.bike.pitch;
+    }
+    expect(Math.abs(lastPitch - first - (2 * TAU - SPIN_PHI0))).toBeLessThan(0.1);
+    const end = megaFrame(id, 1, megaDuration(id, 1));
+    expect(Math.abs(end.bike.y - BIKE_Y)).toBeLessThan(0.01);
+    expect(end.rider).toMatchObject({ mode: 'free', pose: 'dizzy' });
+    expect(Math.abs(end.rider.y - 0.25)).toBeLessThan(0.1);
+  });
+
+  it('dives into the foam pit and leaves only the helmet showing', () => {
+    const end = megaFrame(id, 2, megaDuration(id, 2));
+    const local = end.bike.x;
+    expect(local).toBeGreaterThan(FOAM_FROM);
+    expect(local).toBeLessThan(FOAM_TO);
+    expect(end.bike.y).toBeLessThan(FOAM_Y - 0.6);
+    expect(end.rider.y).toBeLessThan(FOAM_Y);
+    expect(end.rider.y).toBeGreaterThan(FOAM_FLOOR);
+    expect(end.rider.pose).toBe('sit');
+  });
+
+  it('cuts the road for the foam pit', () => {
+    expect(megaCuts(id)).toEqual([[FOAM_FROM, FOAM_TO]]);
+    expect(offsets).toEqual([0, 26, 35]);
+    expect(startOf(3, 2)).toBeGreaterThan(0);
+    expect(T_END).toBeGreaterThan(T_LIP);
   });
 });
