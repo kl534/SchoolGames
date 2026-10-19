@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { runs } from './helpers/full';
 import {
   aimThrough,
   arrowTipX,
@@ -278,7 +279,7 @@ describe('position', () => {
 describe('random games', () => {
   it('always play out to a legal score', () => {
     const random = seededRandom(2026);
-    for (let game = 0; game < 1000; game++) {
+    for (let game = 0; game < runs(1000, 150); game++) {
       const rolls: number[] = [];
       let where = position(rolls);
       while (!where.over) {

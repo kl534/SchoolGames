@@ -189,6 +189,7 @@ import {
 } from '../src/games/batter-up/teams';
 import { VOICE_LINES } from '../src/games/batter-up/voice';
 import { normalizeSpeech } from '../src/shared/voice';
+import { FULL, runs } from './helpers/full';
 
 const at = (x: number, y: number, z: number): Vec => ({ x, y, z });
 const ALL_HIT_KINDS: HitKind[] = Object.values(HIT_KINDS).flatMap((list) =>
@@ -2108,7 +2109,7 @@ describe('batted ball paths', () => {
 
   it('starts every path at the bat and ends at rest', () => {
     for (const kind of KINDS) {
-      for (const rolls of rollSets) {
+      for (const rolls of FULL ? rollSets : rollSets.filter((_, i) => i % 5 === 0)) {
         const ball = planBatted(kind, rolls, spots[kind]);
         expect(ball.position(0, at(0, 0, 0))).toMatchObject(CONTACT);
         expect(ball.end).toBeGreaterThan(0);
@@ -2162,7 +2163,7 @@ describe('batted ball paths', () => {
   it('keeps every ball that stays in the park in fair ground and inside the wall', () => {
     const inPlay = KINDS.filter((k) => !k.startsWith('homer') && k !== 'foul-pop');
     for (const kind of inPlay) {
-      for (const rolls of rollSets) {
+      for (const rolls of FULL ? rollSets : rollSets.filter((_, i) => i % 5 === 0)) {
         const ball = planBatted(kind, rolls, spots[kind]);
         expect(ball.overWall).toBe(false);
         const out = at(0, 0, 0);
@@ -2296,7 +2297,7 @@ describe('the play script', () => {
 
   it('breaks no rule for any hit, base state, outs or seed', () => {
     for (const kind of ALL_HIT_KINDS) {
-      for (let seed = 0; seed < 20; seed++) {
+      for (let seed = 0; seed < runs(20, 4); seed++) {
         const r = rolls(seed);
         for (let mask = 0; mask < 8; mask++) {
           for (const outs of [0, 1, 2]) {
@@ -2517,7 +2518,7 @@ describe('the play script for outs', () => {
 
   it('breaks no rule for any out, fielder, base state, outs or seed', () => {
     for (const call of calls) {
-      for (let seed = 0; seed < 12; seed++) {
+      for (let seed = 0; seed < runs(12, 3); seed++) {
         for (let mask = 0; mask < 8; mask++) {
           // A double play and a force need a runner on first.
           if ((call.kind === 'double-play' || call.kind === 'force-second') && !(mask & 1))

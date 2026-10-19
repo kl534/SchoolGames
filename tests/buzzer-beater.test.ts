@@ -1,5 +1,6 @@
 import { PerspectiveCamera, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
+import { FULL, runs } from './helpers/full';
 import {
   ballAt,
   actorAt,
@@ -265,9 +266,9 @@ describe('transitions', () => {
     expect(state.them).toBe(0);
   });
 
-  it('plays 2000 random games to a sane end', () => {
+  it('plays many random games to a sane end', () => {
     const random = seededRandom(2024);
-    for (let game = 0; game < 2000; game++) {
+    for (let game = 0; game < runs(2000, 300); game++) {
       let state = newGame();
       let ours = 0;
       let theirs = 0;
@@ -457,97 +458,100 @@ describe('plays', () => {
     SPOT_ANGLES.map((angle) => ({ input, angle, name: `${describeInput(input)} @ ${angle}` })),
   );
 
-  it.each(cases)('is well formed: $name', ({ input, angle }) => {
-    for (let seed = 1; seed <= 20; seed++) {
-      const script = planPlay(input, angle, seededRandom(seed));
-      expect(script.duration).toBeGreaterThan(0.5);
-      expect(script.duration).toBeLessThanOrEqual(MAX_PLAY_SECONDS);
+  it.each(FULL ? cases : cases.filter((_, i) => i % 5 === 0))(
+    'is well formed: $name',
+    ({ input, angle }) => {
+      for (let seed = 1; seed <= 20; seed++) {
+        const script = planPlay(input, angle, seededRandom(seed));
+        expect(script.duration).toBeGreaterThan(0.5);
+        expect(script.duration).toBeLessThanOrEqual(MAX_PLAY_SECONDS);
 
-      // The ball covers 0...duration with no gaps, in order.
-      expect(script.ball[0].t0).toBe(0);
-      expect(script.ball.at(-1)!.t1).toBeCloseTo(script.duration, 9);
-      script.ball.forEach((seg, i) => {
-        expect(seg.t1).toBeGreaterThan(seg.t0);
-        if (i > 0) expect(seg.t0).toBeCloseTo(script.ball[i - 1].t1, 9);
-      });
-      // Events are in order and inside the duration.
-      script.events.forEach((e, i) => {
-        expect(e.t).toBeGreaterThanOrEqual(0);
-        expect(e.t).toBeLessThanOrEqual(script.duration + 1e-9);
-        if (i > 0) expect(e.t).toBeGreaterThanOrEqual(script.events[i - 1].t);
-      });
-      // Both actors start at time 0 with keys in order.
-      for (const who of ['us', 'them'] as const) {
-        const keys = script.actors[who];
-        expect(keys[0].t).toBe(0);
-        keys.forEach((k, i) => {
-          if (i > 0) expect(k.t).toBeGreaterThan(keys[i - 1].t);
-          expect(k.t).toBeLessThanOrEqual(script.duration + 1e-9);
+        // The ball covers 0...duration with no gaps, in order.
+        expect(script.ball[0].t0).toBe(0);
+        expect(script.ball.at(-1)!.t1).toBeCloseTo(script.duration, 9);
+        script.ball.forEach((seg, i) => {
+          expect(seg.t1).toBeGreaterThan(seg.t0);
+          if (i > 0) expect(seg.t0).toBeCloseTo(script.ball[i - 1].t1, 9);
         });
-      }
-
-      // Sampled every 1/60 s.
-      let prev: Vec | null = null;
-      let prevT = 0;
-      const rimHits: number[] = [];
-      for (let t = 0; t <= script.duration + 1e-9; t += STEP) {
-        const p = sample(script, t);
-        expect(p.y).toBeGreaterThanOrEqual(BALL_RADIUS - 0.01);
-        expect(Math.abs(p.x)).toBeLessThan(FENCE.x);
-        expect(p.z).toBeGreaterThan(FENCE.zMin);
-        expect(p.z).toBeLessThan(FENCE.zMax);
-        if (prev) {
-          const jump = Math.hypot(p.x - prev.x, p.y - prev.y, p.z - prev.z);
-          if (jump > 0.5) {
-            // Only allowed where a held segment begins.
-            const startsHeld = script.ball.some(
-              (seg) => seg.kind === 'held' && seg.t0 > prevT - 1e-9 && seg.t0 <= t + 1e-9,
-            );
-            expect(startsHeld, `jump ${jump} at ${t}`).toBe(true);
-          }
-          // Down through the rim's circle?
-          if (
-            prev.y > RIM.y &&
-            p.y <= RIM.y &&
-            Math.hypot(p.x - RIM.x, p.z - RIM.z) < RIM_RADIUS - 0.01
-          ) {
-            rimHits.push(t);
-          }
+        // Events are in order and inside the duration.
+        script.events.forEach((e, i) => {
+          expect(e.t).toBeGreaterThanOrEqual(0);
+          expect(e.t).toBeLessThanOrEqual(script.duration + 1e-9);
+          if (i > 0) expect(e.t).toBeGreaterThanOrEqual(script.events[i - 1].t);
+        });
+        // Both actors start at time 0 with keys in order.
+        for (const who of ['us', 'them'] as const) {
+          const keys = script.actors[who];
+          expect(keys[0].t).toBe(0);
+          keys.forEach((k, i) => {
+            if (i > 0) expect(k.t).toBeGreaterThan(keys[i - 1].t);
+            expect(k.t).toBeLessThanOrEqual(script.duration + 1e-9);
+          });
         }
-        prev = p;
-        prevT = t;
-      }
 
-      const scores = script.events.filter((e) => e.type === 'score');
-      const isMake = input.kind === 'make' || (input.kind === 'free-throw' && input.made);
-      if (isMake) {
-        expect(scores).toHaveLength(1);
-        const net = script.events.find((e) => e.type === 'net')!;
-        const here = sample(script, net.t);
-        expect(Math.abs(here.x - RIM.x)).toBeLessThan(0.06);
-        expect(Math.abs(here.z - RIM.z)).toBeLessThan(0.06);
-        expect(sample(script, net.t + 0.01).y).toBeLessThan(sample(script, net.t - 0.01).y);
-      } else {
-        expect(scores).toHaveLength(0);
-        expect(rimHits).toEqual([]);
+        // Sampled every 1/60 s.
+        let prev: Vec | null = null;
+        let prevT = 0;
+        const rimHits: number[] = [];
+        for (let t = 0; t <= script.duration + 1e-9; t += STEP) {
+          const p = sample(script, t);
+          expect(p.y).toBeGreaterThanOrEqual(BALL_RADIUS - 0.01);
+          expect(Math.abs(p.x)).toBeLessThan(FENCE.x);
+          expect(p.z).toBeGreaterThan(FENCE.zMin);
+          expect(p.z).toBeLessThan(FENCE.zMax);
+          if (prev) {
+            const jump = Math.hypot(p.x - prev.x, p.y - prev.y, p.z - prev.z);
+            if (jump > 0.5) {
+              // Only allowed where a held segment begins.
+              const startsHeld = script.ball.some(
+                (seg) => seg.kind === 'held' && seg.t0 > prevT - 1e-9 && seg.t0 <= t + 1e-9,
+              );
+              expect(startsHeld, `jump ${jump} at ${t}`).toBe(true);
+            }
+            // Down through the rim's circle?
+            if (
+              prev.y > RIM.y &&
+              p.y <= RIM.y &&
+              Math.hypot(p.x - RIM.x, p.z - RIM.z) < RIM_RADIUS - 0.01
+            ) {
+              rimHits.push(t);
+            }
+          }
+          prev = p;
+          prevT = t;
+        }
+
+        const scores = script.events.filter((e) => e.type === 'score');
+        const isMake = input.kind === 'make' || (input.kind === 'free-throw' && input.made);
+        if (isMake) {
+          expect(scores).toHaveLength(1);
+          const net = script.events.find((e) => e.type === 'net')!;
+          const here = sample(script, net.t);
+          expect(Math.abs(here.x - RIM.x)).toBeLessThan(0.06);
+          expect(Math.abs(here.z - RIM.z)).toBeLessThan(0.06);
+          expect(sample(script, net.t + 0.01).y).toBeLessThan(sample(script, net.t - 0.01).y);
+        } else {
+          expect(scores).toHaveLength(0);
+          expect(rimHits).toEqual([]);
+        }
+        if (input.kind === 'miss') {
+          const rebound = script.events.find((e) => e.type === 'rebound');
+          expect(rebound?.who).toBe(input.rebound);
+        }
+        if (input.kind === 'make' && input.shot === 'dunk') {
+          expect(script.slowMo).toBeDefined();
+          const e = script.events.find((x) => x.type === 'score')!;
+          expect(script.slowMo!.t0).toBeLessThanOrEqual(e.t);
+          expect(script.slowMo!.t1).toBeGreaterThanOrEqual(e.t);
+        }
+        if (input.kind === 'block') {
+          const e = script.events.find((x) => x.type === 'block')!;
+          expect(script.slowMo!.t0).toBeLessThanOrEqual(e.t);
+          expect(script.slowMo!.t1).toBeGreaterThanOrEqual(e.t);
+        }
       }
-      if (input.kind === 'miss') {
-        const rebound = script.events.find((e) => e.type === 'rebound');
-        expect(rebound?.who).toBe(input.rebound);
-      }
-      if (input.kind === 'make' && input.shot === 'dunk') {
-        expect(script.slowMo).toBeDefined();
-        const e = script.events.find((x) => x.type === 'score')!;
-        expect(script.slowMo!.t0).toBeLessThanOrEqual(e.t);
-        expect(script.slowMo!.t1).toBeGreaterThanOrEqual(e.t);
-      }
-      if (input.kind === 'block') {
-        const e = script.events.find((x) => x.type === 'block')!;
-        expect(script.slowMo!.t0).toBeLessThanOrEqual(e.t);
-        expect(script.slowMo!.t1).toBeGreaterThanOrEqual(e.t);
-      }
-    }
-  });
+    },
+  );
 
   it('has a contact for an and-one only', () => {
     const plain = planPlay(
