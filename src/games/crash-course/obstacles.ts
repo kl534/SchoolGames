@@ -6,14 +6,11 @@
  */
 import {
   BoxGeometry,
-  BufferGeometry,
   CatmullRomCurve3,
   CircleGeometry,
   ConeGeometry,
   CylinderGeometry,
-  DoubleSide,
   ExtrudeGeometry,
-  Float32BufferAttribute,
   Group,
   Mesh,
   MeshStandardMaterial,
@@ -26,7 +23,7 @@ import {
   type Material,
   type Object3D,
 } from 'three';
-import { Kit, lerp, smooth, type Placed } from './kit';
+import { Kit, lerp, ribbon, ribbonMaterial, smooth, type Placed } from './kit';
 import type { ObstacleKind, Outcome, Variant } from './rules';
 import {
   BRIDGE_FROM,
@@ -94,94 +91,6 @@ export interface Obstacle extends Placed {
   /** Poses the props for time `t` of the stunt. */
   update(outcome: Outcome, variant: Variant, t: number): void;
   dispose(): void;
-}
-
-/**
- * A solid ribbon following a surface from x0 to x1, in flat-shaded segments that alternate
- * between two colours. The underside is `bottom` (a height, or a function of x).
- */
-function ribbon(
-  surface: (x: number) => number,
-  x0: number,
-  x1: number,
-  step: number,
-  bottom: number | ((x: number) => number),
-  halfZ: number,
-  colorA: number,
-  colorB: number,
-  zCenter = 0,
-): BufferGeometry {
-  const positions: number[] = [];
-  const colors: number[] = [];
-  const a = new Vector3();
-  const colA = [(colorA >> 16) / 255, ((colorA >> 8) & 255) / 255, (colorA & 255) / 255];
-  const colB = [(colorB >> 16) / 255, ((colorB >> 8) & 255) / 255, (colorB & 255) / 255];
-  const low = (x: number) => (typeof bottom === 'number' ? bottom : bottom(x));
-  const quad = (p: number[][], c: number[]) => {
-    for (const i of [0, 1, 2, 0, 2, 3]) {
-      positions.push(p[i][0], p[i][1], p[i][2]);
-      colors.push(c[0], c[1], c[2]);
-    }
-  };
-  const count = Math.max(1, Math.round((x1 - x0) / step));
-  const z0 = zCenter - halfZ;
-  const z1 = zCenter + halfZ;
-  for (let i = 0; i < count; i++) {
-    const xa = lerp(x0, x1, i / count);
-    const xb = lerp(x0, x1, (i + 1) / count);
-    const ya = surface(xa);
-    const yb = surface(xb);
-    const c = i % 2 === 0 ? colA : colB;
-    quad(
-      [
-        [xa, ya, z0],
-        [xb, yb, z0],
-        [xb, yb, z1],
-        [xa, ya, z1],
-      ],
-      c,
-    );
-    quad(
-      [
-        [xa, ya, z1],
-        [xb, yb, z1],
-        [xb, low(xb), z1],
-        [xa, low(xa), z1],
-      ],
-      c,
-    );
-    quad(
-      [
-        [xa, ya, z0],
-        [xb, yb, z0],
-        [xb, low(xb), z0],
-        [xa, low(xa), z0],
-      ],
-      c,
-    );
-    quad(
-      [
-        [xa, low(xa), z0],
-        [xb, low(xb), z0],
-        [xb, low(xb), z1],
-        [xa, low(xa), z1],
-      ],
-      c,
-    );
-  }
-  void a;
-  const geometry = new BufferGeometry();
-  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
-  geometry.computeVertexNormals();
-  return geometry;
-}
-
-/** A lit material that uses the vertex colours of a `ribbon`. */
-function ribbonMaterial(kit: Kit): MeshStandardMaterial {
-  const m = new MeshStandardMaterial({ vertexColors: true, roughness: 0.6, side: DoubleSide });
-  kit.materials.push(m);
-  return m;
 }
 
 interface Built {
