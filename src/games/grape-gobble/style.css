@@ -274,12 +274,7 @@
   position: relative;
 }
 
-/* The right answer is marked for the whole gag: pulsing, with a tick in its corner. */
-.gg-answer.reveal {
-  animation: gg-pulse 0.6s ease-in-out infinite;
-}
-
-.gg-answer.reveal::after,
+/* The wrong answer keeps its cross in the corner; the right one is pulsed by the shared tap marks. */
 .gg-answer.wrong::after {
   position: absolute;
   top: 2px;
@@ -289,20 +284,9 @@
   line-height: 1.2;
 }
 
-.gg-answer.reveal::after {
-  content: '✓';
-  color: #0c6b2b;
-}
-
 .gg-answer.wrong::after {
   content: '✗';
   color: #8c1d1d;
-}
-
-@keyframes gg-pulse {
-  50% {
-    scale: 1.08;
-  }
 }
 
 /* A wrong answer shakes the answer bar sideways. */
@@ -428,10 +412,6 @@
   100% {
     opacity: 0;
   }
-}
-
-.gg-answer.gone {
-  opacity: 0.25;
 }
 
 /* Big messages in the clear space between the question and the answers. */
@@ -565,8 +545,7 @@
   .gg-banner,
   .gg-count.on,
   .gg-pop,
-  .gg-answers.shake,
-  .gg-answer.reveal {
+  .gg-answers.shake {
     animation: none;
   }
 

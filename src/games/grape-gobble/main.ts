@@ -8,6 +8,7 @@ import { showResults } from '../../shared/results';
 import { starsFor } from '../../shared/round';
 import { createScene } from '../../shared/scene';
 import { startGameSession, type GameSession } from '../../shared/session';
+import { createTapFlow } from '../../shared/tapflow';
 import { answerOptions, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
 import { devFrame, devRoundSeconds, forcedGag } from './dev';
@@ -113,6 +114,7 @@ function run(session: GameSession): void {
   count.hidden = true;
 
   const flash = el('div', 'gg-flash', document.body);
+  const tapFlow = createTapFlow();
 
   createBackButton();
   const mute = createMuteButton();
@@ -139,6 +141,8 @@ function run(session: GameSession): void {
   let turn = 0;
   let shake = 0;
   let popIndex = 0;
+  /** The gag has finished and the game is waiting for the tap on the green answer: the round clock holds. */
+  let waitingForTap = false;
   /** Game time at which the "Eat!" word goes away. */
   let countHideAt = Infinity;
 
@@ -273,6 +277,8 @@ function run(session: GameSession): void {
 
   // ---------- Run flow ----------
   const startRun = (withPreview: boolean) => {
+    tapFlow.disarm();
+    waitingForTap = false;
     pending = [];
     turn++;
     stopSpeaking();
@@ -328,6 +334,8 @@ function run(session: GameSession): void {
 
   /** Shows the next question with its four answers and reads it out. No time limit. */
   const askQuestion = () => {
+    tapFlow.disarm();
+    waitingForTap = false;
     pending = [];
     stopSpeaking();
     banner.hidden = true;
@@ -352,6 +360,11 @@ function run(session: GameSession): void {
   };
 
   const onAnswer = (index: number) => {
+    // After a miss only the green answer moves on; any other answer is ignored.
+    if (tapFlow.armed) {
+      if (tapFlow.tap(index)) skipGag();
+      return;
+    }
     if (phase !== 'asking' || !fact || options[index] === undefined) return;
     if (gameTime - askedAt < TAP_GUARD) return;
     try {
@@ -405,7 +418,15 @@ function run(session: GameSession): void {
     if (cue.burst) effects.burst(cue.burst.kind, cue.burst.at);
   };
 
-  /** A wrong answer: one of the gags. The answers stay locked for all of it. */
+  /** The tap on the green answer: the gag (if still playing) ends where it is and the next question shows. */
+  const skipGag = () => {
+    // No cue of a gag changes the game, so dropping the ones still to come loses nothing.
+    kid.rest();
+    effects.clear();
+    askQuestion();
+  };
+
+  /** A wrong answer: one of the gags. Only the green answer moves on, after the gag and the reading. */
   const wrong = (index: number) => {
     if (!fact) return;
     const current = fact;
@@ -421,9 +442,8 @@ function run(session: GameSession): void {
       button.setAttribute('aria-disabled', 'true');
       if (i === index) button.classList.add('wrong');
       else if (options[i] === current.answer) button.classList.add('right');
-      else button.classList.add('gone');
     });
-    buttons[options.indexOf(current.answer)]?.classList.add('right', 'reveal');
+    tapFlow.arm(buttons, options.indexOf(current.answer));
     problemText.textContent = `✗ ${current.statement}`;
     problem.classList.add('statement', 'wrong');
     // At the instant of the tap, so a wrong answer never looks like eating.
@@ -434,16 +454,21 @@ function run(session: GameSession): void {
     void answers.offsetWidth;
     answers.classList.add('shake');
     refit = true;
-    after(READ_AFTER, () => speak(current.spokenStatement ?? current.statement));
+    after(READ_AFTER, () =>
+      speak(current.spokenStatement ?? current.statement, () => {
+        if (turn === thisTurn && phase === 'gag') tapFlow.readFinished();
+      }),
+    );
     kid.playGag(gag, onCue, () => {
-      if (turn !== thisTurn || phase !== 'gag') return;
-      stopSpeaking();
-      askQuestion();
+      // The kid is at rest. Nothing moves on until the tap, and the round clock holds meanwhile.
+      if (turn === thisTurn && phase === 'gag') waitingForTap = true;
     });
   };
 
   /** The clock is out: the buzzer, the kid freezes, then the results. */
   const endRound = () => {
+    tapFlow.disarm();
+    waitingForTap = false;
     pending = [];
     turn++;
     stopSpeaking();
@@ -507,6 +532,7 @@ function run(session: GameSession): void {
     layout();
 
     gameTime += delta;
+    tapFlow.update(delta);
     const due = pending.filter((p) => p.at <= gameTime);
     if (due.length) {
       pending = pending.filter((p) => p.at > gameTime);
@@ -518,8 +544,8 @@ function run(session: GameSession): void {
       countHideAt = Infinity;
     }
 
-    // --- The round clock: always running while a question or a gag is on ---
-    if (phase === 'asking' || phase === 'gag') {
+    // --- The round clock: runs while a question or a gag is on, and holds while the game waits for the tap ---
+    if (phase === 'asking' || (phase === 'gag' && !waitingForTap)) {
       roundTime += delta;
       const left = secondsLeft(roundTime, roundSeconds);
       renderClock(left);
@@ -569,6 +595,7 @@ function run(session: GameSession): void {
     stopSpeaking();
     window.removeEventListener('keydown', onKey);
     unpress.forEach((fn) => fn());
+    tapFlow.dispose();
     pause.dispose();
     mute.dispose();
     effects.clear();
