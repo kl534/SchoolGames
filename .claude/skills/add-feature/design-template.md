@@ -63,10 +63,8 @@ Tests that become obsolete and must be removed.>
 
 ## 11. Definition of done (for every milestone)
 
-1. `npm run lint`, `npm run format`, `npm test` and `npm run build` all pass. Tests need Node 22
-   (see `.nvmrc`).
-2. Run it in headless Chromium at 390×844, 844×390, 1024×768 and 1366×1024 and check from
-   screenshots: <the exact states to reach and what each must show>. Drive answers by reading the
-   question and clicking the right button. <Any dev-only hook to force a state.>
+1. `npm run check` passes.
+2. Check with `npm run shots -- <targets>`: <the exact states to reach, as `game-id?query` strings,
+   and what each sheet must show>. <Any dev-only hook to force a state.>
 3. <Feature-specific checks: timings, nothing left hanging, the next turn starts normally.>
 4. Commit in small steps in the repo's style, push, and open the PR.

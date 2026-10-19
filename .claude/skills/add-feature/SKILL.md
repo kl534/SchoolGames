@@ -34,8 +34,8 @@ the latest `main`, and the work branches from it.
 The questions should be about the game, not about things the code already answers.
 
 - Read `CLAUDE.md` and the recent `git log` (it shows the commit style and what changed lately).
-- Read the code the feature touches: the game's whole folder in `src/games/<id>/`, the
-  `src/shared/` modules it uses, and its tests in `tests/`. For a new game, read
+- Read only the files the feature touches (the game's folder, the `src/shared/` modules it uses and
+  its tests in `tests/`). For files over 400 lines, read the relevant sections. For a new game, read
   `src/games/penalty-kick/` and the closest existing game.
 - Skim one or two docs in `docs/` (for example `docs/zombie-blast-endless.md`). They show the depth
   and tone a design here needs.
@@ -80,7 +80,8 @@ You make the technical calls, not the implementer. Decide and write down:
 - What to remove (dead constants, old code paths and their tests).
 - The tests to write, case by case, and the invariants to check over many random inputs.
 - How to check it by eye in headless Chromium: which states to reach and what each screenshot must
-  show. Add a dev-only query hook (like `?play=<kind>`) if a state is hard to reach.
+  show. Every new hard-to-reach state gets a dev query hook in `dev.ts`, so `npm run shots` can reach
+  it.
 - Risks and how to handle them.
 
 Check your design against the real code. Every function, file and constant you name must exist,
@@ -94,6 +95,8 @@ Write `docs/<feature-slug>.md` and follow `.claude/skills/add-feature/design-tem
 - Fill in today's date in the status line.
 - Mark anything you decided without the owner's input **(default)**. The implementer may change a
   **(default)** if it plays or looks badly, but must say so.
+- Keep the doc to about 15 KB. Point at existing code (file + function) to mirror instead of
+  restating it. Write out only new types, constants, tables and lines.
 - Be exact. Write "`SPAWN_GAP = 5` s, minus 0.5 per wave, never below 1", not "spawns get
   faster". The implementer will follow the doc literally.
 - For a big feature, split it into milestones that each ship playable, one branch and one PR each.
@@ -119,10 +122,10 @@ Hand off one milestone at a time, in order. For each one:
    that the build has started.
 3. When it reports back, check the work. Don't just accept the report:
    - `gh pr view <n> --json url,title,body,headRefName,baseRefName` shows the PR exists, and its
-     body has a Summary and a Test plan.
-   - `git diff --stat <base>...<branch>` and a read of the key files show it matches the design.
-     Look for missing pieces, a **(default)** changed without a reason, a skipped test, or files the
-     doc didn't mention.
+     body has a Summary and a Test plan. `gh pr checks <n>` shows CI.
+   - `git diff --stat <base>...<branch>` shows it matches the design. Read only the diff of the
+     files where the design was hardest, not every file. Look for missing pieces, a **(default)**
+     changed without a reason, a skipped test, or files the doc didn't mention.
    - Read what the report says about lint, format, test, build and the browser check.
 4. If something is wrong or missing, send the same agent back with `SendMessage` and say exactly
    what to fix (load it with `ToolSearch` `select:SendMessage` first). Use a fresh `Agent` call only
