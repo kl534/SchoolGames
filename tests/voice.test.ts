@@ -5,6 +5,7 @@ import { collectVoiceLines, voiceLinesByKey } from '../scripts/voice/lines';
 import { finalSpeech, inningSpeech, leadSpeech } from '../src/games/batter-up/rules';
 import voiceLines from '../src/shared/voice-lines.json';
 import { scoreSpeech } from '../src/shared/round';
+import { TAP_SPEECH } from '../src/shared/tapgate';
 import { normalizeSpeech, voiceKey } from '../src/shared/voice';
 
 describe('voiceKey', () => {
@@ -36,6 +37,7 @@ describe('collectVoiceLines', () => {
       "Top of the 3rd. You're up to bat!",
       'Today you play the Toledo Mud Hens!',
       'You scored 1 run!',
+      TAP_SPEECH,
     ]) {
       expect(lines).toContain(line);
     }

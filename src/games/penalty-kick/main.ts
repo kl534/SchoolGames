@@ -18,6 +18,7 @@ import { showResults } from '../../shared/results';
 import { createRound, scoreSpeech, starsFor, type Round } from '../../shared/round';
 import { createScene } from '../../shared/scene';
 import { startGameSession, type GameSession } from '../../shared/session';
+import { createTapFlow } from '../../shared/tapflow';
 import { answerOptions, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
 import { buildField, buildGoalBodies, GOAL_HEIGHT, GOAL_WIDTH } from './field';
@@ -49,8 +50,6 @@ const NET_AIM_Z = -0.6;
 
 const ANSWER_HEIGHT = 64;
 const ANSWER_GAP = 12;
-/** Seconds a result stays up before a tap can skip to the next question. */
-const SKIP_AFTER = 0.6;
 
 type Phase = 'preview' | 'aiming' | 'shot' | 'result' | 'done';
 
@@ -144,6 +143,7 @@ function run(session: GameSession): void {
     button.type = 'button';
     return button;
   });
+  const tapFlow = createTapFlow();
   const banner = el('div', 'pk-banner', document.body);
   banner.setAttribute('role', 'status');
   const bannerTitle = el('div', 'pk-banner-title', banner);
@@ -178,8 +178,6 @@ function run(session: GameSession): void {
   let clockRunning = false;
   let lastTick = 0;
   let ballSpotZ = 7;
-  /** Game time at which the current result was shown. */
-  let resultAt = 0;
 
   // Delayed actions run on game time so pausing freezes them too.
   let gameTime = 0;
@@ -294,6 +292,7 @@ function run(session: GameSession): void {
 
   // ---------- Round flow ----------
   const startRound = () => {
+    tapFlow.disarm();
     const facts = session.chooseFacts();
     round = createRound(facts);
     phase = 'preview';
@@ -312,6 +311,7 @@ function run(session: GameSession): void {
   };
 
   const startTurn = () => {
+    tapFlow.disarm();
     pending = [];
     fact = round.current();
     if (!fact) {
@@ -428,7 +428,6 @@ function run(session: GameSession): void {
     if (!fact) return;
     const current = fact;
     phase = 'result';
-    resultAt = gameTime;
     round.record(goal);
     session.recordAnswer(current, goal);
     renderKicks();
@@ -446,26 +445,18 @@ function run(session: GameSession): void {
     if (chosen >= 0) answers[chosen].classList.add('wrong');
     showBanner(timedOut ? "Time's up!" : 'Saved!', current.statement, 'miss');
     sfx.miss();
-    // Move on once the correct fact has been read out and shown for a bit.
+    // The game waits here until the player taps the green answer.
+    tapFlow.arm(answers, correctIndex);
     const thisTurn = turn;
-    let spoken = false;
-    let shown = false;
-    const next = () => {
-      if (spoken && shown && turn === thisTurn && phase === 'result') startTurn();
-    };
     after(0.6, () =>
       speak(current.spokenStatement ?? current.statement, () => {
-        spoken = true;
-        next();
+        if (turn === thisTurn && phase === 'result') tapFlow.readFinished();
       }),
     );
-    after(2.6, () => {
-      shown = true;
-      next();
-    });
   };
 
   const finishRound = () => {
+    tapFlow.disarm();
     phase = 'done';
     setPlayVisible(false);
     placeBall();
@@ -487,13 +478,13 @@ function run(session: GameSession): void {
   };
 
   // ---------- Input ----------
-  /** A tap while a result is showing skips ahead, so it never feels ignored. */
+  /** After a miss, only the green answer moves on; any other answer is ignored. */
   const onAnswerTap = (index: number) => {
-    if (phase === 'aiming') shoot(index);
-    else if (phase === 'result' && gameTime - resultAt >= SKIP_AFTER) {
-      stopSpeaking();
-      startTurn();
+    if (tapFlow.armed) {
+      if (tapFlow.tap(index)) startTurn();
+      return;
     }
+    if (phase === 'aiming') shoot(index);
   };
   answers.forEach((button, i) => {
     onPress(button, () => onAnswerTap(i));
@@ -507,7 +498,7 @@ function run(session: GameSession): void {
   // Keys 1-4 pick top-left, top-right, bottom-left, bottom-right.
   const onKey = (e: KeyboardEvent) => {
     const index = Number(e.key) - 1;
-    if (!pause.isPaused && index >= 0 && index < CORNERS.length) shoot(index);
+    if (!pause.isPaused && index >= 0 && index < CORNERS.length) onAnswerTap(index);
   };
   window.addEventListener('keydown', onKey);
 
@@ -516,6 +507,7 @@ function run(session: GameSession): void {
     layout();
 
     gameTime += delta;
+    tapFlow.update(delta);
     const due = pending.filter((p) => p.at <= gameTime);
     if (due.length) {
       pending = pending.filter((p) => p.at > gameTime);
@@ -578,6 +570,7 @@ function run(session: GameSession): void {
   window.addEventListener('pagehide', () => {
     stopSpeaking();
     window.removeEventListener('keydown', onKey);
+    tapFlow.dispose();
     pause.dispose();
     mute.dispose();
     ctx.dispose();
