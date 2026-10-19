@@ -888,7 +888,8 @@ function run(session: GameSession, dev: DevOptions | null): void {
     respawnStarted = false;
     const thisTurn = turn;
     hud.showBanner(timedOut ? "Time's up!" : 'Wipeout!', current?.statement ?? '', 'miss');
-    if (current) tapFlow.arm(buttons, options.indexOf(current.answer), [hud.top, hud.banner]);
+    if (current)
+      tapFlow.arm(buttons, options.indexOf(current.answer), [hud.top, hud.banner], current.prompt);
     after(0.6, () => {
       startRespawn();
       if (!current) {
@@ -953,7 +954,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
       return;
     }
     // The question and answers stay up: the player taps the green one before the results appear.
-    tapFlow.arm(buttons, options.indexOf(last.answer), [hud.top, hud.banner]);
+    tapFlow.arm(buttons, options.indexOf(last.answer), [hud.top, hud.banner], last.prompt);
     speak(OUT_OF_BIKES_SPEECH, () => {
       if (turn !== thisTurn || phase !== 'ending') return;
       speak(last.spokenStatement ?? last.statement, () => {

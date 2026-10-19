@@ -449,7 +449,7 @@ function run(session: GameSession): void {
     showBanner(timedOut ? "Time's up!" : 'Saved!', current.statement, 'miss');
     sfx.miss();
     // The game waits here until the player taps the green answer.
-    tapFlow.arm(answers, correctIndex, [hud, banner]);
+    tapFlow.arm(answers, correctIndex, [hud, banner], current.prompt);
     const thisTurn = turn;
     after(0.6, () =>
       speak(current.spokenStatement ?? current.statement, () => {

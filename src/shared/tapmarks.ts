@@ -3,10 +3,15 @@ import { TAP_CAPTION } from './tapgate';
 
 export interface TapMarks {
   /**
-   * Pulses `buttons[correctIndex]`, dims the others, shows the finger and the caption. The pointer
+   * Pulses `buttons[correctIndex]`, dims the others, shows the finger and the caption (`problem`, e.g. '5 + 5 = ?', else a tap hint). The pointer
    * keeps off the other buttons and off `avoid` (the banner, the question) when it can.
    */
-  show(buttons: readonly HTMLElement[], correctIndex: number, avoid?: readonly HTMLElement[]): void;
+  show(
+    buttons: readonly HTMLElement[],
+    correctIndex: number,
+    avoid?: readonly HTMLElement[],
+    problem?: string,
+  ): void;
   /** A dim answer was tapped: it shakes, the green one pulses harder for ~1 s. */
   nope(index: number): void;
   /** A reminder is due: the pulse grows one step (up to 3 steps). */
@@ -177,7 +182,7 @@ export function createTapMarks(container: HTMLElement = document.body): TapMarks
   };
 
   return {
-    show(buttons, correctIndex, avoidElements = []) {
+    show(buttons, correctIndex, avoidElements = [], problem) {
       clear();
       avoid = avoidElements;
       touched = buttons.map((button) => ({
@@ -194,7 +199,7 @@ export function createTapMarks(container: HTMLElement = document.body): TapMarks
           button.setAttribute('aria-disabled', 'true');
         }
       }
-      caption.textContent = TAP_CAPTION;
+      caption.textContent = problem || TAP_CAPTION;
       pointer.hidden = false;
       shownBelow = undefined;
       update();
