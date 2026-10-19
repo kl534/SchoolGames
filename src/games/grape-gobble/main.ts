@@ -423,6 +423,7 @@ function run(session: GameSession): void {
     // No cue of a gag changes the game, so dropping the ones still to come loses nothing.
     kid.rest();
     effects.clear();
+    document.querySelectorAll('.gg-pop').forEach((node) => node.remove());
     askQuestion();
   };
 
