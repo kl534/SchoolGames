@@ -84,6 +84,8 @@ export interface Hud {
   hear: HTMLButtonElement;
   answers: HTMLElement;
   buttons: HTMLButtonElement[];
+  /** The big message under the question ("Wipeout!" and the like). */
+  banner: HTMLElement;
   /** The player's avatar and the bikes left, under the Menu button. */
   setBikes(bikes: number, justLost?: boolean): void;
   setScore(score: number, streak: number, best: number, pulse?: boolean): void;
@@ -199,6 +201,7 @@ export function createHud(avatar: string): Hud {
     hear,
     answers,
     buttons,
+    banner,
     get bannerShown() {
       return !banner.hidden;
     },

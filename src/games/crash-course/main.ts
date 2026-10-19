@@ -8,6 +8,7 @@ import { showResults } from '../../shared/results';
 import { starsFor } from '../../shared/round';
 import { createScene } from '../../shared/scene';
 import { startGameSession, type GameSession } from '../../shared/session';
+import { createTapFlow } from '../../shared/tapflow';
 import { answerOptions, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
 import { createBike, createParachute, type Bike } from './bike';
@@ -85,10 +86,8 @@ import { createWorld, type Cut } from './world';
 
 const GAME_ID = 'crash-course';
 
-/** Seconds a result or a stunt runs before a tap can skip it. */
-const SKIP_AFTER = 0.6;
-/** Least seconds the correct fact stays up after a miss. */
-const REVEAL_FOR = 2.2;
+/** Seconds a stunt runs before a tap can fast-forward it. */
+const FAST_FORWARD_AFTER = 0.6;
 /** Seconds each step of the 3, 2, 1, Go! lasts. */
 const COUNT_STEP = 0.75;
 /** The new bike's parachute drop. */
@@ -96,8 +95,7 @@ const RESPAWN_TIME = 1.6;
 /** How fast a stunt plays after a tap. */
 const FAST_FORWARD = 3;
 
-type Phase =
-  'preview' | 'countdown' | 'riding' | 'nitro' | 'stunt' | 'result' | 'respawn' | 'ending' | 'done';
+type Phase = 'preview' | 'countdown' | 'riding' | 'nitro' | 'stunt' | 'result' | 'ending' | 'done';
 
 interface Pair {
   bike: Bike;
@@ -202,6 +200,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
   // ---------- HUD ----------
   const hud = createHud(avatar);
   const { buttons } = hud;
+  const tapFlow = createTapFlow();
   if (lab) document.body.classList.add('cc-lab');
   createBackButton();
   const mute = createMuteButton();
@@ -234,7 +233,6 @@ function run(session: GameSession, dev: DevOptions | null): void {
   let gameTime = 0;
   let pending: { at: number; fn: () => void }[] = [];
   const after = (seconds: number, fn: () => void) => pending.push({ at: gameTime + seconds, fn });
-  let resultAt = 0;
   let bannerUntil = 0;
 
   // The Mega Stunt in progress.
@@ -436,6 +434,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
   const startRun = (withPreview: boolean) => {
     pending = [];
     turn++;
+    tapFlow.disarm();
     feed = createFactFeed(() => session.chooseFacts());
     score = 0;
     streak = nextStreak(streak, false);
@@ -511,6 +510,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
   const askNext = () => {
     if (phase === 'ending' || phase === 'done') return;
     pending = [];
+    tapFlow.disarm();
     stopSpeaking();
     hud.hideWord();
     if (mega === null && (nextIsMega || startsMega(obstacleNumber + 1))) {
@@ -863,9 +863,12 @@ function run(session: GameSession, dev: DevOptions | null): void {
   };
 
   // ---------- After a crash ----------
+  /**
+   * The crash is shown with the right answer in green. The game then waits for a tap on it; the
+   * parachute drops the new bike meanwhile.
+   */
   const beginResult = () => {
     const current = fact;
-    resultAt = gameTime;
     pending = [];
     hud.hideWord();
     if (outOfBikes(bikes)) {
@@ -875,25 +878,19 @@ function run(session: GameSession, dev: DevOptions | null): void {
     phase = 'result';
     respawnDone = false;
     respawnStarted = false;
-    let spoken = false;
-    let shown = false;
     const thisTurn = turn;
-    const next = () => {
-      if (!spoken || !shown || turn !== thisTurn || phase !== 'result') return;
-      if (respawnDone) advance();
-      else phase = 'respawn';
-    };
     hud.showBanner(timedOut ? "Time's up!" : 'Wipeout!', current?.statement ?? '', 'miss');
+    if (current) tapFlow.arm(buttons, options.indexOf(current.answer), [hud.top, hud.banner]);
     after(0.6, () => {
       startRespawn();
-      speak(current?.spokenStatement ?? current?.statement ?? '', () => {
-        spoken = true;
-        next();
+      if (!current) {
+        // Nothing to read or tap on: go on once the new bike is down.
+        after(RESPAWN_TIME, advance);
+        return;
+      }
+      speak(current.spokenStatement ?? current.statement, () => {
+        if (turn === thisTurn && phase === 'result') tapFlow.readFinished();
       });
-    });
-    after(REVEAL_FOR, () => {
-      shown = true;
-      next();
     });
   };
 
@@ -924,6 +921,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
 
   /** Moves on after a reveal. */
   const advance = () => {
+    tapFlow.disarm();
     stopSpeaking();
     pending = [];
     if (!respawnDone) endRespawn();
@@ -936,32 +934,29 @@ function run(session: GameSession, dev: DevOptions | null): void {
     pending = [];
     turn++;
     clockRunning = false;
-    hud.setTopVisible(false, 0);
     hud.setMega(0, 0);
+    tapFlow.disarm();
     hud.showBanner(OUT_OF_BIKES_SPEECH, last?.statement ?? '', 'out');
     const thisTurn = turn;
-    let spoken = false;
-    let shown = false;
-    const next = () => {
-      if (spoken && shown && turn === thisTurn && phase === 'ending') finishRun();
-    };
-    const done = () => {
-      spoken = true;
-      next();
-    };
+    if (!last) {
+      // No fact to wait on: show the end at once.
+      hud.setTopVisible(false, 0);
+      speak(OUT_OF_BIKES_SPEECH, () => turn === thisTurn && phase === 'ending' && finishRun());
+      return;
+    }
+    // The question and answers stay up: the player taps the green one before the results appear.
+    tapFlow.arm(buttons, options.indexOf(last.answer), [hud.top, hud.banner]);
     speak(OUT_OF_BIKES_SPEECH, () => {
       if (turn !== thisTurn || phase !== 'ending') return;
-      if (last) speak(last.spokenStatement ?? last.statement, done);
-      else done();
-    });
-    after(REVEAL_FOR, () => {
-      shown = true;
-      next();
+      speak(last.spokenStatement ?? last.statement, () => {
+        if (turn === thisTurn && phase === 'ending') tapFlow.readFinished();
+      });
     });
   };
 
   const finishRun = () => {
     phase = 'done';
+    tapFlow.disarm();
     hud.hideBanner();
     hud.setTopVisible(false, 0);
     const stars = starsFor(feed.correct, feed.answered);
@@ -987,13 +982,25 @@ function run(session: GameSession, dev: DevOptions | null): void {
   };
 
   // ---------- Input ----------
-  /** A tap fast-forwards a stunt and skips a result, so it never feels ignored. */
+  /** A tap fast-forwards a stunt, so it never feels ignored. */
   const skip = () => {
-    if (phase === 'stunt' && stunt && stunt.t >= SKIP_AFTER) stunt.scale = FAST_FORWARD;
-    else if ((phase === 'result' || phase === 'respawn') && gameTime - resultAt >= SKIP_AFTER)
-      advance();
+    if (phase === 'stunt' && stunt && stunt.t >= FAST_FORWARD_AFTER) stunt.scale = FAST_FORWARD;
+  };
+  /** The player tapped the green answer: the new bike lands at once and the next question comes. */
+  const proceed = () => {
+    if (phase === 'ending') {
+      finishRun();
+      return;
+    }
+    if (phase !== 'result') return;
+    if (!respawnStarted) startRespawn();
+    advance();
   };
   const onAnswer = (index: number) => {
+    if (tapFlow.armed) {
+      if (tapFlow.tap(index)) proceed();
+      return;
+    }
     if (phase === 'riding') select(index);
     else skip();
   };
@@ -1143,7 +1150,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
       bikeX = originX + frame.bike.x;
       stunt.propsAt(stunt.t);
       if (stunt.t >= stunt.duration) finishStunt(stunt);
-    } else if (phase === 'result' || phase === 'respawn') {
+    } else if (phase === 'result') {
       // Until the parachute opens the crashed bike lies where it ended.
       if (respawnStarted && !respawnDone) respawnT += delta;
       if (!respawnStarted) {
@@ -1156,10 +1163,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
         parachute.object.position.set(respawnX, y, 0);
         parachute.object.scale.setScalar(u < 1 ? 1 : 0.01);
         pair.rider.setPose('ride');
-        if (u >= 1) {
-          endRespawn();
-          if (phase === 'respawn') advance();
-        }
+        if (u >= 1) endRespawn();
       } else {
         rideAt(pair, bikeX, 'wave', delta);
       }
@@ -1224,6 +1228,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
   ctx.onUpdate((delta, elapsed) => {
     layout();
     gameTime += delta;
+    tapFlow.update(delta);
     const due = pending.filter((p) => p.at <= gameTime);
     if (due.length) {
       pending = pending.filter((p) => p.at > gameTime);
@@ -1267,7 +1272,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
 
     // --- Camera: follows the bike, eased so stunts are followed smoothly ---
     const goal =
-      (phase === 'result' || phase === 'respawn') && respawnStarted && !respawnDone
+      phase === 'result' && respawnStarted && !respawnDone
         ? respawnX
         : phase === 'stunt' || phase === 'result' || phase === 'ending'
           ? focus.x
@@ -1404,6 +1409,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     stopSpeaking();
     window.removeEventListener('keydown', onKey);
     stopPointer();
+    tapFlow.dispose();
     unpress.forEach((fn) => fn());
     pause.dispose();
     mute.dispose();
