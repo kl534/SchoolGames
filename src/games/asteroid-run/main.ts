@@ -67,6 +67,8 @@ const LASER_TIME = 0.32;
 const DEBRIS_TIME = 0.5;
 /** Seconds a boss's direct hit stays up before a tap can skip to its next question. */
 const HIT_SKIP = 0.6;
+/** Room kept under a miss banner for the finger and caption that point at the green answer, px. */
+const TAP_ROOM = 104;
 /** Seconds each step of the 3, 2, 1, Go! lasts. */
 const COUNT_STEP = 0.75;
 /** Gap between a destroyed asteroid and the next one appearing. */
@@ -357,7 +359,8 @@ function run(session: GameSession): void {
     banner.className = `ar-banner ${kind}`;
     banner.hidden = false;
     const top = hud.hidden ? 130 : hud.getBoundingClientRect().bottom + 8;
-    const bottom = answers.hidden ? viewH - 20 : answers.getBoundingClientRect().top - 8;
+    const room = kind === 'miss' || kind === 'out' ? TAP_ROOM : 0;
+    const bottom = (answers.hidden ? viewH - 20 : answers.getBoundingClientRect().top - 8) - room;
     const half = banner.offsetHeight / 2;
     const centre = (top + bottom) / 2;
     banner.style.top = `${Math.min(Math.max(centre, top + half), Math.max(bottom - half, top + half))}px`;
