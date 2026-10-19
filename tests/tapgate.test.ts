@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { runs } from './helpers/full';
 import {
   createTapGate,
   NUDGE_EVERY,
@@ -181,8 +182,8 @@ describe('random scripts', () => {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 
-  it('keeps the invariants over 2,000 scripts', () => {
-    for (let seed = 1; seed <= 2000; seed++) {
+  it('keeps the invariants over many random scripts', () => {
+    for (let seed = 1; seed <= runs(2000, 300); seed++) {
       const random = mulberry32(seed);
       const gate = createTapGate();
       let goes = 0;

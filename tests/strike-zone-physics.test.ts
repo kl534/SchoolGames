@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { FULL as FULL_TESTS } from './helpers/full';
 import {
   aimThrough,
   lineX,
@@ -44,25 +45,29 @@ describe('pins', () => {
 describe('the single-pin promise', () => {
   const starts = [-AIM_LIMIT, -0.2, 0, 0.2, AIM_LIMIT];
 
-  it('knocks a lone pin down even when the ball drifts the most', { timeout: LONG }, () => {
-    const failures: string[] = [];
-    let throws = 0;
-    for (const pin of PIN_IDS) {
-      for (const startX of starts) {
-        const aim = aimThrough(startX, pin);
-        for (const side of [-1, 1] as const) {
-          const thrown = thrownAim(aim, MAX_DRIFT, side);
-          throws++;
-          const left = simulateThrow([pin], throwPath(thrown));
-          if (left.length) failures.push(`pin ${pin} from ${startX.toFixed(2)} drift ${side}`);
+  it.runIf(FULL_TESTS)(
+    'knocks a lone pin down even when the ball drifts the most',
+    { timeout: LONG },
+    () => {
+      const failures: string[] = [];
+      let throws = 0;
+      for (const pin of PIN_IDS) {
+        for (const startX of starts) {
+          const aim = aimThrough(startX, pin);
+          for (const side of [-1, 1] as const) {
+            const thrown = thrownAim(aim, MAX_DRIFT, side);
+            throws++;
+            const left = simulateThrow([pin], throwPath(thrown));
+            if (left.length) failures.push(`pin ${pin} from ${startX.toFixed(2)} drift ${side}`);
+          }
         }
       }
-    }
-    expect(throws).toBe(100);
-    expect(failures).toEqual([]);
-  });
+      expect(throws).toBe(100);
+      expect(failures).toEqual([]);
+    },
+  );
 
-  it('knocks it down when the ball goes dead on', { timeout: LONG }, () => {
+  it.runIf(FULL_TESTS)('knocks it down when the ball goes dead on', { timeout: LONG }, () => {
     const failures: string[] = [];
     let throws = 0;
     for (const pin of PIN_IDS) {
@@ -79,7 +84,7 @@ describe('the single-pin promise', () => {
 });
 
 describe('a full rack', () => {
-  it('is knocked over by a ball down the middle', { timeout: LONG }, () => {
+  it.runIf(FULL_TESTS)('is knocked over by a ball down the middle', { timeout: LONG }, () => {
     const aims: Aim[] = [];
     for (const startX of [-0.2, 0.1, 0.35]) {
       for (const headX of [0.04, 0.07, 0.1]) aims.push({ startX, headX });
