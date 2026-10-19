@@ -103,7 +103,12 @@ export interface Hud {
   };
   readonly buttons: HTMLButtonElement[];
   readonly hear: HTMLButtonElement;
+  /** What the finger and caption that point at the green answer keep off: scorebug, question, card. */
+  readonly avoid: readonly HTMLElement[];
 }
+
+/** Room kept under a miss card for the finger and caption that point at the green answer. */
+const TAP_ROOM = 104;
 
 export function createHud(): Hud {
   const bug = el('div', 'bb-bug', document.body);
@@ -189,6 +194,7 @@ export function createHud(): Hud {
   return {
     buttons,
     hear,
+    avoid: [bug, hudBox, banner],
     hideQuestion(hidden) {
       hudBox.hidden = hidden;
       answers.hidden = hidden;
@@ -310,14 +316,15 @@ export function createHud(): Hud {
         return;
       }
       const top = hudBox.hidden ? 130 : hudBox.getBoundingClientRect().bottom + 8;
-      const bottom = answers.hidden ? viewH - 20 : answers.getBoundingClientRect().top - 8;
+      const room = kind === 'miss' && place === 'aside' ? TAP_ROOM : 0;
+      const bottom = (answers.hidden ? viewH - 20 : answers.getBoundingClientRect().top - 8) - room;
       if (place === 'aside') {
         if (!inQuestion) {
           // Keep the whole card on the screen, whatever its width.
           const wide = banner.offsetWidth / 2 + 12;
           const x = Math.min(Math.max(viewW * asideAt, wide), viewW - wide);
           banner.style.left = `${Math.round(x)}px`;
-          banner.style.top = `${Math.min(Math.max((top + bottom) / 2, top + half), bottom - half)}px`;
+          banner.style.top = `${Math.min(Math.max((top + bottom) / 2, top + half), Math.max(bottom - half, top + half))}px`;
         } else {
           banner.style.top = `${top + half}px`;
         }
