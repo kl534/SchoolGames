@@ -10,6 +10,7 @@ import {
   Mesh,
   SRGBColorSpace,
   type BufferGeometry,
+  type Group,
   type Material,
   type Object3D,
 } from 'three';
@@ -20,6 +21,23 @@ export const smooth = (u: number) => {
   return c * c * (3 - 2 * c);
 };
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+/** A stretch of road that is not there (a pool, a canyon), as x from and to. */
+export type Cut = readonly [from: number, to: number];
+
+/** What the game needs of anything it places on the road: an obstacle, a Mega course or a gate. */
+export interface Placed {
+  /** Its origin is the entry line on the road. */
+  object: Group;
+  /** x of its end, for retiring it once it is far behind the camera. */
+  length: number;
+  /** The stretches of road it replaces, in its own coordinates. */
+  cuts: readonly Cut[];
+  /** Idle motion. */
+  ambient(time: number): void;
+  /** Puts every prop back as it was before the ride. */
+  reset(): void;
+}
 
 /** Builds meshes and remembers what to dispose. */
 export class Kit {

@@ -133,7 +133,7 @@ const clamp01 = (n: number) => (n < 0 ? 0 : n > 1 ? 1 : n);
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 /** Linear, accelerating, braking (cubic), braking (quadratic) and smooth in and out. */
-const EASE: Record<Ease, (u: number) => number> = {
+export const EASE: Record<Ease, (u: number) => number> = {
   l: (u) => u,
   i: (u) => u * u,
   o: (u) => 1 - (1 - u) ** 3,
@@ -211,7 +211,7 @@ export function createFrame(): Frame {
   };
 }
 
-function resetFrame(f: Frame): Frame {
+export function resetFrame(f: Frame): Frame {
   const b = f.bike;
   b.x = 0;
   b.y = BIKE_Y;
@@ -227,10 +227,10 @@ function resetFrame(f: Frame): Frame {
   return f;
 }
 
-type Surface = (x: number) => number;
+export type Surface = (x: number) => number;
 
 /** Both wheels on a surface: the bike lies along the chord between them. `settle` eases in. */
-function ride(f: Frame, surf: Surface, x: number, settle = 1): void {
+export function ride(f: Frame, surf: Surface, x: number, settle = 1): void {
   const a = surf(x - REAR);
   const b = surf(x + REAR);
   const pitch = Math.atan2(b - a, 2 * REAR) * settle;
@@ -240,7 +240,7 @@ function ride(f: Frame, surf: Surface, x: number, settle = 1): void {
 }
 
 /** Only the rear wheel on the surface, at `rx`, with the nose `w` radians above the slope. */
-function rearRide(f: Frame, surf: Surface, rx: number, w: number): void {
+export function rearRide(f: Frame, surf: Surface, rx: number, w: number): void {
   const slope = Math.atan2(surf(rx + 0.25) - surf(rx - 0.25), 0.5);
   const p = slope + w;
   const axleX = rx - WHEEL_R * Math.sin(slope);
@@ -254,7 +254,7 @@ function rearRide(f: Frame, surf: Surface, rx: number, w: number): void {
  * Rear wheel on the surface at x - REAR with the nose `w` radians up; as `w` shrinks to zero the
  * front wheel comes down too, so it blends into the ordinary both-wheels ride.
  */
-function rideW(f: Frame, surf: Surface, x: number, w: number): void {
+export function rideW(f: Frame, surf: Surface, x: number, w: number): void {
   rearRide(f, surf, x - REAR, w);
   const k = clamp01(1 - w / 0.2);
   if (k <= 0) return;
@@ -269,7 +269,7 @@ function rideW(f: Frame, surf: Surface, x: number, w: number): void {
 
 const seat = { x: 0, y: 0 };
 /** Where a rider's hips are when seated on a bike at this pose (into `seat`). */
-function hipOf(bx: number, by: number, pitch: number, roll = 0): typeof seat {
+export function hipOf(bx: number, by: number, pitch: number, roll = 0): typeof seat {
   const up = SEAT.y * Math.cos(roll);
   const c = Math.cos(pitch);
   const s = Math.sin(pitch);
@@ -278,7 +278,7 @@ function hipOf(bx: number, by: number, pitch: number, roll = 0): typeof seat {
   return seat;
 }
 
-function setFree(
+export function setFree(
   f: Frame,
   x: number,
   y: number,
@@ -294,19 +294,19 @@ function setFree(
   f.rider.face = face;
 }
 
-const smooth = (u: number) => EASE.io(clamp01(u));
-const settleAt = (t: number) => smooth(t / 0.2);
+export const smooth = (u: number) => EASE.io(clamp01(u));
+export const settleAt = (t: number) => smooth(t / 0.2);
 
 // ---------- Stunt definitions ----------
 
-type Ev = readonly [at: number, type: StuntEventType, x: number, y: number, color?: number];
+export type Ev = readonly [at: number, type: StuntEventType, x: number, y: number, color?: number];
 
-interface Pos {
+export interface Pos {
   x: number;
   y: number;
 }
 
-interface Def {
+export interface Def {
   duration: number;
   word: string;
   /** Named moments (seconds) that the props follow. */
@@ -320,7 +320,7 @@ type Pair<T> = readonly [T, T];
 type Table = Record<ObstacleKind, Record<Outcome, Pair<Def>>>;
 
 /** Events along a stretch of time, at the bike (or rider) position. */
-function trail(
+export function trail(
   from: number,
   to: number,
   every: number,
@@ -2682,18 +2682,24 @@ export function stuntFrame(
   const time = Math.min(Math.max(Number.isFinite(t) ? t : 0, 0), d.duration);
   resetFrame(out);
   d.at(time, out);
-  if (outcome === 'clear' && time >= d.duration) {
-    // Landed and riding on: normalise away any rounding so the next stretch starts clean.
-    const b = out.bike;
-    b.x = SPECS[kind].length;
-    b.y = BIKE_Y;
-    b.pitch = TAU * Math.round(b.pitch / TAU);
-    b.roll = TAU * Math.round(b.roll / TAU);
-    b.z = 0;
-    b.squash = 1;
-    b.visible = b.grounded = true;
-    resetRider(out);
-  }
+  if (outcome === 'clear' && time >= d.duration) settleClear(out, SPECS[kind].length);
+  return out;
+}
+
+/**
+ * Landed and riding on: normalise away any rounding so the next stretch starts clean. The bike
+ * ends on the road at `length`, whole turns kept, and the rider is seated and happy again.
+ */
+export function settleClear(out: Frame, length: number): Frame {
+  const b = out.bike;
+  b.x = length;
+  b.y = BIKE_Y;
+  b.pitch = TAU * Math.round(b.pitch / TAU);
+  b.roll = TAU * Math.round(b.roll / TAU);
+  b.z = 0;
+  b.squash = 1;
+  b.visible = b.grounded = true;
+  resetRider(out);
   return out;
 }
 

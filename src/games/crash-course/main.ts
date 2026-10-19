@@ -267,14 +267,14 @@ function run(session: GameSession, dev: DevOptions | null): void {
 
   const cuts = (): Cut[] =>
     live.flatMap(({ obstacle: o, originX: x }) =>
-      o.cut ? [[x + o.cut[0], x + o.cut[1]] as Cut] : [],
+      o.cuts.map(([from, to]): Cut => [x + from, x + to]),
     );
 
   const retireFar = () => {
     for (let i = live.length - 1; i >= 0; i--) {
       const { obstacle: o, originX: x } = live[i];
       if (o === obstacle) continue;
-      if (camX - (x + o.spec.length) > fit.viewW + 20) {
+      if (camX - (x + o.length) > fit.viewW + 20) {
         o.object.visible = false;
         live.splice(i, 1);
       }

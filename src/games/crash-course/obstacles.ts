@@ -26,7 +26,7 @@ import {
   type Material,
   type Object3D,
 } from 'three';
-import { Kit, lerp, smooth } from './kit';
+import { Kit, lerp, smooth, type Placed } from './kit';
 import type { ObstacleKind, Outcome, Variant } from './rules';
 import {
   BRIDGE_FROM,
@@ -66,17 +66,10 @@ import {
   type StuntSpec,
 } from './stunts';
 
-export interface Obstacle {
-  object: Group;
+export interface Obstacle extends Placed {
   spec: StuntSpec;
-  /** The stretch of road this obstacle replaces (the shark pool, the canyon), if any. */
-  cut: readonly [from: number, to: number] | null;
   /** Poses the props for time `t` of the stunt. */
   update(outcome: Outcome, variant: Variant, t: number): void;
-  /** Idle motion: flickering flames, a circling shark, a trickling stream. */
-  ambient(time: number): void;
-  /** Puts every prop back as it was before the stunt. */
-  reset(): void;
   dispose(): void;
 }
 
@@ -1068,7 +1061,8 @@ export function createObstacle(kind: ObstacleKind): Obstacle {
   return {
     object: built.group,
     spec: SPECS[kind],
-    cut: CUTS[kind],
+    length: SPECS[kind].length,
+    cuts: CUTS[kind] ? [CUTS[kind]] : [],
     update: built.update,
     ambient: built.ambient,
     reset: built.reset,
