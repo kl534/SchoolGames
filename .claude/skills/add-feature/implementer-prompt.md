@@ -9,7 +9,7 @@ the simplest choice that fits it and list it in your report.
 
 ## Steps
 
-1. Read `CLAUDE.md` and the design doc. Then read only the files and sections the doc names: use
+1. Read `CLAUDE.md` and the design doc, then the game's `MAP.md`. Then read only the files and sections the doc names: use
    `grep -n` and `Read` with `offset`/`limit` for any file over 400 lines. Never `cat` a whole test
    file. Run `git log -15` to see the commit style.
 2. `git fetch origin`, then `git checkout -b <BRANCH> <BASE>`. If the working tree has changes
@@ -17,6 +17,7 @@ the simplest choice that fits it and list it in your report.
 3. Build it in small steps, one commit per coherent step, with messages in the repo's style
    (`<Game>: <what changed, in plain words>`). End each commit message with the Co-Authored-By
    trailer from your instructions. Don't commit the design doc or anything else in `docs/`.
+   - If you add files or dev hooks, update the game's `MAP.md`.
    - Follow the doc's types, names, constants and file layout exactly. A **(default)** may change
      only if it clearly plays or looks badly, and you must give the reason in your report.
    - Write the tests the doc lists, and remove the ones it marks obsolete.
