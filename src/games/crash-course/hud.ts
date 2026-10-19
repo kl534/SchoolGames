@@ -3,10 +3,13 @@
  * the four answers, the banner, the comic word, the pops and the screen effects. Plain elements
  * styled in style.css (prefix `cc-`); the game loop in main.ts drives them.
  */
-import type { ObstacleKind } from './rules';
+import type { MegaId, ObstacleKind } from './rules';
 import { BIKES, MEGA_PIECES, multiplierFor } from './rules';
 
-export const GOAL_ICONS: Record<ObstacleKind, string> = {
+/** What the road strip's goal icon can show: an obstacle, a Mega course or a checkpoint gate. */
+export type GoalKey = ObstacleKind | MegaId | 'gate';
+
+export const GOAL_ICONS: Record<GoalKey, string> = {
   loop: '🌀',
   ramp: '🦈',
   ring: '🔥',
@@ -14,6 +17,8 @@ export const GOAL_ICONS: Record<ObstacleKind, string> = {
   bridge: '🌉',
   seesaw: '⚖️',
   coaster: '🎢',
+  gate: '🏁',
+  'triple-loop': '🌀',
 };
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -79,9 +84,12 @@ export interface Hud {
   setScore(score: number, streak: number, best: number, pulse?: boolean): void;
   /** Progress along the road strip: 0 at the start, 1 on arrival. */
   setRoad(progress: number, state: { urgent: boolean; waiting: boolean }): void;
-  setGoal(kind: ObstacleKind): void;
-  /** Mega Stunt pips: hidden when `total` is 0, else the first `done` are lit. */
-  setMega(total: number, done: number): void;
+  setGoal(key: GoalKey): void;
+  /**
+   * Mega Stunt pips: hidden when `total` is 0, else the first `done` are lit. With `missed` the
+   * pip after them shows red, so the player sees which question stopped the chain.
+   */
+  setMega(total: number, done: number, missed?: boolean): void;
   showBanner(title: string, detail: string, kind: 'hit' | 'miss' | 'warn' | 'out'): void;
   hideBanner(): void;
   readonly bannerShown: boolean;
@@ -168,7 +176,7 @@ export function createHud(avatar: string): Hud {
     node.classList.add('on');
   };
 
-  let goalKind: ObstacleKind = 'loop';
+  let goalKind: GoalKey = 'loop';
   const GOAL_W = 26;
   const BIKE_W = 34;
   let bikeCount = BIKES;
@@ -230,17 +238,21 @@ export function createHud(avatar: string): Hud {
       roadBox.classList.toggle('urgent', state.urgent);
       roadBox.classList.toggle('waiting', state.waiting);
     },
-    setGoal(kind) {
-      goalKind = kind;
+    setGoal(key) {
+      goalKind = key;
       roadGoal.textContent = GOAL_ICONS[goalKind];
     },
-    setMega(total, done) {
+    setMega(total, done, missed = false) {
       mega.hidden = total === 0;
       pips.forEach((pip, i) => {
         pip.hidden = i >= total;
         pip.classList.toggle('lit', i < done);
+        pip.classList.toggle('miss', missed && i === done);
       });
-      mega.setAttribute('aria-label', `Mega Stunt: ${done} of ${total} cleared`);
+      mega.setAttribute(
+        'aria-label',
+        `Mega Stunt: ${done} of ${total} right${missed ? ', then a miss' : ''}`,
+      );
       void bikeCount;
     },
     showBanner(title, detail, kind) {
