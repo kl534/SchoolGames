@@ -22,6 +22,8 @@ export const GOAL_ICONS: Record<GoalKey, string> = {
   wrecker: '🔨',
   gate: '🏁',
   'triple-loop': '🌀',
+  'sky-circus': '🎪',
+  'volcano-rush': '🌋',
 };
 
 function el<K extends keyof HTMLElementTagNameMap>(

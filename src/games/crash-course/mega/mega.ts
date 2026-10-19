@@ -15,7 +15,9 @@ import {
   type Pos,
   type StuntEvent,
 } from '../stunts';
+import { SKY_CIRCUS } from './sky-circus';
 import { TRIPLE_LOOP } from './triple-loop';
+import { VOLCANO_RUSH } from './volcano-rush';
 
 export type Cut = readonly [from: number, to: number];
 
@@ -44,6 +46,8 @@ export const MEGA_MAX_H = 6.4; // u
 
 export const MEGA_SPECS: Record<MegaId, MegaSpec> = {
   'triple-loop': TRIPLE_LOOP,
+  'sky-circus': SKY_CIRCUS,
+  'volcano-rush': VOLCANO_RUSH,
 };
 
 const specOf = (id: MegaId) => MEGA_SPECS[id];
