@@ -42,7 +42,10 @@ export interface GameSession {
   chooseFacts(count?: number): Fact[];
   /** Seconds to answer this fact now, from its current streak; 15 when nobody is playing. */
   timerSecondsFor(fact: Fact): number;
-  /** Saves one answer to the player's fact history. */
+  /**
+   * Saves one answer to the player's fact history. The first time a fact comes back after a miss
+   * on this page, a right answer does not count (the player was just shown it).
+   */
   recordAnswer(fact: Fact, correct: boolean): void;
   /** Saves the round's stars; true when it's a new best. */
   recordStars(stars: number): boolean;
@@ -73,6 +76,8 @@ export function startGameSession(
   const topic = realTopic ?? myLevelTopic(() => levelLabel(levelsOpen(progress)));
   /** Where a fact's answers are saved: its own topic, which for My Level is not `topic`. */
   const statTopicId = (fact: Fact) => (isMyLevel ? topicOfFact(fact).id : topic.id);
+  /** Facts missed on this page whose answer was shown and not yet asked again. */
+  const awaitingRetry = new Set<string>();
 
   return {
     gameId,
@@ -90,7 +95,11 @@ export function startGameSession(
     timerSecondsFor: (fact) =>
       timerSecondsFor(player ? progress.facts[statTopicId(fact)]?.[fact.id] : undefined),
     recordAnswer(fact, correct) {
-      recordAnswer(progress, statTopicId(fact), fact.id, correct);
+      const key = `${statTopicId(fact)}/${fact.id}`;
+      const retry = awaitingRetry.has(key);
+      if (correct) awaitingRetry.delete(key);
+      else awaitingRetry.add(key);
+      recordAnswer(progress, statTopicId(fact), fact.id, correct, Date.now(), retry);
       if (isMyLevel) progress.levelsOpen = levelsOpen(progress);
       save();
     },

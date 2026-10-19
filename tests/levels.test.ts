@@ -13,6 +13,7 @@ import {
 import {
   emptyProgress,
   isMastered,
+  LEARN_SPACING_MS,
   recordAnswer,
   type PlayerProgress,
 } from '../src/shared/progress';
@@ -20,9 +21,13 @@ import { seededRandom } from '../src/shared/random';
 import { TOPICS } from '../src/shared/topics';
 import { MATH_TOPICS } from '../src/shared/topics/math';
 
+/** A fake clock: every answer comes 6 hours after the one before, so each right one counts. */
+let clock = 0;
+
 /** Answers a fact the way a game does: under its own topic, then updates the open levels. */
 function answer(progress: PlayerProgress, fact: Parameters<typeof topicOfFact>[0], ok: boolean) {
-  recordAnswer(progress, topicOfFact(fact).id, fact.id, ok);
+  clock += LEARN_SPACING_MS;
+  recordAnswer(progress, topicOfFact(fact).id, fact.id, ok, clock);
   progress.levelsOpen = levelsOpen(progress);
 }
 
@@ -256,7 +261,7 @@ describe('needsWork', () => {
     expect(isMastered(stat)).toBe(true);
     expect(needsWork(stat)).toBe(false);
     answer(progress, fact, false);
-    expect(isMastered(stat)).toBe(true);
+    expect(isMastered(stat)).toBe(false);
     expect(needsWork(stat)).toBe(true);
   });
 });
