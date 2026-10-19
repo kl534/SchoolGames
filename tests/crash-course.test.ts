@@ -21,7 +21,13 @@ import {
   hitPoints,
   loseBike,
   MAX_GAP,
+  GATE_BEAT,
+  MEGA_BANNER,
+  MEGA_BONUS,
+  MEGA_IDS,
+  MEGA_PIECES,
   megaKinds,
+  nextMega,
   multiplierFor,
   NEW_HIGH_SCORE_SPEECH,
   nextKind,
@@ -37,6 +43,7 @@ import {
   startsMega,
   trailLength,
   worldSpeedFactor,
+  type MegaId,
   type ObstacleKind,
   type Variant,
 } from '../src/games/crash-course/rules';
@@ -146,6 +153,33 @@ describe('obstacle order', () => {
     for (let n = 0; n <= 7; n++) expect(startsMega(n)).toBe(false);
     for (const n of [8, 16, 24]) expect(startsMega(n)).toBe(true);
     for (const n of [9, 15, 17, 23]) expect(startsMega(n)).toBe(false);
+  });
+
+  it('picks the next Mega course by index, never the previous one when there is a choice', () => {
+    expect(MEGA_IDS.length).toBeGreaterThan(0);
+    const seen = new Set<MegaId>();
+    for (let i = 0; i < 700; i++) seen.add(nextMega(null, i / 700));
+    expect([...seen].sort()).toEqual([...MEGA_IDS].sort());
+    for (const previous of MEGA_IDS) {
+      for (let i = 0; i < 600; i++) {
+        const next = nextMega(previous, i / 600);
+        expect(MEGA_IDS).toContain(next);
+        // With a single course the only choice is that course again.
+        if (MEGA_IDS.length > 1) expect(next).not.toBe(previous);
+        else expect(next).toBe(previous);
+      }
+    }
+    expect(nextMega(null, 0)).toBe(MEGA_IDS[0]);
+    expect(nextMega(null, 0.999)).toBe(MEGA_IDS[MEGA_IDS.length - 1]);
+    expect(nextMega(null, -3)).toBe(MEGA_IDS[0]);
+    expect(nextMega(null, 7)).toBe(MEGA_IDS[MEGA_IDS.length - 1]);
+  });
+
+  it('asks as many questions as the course has elements, with a pause after each gate', () => {
+    expect(MEGA_PIECES).toBe(3);
+    expect(MEGA_BONUS).toBe(500);
+    expect(GATE_BEAT).toBe(0.5);
+    expect(MEGA_BANNER).toBe(1.5);
   });
 
   it('gives a Mega Stunt three different kinds, none the previous one', () => {

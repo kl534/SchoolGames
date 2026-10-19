@@ -22,9 +22,14 @@ export const GREAT_RIDING_SPEECH = 'Great riding!';
 export const BIKES = 3;
 /** Every this-many-th obstacle starts a Mega Stunt of MEGA_PIECES obstacles. */
 export const MEGA_EVERY = 8;
+/** Questions asked up front, and elements in a Mega course. */
 export const MEGA_PIECES = 3;
-/** Points for clearing every piece of a Mega Stunt. */
+/** Points for clearing every element of a Mega Stunt. */
 export const MEGA_BONUS = 500;
+/** Pause after a gate before the next question appears, and after the last gate before the nitro. */
+export const GATE_BEAT = 0.5; // s
+/** Seconds the "MEGA STUNT!" banner shows. */
+export const MEGA_BANNER = 1.5; // s
 /** Points for riding through a coin. */
 export const COIN_POINTS = 25;
 /** Points for a right answer however slow, and the extra for answering instantly. */
@@ -95,6 +100,25 @@ export function nextKind(previous: ObstacleKind | null, random: number): Obstacl
 /** Obstacles are numbered from 1. The Mega Stunt starts at every MEGA_EVERY-th one: 8, 16, 24... */
 export function startsMega(n: number): boolean {
   return n > 0 && n % MEGA_EVERY === 0;
+}
+
+// ---------- Mega courses ----------
+
+export type MegaId = 'triple-loop';
+/** The Mega courses, in the order `nextMega` picks among them. */
+export const MEGA_IDS: readonly MegaId[] = ['triple-loop'];
+/** How many questions the player got right before the first miss: 0 to MEGA_PIECES. */
+export type Passed = 0 | 1 | 2 | 3;
+
+/**
+ * The next Mega course: a random one that is not `previous` (any when `previous` is null);
+ * index floor(random * allowed.length) among the allowed ids in MEGA_IDS order. With a single
+ * course it is always that course.
+ */
+export function nextMega(previous: MegaId | null, random: number): MegaId {
+  const others = MEGA_IDS.filter((id) => id !== previous);
+  const allowed = others.length > 0 ? others : MEGA_IDS;
+  return allowed[Math.min(Math.floor(clamp01(random) * allowed.length), allowed.length - 1)];
 }
 
 /**
