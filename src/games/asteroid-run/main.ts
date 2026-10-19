@@ -681,7 +681,7 @@ function run(session: GameSession): void {
     showBanner(title, current.statement, 'miss');
     sfx.miss();
     // Move on once the correct fact has been read out and shown for a bit.
-    tapFlow.arm(buttons, options.indexOf(current.answer), [hud, banner]);
+    tapFlow.arm(buttons, options.indexOf(current.answer), [hud, banner], current.prompt);
     const thisTurn = turn;
     after(0.6, () =>
       speak(current.spokenStatement ?? current.statement, () => {
@@ -729,7 +729,7 @@ function run(session: GameSession): void {
     }
     // The answers stay up: the player taps the green one before the results appear.
     showBanner(SHIP_DESTROYED_SPEECH, last.statement, 'out');
-    tapFlow.arm(buttons, options.indexOf(last.answer), [hud, banner]);
+    tapFlow.arm(buttons, options.indexOf(last.answer), [hud, banner], last.prompt);
     const thisTurn = turn;
     speak(SHIP_DESTROYED_SPEECH, () => {
       if (turn !== thisTurn || phase !== 'ending') return;

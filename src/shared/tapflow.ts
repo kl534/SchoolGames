@@ -7,9 +7,14 @@ export interface TapFlow {
   /**
    * Marks the right answer and starts waiting for a tap on it. Call where the game shows the miss.
    * `avoid` lists what the finger and caption should keep off besides the other answers (the
-   * banner with the fact, the question).
+   * banner with the fact, the question). `problem` is the question shown beside the finger.
    */
-  arm(buttons: readonly HTMLElement[], correctIndex: number, avoid?: readonly HTMLElement[]): void;
+  arm(
+    buttons: readonly HTMLElement[],
+    correctIndex: number,
+    avoid?: readonly HTMLElement[],
+    problem?: string,
+  ): void;
   /** The fact has been read out (call in the `speak(...)` callback). */
   readFinished(): void;
   /** Per frame, with the game's own delta (0 or not called while paused). Plays the reminder. */
@@ -40,9 +45,9 @@ export function createTapFlow(container?: HTMLElement): TapFlow {
     get armed() {
       return gate.armed;
     },
-    arm(buttons, correctIndex, avoid) {
+    arm(buttons, correctIndex, avoid, problem) {
       gate.arm(correctIndex);
-      marks.show(buttons, correctIndex, avoid);
+      marks.show(buttons, correctIndex, avoid, problem);
     },
     readFinished() {
       gate.readFinished();

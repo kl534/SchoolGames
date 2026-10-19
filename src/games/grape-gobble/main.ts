@@ -444,8 +444,8 @@ function run(session: GameSession): void {
       if (i === index) button.classList.add('wrong');
       else if (options[i] === current.answer) button.classList.add('right');
     });
-    tapFlow.arm(buttons, options.indexOf(current.answer), [hud, banner]);
-    problemText.textContent = `✗ ${current.statement}`;
+    tapFlow.arm(buttons, options.indexOf(current.answer), [hud, banner], current.prompt);
+    problemText.textContent = current.statement;
     problem.classList.add('statement', 'wrong');
     // At the instant of the tap, so a wrong answer never looks like eating.
     sfx.miss();

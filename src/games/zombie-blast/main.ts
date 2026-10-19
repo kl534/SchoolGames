@@ -633,7 +633,7 @@ function run(session: GameSession): void {
     revealSpoken = false;
     showBanner('Dud!', q.fact.statement, 'miss');
     sfx.miss();
-    tapFlow.arm(buttons, q.options.indexOf(q.fact.answer), [hud, banner]);
+    tapFlow.arm(buttons, q.options.indexOf(q.fact.answer), [hud, banner], q.fact.prompt);
     const id = epoch;
     after(0.6, () => {
       if (question !== q || q.state !== 'reveal') return;
