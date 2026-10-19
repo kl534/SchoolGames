@@ -224,8 +224,9 @@ export const BALLOON_R = 1.25;
 /** The top of a balloon, and the height of the bike's middle when it bounces on it. */
 export const BALLOON_TOP = BALLOON_Y + BALLOON_R;
 const BOUNCE_Y = BALLOON_TOP + 0.37;
-/** The hay pile in the pit: its top is here. */
+/** The hay pile in the pit: its top is here, and the rider ends up sitting at `BALLOON_SIT`. */
 export const HAY_TOP = -1.15;
+export const BALLOON_SIT: Pos = { x: 13.4, y: HAY_TOP + 0.25 };
 /** The pit in the road, element-local. */
 export const BALLOON_PIT: readonly [number, number] = [6, 18];
 
@@ -319,7 +320,7 @@ const crash2: Def = (() => {
   const seat = hipOf(hit.x, hit.y, 0);
   const hips0 = { x: seat.x, y: seat.y };
   const tSit = 2.4;
-  const sit = { x: 13.4, y: HAY_TOP + 0.25 };
+  const sit = BALLOON_SIT;
   const rider = route([
     [tHit, hips0.x, hips0.y],
     [tSit, sit.x, sit.y, 5.2],
