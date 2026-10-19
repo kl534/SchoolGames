@@ -33,7 +33,8 @@ export type PoseName =
   | 'sit'
   | 'dizzy'
   | 'run'
-  | 'thumbs';
+  | 'thumbs'
+  | 'superman';
 export type FaceName = 'happy' | 'scared' | 'dizzy' | 'sooty';
 
 export interface Frame {
@@ -314,6 +315,8 @@ export interface Def {
   word: string;
   /** Named moments (seconds) that the props follow. */
   beats: Record<string, number>;
+  /** Local times (s) at which playback slows right down (Mega slow motion), if any. */
+  slow?: readonly number[];
   at(t: number, f: Frame): void;
   /** The events, given samplers for where the bike and the rider are at a time. */
   events(bike: (t: number) => Pos, rider: (t: number) => Pos): Ev[];

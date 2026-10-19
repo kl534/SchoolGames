@@ -15,13 +15,14 @@ import { createBike, createParachute, type Bike } from './bike';
 import { devOptions, type DevOptions, type LabMega, type LabStunt } from './dev';
 import { createEffects, type EffectKind } from './effects';
 import { createHud } from './hud';
-import { FOV, fitView, playBand, type Fit } from './layout';
+import { FOV, fitView, playBand, riseFor, type Fit } from './layout';
 import type { Placed } from './kit';
 import {
   megaDuration,
   megaEvents,
   megaFrame,
   megaLength,
+  megaRate,
   MEGA_SPECS,
   megaWordAt,
 } from './mega/mega';
@@ -110,6 +111,10 @@ interface Stunt {
   events: StuntEvent[];
   next: number;
   scale: number;
+  /** Slow motion: the playback rate at a stunt time (1 = normal); regular stunts have none. */
+  rateAt?(t: number): number;
+  /** How far (u) the camera may rise to follow the action up. */
+  rise: number;
   outcome: Outcome;
   /** x of the end of what it plays on (the obstacle, or the whole Mega course). */
   length: number;
@@ -268,7 +273,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
   let shake = 0;
   /** What the camera and the comic words follow: the bike, or the rider once he is thrown clear. */
   const focus = { x: 0, y: 0 };
-  /** How far the camera has dropped to follow a bike down into a pit. */
+  /** How far the camera has dropped (positive) or risen (negative) to follow the action. */
   let camPan = 0;
   let panGoal = 0;
   let nitroAmount = 0;
@@ -730,6 +735,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     events: stuntEvents(k, outcome, variant),
     next: 0,
     scale: 1,
+    rise: 0,
     outcome,
     length: SPECS[k].length,
     frameAt: (t, out) => void stuntFrame(k, outcome, variant, t, out),
@@ -744,6 +750,8 @@ function run(session: GameSession, dev: DevOptions | null): void {
     events: megaEvents(id, passed),
     next: 0,
     scale: 1,
+    rise: MEGA_SPECS[id].rise ?? 0,
+    rateAt: (t) => megaRate(id, passed, t),
     outcome: passed === MEGA_PIECES ? 'clear' : 'crash',
     length: megaLength(id),
     frameAt: (t, out) => void megaFrame(id, passed, t, out),
@@ -1094,13 +1102,22 @@ function run(session: GameSession, dev: DevOptions | null): void {
   };
 
   /** How far to drop the camera so a bike or rider that has fallen into a pit stays in view. */
-  const panFor = (f: Frame) => {
+  const panFor = (f: Frame, rise = 0) => {
     const lowest = Math.min(
       f.bike.visible ? f.bike.y : 9,
       f.rider.mode === 'free' && f.rider.visible ? f.rider.y - 0.6 : 9,
     );
-    return MathUtils.clamp((0.6 - lowest) * 0.85, 0, 4.4);
+    const drop = MathUtils.clamp((0.6 - lowest) * 0.85, 0, 4.4);
+    // The highest point of the action: the bike with its seated rider, or a rider thrown free.
+    const top = Math.max(
+      f.bike.visible ? f.bike.y + 1.8 : -9,
+      f.rider.mode === 'free' && f.rider.visible ? f.rider.y + 1.2 : -9,
+    );
+    return drop - riseFor(top, lowest, rise);
   };
+
+  /** Seconds of stunt per second of real time: a tap fast-forwards, else Mega slow motion. */
+  const playRate = (s: Stunt) => (s.scale > 1 ? s.scale : (s.rateAt?.(s.t) ?? 1));
 
   const stepWorld = (delta: number, elapsed: number) => {
     if (phase !== 'stunt' && !(phase === 'result' && !respawnStarted)) panGoal = 0;
@@ -1143,10 +1160,10 @@ function run(session: GameSession, dev: DevOptions | null): void {
 
     // --- The bike and rider ---
     if (phase === 'stunt' && stunt) {
-      stepStunt(stunt, delta * stunt.scale);
+      stepStunt(stunt, delta * playRate(stunt));
       stunt.frameAt(stunt.t, frame);
       applyFrame(pair, frame, originX, delta);
-      panGoal = panFor(frame);
+      panGoal = panFor(frame, stunt.rise);
       bikeX = originX + frame.bike.x;
       stunt.propsAt(stunt.t);
       if (stunt.t >= stunt.duration) finishStunt(stunt);
@@ -1327,7 +1344,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
       s.stunt.propsAt(s.stunt.t);
       camX = focus.x + fit.viewW * (0.5 - 0.28);
       bikeX = originX + frame.bike.x;
-      panGoal = camPan = panFor(frame);
+      panGoal = camPan = panFor(frame, s.stunt.rise);
       return;
     }
     if (s.phase === 'ride') {
@@ -1345,10 +1362,11 @@ function run(session: GameSession, dev: DevOptions | null): void {
       }
     } else if (s.phase === 'play') {
       stunt = s.stunt;
-      stepStunt(s.stunt, delta);
+      stepStunt(s.stunt, delta * playRate(s.stunt));
       s.stunt.frameAt(s.stunt.t, frame);
       applyFrame(pair, frame, originX, delta);
       bikeX = originX + frame.bike.x;
+      panGoal = panFor(frame, s.stunt.rise);
       s.stunt.propsAt(s.stunt.t);
       if (s.stunt.t >= s.stunt.duration) {
         s.phase = 'hold';
@@ -1379,7 +1397,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     s.frameAt(Math.min(at, s.duration), frame);
     applyFrame(active(), frame, originX, 0);
     camX = focus.x + fit.viewW * (0.5 - 0.28);
-    camPan = panFor(frame);
+    camPan = panFor(frame, s.rise);
     aimCamera(0, 0);
     const step = 1 / 30;
     for (let t = 0; t < at; t += step) {

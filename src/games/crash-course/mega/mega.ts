@@ -15,6 +15,7 @@ import {
   type Pos,
   type StuntEvent,
 } from '../stunts';
+import { INFERNO_DROP } from './inferno-drop';
 import { SKY_CIRCUS } from './sky-circus';
 import { TRIPLE_LOOP } from './triple-loop';
 import { VOLCANO_RUSH } from './volcano-rush';
@@ -39,6 +40,10 @@ export interface MegaSpec {
   emoji: string; // the road strip goal icon
 
   elements: readonly [MegaElement, MegaElement, MegaElement];
+  /** Elements 2 and 3 start in the air: a cleared element 1 or 2 ends mid-flight, not on the road. */
+  airborne?: boolean;
+  /** How far (u) the camera may rise to follow the bike up; 0 or absent: it never rises. */
+  rise?: number;
 }
 
 /** Tallest prop of a course: the bike's top (7.2) minus the bike, so the layout is unchanged. */
@@ -48,6 +53,7 @@ export const MEGA_SPECS: Record<MegaId, MegaSpec> = {
   'triple-loop': TRIPLE_LOOP,
   'sky-circus': SKY_CIRCUS,
   'volcano-rush': VOLCANO_RUSH,
+  'inferno-drop': INFERNO_DROP,
 };
 
 const specOf = (id: MegaId) => MEGA_SPECS[id];
@@ -147,7 +153,9 @@ const probe = createFrame();
 /**
  * Whole turns the bike has made by the end of each cleared element. A cleared element ends with
  * its pitch and roll a whole number of turns round; the next one starts from nought, so the
- * sampler carries the turns on and the angles never jump.
+ * sampler carries the turns on and the angles never jump. An airborne course hands over
+ * mid-flight: the bike's pitch at both boundaries is within +-pi, so it rounds to 0 whole turns
+ * and the next element carries on from the same angle.
  */
 const turnCache = new Map<string, { pitch: number; roll: number }>();
 function turnsBefore(id: MegaId, index: number): { pitch: number; roll: number } {
@@ -181,11 +189,13 @@ export function megaFrame(
   out: Frame = createFrame(),
 ): Frame {
   const seg = megaLocate(id, passed, t);
-  const element = specOf(id).elements[seg.index];
+  const spec = specOf(id);
+  const element = spec.elements[seg.index];
   const def = defOf(id, seg.index, seg.outcome);
   resetFrame(out);
   def.at(seg.localT, out);
-  if (seg.outcome === 'clear' && seg.localT >= def.duration) settleClear(out, element.length);
+  if (seg.outcome === 'clear' && seg.localT >= def.duration && !(spec.airborne && seg.index < 2))
+    settleClear(out, element.length);
   const offset = megaOffsets(id)[seg.index];
   const turns = turnsBefore(id, seg.index);
   out.bike.x += offset;
@@ -245,4 +255,28 @@ export function megaWord(id: MegaId, passed: Passed): string {
 export function megaWordAt(id: MegaId, passed: Passed, t: number): { text: string; good: boolean } {
   const seg = megaLocate(id, passed, t);
   return { text: defOf(id, seg.index, seg.outcome).word, good: seg.outcome === 'clear' };
+}
+
+/** Playback rate at the slowest moment of a slow-motion beat. */
+export const SLOW_RATE = 0.35;
+/** Stunt seconds either side of the beat at the slowest rate, then over which it eases back to 1. */
+export const SLOW_HOLD = 0.12;
+export const SLOW_FADE = 0.12;
+
+/**
+ * The playback rate at stunt time t (1 = normal). It is SLOW_RATE within SLOW_HOLD of any slow
+ * beat of the segments that play, and rises linearly back to 1 over the next SLOW_FADE.
+ */
+export function megaRate(id: MegaId, passed: Passed, t: number): number {
+  if (Number.isNaN(t)) return 1;
+  let weight = 0;
+  for (const seg of megaSegments(id, passed)) {
+    for (const c of defOf(id, seg.index, seg.outcome).slow ?? []) {
+      if (c < 0 || c > seg.duration) continue;
+      const d = Math.abs(t - (seg.start + c));
+      const w = d <= SLOW_HOLD ? 1 : Math.max(0, 1 - (d - SLOW_HOLD) / SLOW_FADE);
+      weight = Math.max(weight, w);
+    }
+  }
+  return 1 - (1 - SLOW_RATE) * weight;
 }

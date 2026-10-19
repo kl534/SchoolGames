@@ -117,9 +117,14 @@ export function startsMega(n: number): boolean {
 
 // ---------- Mega courses ----------
 
-export type MegaId = 'triple-loop' | 'sky-circus' | 'volcano-rush';
+export type MegaId = 'triple-loop' | 'sky-circus' | 'volcano-rush' | 'inferno-drop';
 /** The Mega courses, in the order `nextMega` picks among them. */
-export const MEGA_IDS: readonly MegaId[] = ['triple-loop', 'sky-circus', 'volcano-rush'];
+export const MEGA_IDS: readonly MegaId[] = [
+  'triple-loop',
+  'sky-circus',
+  'volcano-rush',
+  'inferno-drop',
+];
 /** How many questions the player got right before the first miss: 0 to MEGA_PIECES. */
 export type Passed = 0 | 1 | 2 | 3;
 
