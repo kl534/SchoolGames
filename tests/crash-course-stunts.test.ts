@@ -49,9 +49,10 @@ function numbers(f: Frame): number[] {
 
 const near = (a: number, b: number, tolerance = 0.02) => Math.abs(a - b) <= tolerance;
 
-describe('there are 28 stunts', () => {
+describe('there are 40 stunts', () => {
   it('covers every kind, outcome and variant', () => {
-    expect(cases).toHaveLength(28);
+    expect(cases).toHaveLength(OBSTACLE_KINDS.length * 4);
+    expect(OBSTACLE_KINDS).toHaveLength(10);
   });
 });
 

@@ -1,6 +1,16 @@
 /** Pure game rules and motion helpers, kept free of three.js objects so they are easy to test. */
 
-export type ObstacleKind = 'loop' | 'ramp' | 'ring' | 'crates' | 'bridge' | 'seesaw' | 'coaster';
+export type ObstacleKind =
+  | 'loop'
+  | 'ramp'
+  | 'ring'
+  | 'crates'
+  | 'bridge'
+  | 'seesaw'
+  | 'coaster'
+  | 'halfpipe'
+  | 'penguins'
+  | 'wrecker';
 export const OBSTACLE_KINDS: readonly ObstacleKind[] = [
   'loop',
   'ramp',
@@ -9,6 +19,9 @@ export const OBSTACLE_KINDS: readonly ObstacleKind[] = [
   'bridge',
   'seesaw',
   'coaster',
+  'halfpipe',
+  'penguins',
+  'wrecker',
 ];
 export type Outcome = 'clear' | 'crash';
 export type Variant = 0 | 1;

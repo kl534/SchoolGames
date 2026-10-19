@@ -1,5 +1,5 @@
 /**
- * The 28 stunts as authored animations: keyframe tracks in obstacle-local coordinates (x = 0 at
+ * The 40 stunts as authored animations: keyframe tracks in obstacle-local coordinates (x = 0 at
  * the obstacle's entry line, y up, the road's top surface at y = 0). Pure data and maths, no
  * three.js and no DOM, so the sampler is easy to test and the stunt lab can play any moment of
  * any stunt. `stuntFrame(kind, outcome, variant, t)` says where the bike and the rider are.
@@ -123,6 +123,9 @@ export const SPECS: Record<ObstacleKind, StuntSpec> = {
   bridge: { kind: 'bridge', length: 18, floorY: -5, height: 1.4 },
   seesaw: { kind: 'seesaw', length: 14, floorY: 0, height: 3.6 },
   coaster: { kind: 'coaster', length: 24, floorY: 0, height: 5.6 },
+  halfpipe: { kind: 'halfpipe', length: 18, floorY: 0, height: 5.6 },
+  penguins: { kind: 'penguins', length: 16, floorY: 0, height: 3.0 },
+  wrecker: { kind: 'wrecker', length: 18, floorY: 0, height: 5.5 },
 };
 
 // ---------- Keyframes and easing ----------
@@ -2603,6 +2606,1044 @@ const coasterCrash1: Def = (() => {
   };
 })();
 
+// ----- Shared by the three newest stunts -----
+
+const flatRoad: Surface = () => 0;
+
+/** A walk along a surface by distance, so a ride keeps its speed up and down the curved walls. */
+interface Walk {
+  length: number;
+  xAt(s: number): number;
+  sAt(x: number): number;
+}
+
+function walkAlong(surf: Surface, x0: number, x1: number, n = 320): Walk {
+  const xs: number[] = [];
+  const ss: number[] = [];
+  let total = 0;
+  for (let i = 0; i <= n; i++) {
+    const x = lerp(x0, x1, i / n);
+    if (i > 0) total += Math.hypot(x - xs[i - 1], surf(x) - surf(xs[i - 1]));
+    xs.push(x);
+    ss.push(total);
+  }
+  const find = (list: number[], v: number): number => {
+    let lo = 0;
+    let hi = n;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (list[mid] <= v) lo = mid;
+      else hi = mid;
+    }
+    return lo;
+  };
+  return {
+    length: total,
+    xAt(s) {
+      if (s <= 0) return x0;
+      if (s >= total) return x1;
+      const i = find(ss, s);
+      return lerp(xs[i], xs[i + 1], (s - ss[i]) / (ss[i + 1] - ss[i] || 1));
+    },
+    sAt(x) {
+      if (x <= x0) return 0;
+      if (x >= x1) return total;
+      const i = find(xs, x);
+      return lerp(ss[i], ss[i + 1], (x - xs[i]) / (xs[i + 1] - xs[i] || 1));
+    },
+  };
+}
+
+/** The bike's frame origin when its front wheel stands on the road at `fx`, nose pitched `p`. */
+const onFrontWheel = (f: Frame, fx: number, p: number): void => {
+  f.bike.x = fx - REAR * Math.cos(p);
+  f.bike.y = WHEEL_R - REAR * Math.sin(p);
+  f.bike.pitch = p;
+};
+
+// ----- Skate half-pipe -----
+
+export const HP_R = 3.2;
+/** The walls are a circle of radius HP_R, ridden up to this angle from the bottom (66 degrees). */
+const HP_THETA = 1.15;
+export const HP_WX = HP_R * Math.sin(HP_THETA);
+export const HP_WH = HP_R * (1 - Math.cos(HP_THETA));
+export const HP_KICK_LEN = 2.4;
+const HP_KICK_H = 0.8;
+/** The left lip deck (where the bike drops in from) and the right one (where it takes off). */
+export const HP_DECK_L0 = 3.2;
+export const HP_DECK_L1 = 4.7;
+export const HP_CXL = HP_DECK_L1 + HP_WX;
+export const HP_CXR = HP_CXL + 6;
+export const HP_LIP = HP_CXR + HP_WX;
+export const HP_DECK_R1 = HP_LIP + 0.3;
+const hpWall = (dx: number) => HP_R - Math.sqrt(Math.max(HP_R * HP_R - dx * dx, 0));
+
+/** The kicker, the left deck, the U (floor at road level) and the right deck. */
+export function halfpipeSurface(x: number): number {
+  if (x <= 0) return 0;
+  if (x <= HP_KICK_LEN) return kicker(x, HP_KICK_H, HP_KICK_LEN);
+  if (x < HP_DECK_L0) return 0;
+  if (x <= HP_DECK_L1) return HP_WH;
+  if (x < HP_CXL) return hpWall(HP_CXL - x);
+  if (x <= HP_CXR) return 0;
+  if (x < HP_LIP) return hpWall(x - HP_CXR);
+  if (x <= HP_DECK_R1) return HP_WH;
+  return 0;
+}
+
+const HP_X0 = HP_KICK_LEN - REAR;
+const HP_T_KICK = 0.18;
+const HP_T_HOP = 0.5;
+const HP_LAND = { x: 4.0, y: HP_WH + BIKE_Y };
+const HP_X_END = HP_LIP - REAR;
+const hpLaunch = (() => {
+  const f = createFrame();
+  ride(f, halfpipeSurface, HP_X0);
+  return { x: f.bike.x, y: f.bike.y, pitch: f.bike.pitch };
+})();
+const hpTake = (() => {
+  const f = createFrame();
+  ride(f, halfpipeSurface, HP_X_END);
+  return { x: f.bike.x, y: f.bike.y, pitch: f.bike.pitch };
+})();
+const hpPipe = walkAlong(halfpipeSurface, HP_LAND.x, HP_X_END);
+const HP_END_X = 17.7;
+
+/** The run-up: along the kicker, then a hop onto the left deck. True while it placed the bike. */
+function hpIntro(t: number, f: Frame): boolean {
+  if (t < HP_T_KICK) {
+    ride(f, halfpipeSurface, lerp(0, HP_X0, t / HP_T_KICK), settleAt(t));
+    return true;
+  }
+  if (t < HP_T_HOP) {
+    const u = (t - HP_T_KICK) / (HP_T_HOP - HP_T_KICK);
+    f.bike.x = lerp(hpLaunch.x, HP_LAND.x, u);
+    f.bike.y = arc(hpLaunch.y, HP_LAND.y, 3.4, u);
+    f.bike.pitch = lerp(hpLaunch.pitch, 0, EASE.io(u));
+    f.bike.grounded = false;
+    return true;
+  }
+  return false;
+}
+
+/** A small squash as the bike drops onto the deck. */
+const hpDropSquash = track([
+  [HP_T_HOP, 1],
+  [HP_T_HOP + 0.06, 0.88],
+  [HP_T_HOP + 0.3, 1, 'o'],
+]);
+
+/** A clear: the whole run, the air off the right lip (a spin or a back flip) and the landing. */
+function halfpipeClear(variant: Variant): Def {
+  // The flip is a slower, higher show than the spin.
+  const tTake = variant === 0 ? 1.9 : 2.1;
+  const tLand = tTake + (variant === 0 ? 0.95 : 1.05);
+  const duration = tLand + 0.35;
+  const peak = variant === 0 ? 5.2 : 5.4;
+  const s = track([
+    [HP_T_HOP, 0],
+    [tTake, hpPipe.length, 'l'],
+  ]);
+  const at = (t: number, f: Frame) => {
+    if (hpIntro(t, f)) return;
+    if (t < tTake) {
+      ride(f, halfpipeSurface, hpPipe.xAt(s(t)));
+      f.bike.squash = hpDropSquash(t);
+    } else if (t < tLand) {
+      const u = (t - tTake) / (tLand - tTake);
+      f.bike.x = lerp(hpTake.x, HP_END_X, u);
+      f.bike.y = arc(hpTake.y, BIKE_Y, peak, u);
+      f.bike.grounded = false;
+      if (variant === 0) {
+        // A 360 corkscrew with the arms up.
+        f.bike.pitch = lerp(hpTake.pitch, 0, EASE.io(u));
+        f.bike.roll = TAU * EASE.io(u);
+      } else {
+        // A no-handed back flip.
+        f.bike.pitch = lerp(hpTake.pitch, TAU, EASE.io(u));
+      }
+    } else {
+      f.bike.x = lerp(HP_END_X, 18, prog(t, tLand, duration, 'l'));
+      f.bike.pitch = variant === 0 ? 0 : TAU;
+      f.bike.roll = variant === 0 ? TAU : 0;
+      const k = t - tLand;
+      f.bike.squash =
+        k < 0.08
+          ? lerp(1, 0.86, k / 0.08)
+          : lerp(0.86, 1, prog(t, tLand + 0.08, duration - 0.1, 'o'));
+    }
+    if (t > tTake + 0.1 && t < tLand) f.rider.pose = variant === 0 ? 'armsUp' : 'thumbs';
+    else if (t > 1.2 && t < 1.55) f.rider.pose = variant === 0 ? 'wave' : 'duck';
+  };
+  const tPeak = tTake + (tLand - tTake) * 0.5;
+  return {
+    duration,
+    word: variant === 0 ? 'AIR TIME!' : 'NO HANDS!',
+    beats: { drop: HP_T_HOP, take: tTake, land: tLand },
+    at,
+    events: (bike) => [
+      [HP_T_HOP, 'dust', HP_LAND.x, HP_WH],
+      [HP_T_HOP + 0.1, 'sfx:whoosh', 5.5, 2],
+      ...trail(0.9, tTake - 0.1, 0.2, 'spark', bike, -0.3),
+      [tTake, 'sfx:boing', HP_LIP, HP_WH],
+      [tPeak, 'word', hpTake.x + 0.6, peak + 0.5],
+      [tLand, 'dust', HP_END_X, 0.1],
+      [tLand, variant === 0 ? 'spark' : 'confetti', HP_END_X, 1.2],
+      [tLand + 0.12, 'cheer', HP_END_X + 0.5, 2],
+    ],
+  };
+}
+
+const halfpipeClear0: Def = halfpipeClear(0);
+const halfpipeClear1: Def = halfpipeClear(1);
+
+/** Too slow: stalls near the top of the right wall and slides back down backwards. */
+const halfpipeCrash0: Def = (() => {
+  const duration = 3.9;
+  const sStall = hpPipe.length - 1.2;
+  const sMid = sStall - 1.4;
+  const tClimb = 1.35;
+  const tStall = 1.75;
+  const tHang = 1.85;
+  const tFloor = 2.5;
+  const tLap = 2.8;
+  const sFloor = hpPipe.sAt(11.0);
+  const s = track([
+    [HP_T_HOP, 0],
+    [tClimb, sMid, 'l'],
+    [tStall, sStall, 'o'],
+    [tHang, sStall],
+    [tFloor, sFloor, 'io'],
+  ]);
+  const floorBike = (() => {
+    const f = createFrame();
+    ride(f, halfpipeSurface, 11.0);
+    return { x: f.bike.x, y: f.bike.y };
+  })();
+  const hipsAt = hipOf(floorBike.x, floorBike.y, 0);
+  const hips = { x: hipsAt.x, y: hipsAt.y };
+  const lap = { x: 10.75, y: 0.85, pitch: 0.25 };
+  const sit = { x: 10.2, y: 0.2 };
+  const at = (t: number, f: Frame) => {
+    if (hpIntro(t, f)) return;
+    const k = prog(t, tFloor, tLap, 'o');
+    ride(f, halfpipeSurface, hpPipe.xAt(s(t)));
+    f.bike.squash = hpDropSquash(t);
+    if (t >= tStall && t < tHang) {
+      f.bike.grounded = false;
+      f.bike.pitch += 0.05 * Math.sin((t - tStall) * 40);
+    } else if (t >= tHang && t < tFloor) {
+      f.bike.grounded = false;
+    }
+    if (t >= tFloor) {
+      f.bike.x = lerp(floorBike.x, lap.x, k);
+      f.bike.y = lerp(floorBike.y, lap.y, k);
+      f.bike.pitch = lerp(0, lap.pitch, k);
+      f.bike.squash = lerp(1, 0.75, k);
+      f.bike.grounded = false;
+      setFree(
+        f,
+        lerp(hips.x, sit.x, k),
+        lerp(hips.y, sit.y, k),
+        0,
+        'sit',
+        t > tLap ? 'dizzy' : 'scared',
+      );
+    } else if (t >= tStall - 0.25) {
+      f.rider.face = 'scared';
+    }
+  };
+  const stallX = hpPipe.xAt(sStall);
+  return {
+    duration,
+    word: 'STALLED!',
+    beats: { stall: tStall, floor: tFloor },
+    at,
+    events: (bike) => [
+      [HP_T_HOP, 'dust', HP_LAND.x, HP_WH],
+      [tClimb - 0.2, 'sweat', stallX - 0.8, 3],
+      [tStall, 'groan', stallX, 2.4],
+      [tStall + 0.05, 'word', stallX, 3.6],
+      [tStall + 0.05, 'sfx:fizz', stallX, 2.2],
+      ...trail(tHang + 0.1, tFloor - 0.1, 0.2, 'dust', bike, -0.3),
+      [tFloor, 'sfx:bump', floorBike.x, 0.3],
+      [tFloor, 'dust', floorBike.x, 0.1],
+      [tLap + 0.1, 'stars', sit.x, 1.7],
+    ],
+  };
+})();
+
+/** Far too fast: over the lip, the rider lands on his head and the bike spins on its front wheel. */
+const halfpipeCrash1: Def = (() => {
+  const duration = 4.0;
+  const tTake = 1.65;
+  const tLand = 2.3;
+  const tSpin = 2.7;
+  const tTip = 3.0;
+  const s = track([
+    [HP_T_HOP, 0],
+    [tTake, hpPipe.length, 'l'],
+  ]);
+  const frontX = 19.0;
+  const pitchLand = -1.35;
+  const landBike = (() => {
+    const f = createFrame();
+    onFrontWheel(f, frontX, pitchLand);
+    return { x: f.bike.x, y: f.bike.y };
+  })();
+  const restBike = { x: 19.7, y: 0.34 };
+  const hip0 = (() => {
+    const h = hipOf(hpTake.x, hpTake.y, hpTake.pitch);
+    return { x: h.x, y: h.y };
+  })();
+  const riderLand = { x: 17.3, y: 0.4 };
+  const sit = { x: 17.5, y: 0.2 };
+  const at = (t: number, f: Frame) => {
+    if (hpIntro(t, f)) return;
+    if (t < tTake) {
+      ride(f, halfpipeSurface, hpPipe.xAt(s(t)));
+      f.bike.squash = hpDropSquash(t);
+    } else if (t < tLand) {
+      const u = (t - tTake) / (tLand - tTake);
+      f.bike.x = lerp(hpTake.x, landBike.x, u);
+      f.bike.y = arc(hpTake.y, landBike.y, 6.0, u);
+      f.bike.pitch = lerp(hpTake.pitch, pitchLand, EASE.io(u));
+      f.bike.grounded = false;
+    } else if (t < tSpin) {
+      // Spinning like a top on the front wheel.
+      onFrontWheel(f, frontX, pitchLand);
+      f.bike.roll = TAU * prog(t, tLand, tSpin, 'l');
+      f.bike.grounded = false;
+    } else {
+      const k = prog(t, tSpin, tTip, 'io');
+      onFrontWheel(f, frontX, lerp(pitchLand, 0, k));
+      f.bike.x = lerp(f.bike.x, restBike.x, k);
+      f.bike.y = lerp(f.bike.y, restBike.y, k * k);
+      f.bike.roll = TAU + 1.5 * k;
+      f.bike.grounded = false;
+      f.bike.squash = 1 - 0.1 * prog(t, tTip - 0.1, tTip, 'o');
+    }
+    if (t >= tTake - 0.1) f.rider.face = 'scared';
+    if (t >= tTake && t < tLand) {
+      const u = (t - tTake) / (tLand - tTake);
+      setFree(
+        f,
+        lerp(hip0.x, riderLand.x, u),
+        arc(hip0.y, riderLand.y, 5.2, u),
+        lerp(hpTake.pitch, -Math.PI, EASE.io(u)),
+        'flail',
+        'scared',
+      );
+    } else if (t >= tLand) {
+      // Lands on his head, then topples over to sit up dizzy.
+      const k = prog(t, tLand + 0.15, tLand + 0.5, 'io');
+      setFree(
+        f,
+        lerp(riderLand.x, sit.x, k),
+        lerp(riderLand.y, sit.y, k),
+        lerp(-Math.PI, -TAU, k),
+        k > 0.7 ? 'sit' : 'flail',
+        'dizzy',
+      );
+    }
+  };
+  return {
+    duration,
+    word: 'OVERCOOKED!',
+    beats: { take: tTake, land: tLand, spin: tLand },
+    at,
+    events: (bike) => [
+      [HP_T_HOP, 'dust', HP_LAND.x, HP_WH],
+      ...trail(1.1, tTake - 0.05, 0.15, 'spark', bike, -0.3),
+      [tTake, 'sfx:slideWhistle', HP_LIP, HP_WH + 0.5],
+      [tLand, 'groan', riderLand.x, 0.6],
+      [tLand, 'word', riderLand.x, 2.0],
+      [tLand, 'sfx:bump', riderLand.x, 0.2],
+      [tLand, 'dust', frontX, 0.1],
+      [tLand, 'dust', riderLand.x, 0.1],
+      [tTip, 'sfx:crash', restBike.x, 0.3],
+      [tTip, 'dust', restBike.x, 0.1],
+      [tLand + 0.6, 'stars', sit.x, 1.8],
+      ...trail(tSpin - 0.3, tSpin, 0.15, 'spark', () => ({ x: frontX, y: 0.5 })),
+    ],
+  };
+})();
+
+// ----- Penguin pond -----
+
+export const PG_ICE_FROM = 2;
+export const PG_ICE_TO = 15.2;
+export const PG_HOOP_X = 8;
+/** The penguins stand behind the bike's lane, so the bike passes in front of them. */
+export const PG_LANE_Z = -1.4;
+export const PENGUIN_COUNT = 7;
+/** Two flank the hoop; five stand in a row at the far end for the bike to bowl through. */
+export const PENGUIN_HOME: readonly number[] = [6.7, 9.3, 10.9, 11.8, 12.7, 13.6, 14.5];
+const PG_X0 = 2.4;
+const PG_ENTER = 0.26;
+
+/** How squashed a bike looks while it turns about the vertical, for a yaw (radians). */
+const yawSquash = (yaw: number) => 0.45 + 0.55 * Math.abs(Math.cos(yaw));
+
+const penguinPiece = (out: Piece, i: number): Piece => {
+  out.x = PENGUIN_HOME[i];
+  out.y = 0;
+  out.rot = 0;
+  out.scale = 1;
+  out.visible = true;
+  return out;
+};
+
+/** Penguins clapping: little hops, each out of step with the next, once the bike has passed. */
+const clap = (out: Piece, i: number, t: number, from: number): Piece => {
+  if (t > from) out.y = 0.16 * Math.abs(Math.sin((t - from) * 9 + i * 1.7));
+  return out;
+};
+
+const penguinsClear0: Def = (() => {
+  const duration = 2.6;
+  const tSlide0 = PG_ENTER;
+  const tSlide1 = 1.85;
+  const tOut = 2.4;
+  const x = track([
+    [0, 0],
+    [tSlide0, PG_X0, 'l'],
+    [tSlide1, 13.6, 'l'],
+    [tOut, 16, 'l'],
+  ]);
+  const at = (t: number, f: Frame) => {
+    const u = prog(t, tSlide0, tSlide1, 'l');
+    const yaw = TAU * prog(t, tSlide0, tSlide1, 'io');
+    ride(f, flatRoad, x(t));
+    f.bike.z = 0.8 * Math.sin(TAU * u);
+    f.bike.roll = 0.25 * Math.sin(TAU * 1.5 * u);
+    f.bike.squash = t > tSlide0 && t < tSlide1 ? yawSquash(yaw) : 1;
+    if (t > tSlide0 && t < tSlide1) {
+      f.rider.pose = 'balance';
+      f.bike.grounded = false;
+    }
+  };
+  return {
+    duration,
+    word: 'ICE ICE BABY!',
+    beats: { slide: tSlide0, out: tSlide1 },
+    at,
+    events: (bike) => [
+      [tSlide0, 'sfx:whoosh', PG_X0, 0.5],
+      ...trail(tSlide0 + 0.1, tSlide1, 0.15, 'spark', bike, -0.2),
+      [1.0, 'word', 8, 3],
+      [tSlide1, 'dust', 13.6, 0.1],
+      [tOut - 0.1, 'cheer', 15, 2],
+    ],
+  };
+})();
+
+const PG_END_1 = 2.3;
+const pgX1 = track([
+  [0, 0],
+  [PG_ENTER, PG_X0, 'l'],
+  [PG_END_1, 16, 'l'],
+]);
+const pgW1 = track([
+  [0, 0],
+  [0.45, 0.5],
+  [1.95, 0.5, 'l'],
+  [PG_END_1, 0],
+]);
+/** The wheelie across the ice. */
+function pgWheelie(t: number, f: Frame): void {
+  if (t < PG_ENTER) ride(f, flatRoad, pgX1(t));
+  else rideW(f, flatRoad, pgX1(t), pgW1(t));
+  f.bike.grounded = pgW1(t) < 0.05;
+  if (pgW1(t) > 0.2) f.rider.pose = 'wheelie';
+}
+
+const pgScratch = createFrame();
+/** Where a penguin sits on the back of the wheelie at a moment. */
+function penguinRack(t: number, out: { x: number; y: number }): void {
+  const f = resetFrame(pgScratch);
+  pgWheelie(t, f);
+  const c = Math.cos(f.bike.pitch);
+  const s = Math.sin(f.bike.pitch);
+  out.x = f.bike.x - 0.75 * c - 0.45 * s;
+  out.y = f.bike.y - 0.75 * s + 0.45 * c;
+}
+
+/** When the first penguin hops on the back of the wheelie (as the bike passes it) and off again. */
+const PG_RIDE = (() => {
+  const p = { x: 0, y: 0 };
+  let on = 0.7;
+  for (let t = 0.5; t < 2; t += 0.005) {
+    penguinRack(t, p);
+    if (p.x >= PENGUIN_HOME[0]) {
+      on = t;
+      break;
+    }
+  }
+  return { on, off: 1.95, hop: 0.3, land: 0.35 };
+})();
+
+const penguinsClear1: Def = (() => {
+  const duration = 2.9;
+  return {
+    duration,
+    word: 'PENGUIN POWER!',
+    beats: { on: PG_RIDE.on, off: PG_RIDE.off },
+    at: pgWheelie,
+    events: (bike) => [
+      [0.5, 'sfx:whoosh', PG_X0, 0.5],
+      [PG_RIDE.on, 'poof', PENGUIN_HOME[0], 0.8],
+      [PG_RIDE.on, 'sfx:boing', PENGUIN_HOME[0], 0.8],
+      [PG_RIDE.on + 0.1, 'word', PENGUIN_HOME[0], 3],
+      ...trail(1.0, PG_RIDE.off, 0.2, 'spark', bike, -0.2),
+      [PG_RIDE.off, 'sfx:boing', 12, 0.8],
+      [PG_END_1 + 0.1, 'cheer', 16, 2],
+    ],
+  };
+})();
+
+const penguinsCrash0: Def = (() => {
+  const duration = 3.6;
+  const tStrike = 1.45;
+  const tFly = 2.25;
+  const x = track([
+    [0, 0],
+    [PG_ENTER, PG_X0, 'l'],
+    [tStrike, 10.7, 'l'],
+    [2.1, 12.3, 'o'],
+  ]);
+  const zLane = track([
+    [0.5, 0],
+    [1.4, PG_LANE_Z * 0.9, 'io'],
+  ]);
+  const hip = (() => {
+    const h = hipOf(10.7, BIKE_Y, 0);
+    return { x: h.x, y: h.y };
+  })();
+  const sit = { x: 14.9, y: 0.2 };
+  const at = (t: number, f: Frame) => {
+    ride(f, flatRoad, x(t));
+    const yaw = TAU * 2 * prog(t, PG_ENTER, tStrike, 'l');
+    f.bike.z = zLane(t);
+    if (t < tStrike) {
+      f.bike.squash = t > PG_ENTER ? yawSquash(yaw) : 1;
+      f.bike.grounded = t < PG_ENTER;
+      if (t > tStrike - 0.5) f.rider.face = 'scared';
+    } else {
+      f.bike.squash = lerp(0.8, 1, prog(t, tStrike, 1.9, 'o'));
+      const k = prog(t, 1.7, 2.1, 'io');
+      f.bike.roll = 1.4 * k;
+      f.bike.y = lerp(BIKE_Y, 0.34, k);
+      f.bike.grounded = false;
+      const u = prog(t, tStrike, tFly, 'l');
+      if (t < tFly)
+        setFree(f, lerp(hip.x, sit.x, u), arc(hip.y, sit.y, 2.8, u), -TAU * u, 'flail', 'scared');
+      else setFree(f, sit.x, sit.y, -TAU, 'sit', 'dizzy');
+    }
+  };
+  return {
+    duration,
+    word: 'STRIKE!',
+    beats: { strike: tStrike, fly: tFly, hat: tFly + 0.05 },
+    at,
+    events: (bike) => [
+      [PG_ENTER, 'dust', PG_X0, 0.1],
+      [PG_ENTER + 0.05, 'sfx:slideWhistle', PG_X0, 0.8],
+      ...trail(PG_ENTER + 0.1, tStrike, 0.15, 'spark', bike, -0.2),
+      [tStrike, 'groan', 11, 1],
+      [tStrike, 'word', 11.5, 2.4],
+      [tStrike, 'sfx:pins', 11.5, 0.8],
+      [tStrike, 'poof', 11.8, 1],
+      [tStrike + 0.1, 'poof', 13, 1],
+      [tFly + 0.1, 'sfx:bump', sit.x, 0.3],
+      [tFly + 0.3, 'stars', sit.x, 1.9],
+    ],
+  };
+})();
+
+const penguinsCrash1: Def = (() => {
+  const duration = 3.6;
+  const tTip = 0.4;
+  const tBank = 1.95;
+  const tSnow = 2.2;
+  const bankX = 13.4;
+  const x = track([
+    [0, 0],
+    [PG_ENTER, PG_X0, 'l'],
+    [tBank, bankX, 'q'],
+  ]);
+  const hip = (() => {
+    const h = hipOf(PG_X0 + 1.6, BIKE_Y, 0);
+    return { x: h.x, y: h.y };
+  })();
+  const at = (t: number, f: Frame) => {
+    const k = prog(t, tTip, tTip + 0.3, 'io');
+    ride(f, flatRoad, x(t));
+    f.bike.roll = 1.4 * k;
+    f.bike.y = lerp(BIKE_Y, 0.34, k);
+    f.bike.grounded = t < tTip;
+    if (t >= tTip - 0.1) f.rider.face = 'scared';
+    if (t >= tTip) {
+      // Face down beside the bike, sliding on into the bank.
+      const bx = x(t);
+      const j = prog(t, tTip, tTip + 0.6, 'o');
+      setFree(
+        f,
+        lerp(hip.x, bx + 1.2, j) + (t > tBank ? Math.min(1, (t - tBank) * 3) * 0.3 : 0),
+        lerp(hip.y, 0.32, j),
+        lerp(0, -Math.PI / 2, j),
+        j > 0.5 ? 'splat' : 'flail',
+        'scared',
+      );
+    }
+  };
+  return {
+    duration,
+    word: 'BRRR!',
+    beats: { tip: tTip, bank: tBank, snow: tSnow },
+    at,
+    events: (bike) => [
+      [tTip, 'groan', PG_X0 + 1.6, 0.6],
+      [tTip, 'word', 5, 2.4],
+      [tTip, 'sfx:slideWhistle', PG_X0 + 1.5, 0.8],
+      ...trail(tTip + 0.1, tBank - 0.2, 0.15, 'dust', bike, -0.1),
+      [tBank, 'sfx:bump', bankX + 1.2, 0.5],
+      [tBank, 'poof', bankX + 1.5, 1],
+      [tSnow + 0.2, 'sfx:splat', bankX + 1.3, 1.4],
+      [tSnow + 0.2, 'poof', bankX + 1.3, 1.6],
+      [tSnow + 0.5, 'stars', bankX + 1.3, 2],
+    ],
+  };
+})();
+
+/** One penguin at a moment of a penguin stunt: where it is, how it is turned and whether to draw it. */
+export function penguinAt(
+  outcome: Outcome,
+  variant: Variant,
+  i: number,
+  t: number,
+  out: Piece = { x: 0, y: 0, rot: 0, scale: 1, visible: true },
+): Piece {
+  penguinPiece(out, i);
+  const rack = { x: 0, y: 0 };
+  if (outcome === 'clear' && variant === 0) return clap(out, i, t, 1.0);
+  if (outcome === 'clear' && variant === 1) {
+    if (i !== 0) return clap(out, i, t, 1.2);
+    const { on, off, hop, land } = PG_RIDE;
+    if (t < on - hop) return out;
+    if (t < on) {
+      penguinRack(on, rack);
+      const u = (t - (on - hop)) / hop;
+      out.x = lerp(PENGUIN_HOME[0], rack.x, u);
+      out.y = arc(0, rack.y, 1.4, u);
+      return out;
+    }
+    if (t < off) {
+      penguinRack(t, rack);
+      out.x = rack.x;
+      out.y = rack.y;
+      out.rot = 0.1 * Math.sin((t - on) * 12);
+      return out;
+    }
+    penguinRack(off, rack);
+    const stand = rack.x - 1.2;
+    if (t < off + land) {
+      const u = (t - off) / land;
+      out.x = lerp(rack.x, stand, u);
+      out.y = arc(rack.y, 0, rack.y + 0.6, u);
+      return out;
+    }
+    out.x = stand;
+    return clap(out, i, t, off + land);
+  }
+  if (outcome === 'crash' && variant === 0) {
+    const tStrike = 1.45;
+    if (i < 2) return t > tStrike ? clap(out, i, t, tStrike + 0.2) : out;
+    if (t < tStrike) return out;
+    const dt = t - tStrike;
+    const home = PENGUIN_HOME[i];
+    fly(
+      home,
+      0,
+      4 + (i - 2) * 1.1,
+      5.5 + ((i * 7) % 3) * 0.8,
+      0,
+      (i % 2 ? 1 : -1) * (7 + i),
+      0,
+      dt,
+      out,
+      18,
+    );
+    if (i === 6) {
+      // The last one lands on the rider's helmet.
+      const tHat = 2.3;
+      if (t >= tHat) {
+        fly(
+          home,
+          0,
+          4 + (i - 2) * 1.1,
+          5.5 + ((i * 7) % 3) * 0.8,
+          0,
+          11 * -1,
+          0,
+          tHat - tStrike,
+          out,
+          18,
+        );
+        const k = prog(t, tHat, tHat + 0.3, 'io');
+        out.x = lerp(out.x, 14.9, k);
+        out.y = lerp(out.y, 1.3, k);
+        out.rot = lerp(out.rot, -TAU * Math.round(out.rot / -TAU), k);
+      }
+    }
+    return out;
+  }
+  // Crash 1: the penguins look on, jumping at the snow.
+  return t > 2.2 ? clap(out, i, t, 2.2) : out;
+}
+
+/** How far toward the camera a penguin stands (the helmet one moves up to the rider). */
+export function penguinLane(outcome: Outcome, variant: Variant, i: number, t: number): number {
+  if (outcome === 'clear' && variant === 1 && i === 0) {
+    const u =
+      prog(t, PG_RIDE.on - PG_RIDE.hop, PG_RIDE.on, 'io') -
+      prog(t, PG_RIDE.off, PG_RIDE.off + PG_RIDE.land, 'io');
+    return lerp(PG_LANE_Z, 0, Math.max(0, u));
+  }
+  if (outcome === 'crash' && variant === 0 && i === 6)
+    return lerp(PG_LANE_Z, 0, prog(t, 2.3, 2.6, 'io'));
+  return PG_LANE_Z;
+}
+
+// ----- Wrecking balls -----
+
+export const WR_PX: readonly number[] = [4.5, 9, 13.5];
+/** Height of the gantry beam the chains hang from. */
+export const WR_TOP = 5.5;
+export const WR_L = 3.2;
+export const WR_R = 0.8;
+/** The balls swing a little behind the bike's lane. */
+export const WR_Z = -0.6;
+const WR_A = 0.55;
+const WR_W = 2.6;
+
+/** Where the centre of ball `i` is when its chain is `angle` radians from straight down. */
+export function wreckerBall(i: number, angle: number, out: Pos = { x: 0, y: 0 }): Pos {
+  out.x = WR_PX[i] + WR_L * Math.sin(angle);
+  out.y = WR_TOP - WR_L * Math.cos(angle);
+  return out;
+}
+
+interface Swing {
+  amp: number;
+  w: number;
+  phase: number;
+}
+/** A swing that is at its right extreme (1), left extreme (-1) or lowest going forward (0) at `t`. */
+const swingAt = (t: number, where: -1 | 0 | 1, w = WR_W, amp = WR_A): Swing => ({
+  amp,
+  w,
+  phase: where === 0 ? -w * t : (where * Math.PI) / 2 - w * t,
+});
+
+/** The first time the bike (a function of time) is at x. */
+function whenAt(x: (t: number) => number, target: number, from = 0): number {
+  for (let t = from; t < 6; t += 0.002) if (x(t) >= target) return t;
+  return 6;
+}
+
+// Clear 0: slow wheelie, speed up, duck under the middle ball, hop past the third.
+const wrX0 = track([
+  [0, 0],
+  [0.45, 4.0, 'l'],
+  [1.25, 7.0, 'l'],
+  [1.8, 11.5, 'l'],
+  [2.9, 18, 'l'],
+]);
+const wrW0 = track([
+  [0.55, 0],
+  [0.8, 0.45],
+  [1.1, 0.45, 'l'],
+  [1.3, 0],
+]);
+const WR_DUCK = [1.35, 1.7] as const;
+const WR_HOP = [1.95, 2.4] as const;
+function wrecker0At(t: number, f: Frame): void {
+  const w = wrW0(t);
+  if (w > 0) rideW(f, flatRoad, wrX0(t), w);
+  else ride(f, flatRoad, wrX0(t));
+  if (t >= WR_HOP[0] && t <= WR_HOP[1]) {
+    const u = (t - WR_HOP[0]) / (WR_HOP[1] - WR_HOP[0]);
+    f.bike.y += 1.1 * Math.sin(Math.PI * u);
+    f.bike.pitch = 0.2 * Math.cos(Math.PI * u);
+    f.bike.grounded = false;
+  }
+  if (w > 0.2) f.rider.pose = 'wheelie';
+  else if (t > WR_DUCK[0] && t < WR_DUCK[1]) f.rider.pose = 'duck';
+  else if (t >= 2.6) f.rider.pose = 'thumbs';
+}
+
+// Clear 1: hop on the middle ball at its back extreme, ride half a swing, hop off.
+const WR_ON = 1.0;
+const WR_OFF = WR_ON + Math.PI / WR_W;
+const WR_JUMP = 0.65;
+const wr1Swing = swingAt(WR_ON, -1);
+const wr1Ball = (t: number): Pos =>
+  wreckerBall(1, wr1Swing.amp * Math.sin(wr1Swing.w * t + wr1Swing.phase));
+const WR_LAND_1 = 14.2;
+const WR_END_1 = 2.6;
+const wr1Run = track([
+  [0, 0],
+  [0.5, 4.5, 'l'],
+  [WR_JUMP, 5.5, 'l'],
+]);
+function wrecker1At(t: number, f: Frame): void {
+  const top = WR_R + WHEEL_R - 0.4;
+  if (t < WR_JUMP) {
+    ride(f, flatRoad, wr1Run(t));
+  } else if (t < WR_ON) {
+    const u = (t - WR_JUMP) / (WR_ON - WR_JUMP);
+    const b = wr1Ball(WR_ON);
+    f.bike.x = lerp(5.5, b.x, u);
+    f.bike.y = arc(BIKE_Y, b.y + top, 5.2, u);
+    f.bike.pitch = 0.5 * Math.sin(Math.PI * u);
+    f.bike.grounded = false;
+  } else if (t < WR_OFF) {
+    const b = wr1Ball(t);
+    f.bike.x = b.x;
+    f.bike.y = b.y + top;
+    f.bike.pitch = 0;
+    f.rider.pose = 'balance';
+  } else if (t < WR_END_1) {
+    const u = (t - WR_OFF) / (WR_END_1 - WR_OFF);
+    const b = wr1Ball(WR_OFF);
+    f.bike.x = lerp(b.x, WR_LAND_1, u);
+    f.bike.y = arc(b.y + top, BIKE_Y, 5.3, u);
+    f.bike.pitch = -0.4 * Math.sin(Math.PI * u);
+    f.bike.grounded = false;
+  } else {
+    f.bike.x = lerp(WR_LAND_1, 18, prog(t, WR_END_1, WR_END_1 + 0.7, 'l'));
+    const k = t - WR_END_1;
+    f.bike.squash =
+      k < 0.08
+        ? lerp(1, 0.88, k / 0.08)
+        : lerp(0.88, 1, prog(t, WR_END_1 + 0.08, WR_END_1 + 0.5, 'o'));
+    if (t > WR_END_1 + 0.2) f.rider.pose = 'armsUp';
+  }
+}
+
+// Crash: ball 0 swings through the bike at its lowest point, at this moment.
+const WR_HIT = 0.55;
+const WR_HIT_X = 3.9;
+const wrHitRide = track([
+  [0, 0],
+  [WR_HIT, WR_HIT_X, 'l'],
+]);
+
+const wrecker2Land = { x: 10.6, y: 0.6 };
+const wrecker2Sit = { x: 9.9, y: 0.55 };
+const WR_LAND_2 = 1.7;
+const wrecker2Hip = (() => {
+  const h = hipOf(wrecker2Land.x, wrecker2Land.y, 0);
+  return { x: h.x, y: h.y };
+})();
+function wreckerCrash0At(t: number, f: Frame): void {
+  const hipAtLand = wrecker2Hip;
+  if (t < WR_HIT) {
+    ride(f, flatRoad, wrHitRide(t));
+  } else if (t < WR_LAND_2) {
+    const u = (t - WR_HIT) / (WR_LAND_2 - WR_HIT);
+    f.bike.x = lerp(WR_HIT_X, wrecker2Land.x, u);
+    f.bike.y = arc(0.9, wrecker2Land.y, 5.9, u);
+    f.bike.pitch = lerp(0.3, -TAU, EASE.io(u));
+    f.bike.grounded = false;
+  } else {
+    f.bike.x = wrecker2Land.x;
+    f.bike.y = wrecker2Land.y;
+    f.bike.pitch = -TAU;
+    f.bike.squash = lerp(1, 0.8, prog(t, WR_LAND_2, WR_LAND_2 + 0.15, 'o'));
+    f.bike.grounded = false;
+  }
+  if (t >= WR_HIT - 0.15) f.rider.face = 'scared';
+  if (t >= WR_LAND_2) {
+    const k = prog(t, WR_LAND_2, WR_LAND_2 + 0.35, 'o');
+    setFree(
+      f,
+      lerp(hipAtLand.x, wrecker2Sit.x, k),
+      lerp(hipAtLand.y, wrecker2Sit.y, k),
+      lerp(-TAU, -TAU - 0.0, k),
+      'sit',
+      t > WR_LAND_2 + 0.3 ? 'dizzy' : 'scared',
+    );
+  }
+}
+
+// Crash 1: the rider flies off and sticks to ball 1, which swings faster.
+const WR_STICK = 1.1;
+const WR_C1_W = 7;
+const WR_DROP = WR_STICK + (1.5 * TAU) / WR_C1_W;
+const WR_LAND_C1 = WR_DROP + 0.5;
+const wrC1Swing = swingAt(WR_STICK, -1, WR_C1_W);
+const wrC1Ball = (t: number): Pos =>
+  wreckerBall(1, wrC1Swing.amp * Math.sin(wrC1Swing.w * t + wrC1Swing.phase));
+const wrC1Bike = track([
+  [0, 0],
+  [WR_HIT, WR_HIT_X, 'l'],
+  [1.5, 7.4, 'q'],
+]);
+function wreckerCrash1At(t: number, f: Frame): void {
+  const tip = prog(t, 1.5, 1.8, 'io');
+  ride(f, flatRoad, wrC1Bike(t));
+  if (t >= WR_HIT) {
+    f.bike.pitch = 0.08 * Math.sin((t - WR_HIT) * 9) * (1 - tip);
+    f.bike.roll = 1.5 * tip;
+    f.bike.y = lerp(BIKE_Y, 0.34, tip);
+    f.bike.grounded = t < 1.5;
+  }
+  if (t >= WR_HIT - 0.15) f.rider.face = 'scared';
+  if (t < WR_HIT) return;
+  const hip = hipOf(WR_HIT_X, BIKE_Y, 0);
+  if (t < WR_STICK) {
+    const u = (t - WR_HIT) / (WR_STICK - WR_HIT);
+    const b = wrC1Ball(WR_STICK);
+    setFree(
+      f,
+      lerp(hip.x, b.x + 0.2, u),
+      arc(hip.y, b.y - 0.1, 4.6, u),
+      -TAU * u * 0.5,
+      'flail',
+      'scared',
+    );
+  } else if (t < WR_DROP) {
+    const b = wrC1Ball(t);
+    setFree(
+      f,
+      b.x + 0.2,
+      b.y - 0.1,
+      -TAU * 0.5 + 0.3 * Math.sin((t - WR_STICK) * WR_C1_W),
+      'flail',
+      'scared',
+    );
+  } else {
+    const b = wrC1Ball(WR_DROP);
+    const u = prog(t, WR_DROP, WR_LAND_C1, 'l');
+    setFree(
+      f,
+      lerp(b.x + 0.2, b.x + 1.1, u),
+      arc(b.y - 0.1, 0.2, b.y + 0.4, u),
+      lerp(-TAU * 0.5, -TAU, u),
+      t < WR_LAND_C1 ? 'flail' : 'sit',
+      t < WR_LAND_C1 ? 'scared' : 'dizzy',
+    );
+  }
+}
+
+const SWINGS: Record<string, readonly Swing[]> = (() => {
+  const p0 = whenAt(wrX0, WR_PX[0]);
+  const p1 = whenAt(wrX0, WR_PX[1]);
+  const p2 = whenAt(wrX0, WR_PX[2]);
+  return {
+    clear0: [swingAt(p0, 1), swingAt(p1, 0), swingAt(p2, -1)],
+    clear1: [swingAt(0.5, 1), wr1Swing, swingAt(WR_OFF, 1)],
+    crash0: [swingAt(WR_HIT, 0), swingAt(1.1, 1), swingAt(2.3, -1)],
+    crash1: [swingAt(WR_HIT, 0), wrC1Swing, swingAt(1.0, 1)],
+  };
+})();
+
+/** The angle of the chain of ball `i` (radians from straight down, positive swings forward). */
+export function wreckerAngle(outcome: Outcome, variant: Variant, i: number, t: number): number {
+  const s = SWINGS[`${outcome}${variant}`][i];
+  return s.amp * Math.sin(s.w * t + s.phase);
+}
+
+const wreckerClear0: Def = (() => {
+  const duration = 3.1;
+  return {
+    duration,
+    word: 'NEAT MOVES!',
+    beats: { duck: WR_DUCK[0], hop: WR_HOP[0] },
+    at: wrecker0At,
+    events: (bike) => [
+      [0.3, 'sfx:whoosh', 3, 0.5],
+      [0.8, 'sfx:boing', 5.5, 0.5],
+      [WR_DUCK[0] + 0.05, 'word', 9, 3.6],
+      [WR_DUCK[0], 'sweat', 8.5, 1.6],
+      ...trail(1.4, 1.8, 0.2, 'dust', bike, -0.3),
+      [WR_HOP[0], 'sfx:whoosh', 12.5, 0.8],
+      [WR_HOP[1], 'dust', 14.8, 0.1],
+      [duration - 0.15, 'cheer', 17, 2],
+    ],
+  };
+})();
+
+const wreckerClear1: Def = (() => {
+  const duration = 3.3;
+  return {
+    duration,
+    word: 'HITCHHIKER!',
+    beats: { on: WR_ON, off: WR_OFF },
+    at: wrecker1At,
+    events: () => [
+      [0.5, 'sfx:whoosh', 4.5, 0.5],
+      [WR_JUMP, 'sfx:boing', 5.5, 0.6],
+      [WR_ON, 'sfx:chime', wr1Ball(WR_ON).x, wr1Ball(WR_ON).y + 1],
+      [WR_ON + 0.2, 'word', 9, 5.4],
+      [WR_OFF, 'sfx:boing', wr1Ball(WR_OFF).x, wr1Ball(WR_OFF).y + 1],
+      [WR_END_1, 'dust', WR_LAND_1, 0.1],
+      [WR_END_1 + 0.2, 'confetti', 15.5, 1.8],
+      [WR_END_1 + 0.5, 'cheer', 16.5, 2],
+    ],
+  };
+})();
+
+const wreckerCrash0: Def = (() => {
+  const duration = 3.5;
+  const hitBall = wreckerBall(0, 0);
+  return {
+    duration,
+    word: 'BASHED!',
+    beats: { hit: WR_HIT, land: WR_LAND_2 },
+    at: wreckerCrash0At,
+    events: (bike) => [
+      [0.3, 'sfx:whoosh', 2, 0.5],
+      [WR_HIT, 'groan', hitBall.x, 1.2],
+      [WR_HIT, 'sfx:crash', hitBall.x, 1.2],
+      [WR_HIT, 'debris', hitBall.x, 1.2],
+      [WR_HIT + 0.05, 'word', 5, 5.0],
+      ...trail(WR_HIT + 0.1, WR_LAND_2 - 0.1, 0.2, 'stars', bike),
+      [WR_LAND_2, 'sfx:splat', wrecker2Land.x, 0.6],
+      [WR_LAND_2, 'poof', wrecker2Land.x, 1],
+      [WR_LAND_2 + 0.2, 'stars', wrecker2Sit.x, 1.8],
+    ],
+  };
+})();
+
+const wreckerCrash1: Def = (() => {
+  const duration = 4.0;
+  const hitBall = wreckerBall(0, 0);
+  return {
+    duration,
+    word: 'SWING AND A MISS!',
+    beats: { hit: WR_HIT, stick: WR_STICK, drop: WR_DROP, land: WR_LAND_C1 },
+    at: wreckerCrash1At,
+    events: (_bike, rider) => [
+      [0.3, 'sfx:whoosh', 2, 0.5],
+      [WR_HIT, 'groan', hitBall.x, 1.4],
+      [WR_HIT, 'sfx:crash', hitBall.x, 1.2],
+      [WR_STICK, 'word', 7, 4.4],
+      [WR_STICK, 'sfx:boing', 6.7, 3],
+      ...trail(WR_STICK + 0.2, WR_DROP - 0.1, 0.25, 'sweat', rider, 0.5),
+      [1.55, 'sfx:bump', 7.4, 0.2],
+      [1.55, 'dust', 7.4, 0.1],
+      [WR_DROP, 'sfx:slideWhistle', 11.3, 3],
+      [WR_LAND_C1, 'sfx:bump', 12.4, 0.2],
+      [WR_LAND_C1, 'dust', 12.4, 0.1],
+      [WR_LAND_C1 + 0.3, 'stars', 12.4, 1.7],
+    ],
+  };
+})();
+
 // ---------- The table and the public API ----------
 
 const TABLE: Table = {
@@ -2613,6 +3654,9 @@ const TABLE: Table = {
   bridge: { clear: [bridgeClear0, bridgeClear1], crash: [bridgeCrash0, bridgeCrash1] },
   seesaw: { clear: [seesawClear0, seesawClear1], crash: [seesawCrash0, seesawCrash1] },
   coaster: { clear: [coasterClear0, coasterClear1], crash: [coasterCrash0, coasterCrash1] },
+  halfpipe: { clear: [halfpipeClear0, halfpipeClear1], crash: [halfpipeCrash0, halfpipeCrash1] },
+  penguins: { clear: [penguinsClear0, penguinsClear1], crash: [penguinsCrash0, penguinsCrash1] },
+  wrecker: { clear: [wreckerClear0, wreckerClear1], crash: [wreckerCrash0, wreckerCrash1] },
 };
 
 const def = (kind: ObstacleKind, outcome: Outcome, variant: Variant): Def =>
