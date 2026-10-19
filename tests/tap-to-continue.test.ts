@@ -4,8 +4,14 @@ import { describe, expect, it } from 'vitest';
 
 const gamesDir = resolve(import.meta.dirname, '../src/games');
 
-/** The games that wait for a tap on the green answer after a miss, so far. */
-const CONVERTED = ['penalty-kick', 'grape-gobble', 'asteroid-run', 'zombie-blast', 'crash-course'];
+/**
+ * Every game: each one has answer buttons, so each waits for a tap on the green answer after a
+ * miss. A new game fails here until it uses the shared tap flow.
+ */
+const GAMES = readdirSync(gamesDir, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name)
+  .sort();
 
 function sources(id: string): Record<string, string> {
   const dir = resolve(gamesDir, id);
@@ -17,7 +23,13 @@ function sources(id: string): Record<string, string> {
 }
 
 describe('tap to continue', () => {
-  it.each(CONVERTED)('%s uses the shared tap flow', (id) => {
+  it('lists the games', () => {
+    // A listing that came back empty would make every check below pass for nothing.
+    expect(GAMES.length).toBeGreaterThanOrEqual(8);
+    expect(GAMES).toEqual(expect.arrayContaining(['batter-up', 'buzzer-beater', 'strike-zone']));
+  });
+
+  it.each(GAMES)('%s uses the shared tap flow', (id) => {
     const files = sources(id);
     const all = Object.values(files);
     expect(
@@ -32,7 +44,7 @@ describe('tap to continue', () => {
     expect(files['main.ts']).toContain('tapFlow.disarm(');
   });
 
-  it.each(CONVERTED)('%s no longer times out or skips a miss', (id) => {
+  it.each(GAMES)('%s no longer times out or skips a miss', (id) => {
     const main = sources(id)['main.ts'];
     expect(main).not.toContain('SKIP_AFTER');
     expect(main).not.toContain('REVEAL_FOR');

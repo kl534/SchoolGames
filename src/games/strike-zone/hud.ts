@@ -54,9 +54,18 @@ export interface Bands {
   play: PlayBand;
 }
 
+/**
+ * Room kept under a miss card for the finger and caption that point at the green answer. They
+ * grow with the screen, so a big screen needs a little more.
+ */
+const TAP_ROOM = 104;
+const TAP_ROOM_BIG = 116;
+
 export interface Hud {
   buttons: HTMLButtonElement[];
   hear: HTMLButtonElement;
+  /** What the finger and caption that point at the green answer keep off: card, pins, question. */
+  avoid: readonly HTMLElement[];
   bowl: HTMLButtonElement;
   nudges: {
     moveLeft: HTMLButtonElement;
@@ -80,7 +89,8 @@ export interface Hud {
   // The question.
   setQuestion(text: string): void;
   setOptions(options: string[]): void;
-  showQuestion(visible: boolean): void;
+  /** Shows or hides the question and answers; `keepAnswers` hides only the question. */
+  showQuestion(visible: boolean, keepAnswers?: boolean): void;
   /** The clock bar: the share of time left (0 … 1), or null to hide it. */
   setClock(left: number | null, urgent: boolean): void;
   lock(): void;
@@ -241,6 +251,7 @@ export function createHud(): Hud {
   return {
     buttons,
     hear,
+    avoid: [card, side, q, banner],
     bowl,
     nudges: {
       moveLeft: moveNudge.leftButton,
@@ -347,9 +358,9 @@ export function createHud(): Hud {
         button.hidden = text === undefined;
       });
     },
-    showQuestion(visible) {
+    showQuestion(visible, keepAnswers = false) {
       q.hidden = !visible;
-      answers.hidden = !visible;
+      answers.hidden = !visible && !keepAnswers;
       buttons.forEach((b, i) => (b.hidden = options[i] === undefined));
       if (!visible) clock.classList.remove('on', 'urgent');
     },
@@ -384,7 +395,10 @@ export function createHud(): Hud {
         anchor = rectOf(controls).top;
         controls.hidden = wasHidden;
       }
-      banner.style.bottom = `${Math.max(viewH - anchor + 8, 8)}px`;
+      // A miss leaves room under it for the finger and caption that point at the green answer.
+      const big = Math.min(window.innerWidth, viewH) >= 520;
+      const room = kind === 'miss' && where === 'ask' ? (big ? TAP_ROOM_BIG : TAP_ROOM) : 0;
+      banner.style.bottom = `${Math.max(viewH - anchor + 8 + room, 8)}px`;
     },
     hideBanner() {
       banner.hidden = true;

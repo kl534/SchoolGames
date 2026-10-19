@@ -8,6 +8,7 @@ import { showResults } from '../../shared/results';
 import { starsFor } from '../../shared/round';
 import { createScene } from '../../shared/scene';
 import { startGameSession, type GameSession } from '../../shared/session';
+import { createTapFlow } from '../../shared/tapflow';
 import { answerOptions, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
 import { createBall } from './ball';
@@ -112,12 +113,10 @@ const INTRO_FOR = 1.8;
 const RESET_SECONDS = 0.9;
 /** Seconds the players walk to the line for a free throw. */
 const FT_SETUP = 1.0;
-/** The answers stay on screen at least this long after a wrong answer. */
-const REVEAL_FOR = 2.4;
-/** Seconds after a result is ready before a tap skips ahead. */
-const SKIP_AFTER = 0.6;
-/** Seconds into a play before a tap can skip the rest of it. */
-const PLAY_SKIP_AFTER = 1.4;
+/** Seconds after a right answer's result is ready before a tap skips ahead. */
+const SKIP_BANNER_AFTER = 0.6;
+/** Seconds into a right answer's play before a tap can skip the rest of it. */
+const PLAY_FAST_FORWARD_AFTER = 1.4;
 /** Seconds an announcement (halftime, overtime) stays up at least. */
 const ANNOUNCE_FOR = 1.8;
 /** Seconds the final banner stays up before the results. */
@@ -207,6 +206,7 @@ function run(session: GameSession): void {
 
   // ---------- HUD ----------
   const hud = createHud();
+  const tapFlow = createTapFlow();
   createBackButton();
   const mute = createMuteButton();
   const pause = createPauseOverlay({
@@ -703,17 +703,19 @@ function run(session: GameSession): void {
     if (timedOut) sfx.alarm();
     if (input.kind === 'violation') setKids('groan');
 
+    if (!right) {
+      // The green answer pulses at once. Nothing moves on by itself: the game waits for a tap on
+      // it, however long that takes, and `proceedAfterMiss` finishes the play first.
+      resultDone = null;
+      tapFlow.arm(hud.buttons, options.indexOf(f.answer), hud.avoid);
+      sayLines(lines, thisTurn, () => {
+        if (phase === 'play' || phase === 'result') tapFlow.readFinished();
+      });
+      return;
+    }
     let spoken = false;
-    let revealed = right;
     const next = () => {
-      if (
-        spoken &&
-        revealed &&
-        playEnded &&
-        !replaying &&
-        turn === thisTurn &&
-        phase === 'result'
-      ) {
+      if (spoken && playEnded && !replaying && turn === thisTurn && phase === 'result') {
         proceed();
       }
     };
@@ -722,12 +724,6 @@ function run(session: GameSession): void {
       spoken = true;
       next();
     });
-    if (!right) {
-      after(REVEAL_FOR, () => {
-        revealed = true;
-        next();
-      });
-    }
   };
 
   /** The camera pushes in on this point during slow motion. */
@@ -936,6 +932,7 @@ function run(session: GameSession): void {
   /** The players jog to their places and the camera eases to the view; then the question. */
   const move = (a: number, ft: boolean, seconds: number, then: () => void) => {
     pending = [];
+    tapFlow.disarm();
     stopSpeaking();
     hud.hideBanner();
     hud.hideQuestion(true);
@@ -1022,6 +1019,7 @@ function run(session: GameSession): void {
 
   /** After a result: the free throw, the same turn again, or the next turn. */
   const proceed = () => {
+    tapFlow.disarm();
     stopSpeaking();
     pending = [];
     hud.hideBanner();
@@ -1085,6 +1083,7 @@ function run(session: GameSession): void {
     buzzer = false,
   ) => {
     phase = 'announce';
+    tapFlow.disarm();
     const token = ++announceToken;
     const startedAt = gameTime;
     stopSpeaking();
@@ -1121,7 +1120,7 @@ function run(session: GameSession): void {
       next();
     });
     skipAnnounce = () => {
-      if (gameTime - startedAt >= SKIP_AFTER) go();
+      if (gameTime - startedAt >= SKIP_BANNER_AFTER) go();
     };
   };
 
@@ -1129,6 +1128,7 @@ function run(session: GameSession): void {
   const finishGame = () => {
     pending = [];
     turn++;
+    tapFlow.disarm();
     syncShown();
     refresh();
     const won = state.winner === 'us';
@@ -1183,6 +1183,7 @@ function run(session: GameSession): void {
     announceToken++;
     skipAnnounce = null;
     speechToken++;
+    tapFlow.disarm();
     replaying = 0;
     resultDone = null;
     movement = null;
@@ -1243,13 +1244,26 @@ function run(session: GameSession): void {
   };
 
   // ---------- Input ----------
-  /** A tap while a result is showing skips ahead, so it never feels ignored. */
+  /** A tap while a right answer's result is showing skips ahead. A miss waits for the green answer. */
   const skip = () => {
-    if (phase === 'result' && gameTime - scriptEndedAt >= SKIP_AFTER) proceed();
-    else if (phase === 'play' && playClock >= PLAY_SKIP_AFTER) skipPlay();
+    if (tapFlow.armed) return;
+    if (phase === 'result' && gameTime - scriptEndedAt >= SKIP_BANNER_AFTER) proceed();
+    else if (phase === 'play' && playClock >= PLAY_FAST_FORWARD_AFTER) skipPlay();
     else if (phase === 'announce' || phase === 'intro') skipAnnounce?.();
   };
+  /** The player tapped the green answer after a miss: the play ends where it would have, then on. */
+  const proceedAfterMiss = () => {
+    // The reading is cut off; its lines must not go on into the next beat.
+    speechToken++;
+    if (phase === 'play') skipPlay();
+    proceed();
+  };
   const onAnswer = (index: number) => {
+    if (tapFlow.armed) {
+      // After a miss only the green answer moves on; any other answer is ignored.
+      if (tapFlow.tap(index)) proceedAfterMiss();
+      return;
+    }
     if (phase === 'ask') select(index);
     else skip();
   };
@@ -1295,6 +1309,7 @@ function run(session: GameSession): void {
   ctx.onUpdate((delta) => {
     layout();
     gameTime += delta;
+    tapFlow.update(delta);
     const due = pending.filter((p) => p.at <= gameTime);
     if (due.length) {
       pending = pending.filter((p) => p.at > gameTime);
@@ -1340,6 +1355,7 @@ function run(session: GameSession): void {
     stopSpeaking();
     window.removeEventListener('keydown', onKey);
     stopPointer();
+    tapFlow.dispose();
     unpress.forEach((fn) => fn());
     pause.dispose();
     mute.dispose();

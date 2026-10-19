@@ -8,6 +8,7 @@ import { showResults } from '../../shared/results';
 import { starsFor } from '../../shared/round';
 import { createScene } from '../../shared/scene';
 import { startGameSession, type GameSession } from '../../shared/session';
+import { createTapFlow } from '../../shared/tapflow';
 import { answerOptions, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
 import {
@@ -68,7 +69,7 @@ import {
   type Rect,
   type ViewFit,
 } from './layout';
-import { createPitching, REVEAL_FOR, SKIP_AFTER } from './pitching';
+import { createPitching, HALF_END_FOR, SKIP_BANNER_AFTER } from './pitching';
 import {
   applyHit,
   applyStrike,
@@ -123,7 +124,7 @@ const BANNER_FOR = 1.4;
 /** The pitcher winds up at least this long, however quickly the question is read. */
 const MIN_WIND = 0.9;
 /** Seconds into a hit before a tap can skip the rest of it. */
-const HIT_SKIP_AFTER = 1.4;
+const HIT_FAST_FORWARD_AFTER = 1.4;
 /** Seconds an announcement (a new inning, the end of one) stays up at least. */
 const ANNOUNCE_FOR = 1.8;
 
@@ -171,6 +172,7 @@ function run(session: GameSession): void {
 
   // ---------- HUD ----------
   const hud = createHud();
+  const tapFlow = createTapFlow();
   createBackButton();
   const mute = createMuteButton();
   const pause = createPauseOverlay({
@@ -214,7 +216,6 @@ function run(session: GameSession): void {
     segments: { to: Vec; dur: number; onEnd?: () => void }[];
     t: number;
   } | null = null;
-  let resultAt = 0;
 
   // The people.
   let batter: Batter = createBatter();
@@ -233,10 +234,6 @@ function run(session: GameSession): void {
   let fireworksFrom = Infinity;
   /** The batter at the plate was just struck out. */
   let struckOut = false;
-  /** Replays of the fact the player asked for during a result; the next pitch waits for them. */
-  let replaying = 0;
-  /** Moves on from a result if everything it was waiting for is done. */
-  let resultDone: (() => void) | null = null;
   /** Skips the announcement on screen, once it has been up a moment. */
   let skipAnnounce: (() => void) | null = null;
   let announceToken = 0;
@@ -474,6 +471,7 @@ function run(session: GameSession): void {
   const nextPitch = () => {
     if (state.over || phase === 'done') return;
     pending = [];
+    tapFlow.disarm();
     stopSpeaking();
     hud.hideBanner();
     const thisTurn = ++turn;
@@ -619,35 +617,24 @@ function run(session: GameSession): void {
     if (call.out) batter.slump();
     refresh();
     phase = 'result';
-    resultAt = gameTime;
-    hud.mark(chosen, options.indexOf(current.answer), false);
+    const correct = options.indexOf(current.answer);
+    hud.mark(chosen, correct, false);
     hud.showBanner(call.title, current.statement, 'miss', 'aside');
     sfx.miss();
-    // Move on once the umpire has called it, the fact has been read out and shown for a while.
+    // The green answer pulses at once. The game waits for a tap on it, however long that takes.
+    tapFlow.arm(hud.buttons, correct, hud.avoid);
     const thisTurn = turn;
-    let spoken = false;
-    let shownLongEnough = false;
-    const next = () => {
-      if (spoken && shownLongEnough && !replaying && turn === thisTurn && phase === 'result') {
-        advance();
-      }
-    };
-    resultDone = next;
     speak(call.spoken, () => {
       if (turn !== thisTurn || phase !== 'result') return;
       speak(current.spokenStatement ?? current.statement, () => {
-        spoken = true;
-        next();
+        if (turn === thisTurn && phase === 'result') tapFlow.readFinished();
       });
-    });
-    after(REVEAL_FOR, () => {
-      shownLongEnough = true;
-      next();
     });
   };
 
   /** After a result: the same batter again, or the next one if that was an out. */
   const advance = () => {
+    tapFlow.disarm();
     stopSpeaking();
     pending = [];
     hud.hideBanner();
@@ -798,7 +785,6 @@ function run(session: GameSession): void {
       props.push(dropped);
       spawn(dropped.object);
     }
-    resultAt = gameTime;
   };
 
   /** Where every fielder stands and where each runner stands now. */
@@ -1014,6 +1000,7 @@ function run(session: GameSession): void {
   // ---------- Pitching ----------
   const pitching = createPitching({
     hud,
+    tapFlow,
     pitcher,
     catcher,
     umpire,
@@ -1092,6 +1079,7 @@ function run(session: GameSession): void {
     hold = ANNOUNCE_FOR,
   ) => {
     phase = 'announce';
+    tapFlow.disarm();
     const token = ++announceToken;
     const startedAt = gameTime;
     stopSpeaking();
@@ -1126,7 +1114,7 @@ function run(session: GameSession): void {
       next();
     });
     skipAnnounce = () => {
-      if (gameTime - startedAt >= SKIP_AFTER) go();
+      if (gameTime - startedAt >= SKIP_BANNER_AFTER) go();
     };
   };
 
@@ -1144,7 +1132,7 @@ function run(session: GameSession): void {
       'info',
       [halfEndSpeech(reason), leadSpeech(us - them)],
       changeSides,
-      REVEAL_FOR,
+      HALF_END_FOR,
     );
   };
 
@@ -1229,7 +1217,7 @@ function run(session: GameSession): void {
       won ? 'good' : 'miss',
       [line],
       finishRun,
-      REVEAL_FOR,
+      HALF_END_FOR,
     );
   };
 
@@ -1272,7 +1260,7 @@ function run(session: GameSession): void {
     skipAnnounce = null;
     speechToken++;
     struckOut = false;
-    replaying = 0;
+    tapFlow.disarm();
     stopSpeaking();
     pitching.reset();
     feed = createFactFeed(() => session.chooseFacts());
@@ -1335,14 +1323,22 @@ function run(session: GameSession): void {
   };
 
   // ---------- Input ----------
-  /** A tap while a result is showing skips ahead, so it never feels ignored. */
+  /** A tap while a good hit or call is showing skips ahead. A miss waits for the green answer. */
   const skip = () => {
-    if (phase === 'result' && gameTime - resultAt >= SKIP_AFTER) advance();
-    else if (phase === 'hit' && playRunner.time >= HIT_SKIP_AFTER) endPlay();
+    if (tapFlow.armed) return;
+    if (phase === 'hit' && playRunner.time >= HIT_FAST_FORWARD_AFTER) endPlay();
     else if (phase === 'pitching') pitching.skip();
     else if (phase === 'announce') skipAnnounce?.();
   };
   const onAnswer = (index: number) => {
+    if (tapFlow.armed) {
+      // After a miss only the green answer moves on; any other answer is ignored.
+      if (tapFlow.tap(index)) {
+        if (phase === 'pitching') pitching.proceed();
+        else if (phase === 'result') advance();
+      }
+      return;
+    }
     if (phase === 'pitching') pitching.press(index);
     else if (phase === 'windup' || phase === 'release' || phase === 'pitch') select(index);
     else skip();
@@ -1358,14 +1354,8 @@ function run(session: GameSession): void {
       pitching.hear();
     } else if (fact && hud.callInPanel()) {
       // The call has taken the question's place: the button says the fact again.
-      const current = fact;
-      const thisTurn = turn;
-      replaying++;
       speechToken++;
-      speak(current.spokenStatement ?? current.statement, () => {
-        replaying--;
-        if (turn === thisTurn) resultDone?.();
-      });
+      speak(fact.spokenStatement ?? fact.statement);
     } else if (fact) {
       const token = ++speechToken;
       const thisTurn = turn;
@@ -1402,6 +1392,7 @@ function run(session: GameSession): void {
   ctx.onUpdate((delta, time) => {
     layout();
     gameTime += delta;
+    tapFlow.update(delta);
     runDue(pending, (rest) => (pending = rest));
     runDue(scenery, (rest) => (scenery = rest));
 
@@ -1532,6 +1523,7 @@ function run(session: GameSession): void {
     stopSpeaking();
     window.removeEventListener('keydown', onKey);
     stopPointer();
+    tapFlow.dispose();
     unpress.forEach((fn) => fn());
     pause.dispose();
     mute.dispose();

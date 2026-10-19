@@ -124,7 +124,14 @@ export interface Hud {
   pop(text: string, x: number, y: number, kind?: 'good' | 'bad' | 'plain'): void;
   readonly buttons: HTMLButtonElement[];
   readonly hear: HTMLButtonElement;
+  /** What the finger and caption that point at the green answer keep off: scorebug, question, card. */
+  readonly avoid: readonly HTMLElement[];
 }
+
+/** Room kept under a miss card for the finger and caption that point at the green answer. */
+const TAP_ROOM = 104;
+/** The back, sound and pause buttons end this far down the screen. */
+const TOP_BAR = 72;
 
 export function createHud(): Hud {
   const bug = el('div', 'bu-bug', document.body);
@@ -193,6 +200,18 @@ export function createHud(): Hud {
     hear.setAttribute('aria-label', 'Hear the answer');
   };
 
+  /**
+   * The highest a card beside the plate may start: just below the top bar when it is clear of the
+   * scorebug and the question sideways, else `under` (below the question).
+   */
+  const cardTop = (card: DOMRect, under: number) => {
+    const clearOf = (node: HTMLElement) => {
+      const r = node.getBoundingClientRect();
+      return card.left >= r.right || card.right <= r.left;
+    };
+    return !hudBox.hidden && clearOf(bug) && clearOf(hudBox) ? Math.min(under, TOP_BAR) : under;
+  };
+
   const replay = (node: HTMLElement) => {
     node.classList.remove('on');
     void node.offsetWidth;
@@ -202,6 +221,7 @@ export function createHud(): Hud {
   return {
     buttons,
     hear,
+    avoid: [bug, hudBox, banner],
     hideQuestion(hidden) {
       hudBox.hidden = hidden;
       answers.hidden = hidden;
@@ -329,13 +349,19 @@ export function createHud(): Hud {
         return;
       }
       const top = hudBox.hidden ? 130 : hudBox.getBoundingClientRect().bottom + 8;
-      const bottom = answers.hidden ? viewH - 20 : answers.getBoundingClientRect().top - 8;
+      const room = kind === 'miss' && place === 'aside' ? TAP_ROOM : 0;
+      const bottom = (answers.hidden ? viewH - 20 : answers.getBoundingClientRect().top - 8) - room;
       if (place === 'aside') {
         // Keep the plate clear: on a wide screen the call goes to one side. (On a tall one it
         // goes in the question panel, above; this is only for when there is no panel.)
         if (!inQuestion) {
-          banner.style.left = `${Math.round(viewW * 0.77)}px`;
-          banner.style.top = `${Math.min(Math.max((top + bottom) / 2, top + half), bottom - half)}px`;
+          // Keep the whole card on the screen, whatever its width.
+          const wide = banner.offsetWidth / 2 + 12;
+          banner.style.left = `${Math.round(Math.min(Math.max(viewW * 0.77, wide), viewW - wide))}px`;
+          // A miss card needs room under it for the finger. Beside the question rather than under
+          // it, the card may start higher up, just below the top bar.
+          const first = kind === 'miss' ? cardTop(banner.getBoundingClientRect(), top) : top;
+          banner.style.top = `${Math.min(Math.max((first + bottom) / 2, first + half), Math.max(bottom - half, first + half))}px`;
         } else {
           banner.style.top = `${top + half}px`;
         }

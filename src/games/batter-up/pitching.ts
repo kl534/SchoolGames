@@ -6,6 +6,7 @@
  */
 import { Vector3 } from 'three';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
+import type { TapFlow } from '../../shared/tapflow';
 import type { Fact } from '../../shared/topics';
 import type { Ball, Batter, Catcher, Pitcher, Prop, Umpire } from './characters';
 import type { Effects } from './effects';
@@ -38,10 +39,10 @@ import {
 } from './rules';
 import { rivalHitTitle, type Team } from './teams';
 
-/** Seconds a result stays up before a tap can skip to the next pitch. */
-export const SKIP_AFTER = 0.6;
-/** Least seconds the correct fact stays up after a miss. */
-export const REVEAL_FOR = 2.4;
+/** Seconds a good pitch's result or an announcement stays up before a tap can skip it. */
+export const SKIP_BANNER_AFTER = 0.6;
+/** Least seconds the end-of-half and final banners stay up. */
+export const HALF_END_FOR = 2.4;
 /** Seconds the call on a good pitch stays up. */
 const CALL_FOR = 1.0;
 /** How often the rival swings and misses a strike, rather than letting it go by. */
@@ -57,6 +58,8 @@ type Call =
 /** What the pitching needs from the game: the people and the ball, and the game's own state. */
 export interface PitchingHost {
   hud: Hud;
+  /** Waits for a tap on the green answer after the rival hits our pitch. */
+  tapFlow: TapFlow;
   pitcher: Pitcher;
   catcher: Catcher;
   umpire: Umpire;
@@ -112,11 +115,13 @@ export interface Pitching {
   /** The next pitch: the question and the pitcher set. */
   begin(): void;
   update(delta: number): void;
-  /** An answer button (or key): answers the question, or skips ahead during a result. */
+  /** An answer button (or key): answers the question, or skips ahead during a good call. */
   press(index: number): void;
+  /** The player tapped the green answer after a hit: finishes the play and moves on. */
+  proceed(): void;
   /** The hear button: reads the question again, or the fact during a call. */
   hear(): void;
-  /** A tap on the field: skips ahead during a result. */
+  /** A tap on the field: skips ahead during a good call. */
   skip(): void;
   /** Forgets the pitch in hand, for a new game. */
   reset(): void;
@@ -132,7 +137,7 @@ interface Leg {
 }
 
 export function createPitching(host: PitchingHost): Pitching {
-  const { hud, pitcher, catcher, umpire, ball, effects, shown } = host;
+  const { hud, pitcher, catcher, umpire, ball, effects, shown, tapFlow } = host;
   type Phase = 'idle' | 'set' | 'live' | 'delivery' | 'play';
   let phase: Phase = 'idle';
   /** Ticks up for each pitch, so late callbacks can tell they are stale. */
@@ -184,6 +189,7 @@ export function createPitching(host: PitchingHost): Pitching {
 
   const begin = () => {
     host.clearTimers();
+    tapFlow.disarm();
     stopSpeaking();
     hud.hideBanner();
     turn++;
@@ -289,15 +295,17 @@ export function createPitching(host: PitchingHost): Pitching {
   // ---------- Results ----------
   /**
    * A call is up: it is over when the play, the speech and the time to read it are all done.
-   * `mark` says each is; a tap (or all three) ends it.
+   * `mark` says each is; a tap (or all three) ends it. After a hit the call never ends by itself:
+   * with `waitForTap` only `proceed` (the player tapping the green answer) ends it.
    */
-  const startResult = (batterGone: boolean, sendOff = batterGone) => {
+  const startResult = (batterGone: boolean, sendOff = batterGone, waitForTap = false) => {
     phase = 'play';
     resultAt = host.now();
     const thisTurn = turn;
     const flags = { play: false, speech: false, hold: false };
     const check = () => {
       if (
+        !waitForTap &&
         turn === thisTurn &&
         phase === 'play' &&
         !replaying &&
@@ -318,6 +326,7 @@ export function createPitching(host: PitchingHost): Pitching {
   const finish = (batterGone: boolean, sendOff: boolean) => {
     if (phase !== 'play') return;
     phase = 'idle';
+    tapFlow.disarm();
     stopSpeaking();
     host.clearTimers();
     hud.hideBanner();
@@ -405,14 +414,17 @@ export function createPitching(host: PitchingHost): Pitching {
       'aside',
     );
     sfx.miss();
-    const mark = startResult(true, false);
-    // The hit is called, then the fact is read out, and shown for a while.
+    const mark = startResult(true, false, true);
+    // The green answer pulses at once; the game waits for a tap on it, however long it takes.
+    tapFlow.arm(hud.buttons, options.indexOf(current.answer), hud.avoid);
+    // The hit is called, then the fact is read out.
     const thisTurn = turn;
     speak(cpuHitSpeech(hit), () => {
       if (turn !== thisTurn || phase !== 'play') return;
-      speak(current.spokenStatement ?? current.statement, () => mark('speech'));
+      speak(current.spokenStatement ?? current.statement, () => {
+        if (turn === thisTurn && phase === 'play') tapFlow.readFinished();
+      });
     });
-    host.after(REVEAL_FOR, () => mark('hold'));
     const { spots, leads } = host.snapshot();
     const script = planPlay({
       ball: path,
@@ -529,7 +541,13 @@ export function createPitching(host: PitchingHost): Pitching {
 
   // ---------- Input ----------
   const skip = () => {
-    if (phase === 'play' && host.now() - resultAt >= SKIP_AFTER) ending?.();
+    if (tapFlow.armed) return;
+    if (phase === 'play' && host.now() - resultAt >= SKIP_BANNER_AFTER) ending?.();
+  };
+
+  /** The player tapped the green answer: the play ends where it would have, then the next pitch. */
+  const proceed = () => {
+    if (phase === 'play') ending?.();
   };
 
   const hear = () => {
@@ -552,6 +570,7 @@ export function createPitching(host: PitchingHost): Pitching {
   };
 
   const reset = () => {
+    tapFlow.disarm();
     turn++;
     speechToken++;
     phase = 'idle';
@@ -562,5 +581,5 @@ export function createPitching(host: PitchingHost): Pitching {
     replaying = 0;
   };
 
-  return { begin, update, press, hear, skip, reset };
+  return { begin, update, press, proceed, hear, skip, reset };
 }

@@ -8,6 +8,7 @@ import { showResults } from '../../shared/results';
 import { starsFor } from '../../shared/round';
 import { createScene } from '../../shared/scene';
 import { startGameSession, type GameSession } from '../../shared/session';
+import { createTapFlow } from '../../shared/tapflow';
 import { answerOptions, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
 import {
@@ -85,10 +86,8 @@ const PIN_HOLD = 1.2;
 const REACTION_FOR = 1.3;
 /** After a gutter ball the friends come in this long after the drop. */
 const GUTTER_HOLD = 0.9;
-/** The right answer stays up at least this long after a wrong answer. */
-const REVEAL_FOR = 2.4;
-/** Seconds after a result is ready before a tap skips ahead. */
-const SKIP_AFTER = 0.6;
+/** Seconds after a result is ready before a tap skips ahead (not after a gutter ball). */
+const SKIP_RESULT_AFTER = 0.6;
 /** Seconds the pins are put back and the camera comes back to the lane. */
 const RESET_FOR = 0.6;
 /** Seconds the big scorecard stays up before the results. */
@@ -149,6 +148,7 @@ function run(session: GameSession): void {
 
   // ---------- HUD ----------
   const hud = createHud();
+  const tapFlow = createTapFlow();
   createBackButton();
   const mute = createMuteButton();
   const pause = createPauseOverlay({
@@ -181,7 +181,6 @@ function run(session: GameSession): void {
   let lastTick = 0;
   /** The line the ball is thrown along (the aim, moved by the drift). */
   let thrown: Aim = DEFAULT_AIM;
-  let answeredAt = 0;
   let isGutter = false;
   let tenthShown = false;
   const hints = { move: true, swing: true };
@@ -206,7 +205,6 @@ function run(session: GameSession): void {
   let resultAt = 0;
   let speechOver = false;
   let holdOver = false;
-  let revealOver = true;
   let standingAfter: PinId[] = [];
   let lastCall: Call = { kind: 'count', pins: 0 };
   let overAt = 0;
@@ -334,6 +332,7 @@ function run(session: GameSession): void {
     if (phase !== 'aim') return;
     unlockAudio();
     pending = [];
+    tapFlow.disarm();
     stopSpeaking();
     hud.hideBanner();
     hud.hidePill();
@@ -415,14 +414,16 @@ function run(session: GameSession): void {
       feed.recordMiss(f);
       session.recordAnswer(f, false);
     }
-    answeredAt = gameTime;
     isGutter = !right;
     hud.mark(chosen, options.indexOf(f.answer), right);
+    // After a gutter ball the green answer pulses at once and the game waits for a tap on it.
+    if (!right) tapFlow.arm(hud.buttons, options.indexOf(f.answer), hud.avoid);
     hud.setClock(null, false);
     alley.aim.setVisible(false);
     after(HIDE_QUESTION_AFTER, () => {
       if (turn !== thisTurn) return;
-      hud.showQuestion(false);
+      // The question goes; after a gutter ball the answers stay up for the tap.
+      hud.showQuestion(false, !right);
       if (!right) goTo('aim', 0.35);
     });
     if (right) {
@@ -547,7 +548,7 @@ function run(session: GameSession): void {
         after(PILL_FOR, () => hud.hidePill());
       }
     }
-    if (gutter && f) hud.showBanner('GUTTER BALL', f.statement, 'miss', 'aim');
+    if (gutter && f) hud.showBanner('GUTTER BALL', f.statement, 'miss', 'ask');
 
     // Sounds.
     if (gutter) sfx.miss();
@@ -563,6 +564,7 @@ function run(session: GameSession): void {
     if (gutter && f) lines.push(spokenFact(f));
     sayLines(lines, thisTurn, () => {
       speechOver = true;
+      if (gutter) tapFlow.readFinished();
     });
 
     // The reaction shot from the friends.
@@ -585,35 +587,34 @@ function run(session: GameSession): void {
         holdOver = true;
       });
     }
-    // After a wrong answer the right one stays up for a while.
-    revealOver = !gutter;
-    if (gutter) {
-      const wait = Math.max(REVEAL_FOR - (gameTime - answeredAt), 0);
-      after(wait, () => {
-        revealOver = true;
-      });
-    }
   };
 
+  /** A gutter ball never moves on by itself: only a tap on the green answer does. */
   const updateResult = () => {
-    if (phase !== 'result') return;
-    if (speechOver && holdOver && revealOver) reset();
+    if (phase !== 'result' || isGutter) return;
+    if (speechOver && holdOver) reset();
   };
 
   /** A tap while a result shows skips ahead, so it never feels ignored. */
-  const canSkip = () =>
-    phase === 'result' &&
-    gameTime - resultAt >= SKIP_AFTER &&
-    (!isGutter || gameTime - answeredAt >= REVEAL_FOR);
+  const canSkip = () => phase === 'result' && gameTime - resultAt >= SKIP_RESULT_AFTER;
+
+  /** The player tapped the green answer after a gutter ball: the ball lands at once, then on. */
+  const proceedAfterGutter = () => {
+    if (phase === 'gutter') result(0, standing, true);
+    hud.hideBanner();
+    reset();
+  };
 
   // ---------- Reset and the next ball ----------
   const reset = () => {
     if (phase !== 'result') return;
     pending = [];
     speechToken++;
+    tapFlow.disarm();
     stopSpeaking();
     hud.hideScreen();
     hud.hidePill();
+    hud.showQuestion(false);
     const where = position(rolls);
     if (where.over) {
       finishGame();
@@ -671,6 +672,7 @@ function run(session: GameSession): void {
     phase = 'over';
     overAt = gameTime;
     const thisTurn = ++turn;
+    tapFlow.disarm();
     hud.hideBanner();
     hud.showControls(false);
     hud.showSide(false);
@@ -723,6 +725,7 @@ function run(session: GameSession): void {
     pending = [];
     turn++;
     speechToken++;
+    tapFlow.disarm();
     stopSpeaking();
     feed = createFactFeed(() => session.chooseFacts());
     const start = devStart();
@@ -779,18 +782,24 @@ function run(session: GameSession): void {
   };
 
   const skip = () => {
+    if (tapFlow.armed) return;
     if (phase === 'roll' && rollT >= FAST_AFTER && !fast) {
       fast = true;
       goTo('pins', 0);
       switchedToPins = true;
     } else if (canSkip()) {
       reset();
-    } else if (phase === 'over' && gameTime - overAt >= SKIP_AFTER) {
+    } else if (phase === 'over' && gameTime - overAt >= SKIP_RESULT_AFTER) {
       finishRun();
     }
   };
 
   const onAnswer = (index: number) => {
+    if (tapFlow.armed) {
+      // After a gutter ball only the green answer moves on; any other answer is ignored.
+      if (tapFlow.tap(index)) proceedAfterGutter();
+      return;
+    }
     if (phase === 'ask') select(index);
     else skip();
   };
@@ -840,7 +849,7 @@ function run(session: GameSession): void {
   const onKey = (e: KeyboardEvent) => {
     if (pause.isPaused) return;
     const index = Number(e.key) - 1;
-    if (phase === 'ask' && index >= 0 && index < hud.buttons.length) {
+    if ((phase === 'ask' || tapFlow.armed) && index >= 0 && index < hud.buttons.length) {
       onAnswer(index);
       return;
     }
@@ -909,6 +918,7 @@ function run(session: GameSession): void {
   ctx.onUpdate((delta) => {
     layout();
     gameTime += delta;
+    tapFlow.update(delta);
     const due = pending.filter((p) => p.at <= gameTime);
     if (due.length) {
       pending = pending.filter((p) => p.at > gameTime);
@@ -947,6 +957,7 @@ function run(session: GameSession): void {
     stopSpeaking();
     window.removeEventListener('keydown', onKey);
     stopPointer();
+    tapFlow.dispose();
     unpress.forEach((fn) => fn());
     pause.dispose();
     mute.dispose();
