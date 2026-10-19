@@ -510,7 +510,7 @@ const crash3: Def = (() => {
   const tIn = 0.95;
   const tUp = 1.6;
   /** Hips of the rider when only the top of the helmet shows. */
-  const bobY = FOAM_Y - 1.0;
+  const bobY = FOAM_Y - 0.62;
   const riderPath = route([
     [tClip, hips0.x, hips0.y],
     [tIn, 9.3, FOAM_Y, hips0.y + 0.3],
