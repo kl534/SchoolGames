@@ -1,5 +1,6 @@
 import './style.css';
 import { MathUtils, Vector3 } from 'three';
+import { pressAnswers } from '../../shared/answers';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
 import { createFactFeed, type FactFeed } from '../../shared/feed';
 import { createPointerInput, onPress } from '../../shared/input';
@@ -9,7 +10,8 @@ import { starsFor } from '../../shared/round';
 import { createScene } from '../../shared/scene';
 import { startGameSession, type GameSession } from '../../shared/session';
 import { createTapFlow } from '../../shared/tapflow';
-import { answerOptions, type Fact } from '../../shared/topics';
+import { createTimers } from '../../shared/timers';
+import { answerOptions, promptSpeech, statementSpeech, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
 import {
   arrowTipX,
@@ -211,8 +213,8 @@ function run(session: GameSession): void {
 
   // Delayed actions run on game time so pausing freezes them too.
   let gameTime = 0;
-  let pending: { at: number; fn: () => void }[] = [];
-  const after = (seconds: number, fn: () => void) => pending.push({ at: gameTime + seconds, fn });
+  const timers = createTimers();
+  const after = timers.after;
 
   // ---------- Layout and the camera ----------
   let viewW = 0;
@@ -316,12 +318,11 @@ function run(session: GameSession): void {
   };
 
   // ---------- Asking ----------
-  const spokenFact = (f: Fact) => f.spokenStatement ?? f.statement;
 
   const readQuestion = (thisTurn: number) => {
     if (!fact) return;
     const token = ++speechToken;
-    speak(fact.spokenPrompt ?? fact.prompt, () => {
+    speak(promptSpeech(fact), () => {
       if (token !== speechToken || turn !== thisTurn || phase !== 'ask') return;
       speechDone = true;
     });
@@ -331,7 +332,7 @@ function run(session: GameSession): void {
   const ask = () => {
     if (phase !== 'aim') return;
     unlockAudio();
-    pending = [];
+    timers.clear();
     tapFlow.disarm();
     stopSpeaking();
     hud.hideBanner();
@@ -561,7 +562,7 @@ function run(session: GameSession): void {
     // The announcer, then the fact after a wrong answer.
     speechOver = false;
     const lines = callSpeech(call);
-    if (gutter && f) lines.push(spokenFact(f));
+    if (gutter && f) lines.push(statementSpeech(f));
     sayLines(lines, thisTurn, () => {
       speechOver = true;
       if (gutter) tapFlow.readFinished();
@@ -608,7 +609,7 @@ function run(session: GameSession): void {
   // ---------- Reset and the next ball ----------
   const reset = () => {
     if (phase !== 'result') return;
-    pending = [];
+    timers.clear();
     speechToken++;
     tapFlow.disarm();
     stopSpeaking();
@@ -645,7 +646,7 @@ function run(session: GameSession): void {
 
   const startAim = () => {
     phase = 'aim';
-    pending = [];
+    timers.clear();
     const where = position(rolls);
     renderCard();
     renderPins(true);
@@ -696,7 +697,7 @@ function run(session: GameSession): void {
   const finishRun = () => {
     if (phase !== 'over') return;
     phase = 'done';
-    pending = [];
+    timers.clear();
     stopSpeaking();
     hud.hideBanner();
     hud.showCard(false);
@@ -722,7 +723,7 @@ function run(session: GameSession): void {
   };
 
   const startGame = (withPreview: boolean) => {
-    pending = [];
+    timers.clear();
     turn++;
     speechToken++;
     tapFlow.disarm();
@@ -810,7 +811,7 @@ function run(session: GameSession): void {
     button.addEventListener('pointerup', unlockAudio);
     unpress.push(onPress(button, handler));
   };
-  hud.buttons.forEach((button, i) => press(button, () => onAnswer(i)));
+  unpress.push(pressAnswers(hud.buttons, onAnswer));
   press(hud.bowl, bowl);
   press(hud.nudges.moveLeft, () => changeAim('move', -BOARD_W));
   press(hud.nudges.moveRight, () => changeAim('move', BOARD_W));
@@ -821,7 +822,7 @@ function run(session: GameSession): void {
     if (!fact || phase !== 'ask') return;
     const thisTurn = turn;
     const token = ++speechToken;
-    speak(fact.spokenPrompt ?? fact.prompt, () => {
+    speak(promptSpeech(fact), () => {
       if (token !== speechToken || turn !== thisTurn || phase !== 'ask') return;
       speechDone = true;
     });
@@ -919,11 +920,7 @@ function run(session: GameSession): void {
     layout();
     gameTime += delta;
     tapFlow.update(delta);
-    const due = pending.filter((p) => p.at <= gameTime);
-    if (due.length) {
-      pending = pending.filter((p) => p.at > gameTime);
-      due.forEach((p) => p.fn());
-    }
+    timers.update(delta);
     if (moveT < 1) moveT = Math.min(1, moveT + delta / Math.max(moveDur, 1e-3));
 
     updateAsk(delta);

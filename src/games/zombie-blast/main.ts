@@ -1,15 +1,17 @@
 import './style.css';
 import { CircleGeometry, MathUtils, Mesh, MeshBasicMaterial, Vector3 } from 'three';
+import { fillAnswers, lockAnswers, markAnswers, pressAnswers } from '../../shared/answers';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
 import { createFactFeed, type FactFeed } from '../../shared/feed';
-import { createPointerInput, onPress } from '../../shared/input';
+import { createPointerInput } from '../../shared/input';
 import { showPreview } from '../../shared/preview';
 import { showResults } from '../../shared/results';
 import { starsFor } from '../../shared/round';
 import { createScene } from '../../shared/scene';
 import { startGameSession, type GameSession } from '../../shared/session';
 import { createTapFlow } from '../../shared/tapflow';
-import { answerOptions, type Fact } from '../../shared/topics';
+import { createTimers } from '../../shared/timers';
+import { answerOptions, promptSpeech, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
 import { BOMB_RADIUS, createBomb } from './bomb';
 import { createEffects } from './effects';
@@ -213,14 +215,10 @@ function run(session: GameSession): void {
 
   // Delayed actions run on game time so pausing freezes them too.
   let gameTime = 0;
-  let pending: { at: number; fn: () => void }[] = [];
-  const after = (seconds: number, fn: () => void) => pending.push({ at: gameTime + seconds, fn });
+  const timers = createTimers();
+  const after = timers.after;
 
-  /**
-   * Dims the answers while a bomb is in the air. They are not `disabled`, so a tap in that window
-   * still reaches `onAnswer` instead of being swallowed.
-   */
-  const lockAnswers = () => buttons.forEach((b) => b.setAttribute('aria-disabled', 'true'));
+  /** The bomb has left the hand: the answers can be tapped again (`lockAnswers` dims them). */
   const unlockAnswers = () => buttons.forEach((b) => b.removeAttribute('aria-disabled'));
 
   /** The top HUD, with or without the question; the answer bar goes with the question. */
@@ -388,7 +386,7 @@ function run(session: GameSession): void {
 
   // ---------- Run flow ----------
   const startRun = (withPreview: boolean) => {
-    pending = [];
+    timers.clear();
     epoch++;
     tapFlow.disarm();
     feed = createFactFeed(() => session.chooseFacts());
@@ -468,18 +466,10 @@ function run(session: GameSession): void {
     };
     question = q;
     paceSeconds = q.seconds;
-    buttons.forEach((button, i) => {
-      const text = q.options[i];
-      button.hidden = text === undefined;
-      button.textContent = text ?? '';
-      button.setAttribute('aria-label', `Answer ${text ?? ''}`);
-      button.className = 'zb-answer';
-      if (locked) button.setAttribute('aria-disabled', 'true');
-      else button.removeAttribute('aria-disabled');
-    });
+    fillAnswers(buttons, q.options, 'zb-answer', locked);
     problemText.textContent = fact.prompt;
     setHud(true, true);
-    speak(fact.spokenPrompt ?? fact.prompt, () => {
+    speak(promptSpeech(fact), () => {
       if (question === q && q.speechEndAt === null) q.speechEndAt = gameTime;
     });
   };
@@ -496,7 +486,7 @@ function run(session: GameSession): void {
     }
     q.state = 'throwing';
     q.chosen = index;
-    lockAnswers();
+    lockAnswers(buttons);
     buttons[index].classList.add('chosen');
     const right = q.options[index] === q.fact.answer;
     let points = 0;
@@ -518,8 +508,7 @@ function run(session: GameSession): void {
       session.recordAnswer(q.fact, false);
       streak = nextStreak(streak, false);
       renderScore();
-      buttons[index].classList.add('wrong');
-      buttons[q.options.indexOf(q.fact.answer)]?.classList.add('right');
+      markAnswers(buttons, index, q.options.indexOf(q.fact.answer), false);
     }
     releasePending = true;
     kidResetAt = 0;
@@ -633,15 +622,11 @@ function run(session: GameSession): void {
     revealSpoken = false;
     showBanner('Dud!', q.fact.statement, 'miss');
     sfx.miss();
-    tapFlow.arm(buttons, q.options.indexOf(q.fact.answer), [hud, banner], q.fact.prompt);
-    const id = epoch;
-    after(0.6, () => {
-      if (question !== q || q.state !== 'reveal') return;
-      speak(q.fact.spokenStatement ?? q.fact.statement, () => {
-        if (epoch !== id || question !== q || q.state !== 'reveal') return;
-        revealSpoken = true;
-        tapFlow.readFinished();
-      });
+    tapFlow.reveal(buttons, q.options, q.fact, {
+      avoid: [hud, banner],
+      problem: q.fact.prompt,
+      delay: 0.6,
+      onRead: () => (revealSpoken = true),
     });
   };
 
@@ -731,7 +716,7 @@ function run(session: GameSession): void {
     phase = 'ending';
     tapFlow.disarm();
     const thisEpoch = ++epoch;
-    pending = [];
+    timers.clear();
     question = null;
     flight = null;
     flyingBomb.object.visible = false;
@@ -796,14 +781,10 @@ function run(session: GameSession): void {
     }
     if (phase === 'playing' && question?.state === 'open') select(index);
   };
-  const unpress = buttons.map((button, i) => {
-    // A touch press doesn't count as a user gesture for iOS audio; the release does.
-    button.addEventListener('pointerup', unlockAudio);
-    return onPress(button, () => onAnswer(i));
-  });
+  const unpress = pressAnswers(buttons, onAnswer);
   hear.addEventListener('click', () => {
     unlockAudio();
-    if (question) speak(question.fact.spokenPrompt ?? question.fact.prompt);
+    if (question) speak(promptSpeech(question.fact));
   });
   const stopPointer = createPointerInput(ctx.renderer.domElement, {
     onDragStart: () => unlockAudio(),
@@ -828,11 +809,7 @@ function run(session: GameSession): void {
 
     gameTime += delta;
     tapFlow.update(delta);
-    const due = pending.filter((p) => p.at <= gameTime);
-    if (due.length) {
-      pending = pending.filter((p) => p.at > gameTime);
-      due.forEach((p) => p.fn());
-    }
+    timers.update(delta);
     if (kidResetAt && gameTime >= kidResetAt && !releasePending) {
       kidResetAt = 0;
       if (question?.state !== 'reveal') thrower.reset();
@@ -897,7 +874,7 @@ function run(session: GameSession): void {
     window.removeEventListener('keydown', onKey);
     stopPointer();
     tapFlow.dispose();
-    unpress.forEach((fn) => fn());
+    unpress();
     pause.dispose();
     mute.dispose();
     effects.clear();

@@ -129,6 +129,65 @@ describe('tapflow', () => {
     expect(flow.armed).toBe(true);
   });
 
+  const fact = {
+    id: 'f',
+    prompt: '2 + 2 = ?',
+    answer: '4',
+    statement: '2 + 2 = 4',
+    spokenStatement: '2 plus 2 is 4',
+  };
+
+  /** Ends the last `speak` call, as the voice would when the line is over. */
+  const endSpeech = () => vi.mocked(speak).mock.lastCall?.[1]?.();
+
+  it('reveal arms on the answer and reads the fact after the delay', () => {
+    const onRead = vi.fn();
+    flow.reveal(buttons, ['1', '3', '4', '5'], fact, { delay: 0.6, onRead });
+    expect(buttons[2].classList.contains('sg-tap-correct')).toBe(true);
+    flow.update(0.5);
+    expect(speak).not.toHaveBeenCalled();
+    flow.update(0.1);
+    expect(speak).toHaveBeenLastCalledWith('2 plus 2 is 4', expect.any(Function));
+    endSpeech();
+    expect(onRead).toHaveBeenCalledTimes(1);
+    // The reminders count from the end of the reading.
+    flow.update(NUDGE_FIRST);
+    expect(speak).toHaveBeenLastCalledWith(TAP_SPEECH);
+  });
+
+  it('reveal says the lead line first', () => {
+    flow.reveal(buttons, ['4', '3'], fact, { lead: 'Strike three!' });
+    expect(speak).toHaveBeenLastCalledWith('Strike three!', expect.any(Function));
+    endSpeech();
+    expect(speak).toHaveBeenLastCalledWith('2 plus 2 is 4', expect.any(Function));
+  });
+
+  it('a reading cut off by a disarm or a new arm counts for nothing', () => {
+    const onRead = vi.fn();
+    flow.reveal(buttons, ['4', '3'], fact, { lead: 'Out!', onRead });
+    const endLead = vi.mocked(speak).mock.lastCall![1]!;
+    flow.disarm();
+    endLead();
+    expect(speak).toHaveBeenCalledTimes(1);
+
+    flow.reveal(buttons, ['4', '3'], fact, { onRead });
+    const endFirst = vi.mocked(speak).mock.lastCall![1]!;
+    flow.arm(buttons, 1);
+    endFirst();
+    expect(onRead).not.toHaveBeenCalled();
+    // So the new arm's reminders still wait for its own reading.
+    flow.update(100);
+    expect(speak).toHaveBeenCalledTimes(2);
+  });
+
+  it('a delayed reading never starts once the green answer was tapped', () => {
+    flow.reveal(buttons, ['4', '3'], fact, { delay: 1 });
+    flow.update(TAP_GUARD);
+    expect(flow.tap(0)).toBe(true);
+    flow.update(5);
+    expect(speak).not.toHaveBeenCalled();
+  });
+
   it('dispose removes the pointer', () => {
     flow.arm(buttons, 1);
     flow.dispose();

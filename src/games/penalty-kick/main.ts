@@ -11,15 +11,16 @@ import {
   Vector3,
 } from 'three';
 import { Body, Material, Sphere, Vec3, World } from 'cannon-es';
+import { fillAnswers, lockAnswers, pressAnswers } from '../../shared/answers';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
-import { onPress } from '../../shared/input';
 import { showPreview } from '../../shared/preview';
 import { showResults } from '../../shared/results';
 import { createRound, scoreSpeech, starsFor, type Round } from '../../shared/round';
 import { createScene } from '../../shared/scene';
 import { startGameSession, type GameSession } from '../../shared/session';
 import { createTapFlow } from '../../shared/tapflow';
-import { answerOptions, type Fact } from '../../shared/topics';
+import { createTimers } from '../../shared/timers';
+import { answerOptions, promptSpeech, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
 import { buildField, buildGoalBodies, GOAL_HEIGHT, GOAL_WIDTH } from './field';
 import { createGoalie } from './goalie';
@@ -180,15 +181,8 @@ function run(session: GameSession): void {
   let ballSpotZ = 7;
 
   // Delayed actions run on game time so pausing freezes them too.
-  let gameTime = 0;
-  let pending: { at: number; fn: () => void }[] = [];
-  const after = (seconds: number, fn: () => void) => pending.push({ at: gameTime + seconds, fn });
-
-  /**
-   * Dims the answers while a kick plays out. They are not `disabled`, so a tap in that window
-   * still reaches `onAnswerTap` instead of being swallowed.
-   */
-  const lockAnswers = () => answers.forEach((b) => b.setAttribute('aria-disabled', 'true'));
+  const timers = createTimers();
+  const after = timers.after;
 
   const setPlayVisible = (visible: boolean) => {
     hud.hidden = !visible;
@@ -315,7 +309,7 @@ function run(session: GameSession): void {
 
   const startTurn = () => {
     tapFlow.disarm();
-    pending = [];
+    timers.clear();
     fact = round.current();
     if (!fact) {
       finishRound();
@@ -325,14 +319,7 @@ function run(session: GameSession): void {
     const thisTurn = ++turn;
     options = answerOptions(session.topic, current, CORNERS.length);
     chosen = -1;
-    answers.forEach((button, i) => {
-      const text = options[i];
-      button.hidden = text === undefined;
-      button.textContent = text ?? '';
-      button.setAttribute('aria-label', `Answer ${text ?? ''}`);
-      button.removeAttribute('aria-disabled');
-      button.className = 'pk-answer';
-    });
+    fillAnswers(answers, options, 'pk-answer');
     problemText.textContent = current.prompt;
     banner.hidden = true;
     phase = 'aiming';
@@ -345,7 +332,7 @@ function run(session: GameSession): void {
     positionAnswers();
 
     // The shot clock starts once the question has been read out.
-    speak(current.spokenPrompt ?? current.prompt, () => {
+    speak(promptSpeech(current), () => {
       if (turn !== thisTurn || phase !== 'aiming') return;
       clockTotal = session.timerSecondsFor(current);
       clockLeft = clockTotal;
@@ -409,7 +396,7 @@ function run(session: GameSession): void {
     clockRunning = false;
     chosen = index;
     timedOut = false;
-    lockAnswers();
+    lockAnswers(answers);
     answers[index].classList.add('chosen');
     renderKicks();
     const correct = options[index] === fact.answer;
@@ -421,7 +408,7 @@ function run(session: GameSession): void {
     phase = 'shot';
     clockRunning = false;
     timedOut = true;
-    lockAnswers();
+    lockAnswers(answers);
     renderKicks();
     // A weak roll straight at the keeper.
     kick(new Vector3(0, BALL_RADIUS + 0.1, GOALIE_Z), 1.1, true);
@@ -449,13 +436,11 @@ function run(session: GameSession): void {
     showBanner(timedOut ? "Time's up!" : 'Saved!', current.statement, 'miss');
     sfx.miss();
     // The game waits here until the player taps the green answer.
-    tapFlow.arm(answers, correctIndex, [hud, banner], current.prompt);
-    const thisTurn = turn;
-    after(0.6, () =>
-      speak(current.spokenStatement ?? current.statement, () => {
-        if (turn === thisTurn && phase === 'result') tapFlow.readFinished();
-      }),
-    );
+    tapFlow.reveal(answers, options, current, {
+      avoid: [hud, banner],
+      problem: current.prompt,
+      delay: 0.6,
+    });
   };
 
   const finishRound = () => {
@@ -489,14 +474,10 @@ function run(session: GameSession): void {
     }
     if (phase === 'aiming') shoot(index);
   };
-  answers.forEach((button, i) => {
-    onPress(button, () => onAnswerTap(i));
-    // A touch press doesn't count as a user gesture for iOS audio; the release does.
-    button.addEventListener('pointerup', unlockAudio);
-  });
+  pressAnswers(answers, onAnswerTap);
   hear.addEventListener('click', () => {
     unlockAudio();
-    if (fact) speak(fact.spokenPrompt ?? fact.prompt);
+    if (fact) speak(promptSpeech(fact));
   });
   // Keys 1-4 pick top-left, top-right, bottom-left, bottom-right.
   const onKey = (e: KeyboardEvent) => {
@@ -509,13 +490,8 @@ function run(session: GameSession): void {
   ctx.onUpdate((delta, elapsed) => {
     layout();
 
-    gameTime += delta;
     tapFlow.update(delta);
-    const due = pending.filter((p) => p.at <= gameTime);
-    if (due.length) {
-      pending = pending.filter((p) => p.at > gameTime);
-      due.forEach((p) => p.fn());
-    }
+    timers.update(delta);
 
     if (phase === 'aiming' && clockRunning) {
       clockLeft -= delta;

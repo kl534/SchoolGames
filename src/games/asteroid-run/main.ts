@@ -1,14 +1,16 @@
 import './style.css';
 import { MathUtils, Vector3 } from 'three';
+import { fillAnswers, lockAnswers, pressAnswers } from '../../shared/answers';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
-import { createPointerInput, onPress } from '../../shared/input';
+import { createPointerInput } from '../../shared/input';
 import { showPreview } from '../../shared/preview';
 import { showResults } from '../../shared/results';
 import { starsFor } from '../../shared/round';
 import { createScene } from '../../shared/scene';
 import { startGameSession, type GameSession } from '../../shared/session';
 import { createTapFlow } from '../../shared/tapflow';
-import { answerOptions, type Fact } from '../../shared/topics';
+import { createTimers } from '../../shared/timers';
+import { answerOptions, promptSpeech, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
 import { createAsteroid, type Asteroid } from './asteroid';
 import { buildBackdrop, FOG_COLOR } from './backdrop';
@@ -242,14 +244,8 @@ function run(session: GameSession): void {
 
   // Delayed actions run on game time so pausing freezes them too.
   let gameTime = 0;
-  let pending: { at: number; fn: () => void }[] = [];
-  const after = (seconds: number, fn: () => void) => pending.push({ at: gameTime + seconds, fn });
-
-  /**
-   * Dims the answers while a result plays out. They are not `disabled`, so a tap in that window
-   * still reaches `onAnswer` instead of being swallowed.
-   */
-  const lockAnswers = () => buttons.forEach((b) => b.setAttribute('aria-disabled', 'true'));
+  const timers = createTimers();
+  const after = timers.after;
 
   const setHudVisible = (visible: boolean) => {
     hud.hidden = !visible;
@@ -368,7 +364,7 @@ function run(session: GameSession): void {
 
   // ---------- Run flow ----------
   const startRun = (withPreview: boolean) => {
-    pending = [];
+    timers.clear();
     turn++;
     tapFlow.disarm();
     feed = createFactFeed(() => session.chooseFacts());
@@ -433,7 +429,7 @@ function run(session: GameSession): void {
   /** The next asteroid appears far ahead: a boss every `BOSS_EVERY`th, else a normal one. */
   const spawnTarget = () => {
     if (phase === 'ending' || phase === 'done') return;
-    pending = [];
+    timers.clear();
     tapFlow.disarm();
     stopSpeaking();
     banner.hidden = true;
@@ -469,20 +465,14 @@ function run(session: GameSession): void {
 
   /** Shows a question with its four answers and reads it out; the clock waits for the reading. */
   const askQuestion = (next: Fact, readAfter = 0) => {
-    pending = [];
+    timers.clear();
     tapFlow.disarm();
     fact = next;
     banner.hidden = true;
     const thisTurn = ++turn;
     options = answerOptions(session.topic, next, buttons.length);
     chosen = -1;
-    buttons.forEach((button, i) => {
-      const text = options[i];
-      button.textContent = text ?? '';
-      button.setAttribute('aria-label', `Answer ${text ?? ''}`);
-      button.removeAttribute('aria-disabled');
-      button.className = 'ar-answer';
-    });
+    fillAnswers(buttons, options, 'ar-answer');
     problemText.textContent = next.prompt;
     clockRunning = false;
     speechDone = false;
@@ -491,7 +481,7 @@ function run(session: GameSession): void {
     setClock(clockLeft / clockTotal);
     // The clock starts once the question has been read out and the asteroid is locked.
     const read = () =>
-      speak(next.spokenPrompt ?? next.prompt, () => {
+      speak(promptSpeech(next), () => {
         if (turn !== thisTurn || phase !== 'aiming') return;
         speechDone = true;
       });
@@ -511,7 +501,7 @@ function run(session: GameSession): void {
     phase = 'firing';
     clockRunning = false;
     chosen = index;
-    lockAnswers();
+    lockAnswers(buttons);
     buttons[index].classList.add('chosen');
     ship.muzzle(0, muzzleLeft);
     ship.muzzle(1, muzzleRight);
@@ -614,7 +604,7 @@ function run(session: GameSession): void {
   const timeUp = () => {
     clockRunning = false;
     chosen = -1;
-    lockAnswers();
+    lockAnswers(buttons);
     resolveMiss("Time's up!");
     startRam();
   };
@@ -680,21 +670,19 @@ function run(session: GameSession): void {
     if (chosen >= 0) buttons[chosen].classList.add('wrong');
     showBanner(title, current.statement, 'miss');
     sfx.miss();
-    // Move on once the correct fact has been read out and shown for a bit.
-    tapFlow.arm(buttons, options.indexOf(current.answer), [hud, banner], current.prompt);
-    const thisTurn = turn;
-    after(0.6, () =>
-      speak(current.spokenStatement ?? current.statement, () => {
-        if (turn === thisTurn && phase === 'result') tapFlow.readFinished();
-      }),
-    );
+    // Move on once the correct fact has been read out and the green answer tapped.
+    tapFlow.reveal(buttons, options, current, {
+      avoid: [hud, banner],
+      problem: current.prompt,
+      delay: 0.6,
+    });
   };
 
   /** After a reveal: the boss's next question, or the next asteroid. */
   const advance = () => {
     tapFlow.disarm();
     stopSpeaking();
-    pending = [];
+    timers.clear();
     const next = isBoss && targetAlive ? bossFacts.shift() : undefined;
     if (next) {
       banner.hidden = true;
@@ -710,7 +698,7 @@ function run(session: GameSession): void {
   const endRun = () => {
     const last = fact;
     phase = 'ending';
-    pending = [];
+    timers.clear();
     turn++;
     clockRunning = false;
     ram = null;
@@ -729,13 +717,10 @@ function run(session: GameSession): void {
     }
     // The answers stay up: the player taps the green one before the results appear.
     showBanner(SHIP_DESTROYED_SPEECH, last.statement, 'out');
-    tapFlow.arm(buttons, options.indexOf(last.answer), [hud, banner], last.prompt);
-    const thisTurn = turn;
-    speak(SHIP_DESTROYED_SPEECH, () => {
-      if (turn !== thisTurn || phase !== 'ending') return;
-      speak(last.spokenStatement ?? last.statement, () => {
-        if (turn === thisTurn && phase === 'ending') tapFlow.readFinished();
-      });
+    tapFlow.reveal(buttons, options, last, {
+      avoid: [hud, banner],
+      problem: last.prompt,
+      lead: SHIP_DESTROYED_SPEECH,
     });
   };
 
@@ -792,14 +777,10 @@ function run(session: GameSession): void {
     if (phase === 'aiming') select(index);
     else skip();
   };
-  const unpress = buttons.map((button, i) => {
-    // A touch press doesn't count as a user gesture for iOS audio; the release does.
-    button.addEventListener('pointerup', unlockAudio);
-    return onPress(button, () => onAnswer(i));
-  });
+  const unpress = pressAnswers(buttons, onAnswer);
   hear.addEventListener('click', () => {
     unlockAudio();
-    if (fact) speak(fact.spokenPrompt ?? fact.prompt);
+    if (fact) speak(promptSpeech(fact));
   });
 
   const canSteer = () =>
@@ -937,11 +918,7 @@ function run(session: GameSession): void {
 
     gameTime += delta;
     tapFlow.update(delta);
-    const due = pending.filter((p) => p.at <= gameTime);
-    if (due.length) {
-      pending = pending.filter((p) => p.at > gameTime);
-      due.forEach((p) => p.fn());
-    }
+    timers.update(delta);
 
     // --- Steering ---
     if (canSteer()) {
@@ -1038,7 +1015,7 @@ function run(session: GameSession): void {
     window.removeEventListener('blur', onBlur);
     stopPointer();
     tapFlow.dispose();
-    unpress.forEach((fn) => fn());
+    unpress();
     pause.dispose();
     mute.dispose();
     effects.clear();

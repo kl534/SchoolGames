@@ -7,7 +7,7 @@
 import { Vector3 } from 'three';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
 import type { TapFlow } from '../../shared/tapflow';
-import type { Fact } from '../../shared/topics';
+import { promptSpeech, statementSpeech, type Fact } from '../../shared/topics';
 import type { Ball, Batter, Catcher, Pitcher, Prop, Umpire } from './characters';
 import type { Effects } from './effects';
 import { planBatted, type BattedBall } from './batted';
@@ -178,7 +178,7 @@ export function createPitching(host: PitchingHost): Pitching {
     if (!fact) return;
     const token = ++speechToken;
     const thisTurn = turn;
-    speak(fact.spokenPrompt ?? fact.prompt, () => {
+    speak(promptSpeech(fact), () => {
       if (token !== speechToken || turn !== thisTurn || phase !== 'set') return;
       // The clock starts once the question has been read.
       phase = 'live';
@@ -416,15 +416,8 @@ export function createPitching(host: PitchingHost): Pitching {
     sfx.miss();
     const mark = startResult(true, false, true);
     // The green answer pulses at once; the game waits for a tap on it, however long it takes.
-    tapFlow.arm(hud.buttons, options.indexOf(current.answer), hud.avoid);
     // The hit is called, then the fact is read out.
-    const thisTurn = turn;
-    speak(cpuHitSpeech(hit), () => {
-      if (turn !== thisTurn || phase !== 'play') return;
-      speak(current.spokenStatement ?? current.statement, () => {
-        if (turn === thisTurn && phase === 'play') tapFlow.readFinished();
-      });
-    });
+    tapFlow.reveal(hud.buttons, options, current, { avoid: hud.avoid, lead: cpuHitSpeech(hit) });
     const { spots, leads } = host.snapshot();
     const script = planPlay({
       ball: path,
@@ -558,14 +551,14 @@ export function createPitching(host: PitchingHost): Pitching {
       // The call has taken the question's place: the button says the fact again.
       replaying++;
       speechToken++;
-      speak(current.spokenStatement ?? current.statement, () => {
+      speak(statementSpeech(current), () => {
         replaying--;
         if (turn === thisTurn) resultDone?.();
       });
     } else if (phase === 'set') {
       readQuestion();
     } else if (phase === 'live') {
-      speak(current.spokenPrompt ?? current.prompt);
+      speak(promptSpeech(current));
     }
   };
 

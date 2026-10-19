@@ -1,15 +1,17 @@
 import './style.css';
 import { MathUtils, Vector3, type Object3D } from 'three';
+import { pressAnswers } from '../../shared/answers';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
 import { createFactFeed, type FactFeed } from '../../shared/feed';
-import { createPointerInput, onPress } from '../../shared/input';
+import { createPointerInput } from '../../shared/input';
 import { showPreview } from '../../shared/preview';
 import { showResults } from '../../shared/results';
 import { starsFor } from '../../shared/round';
 import { createScene } from '../../shared/scene';
 import { startGameSession, type GameSession } from '../../shared/session';
 import { createTapFlow } from '../../shared/tapflow';
-import { answerOptions, type Fact } from '../../shared/topics';
+import { createTimers } from '../../shared/timers';
+import { answerOptions, promptSpeech, statementSpeech, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
 import {
   createBall,
@@ -267,10 +269,10 @@ function run(session: GameSession): void {
   // Delayed actions run on game time so pausing freezes them too. `after` is for the flow of the
   // game and is wiped at each pitch; `later` is for scenery and only cleared on a new game.
   let gameTime = 0;
-  let pending: { at: number; fn: () => void }[] = [];
-  let scenery: { at: number; fn: () => void }[] = [];
-  const after = (seconds: number, fn: () => void) => pending.push({ at: gameTime + seconds, fn });
-  const later = (seconds: number, fn: () => void) => scenery.push({ at: gameTime + seconds, fn });
+  const timers = createTimers();
+  const scenery = createTimers();
+  const after = timers.after;
+  const later = scenery.after;
 
   /** Everyone and everything added to the scene during play, so a new game can clear it away. */
   const spawned = new Set<Object3D>();
@@ -470,7 +472,7 @@ function run(session: GameSession): void {
   /** Starts a new pitch: the question, the answers, and the pitcher winding up as it is read. */
   const nextPitch = () => {
     if (state.over || phase === 'done') return;
-    pending = [];
+    timers.clear();
     tapFlow.disarm();
     stopSpeaking();
     hud.hideBanner();
@@ -496,7 +498,7 @@ function run(session: GameSession): void {
   const readQuestion = (thisTurn: number) => {
     if (!fact) return;
     const token = ++speechToken;
-    speak(fact.spokenPrompt ?? fact.prompt, () => {
+    speak(promptSpeech(fact), () => {
       if (token !== speechToken || turn !== thisTurn || phase !== 'windup') return;
       speechDone = true;
     });
@@ -617,26 +619,18 @@ function run(session: GameSession): void {
     if (call.out) batter.slump();
     refresh();
     phase = 'result';
-    const correct = options.indexOf(current.answer);
-    hud.mark(chosen, correct, false);
+    hud.mark(chosen, options.indexOf(current.answer), false);
     hud.showBanner(call.title, current.statement, 'miss', 'aside');
     sfx.miss();
     // The green answer pulses at once. The game waits for a tap on it, however long that takes.
-    tapFlow.arm(hud.buttons, correct, hud.avoid);
-    const thisTurn = turn;
-    speak(call.spoken, () => {
-      if (turn !== thisTurn || phase !== 'result') return;
-      speak(current.spokenStatement ?? current.statement, () => {
-        if (turn === thisTurn && phase === 'result') tapFlow.readFinished();
-      });
-    });
+    tapFlow.reveal(hud.buttons, options, current, { avoid: hud.avoid, lead: call.spoken });
   };
 
   /** After a result: the same batter again, or the next one if that was an out. */
   const advance = () => {
     tapFlow.disarm();
     stopSpeaking();
-    pending = [];
+    timers.clear();
     hud.hideBanner();
     ball.setVisible(false);
     umpire.reset();
@@ -895,7 +889,7 @@ function run(session: GameSession): void {
     hud.hideBanner();
     effects.onBurst = null;
     positionField(true);
-    pending = [];
+    timers.clear();
     afterPlay(true, 0.7);
   };
 
@@ -1052,9 +1046,7 @@ function run(session: GameSession): void {
     refresh,
     now: () => gameTime,
     after,
-    clearTimers: () => {
-      pending = [];
-    },
+    clearTimers: timers.clear,
     playOver: (batterGone) => afterPlay(batterGone, 0.4),
     snapshot: snapshotField,
   });
@@ -1120,7 +1112,7 @@ function run(session: GameSession): void {
 
   /** The half-inning is over: the banner and the score, then the other side comes in. */
   const endHalf = (reason: 'outs' | 'mercy') => {
-    pending = [];
+    timers.clear();
     turn++;
     shown.runs = state.runs;
     shown.outs = state.outs;
@@ -1141,7 +1133,7 @@ function run(session: GameSession): void {
     shown.runs = 0;
     shown.strikes = 0;
     shown.outs = 0;
-    pending = [];
+    timers.clear();
     [...spawned].forEach(retire);
     props = [];
     onBase = [null, null, null];
@@ -1203,7 +1195,7 @@ function run(session: GameSession): void {
 
   /** The game is won or lost: the banner, then the results. */
   const finishGame = () => {
-    pending = [];
+    timers.clear();
     turn++;
     const { us, them } = totals(state);
     shown.runs = state.runs;
@@ -1253,8 +1245,8 @@ function run(session: GameSession): void {
 
   // ---------- Run flow ----------
   const startRun = (withPreview: boolean) => {
-    pending = [];
-    scenery = [];
+    timers.clear();
+    scenery.clear();
     turn++;
     announceToken++;
     skipAnnounce = null;
@@ -1343,11 +1335,7 @@ function run(session: GameSession): void {
     else if (phase === 'windup' || phase === 'release' || phase === 'pitch') select(index);
     else skip();
   };
-  const unpress = hud.buttons.map((button, i) => {
-    // A touch press doesn't count as a user gesture for iOS audio; the release does.
-    button.addEventListener('pointerup', unlockAudio);
-    return onPress(button, () => onAnswer(i));
-  });
+  const unpress = pressAnswers(hud.buttons, onAnswer);
   hud.hear.addEventListener('click', () => {
     unlockAudio();
     if (phase === 'pitching') {
@@ -1355,11 +1343,11 @@ function run(session: GameSession): void {
     } else if (fact && hud.callInPanel()) {
       // The call has taken the question's place: the button says the fact again.
       speechToken++;
-      speak(fact.spokenStatement ?? fact.statement);
+      speak(statementSpeech(fact));
     } else if (fact) {
       const token = ++speechToken;
       const thisTurn = turn;
-      speak(fact.spokenPrompt ?? fact.prompt, () => {
+      speak(promptSpeech(fact), () => {
         if (token !== speechToken || turn !== thisTurn || phase !== 'windup') return;
         speechDone = true;
       });
@@ -1378,23 +1366,12 @@ function run(session: GameSession): void {
   window.addEventListener('keydown', onKey);
 
   // ---------- Loop ----------
-  /**
-   * Runs the timers that are due. They come off the list first: a timer may well clear the list
-   * or add new ones (a banner ending starts the next), and those must be kept.
-   */
-  const runDue = (list: { at: number; fn: () => void }[], keep: (rest: typeof list) => void) => {
-    const due = list.filter((p) => p.at <= gameTime);
-    if (!due.length) return;
-    keep(list.filter((p) => p.at > gameTime));
-    due.forEach((p) => p.fn());
-  };
-
   ctx.onUpdate((delta, time) => {
     layout();
     gameTime += delta;
     tapFlow.update(delta);
-    runDue(pending, (rest) => (pending = rest));
-    runDue(scenery, (rest) => (scenery = rest));
+    timers.update(delta);
+    scenery.update(delta);
 
     // --- The people ---
     pitcher.update(delta, time);
@@ -1524,7 +1501,7 @@ function run(session: GameSession): void {
     window.removeEventListener('keydown', onKey);
     stopPointer();
     tapFlow.dispose();
-    unpress.forEach((fn) => fn());
+    unpress();
     pause.dispose();
     mute.dispose();
     effects.clear();
