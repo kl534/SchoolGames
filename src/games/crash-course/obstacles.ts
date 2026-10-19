@@ -1,5 +1,5 @@
 /**
- * The seven obstacles, built from bright painted primitives. Each one's group has its origin at
+ * The ten obstacles, built from bright painted primitives. Each one's group has its origin at
  * the entry line on the road. `update(outcome, variant, t)` poses the props for any moment of any
  * stunt (the same timeline the bike follows), `ambient(time)` keeps the idle bits moving, and
  * `reset()` puts everything back for the next ride.
@@ -38,9 +38,26 @@ import {
   crateAt,
   createFrame,
   fly,
+  halfpipeSurface,
+  HP_CXL,
+  HP_CXR,
+  HP_DECK_L0,
+  HP_DECK_L1,
+  HP_DECK_R1,
+  HP_KICK_LEN,
+  HP_LIP,
+  HP_WH,
   LOOP_CX,
   LOOP_CY,
   LOOP_R,
+  penguinAt,
+  penguinLane,
+  PENGUIN_COUNT,
+  PENGUIN_HOME,
+  PG_HOOP_X,
+  PG_ICE_FROM,
+  PG_ICE_TO,
+  PG_LANE_Z,
   plankAt,
   POOL_FLOOR,
   POOL_FROM,
@@ -61,6 +78,12 @@ import {
   stuntFrame,
   TAU,
   WATER_Y,
+  WR_L,
+  WR_PX,
+  WR_R,
+  WR_TOP,
+  WR_Z,
+  wreckerAngle,
   type Frame,
   type Piece,
   type StuntSpec,
@@ -1031,6 +1054,281 @@ function buildCoaster(kit: Kit): Built {
   };
 }
 
+// ---------- Skate half-pipe ----------
+
+function buildHalfpipe(kit: Kit): Built {
+  const group = new Group();
+  const rib = ribbonMaterial(kit);
+  // The orange kicker, then the grey concrete bowl with a deck at each end.
+  kit.mesh(ribbon(halfpipeSurface, 0, HP_KICK_LEN, 0.3, 0, 1.5, 0xff9d2e, 0xf08a1c), rib, group);
+  kit.mesh(
+    ribbon(halfpipeSurface, HP_DECK_L0, HP_DECK_R1, 0.2, 0, 1.5, 0xb7bfd0, 0xa7afc2),
+    rib,
+    group,
+  );
+  // Red coping along each lip.
+  const red = kit.lit(RED, 0.45);
+  for (const x of [HP_DECK_L1, HP_LIP]) {
+    kit.box(0.28, 0.16, 3.1, red, group, x, HP_WH + 0.05, 0);
+  }
+  // Blue rails behind the decks.
+  const blue = kit.lit(BLUE, 0.5);
+  for (const [x0, x1] of [
+    [HP_DECK_L0 + 0.1, HP_DECK_L1 - 0.2],
+    [HP_LIP + 0.1, HP_DECK_R1],
+  ]) {
+    kit.box(x1 - x0, 0.08, 0.08, blue, group, (x0 + x1) / 2, HP_WH + 0.9, -1.4);
+    kit.box(0.08, 0.9, 0.08, blue, group, x0, HP_WH + 0.45, -1.4);
+    kit.box(0.08, 0.9, 0.08, blue, group, x1, HP_WH + 0.45, -1.4);
+  }
+  // A lamp on the left deck.
+  const steel = kit.lit(0x8791a8, 0.5);
+  kit.box(0.14, 4.6, 0.14, steel, group, HP_DECK_L0 + 0.35, 2.3 + HP_WH * 0.5, -1.4);
+  const lamp = kit.mesh(
+    new SphereGeometry(0.34, 14, 10),
+    kit.basic(0xfff1a8),
+    group,
+    HP_DECK_L0 + 0.35,
+    4.7 + HP_WH * 0.5,
+    -1.3,
+  );
+  // The banner between two poles above the bowl.
+  const bannerTex = kit.paint(512, 96, (g) => {
+    g.fillStyle = '#1e66d6';
+    g.fillRect(0, 0, 512, 96);
+    g.fillStyle = '#ffd43b';
+    g.fillRect(0, 0, 512, 10);
+    g.fillRect(0, 86, 512, 10);
+    g.fillStyle = '#ffffff';
+    g.font = '900 60px system-ui, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('SKATE PARK', 256, 50);
+  });
+  const bannerMaterial = kit.basic(0xffffff);
+  if (bannerTex) bannerMaterial.map = bannerTex;
+  else bannerMaterial.color.set(BLUE);
+  const midBowl = (HP_CXL + HP_CXR) / 2;
+  const banner = kit.mesh(new PlaneGeometry(6.2, 1.1), bannerMaterial, group, midBowl, 5.0, -1.5);
+  for (const x of [midBowl - 3.2, midBowl + 3.2]) {
+    kit.box(0.14, 5.6, 0.14, steel, group, x, 2.8, -1.5);
+  }
+  return {
+    group,
+    update() {},
+    ambient(time) {
+      banner.rotation.z = 0.02 * Math.sin(time * 1.4);
+      lamp.scale.setScalar(1 + 0.05 * Math.sin(time * 5));
+    },
+    reset() {
+      banner.rotation.z = 0;
+    },
+  };
+}
+
+// ---------- Penguin pond ----------
+
+function buildPenguin(kit: Kit, scarfColor: number): Group {
+  const g = new Group();
+  const black = kit.lit(0x1d2433, 0.6);
+  const white = kit.lit(0xf7f9ff, 0.5);
+  const orange = kit.lit(0xff9a1f, 0.5);
+  const scarf = kit.lit(scarfColor, 0.7);
+  const body = kit.mesh(new SphereGeometry(0.5, 16, 12), black, g, 0, 0.6, 0);
+  body.scale.set(0.8, 1.1, 0.7);
+  const belly = kit.mesh(new SphereGeometry(0.42, 14, 10), white, g, 0, 0.55, 0.2);
+  belly.scale.set(0.75, 1.05, 0.5);
+  kit.mesh(new SphereGeometry(0.3, 14, 10), black, g, 0, 1.25, 0);
+  const beak = kit.mesh(new ConeGeometry(0.1, 0.26, 10), orange, g, 0, 1.2, 0.32);
+  beak.rotation.x = Math.PI / 2;
+  for (const side of [-1, 1]) {
+    kit.mesh(new SphereGeometry(0.085, 10, 8), white, g, side * 0.12, 1.33, 0.24);
+    kit.mesh(new SphereGeometry(0.045, 8, 6), black, g, side * 0.12, 1.33, 0.31);
+    kit.box(0.3, 0.08, 0.4, orange, g, side * 0.18, 0.04, 0.12);
+    kit.box(0.1, 0.5, 0.22, black, g, side * 0.44, 0.65, 0).rotation.z = side * 0.4;
+  }
+  const wrap = kit.mesh(new TorusGeometry(0.27, 0.07, 8, 16), scarf, g, 0, 1.0, 0);
+  wrap.rotation.x = Math.PI / 2;
+  g.scale.setScalar(1.1);
+  return g;
+}
+
+function buildPenguins(kit: Kit): Built {
+  const group = new Group();
+  // The ice: a pale slab over the road with a scatter of sparkles.
+  const iceLength = PG_ICE_TO - PG_ICE_FROM;
+  const mid = (PG_ICE_FROM + PG_ICE_TO) / 2;
+  kit.box(iceLength, 0.05, 4.3, kit.lit(0xa9dcf7, 0.15), group, mid, 0.02, -0.9);
+  const sparkle = kit.basic(0xffffff);
+  for (let i = 0; i < 26; i++) {
+    const x = PG_ICE_FROM + 0.4 + ((i * 0.53) % (iceLength - 0.8));
+    const z = -2.4 + ((i * 7) % 11) * 0.36;
+    kit.box(0.1, 0.02, 0.1, sparkle, group, x, 0.06, z).rotation.y = i;
+  }
+  // The hoop between the first two penguins, and a snowbank at the end for the splat.
+  kit.mesh(
+    new TorusGeometry(1.25, 0.11, 10, 40),
+    kit.lit(RED, 0.4),
+    group,
+    PG_HOOP_X,
+    1.6,
+    PG_LANE_Z,
+  );
+  kit.box(0.14, 0.5, 0.14, kit.lit(WHITE, 0.6), group, PG_HOOP_X, 0.25, PG_LANE_Z);
+  const snow = kit.lit(0xf4fbff, 0.9);
+  const bank = kit.mesh(new SphereGeometry(1, 18, 12), snow, group, 15.6, 0, -1.3);
+  bank.scale.set(1.7, 0.95, 1.1);
+  // The heap that lands on top of whoever slid into the bank.
+  const heap = new Group();
+  for (const [x, y, r] of [
+    [0, 0.5, 0.9],
+    [-0.8, 0.3, 0.6],
+    [0.8, 0.3, 0.65],
+    [0.1, 1.0, 0.55],
+  ]) {
+    kit.mesh(new SphereGeometry(r, 14, 10), snow, heap, x, y, 0);
+  }
+  group.add(heap);
+  const penguins: Group[] = [];
+  const scarves = [RED, BLUE, 0x2fbf71, GOLD, 0xff8fd0, 0xb28dff, 0xff6b3a];
+  for (let i = 0; i < PENGUIN_COUNT; i++) {
+    const p = buildPenguin(kit, scarves[i % scarves.length]);
+    group.add(p);
+    penguins.push(p);
+  }
+  const beats = stuntBeats('penguins', 'crash', 1);
+  let playing = false;
+  const apply = (outcome: Outcome, variant: Variant, t: number) => {
+    playing = true;
+    for (let i = 0; i < PENGUIN_COUNT; i++) {
+      penguinAt(outcome, variant, i, t, piece);
+      const p = penguins[i];
+      p.visible = piece.visible;
+      p.position.set(piece.x, piece.y, penguinLane(outcome, variant, i, t));
+      p.rotation.z = piece.rot;
+    }
+    if (outcome === 'crash' && variant === 1) {
+      const drop = Math.min(1, Math.max(0, (t - beats.snow) / 0.35));
+      heap.visible = t >= beats.snow - 0.5;
+      heap.position.set(14.6, (1 - drop * drop) * 4.5, -0.3);
+      const land = Math.max(0, 1 - Math.abs(t - beats.snow - 0.38) / 0.2);
+      heap.scale.set(1 + 0.15 * land, 1 - 0.2 * land, 1);
+    } else {
+      heap.visible = false;
+    }
+  };
+  const idle = () => {
+    for (let i = 0; i < PENGUIN_COUNT; i++) {
+      const p = penguins[i];
+      p.visible = true;
+      p.position.set(PENGUIN_HOME[i], 0, PG_LANE_Z);
+      p.rotation.z = 0;
+    }
+    heap.visible = false;
+  };
+  idle();
+  return {
+    group,
+    update: apply,
+    ambient(time) {
+      if (playing) return;
+      for (let i = 0; i < PENGUIN_COUNT; i++) {
+        penguins[i].rotation.z = 0.06 * Math.sin(time * 2.2 + i * 1.3);
+      }
+    },
+    reset() {
+      playing = false;
+      idle();
+    },
+  };
+}
+
+// ---------- Wrecking balls ----------
+
+function buildWrecker(kit: Kit): Built {
+  const group = new Group();
+  const steel = kit.lit(0x8791a8, 0.5);
+  const yellow = kit.lit(0xffcf33, 0.5);
+  const dark = kit.lit(0x2b3140, 0.45);
+  // The gantry: two legs and a beam with a warning stripe.
+  for (const x of [WR_PX[0] - 2.4, WR_PX[2] + 2.4]) {
+    kit.box(0.45, WR_TOP + 0.4, 0.45, yellow, group, x, (WR_TOP + 0.4) / 2, WR_Z - 0.5);
+    kit.box(1.1, 0.2, 1.1, steel, group, x, 0.1, WR_Z - 0.5);
+  }
+  const beamLength = WR_PX[2] - WR_PX[0] + 4.8;
+  const beamMid = (WR_PX[0] + WR_PX[2]) / 2;
+  kit.box(beamLength, 0.5, 0.55, yellow, group, beamMid, WR_TOP + 0.25, WR_Z);
+  for (let i = 0; i < 18; i++) {
+    const x = beamMid - beamLength / 2 + 0.5 + i * 0.75;
+    kit.box(0.28, 0.52, 0.57, dark, group, x, WR_TOP + 0.25, WR_Z).rotation.z = 0.5;
+  }
+  // The balls on their chains, hung from the beam.
+  const swings: Group[] = [];
+  const ballColors = [0x394057, 0x4a5370, 0x394057];
+  for (let i = 0; i < 3; i++) {
+    const pivot = new Group();
+    pivot.position.set(WR_PX[i], WR_TOP, WR_Z);
+    group.add(pivot);
+    const chainLength = WR_L - WR_R + 0.1;
+    const chain = new CylinderGeometry(0.07, 0.07, chainLength, 8);
+    kit.mesh(chain, steel, pivot, 0, -chainLength / 2, 0);
+    for (let k = 1; k < 6; k++) {
+      kit.box(0.28, 0.12, 0.2, steel, pivot, 0, -(chainLength * k) / 6, 0);
+    }
+    kit.mesh(new SphereGeometry(WR_R, 22, 16), kit.lit(ballColors[i], 0.35), pivot, 0, -WR_L, 0);
+    kit.mesh(new TorusGeometry(WR_R * 0.98, 0.09, 8, 28), yellow, pivot, 0, -WR_L, 0);
+    swings.push(pivot);
+  }
+  // The foam that catches a bashed bike.
+  const foam = new Group();
+  const colors = [0xff8fd0, 0x7be07b, 0x4dd0e1, 0xffd43b, 0xffffff];
+  for (let i = 0; i < 12; i++) {
+    const column = (i * 5) % 7;
+    const high = Math.floor(i / 6) * 0.55 * (1 - Math.abs(column - 3) / 4);
+    const material = kit.lit(colors[i % colors.length], 0.9);
+    const block = kit.box(
+      0.9,
+      0.7,
+      1.2,
+      material,
+      foam,
+      column * 0.45 - 1.3,
+      0.35 + high,
+      (i % 3) * 0.3 - 0.6,
+    );
+    block.rotation.set(0.1 * i, 0.4 * i, 0.15 * (i % 4));
+  }
+  foam.position.set(10.3, 0, -0.2);
+  group.add(foam);
+  const beats = stuntBeats('wrecker', 'crash', 0);
+  let playing = false;
+  const apply = (outcome: Outcome, variant: Variant, t: number) => {
+    playing = true;
+    for (let i = 0; i < 3; i++) swings[i].rotation.z = wreckerAngle(outcome, variant, i, t);
+    if (outcome === 'crash' && variant === 0) {
+      const grow = smooth((t - beats.land) / 0.25);
+      foam.visible = grow > 0;
+      foam.scale.set(grow, 0.001 + grow, grow);
+    } else {
+      foam.visible = false;
+    }
+  };
+  foam.visible = false;
+  return {
+    group,
+    update: apply,
+    ambient(time) {
+      if (playing) return;
+      for (let i = 0; i < 3; i++) swings[i].rotation.z = 0.35 * Math.sin(time * 1.7 + i * 1.4);
+    },
+    reset() {
+      playing = false;
+      foam.visible = false;
+      for (let i = 0; i < 3; i++) swings[i].rotation.z = 0;
+    },
+  };
+}
+
 const BUILDERS: Record<ObstacleKind, (kit: Kit) => Built> = {
   loop: buildLoop,
   ramp: buildRamp,
@@ -1039,6 +1337,9 @@ const BUILDERS: Record<ObstacleKind, (kit: Kit) => Built> = {
   bridge: buildBridge,
   seesaw: buildSeesaw,
   coaster: buildCoaster,
+  halfpipe: buildHalfpipe,
+  penguins: buildPenguins,
+  wrecker: buildWrecker,
 };
 
 const CUTS: Record<ObstacleKind, readonly [number, number] | null> = {
@@ -1049,6 +1350,9 @@ const CUTS: Record<ObstacleKind, readonly [number, number] | null> = {
   bridge: [BRIDGE_FROM, BRIDGE_TO],
   seesaw: null,
   coaster: null,
+  halfpipe: null,
+  penguins: null,
+  wrecker: null,
 };
 
 export function createObstacle(kind: ObstacleKind): Obstacle {

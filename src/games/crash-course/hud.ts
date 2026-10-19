@@ -17,6 +17,9 @@ export const GOAL_ICONS: Record<GoalKey, string> = {
   bridge: '🌉',
   seesaw: '⚖️',
   coaster: '🎢',
+  halfpipe: '🛹',
+  penguins: '🐧',
+  wrecker: '🔨',
   gate: '🏁',
   'triple-loop': '🌀',
 };
