@@ -355,7 +355,9 @@ export function createHud(): Hud {
         // Keep the plate clear: on a wide screen the call goes to one side. (On a tall one it
         // goes in the question panel, above; this is only for when there is no panel.)
         if (!inQuestion) {
-          banner.style.left = `${Math.round(viewW * 0.77)}px`;
+          // Keep the whole card on the screen, whatever its width.
+          const wide = banner.offsetWidth / 2 + 12;
+          banner.style.left = `${Math.round(Math.min(Math.max(viewW * 0.77, wide), viewW - wide))}px`;
           // A miss card needs room under it for the finger. Beside the question rather than under
           // it, the card may start higher up, just below the top bar.
           const first = kind === 'miss' ? cardTop(banner.getBoundingClientRect(), top) : top;
