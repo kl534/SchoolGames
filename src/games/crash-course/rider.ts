@@ -257,6 +257,18 @@ export const POSES: Record<PoseName, (pose: Pose, t: number) => void> = {
     p.armL.bend = 1.5;
     p.lean = 0;
   },
+  superman(p, t) {
+    // Hands on the bars, body stretched out flat behind them, legs straight out at the back.
+    POSES.ride(p, t);
+    p.lift = 0.25;
+    p.lean = 1.35;
+    p.armL.raise = p.armR.raise = 1.45;
+    p.armL.bend = p.armR.bend = 0.05;
+    p.legL.raise = p.legR.raise = -0.9;
+    p.legL.bend = p.legR.bend = 0.05;
+    p.legL.out = p.legR.out = 0.2;
+    p.headPitch = 0.35;
+  },
 };
 
 /** Which way the free rider faces, by pose: sideways to the camera, or turned towards it. */
