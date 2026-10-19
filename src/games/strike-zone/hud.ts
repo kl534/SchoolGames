@@ -54,8 +54,12 @@ export interface Bands {
   play: PlayBand;
 }
 
-/** Room kept above the answers for a miss card and under it for the finger and caption. */
+/**
+ * Room kept under a miss card for the finger and caption that point at the green answer. They
+ * grow with the screen, so a big screen needs a little more.
+ */
 const TAP_ROOM = 104;
+const TAP_ROOM_BIG = 116;
 
 export interface Hud {
   buttons: HTMLButtonElement[];
@@ -392,7 +396,8 @@ export function createHud(): Hud {
         controls.hidden = wasHidden;
       }
       // A miss leaves room under it for the finger and caption that point at the green answer.
-      const room = kind === 'miss' && where === 'ask' ? TAP_ROOM : 0;
+      const big = Math.min(window.innerWidth, viewH) >= 520;
+      const room = kind === 'miss' && where === 'ask' ? (big ? TAP_ROOM_BIG : TAP_ROOM) : 0;
       banner.style.bottom = `${Math.max(viewH - anchor + 8 + room, 8)}px`;
     },
     hideBanner() {
