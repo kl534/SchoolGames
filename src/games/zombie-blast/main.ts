@@ -48,6 +48,8 @@ const GAME_ID = 'zombie-blast';
 const KID_Z = 1.5;
 /** Seconds a thrown bomb is in the air. */
 const BOMB_TIME = 0.7;
+/** Room kept under the "Dud!" banner for the finger and caption that point at the green answer. */
+const TAP_ROOM = 104;
 /** Seconds each step of the 3, 2, 1, Go! lasts. */
 const COUNT_STEP = 0.75;
 /** How quickly the shared walking pace follows a new question (1/seconds): about half a second. */
@@ -374,9 +376,10 @@ function run(session: GameSession): void {
     banner.className = `zb-banner ${kind}`;
     banner.hidden = false;
     const top = hud.hidden ? 20 : hud.getBoundingClientRect().bottom + 8;
-    const bottom = answers.classList.contains('off')
-      ? viewH - 20
-      : answers.getBoundingClientRect().top - 8;
+    const room = kind === 'miss' ? TAP_ROOM : 0;
+    const bottom =
+      (answers.classList.contains('off') ? viewH - 20 : answers.getBoundingClientRect().top - 8) -
+      room;
     const half = banner.offsetHeight / 2;
     const wish = place === 'kid' ? toScreen(point.set(0, 0.6, KID_Z)).y : (top + bottom) / 2;
     banner.style.top = `${Math.min(Math.max(wish, top + half), Math.max(bottom - half, top + half))}px`;
