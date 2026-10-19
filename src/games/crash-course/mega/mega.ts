@@ -153,10 +153,10 @@ const probe = createFrame();
 /**
  * Whole turns the bike has made by the end of each cleared element. A cleared element ends with
  * its pitch and roll a whole number of turns round; the next one starts from nought, so the
- * sampler carries the turns on and the angles never jump.
+ * sampler carries the turns on and the angles never jump. An airborne course hands over
+ * mid-flight: the bike's pitch at both boundaries is within +-pi, so it rounds to 0 whole turns
+ * and the next element carries on from the same angle.
  */
-// An airborne course hands over mid-flight: the bike's pitch at both boundaries is within +-pi, so
-// it rounds to 0 whole turns and the next element carries on from the same angle.
 const turnCache = new Map<string, { pitch: number; roll: number }>();
 function turnsBefore(id: MegaId, index: number): { pitch: number; roll: number } {
   const key = `${id}:${index}`;
