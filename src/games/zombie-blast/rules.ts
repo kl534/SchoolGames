@@ -22,8 +22,8 @@ export const SPAWN_MIN = 1;
 export const BOSS_HITS = 3;
 /** The boss walks at this share of the zombies' pace. */
 export const BOSS_PACE = 0.5;
-/** Share of the pace the other zombies keep while a wrong answer is being explained. */
-export const REVEAL_PACE = 0.25;
+/** Share of the pace the other zombies keep while a wrong answer is being explained: none. */
+export const REVEAL_PACE = 0;
 /** How far, in world units, a hit staggers the boss back along its path. */
 export const BOSS_KNOCKBACK = 1.5;
 /** Points for knocking out the boss, on top of its hits. */
@@ -63,8 +63,8 @@ export function spawnInterval(wave: number): number {
 
 /**
  * World units per second a zombie walks when the current question gives `factSeconds` for the
- * whole path from the mist to the barricade. The boss is slower, and everyone slows right down
- * while a wrong answer is being explained.
+ * whole path from the mist to the barricade. The boss is slower, and everyone stands still
+ * while a wrong answer is being explained, until the player taps the green answer.
  */
 export function walkSpeed(factSeconds: number, boss = false, revealing = false): number {
   const path = END_Z - SPAWN_Z;
