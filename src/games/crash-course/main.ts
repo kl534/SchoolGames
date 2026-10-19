@@ -11,10 +11,26 @@ import { startGameSession, type GameSession } from '../../shared/session';
 import { answerOptions, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
 import { createBike, createParachute, type Bike } from './bike';
-import { devOptions, type DevOptions } from './dev';
+import { devOptions, type DevOptions, type LabMega, type LabStunt } from './dev';
 import { createEffects, type EffectKind } from './effects';
 import { createHud } from './hud';
 import { FOV, fitView, playBand, type Fit } from './layout';
+import type { Placed } from './kit';
+import {
+  megaDuration,
+  megaEvents,
+  megaFrame,
+  megaLength,
+  MEGA_SPECS,
+  megaWordAt,
+} from './mega/mega';
+import {
+  createGate,
+  createMegaCoursePool,
+  GATE_HEIGHT,
+  type Gate,
+  type MegaCourse,
+} from './mega/mega-obstacles';
 import { createObstaclePool, type Obstacle } from './obstacles';
 import { createRider, type Rider } from './rider';
 import {
@@ -26,15 +42,18 @@ import {
   COIN_Y,
   easeToward,
   ENTRY_SPEED,
+  GATE_BEAT,
   GREAT_RIDING_SPEECH,
   hitPoints,
   loseBike,
+  MEGA_BANNER,
   MEGA_BONUS,
   MEGA_PIECES,
-  megaKinds,
+  MIN_GAP_PAST_VIEW,
   multiplierFor,
   NEW_HIGH_SCORE_SPEECH,
   nextKind,
+  nextMega,
   nextStreak,
   nitroSpeed,
   NITRO_MAX,
@@ -45,8 +64,10 @@ import {
   startsMega,
   trailLength,
   worldSpeedFactor,
+  type MegaId,
   type ObstacleKind,
   type Outcome,
+  type Passed,
   type Variant,
 } from './rules';
 import {
@@ -74,8 +95,6 @@ const COUNT_STEP = 0.75;
 const RESPAWN_TIME = 1.6;
 /** How fast a stunt plays after a tap. */
 const FAST_FORWARD = 3;
-/** Seconds the banner of a Mega Stunt shows. */
-const MEGA_BANNER = 1.5;
 
 type Phase =
   'preview' | 'countdown' | 'riding' | 'nitro' | 'stunt' | 'result' | 'respawn' | 'ending' | 'done';
@@ -86,16 +105,40 @@ interface Pair {
   lastX: number;
 }
 
+/** A regular stunt and a Mega stunt step the same way. */
 interface Stunt {
-  kind: ObstacleKind;
-  outcome: Outcome;
-  variant: Variant;
   t: number;
   duration: number;
   events: StuntEvent[];
   next: number;
   scale: number;
+  outcome: Outcome;
+  /** x of the end of what it plays on (the obstacle, or the whole Mega course). */
+  length: number;
+  frameAt(t: number, out: Frame): void;
+  propsAt(t: number): void;
+  /** The comic word of a regular stunt. */
+  word?: string;
+  /** The comic word at a time of a Mega stunt, which has one per element. */
+  wordAt?(t: number): { text: string; good: boolean };
 }
+
+/** Where a Mega Stunt has got to: its questions up front, then the long stunt. */
+interface MegaRun {
+  id: MegaId;
+  /** Questions answered right before the first miss. */
+  passed: number;
+  /** Questions asked so far. */
+  asked: number;
+  /** A miss or a timeout stopped the questions. */
+  ended: boolean;
+  /** The fact that was missed, for the result banner, and whether the clock ran out. */
+  missed?: Fact;
+  timedOut: boolean;
+}
+
+/** What the bike is riding to: an obstacle, a checkpoint gate or the Mega course. */
+type Target = 'obstacle' | 'gate' | 'course';
 
 const EFFECT_KINDS: readonly string[] = [
   'dust',
@@ -124,6 +167,9 @@ function run(session: GameSession, dev: DevOptions | null): void {
   const effects = createEffects();
   scene.add(effects.object);
   const pool = createObstaclePool();
+  const megaPool = createMegaCoursePool();
+  // Three checkpoint gates, built once and reused by every Mega Stunt.
+  const gates: Gate[] = Array.from({ length: MEGA_PIECES }, (_, i) => createGate(i + 1));
 
   const makePair = (): Pair => {
     const bike = createBike();
@@ -180,6 +226,8 @@ function run(session: GameSession, dev: DevOptions | null): void {
   let obstacleNumber = 0;
   let lastKind: ObstacleKind | null = null;
   let devKindIndex = 0;
+  let lastMega: MegaId | null = null;
+  let devMegaIndex = 0;
   const lastVariant: Record<string, Variant | undefined> = {};
   /** Ticks up for each question, so late callbacks can tell they are stale. */
   let turn = 0;
@@ -190,16 +238,17 @@ function run(session: GameSession, dev: DevOptions | null): void {
   let bannerUntil = 0;
 
   // The Mega Stunt in progress.
-  let megaQueue: ObstacleKind[] = [];
-  let megaTotal = 0;
-  let megaDone = 0;
-  let megaFirst = 0;
+  let mega: MegaRun | null = null;
   let nextIsMega = dev?.mega ?? false;
+  let target: Target = 'obstacle';
+  let course: MegaCourse | null = null;
 
   // The question and its approach.
   let kind: ObstacleKind = 'loop';
   let obstacle: Obstacle | null = null;
-  const live: { obstacle: Obstacle; originX: number }[] = [];
+  /** Whatever the bike is riding to now (it stays until the next question). */
+  let placed: Placed | null = null;
+  const live: { item: Placed; originX: number }[] = [];
   let originX = 0;
   let approachGap = 0;
   let approachStart = 0;
@@ -266,39 +315,66 @@ function run(session: GameSession, dev: DevOptions | null): void {
   };
 
   const cuts = (): Cut[] =>
-    live.flatMap(({ obstacle: o, originX: x }) =>
-      o.cuts.map(([from, to]): Cut => [x + from, x + to]),
-    );
+    live.flatMap(({ item, originX: x }) => item.cuts.map(([from, to]): Cut => [x + from, x + to]));
 
   const retireFar = () => {
     for (let i = live.length - 1; i >= 0; i--) {
-      const { obstacle: o, originX: x } = live[i];
-      if (o === obstacle) continue;
-      if (camX - (x + o.length) > fit.viewW + 20) {
-        o.object.visible = false;
+      const { item, originX: x } = live[i];
+      if (item === placed) continue;
+      if (camX - (x + item.length) > fit.viewW + 20) {
+        item.object.visible = false;
         live.splice(i, 1);
       }
     }
   };
 
-  /** Puts an obstacle `gap` ahead of the bike. */
-  const placeObstacle = (gap: number) => {
+  /** Adds something to the road at `x`, ready to be ridden to. */
+  const putOnRoad = (item: Placed, x: number) => {
+    item.reset();
+    item.object.position.set(x, 0, 0);
+    if (item.object.parent !== scene) scene.add(item.object);
+    item.object.visible = true;
+    const existing = live.find((l) => l.item === item);
+    if (existing) existing.originX = x;
+    else live.push({ item, originX: x });
+    placed = item;
+  };
+
+  /** Puts the target (an obstacle, the question's gate or the Mega course) `gap` ahead of the bike. */
+  const placeTarget = (gap: number) => {
     obstaclePlaced = true;
     approachGap = gap;
     approachStart = bikeX;
     originX = bikeX + gap;
-    obstacle = pool.get(kind);
-    obstacle.reset();
-    obstacle.object.position.set(originX, 0, 0);
-    if (obstacle.object.parent !== scene) scene.add(obstacle.object);
-    obstacle.object.visible = true;
-    const existing = live.find((l) => l.obstacle === obstacle);
-    if (existing) existing.originX = originX;
-    else live.push({ obstacle, originX });
+    obstacle = null;
+    course = null;
+    if (target === 'gate' && mega) {
+      putOnRoad(gates[Math.max(mega.asked - 1, 0)], originX);
+    } else if (target === 'course' && mega) {
+      course = megaPool.get(mega.id);
+      putOnRoad(course, originX);
+    } else {
+      obstacle = pool.get(kind);
+      putOnRoad(obstacle, originX);
+    }
   };
 
   const setScoreHud = (pulse = false) =>
     hud.setScore(score, streak, Math.max(session.highScore(), 0), pulse);
+
+  /** Adds the points of a right answer to the score, with a pop at `at` (and one for a streak). */
+  const awardPoints = (at: { x: number; y: number }) => {
+    if (pendingPoints <= 0) return;
+    const multiplier = multiplierFor(streak);
+    const before = multiplierFor(streak - 1);
+    score += pendingPoints;
+    hud.pop(`+${pendingPoints.toLocaleString()}`, at, 'good');
+    if (multiplier > before) {
+      hud.pop(`×${multiplier} streak!`, { x: viewW / 2, y: viewH * 0.4 }, 'plain');
+    }
+    pendingPoints = 0;
+    setScoreHud(true);
+  };
 
   const showTimedBanner = (
     title: string,
@@ -368,17 +444,20 @@ function run(session: GameSession, dev: DevOptions | null): void {
     obstacleNumber = nextIsMega || dev?.mega ? 7 : 0;
     lastKind = null;
     devKindIndex = 0;
-    megaQueue = [];
-    megaTotal = 0;
-    megaDone = 0;
+    mega = null;
+    target = 'obstacle';
+    course = null;
+    lastMega = null;
     fact = undefined;
     options = [];
     stunt = null;
     clockRunning = false;
     obstaclePlaced = false;
-    for (const l of live) l.obstacle.object.visible = false;
+    for (const l of live) l.item.object.visible = false;
     live.length = 0;
+    gates.forEach((gate) => gate.reset());
     obstacle = null;
+    placed = null;
     effects.clear();
     coins.forEach((c) => (c.visible = false));
     activeIndex = 0;
@@ -434,11 +513,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     pending = [];
     stopSpeaking();
     hud.hideWord();
-    if (
-      megaQueue.length === 0 &&
-      megaTotal === 0 &&
-      (nextIsMega || startsMega(obstacleNumber + 1))
-    ) {
+    if (mega === null && (nextIsMega || startsMega(obstacleNumber + 1))) {
       nextIsMega = false;
       beginMega();
       return;
@@ -446,32 +521,49 @@ function run(session: GameSession, dev: DevOptions | null): void {
     askPiece();
   };
 
+  /**
+   * A Mega Stunt: one huge course with three big elements. The three questions come first, one
+   * after another, each ridden to a checkpoint gate; then the bike nitros into the course.
+   */
   const beginMega = () => {
-    megaQueue = megaKinds(lastKind, [Math.random(), Math.random(), Math.random()]);
-    megaTotal = MEGA_PIECES;
-    megaDone = 0;
-    megaFirst = obstacleNumber + 1;
-    hud.setMega(megaTotal, 0);
+    const id =
+      dev && dev.megas.length > 0
+        ? dev.megas[devMegaIndex++ % dev.megas.length]
+        : nextMega(lastMega, Math.random());
+    lastMega = id;
+    obstacleNumber += MEGA_PIECES;
+    mega = { id, passed: 0, asked: 0, ended: false, timedOut: false };
+    target = 'gate';
+    hud.setMega(MEGA_PIECES, 0);
+    hud.setGoal('gate');
     phase = 'riding';
     fact = undefined;
     clockRunning = false;
     obstaclePlaced = false;
     rideSpeedGoal = RIDE_SPEED * worldSpeedFactor(cleared);
     hud.setTopVisible(false, 0);
-    showTimedBanner('MEGA STUNT!', '', 'warn', MEGA_BANNER);
+    showTimedBanner('MEGA STUNT!', MEGA_SPECS[id].title, 'warn', MEGA_BANNER);
     sfx.alarm();
     const thisTurn = ++turn;
     after(MEGA_BANNER, () => turn === thisTurn && askPiece());
   };
 
-  /** Shows a question with its four answers and reads it out; the clock waits for the reading. */
+  /**
+   * Shows a question with its four answers and reads it out; the clock waits for the reading.
+   * In a Mega Stunt the target is that question's gate; otherwise a new obstacle.
+   */
   const askPiece = () => {
     if (phase === 'ending' || phase === 'done') return;
-    obstacleNumber++;
-    if (megaQueue.length > 0) kind = megaQueue.shift() as ObstacleKind;
-    else if (dev && dev.kinds.length > 0) kind = dev.kinds[devKindIndex++ % dev.kinds.length];
-    else kind = nextKind(lastKind, Math.random());
-    lastKind = kind;
+    if (mega) {
+      mega.asked++;
+      target = 'gate';
+    } else {
+      obstacleNumber++;
+      target = 'obstacle';
+      if (dev && dev.kinds.length > 0) kind = dev.kinds[devKindIndex++ % dev.kinds.length];
+      else kind = nextKind(lastKind, Math.random());
+      lastKind = kind;
+    }
     const thisTurn = ++turn;
     fact = feed.take();
     const current = fact;
@@ -481,9 +573,10 @@ function run(session: GameSession, dev: DevOptions | null): void {
     pendingPoints = 0;
     hud.setAnswers(options);
     hud.problemText.textContent = current.prompt;
-    hud.setGoal(kind);
-    hud.setMega(megaTotal, megaDone);
-    hud.hideBanner();
+    hud.setGoal(mega ? 'gate' : kind);
+    hud.setMega(mega ? MEGA_PIECES : 0, mega?.passed ?? 0);
+    // The banner of a cleared Mega Stunt stays up for its own time.
+    if (bannerUntil <= gameTime) hud.hideBanner();
     clockTotal = Math.max(session.timerSecondsFor(current), 1);
     clockLeft = clockTotal;
     clockRunning = false;
@@ -503,7 +596,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
   const startClock = () => {
     if (clockRunning || obstaclePlaced) return;
     const ap = approach(cleared, clockTotal, fit.ahead);
-    placeObstacle(ap.gap);
+    placeTarget(ap.gap);
     rideSpeedGoal = ap.rideSpeed;
     startSpeed = speed;
     clockRunning = true;
@@ -526,7 +619,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     // If the question is still being read the clock has not started: the answer counts as full time.
     if (!obstaclePlaced) {
       const ap = approach(cleared, clockTotal, fit.ahead);
-      placeObstacle(ap.gap);
+      placeTarget(ap.gap);
     }
     clockRunning = false;
     buttons[index].classList.add('chosen');
@@ -564,19 +657,98 @@ function run(session: GameSession, dev: DevOptions | null): void {
     streak = nextStreak(streak, false);
     buttons[options.indexOf(current.answer)]?.classList.add('right');
     setScoreHud();
-    startStunt('crash');
+    // At a gate the bike has just arrived and rides on; at an obstacle it crashes.
+    if (target === 'gate') passGate(false);
+    else startStunt('crash');
+  };
+
+  // ---------- Mega Stunt: gates and the course ----------
+  /** The bike reaches a gate: its light shows whether the answer was right, and the ride goes on. */
+  const passGate = (right: boolean) => {
+    const m = mega;
+    if (!m) return;
+    const gate = gates[Math.max(m.asked - 1, 0)];
+    const current = fact;
+    const thisTurn = turn;
+    hud.speedLines(false);
+    phase = 'riding';
+    clockRunning = false;
+    fact = undefined;
+    if (right) {
+      m.passed++;
+      gate.setState('pass');
+      hud.setMega(MEGA_PIECES, m.passed);
+      sfx.chime();
+      effects.sparkle(originX, GATE_HEIGHT + 0.6);
+      awardPoints(toScreen(originX, GATE_HEIGHT - 0.4));
+    } else {
+      m.ended = true;
+      m.missed = current;
+      m.timedOut = timedOut;
+      gate.setState('miss');
+      hud.setMega(MEGA_PIECES, m.passed, true);
+      sfx.miss();
+      effects.fire('smoke', originX, GATE_HEIGHT + 0.6);
+      pendingPoints = 0;
+    }
+    after(GATE_BEAT, () => {
+      if (turn !== thisTurn || mega !== m) return;
+      if (m.ended || m.asked >= MEGA_PIECES) enterCourse();
+      else askPiece();
+    });
+  };
+
+  /** The questions are over: the bike nitros to the course, which waits beyond the screen edge. */
+  const enterCourse = () => {
+    const m = mega;
+    if (!m) return;
+    target = 'course';
+    hud.lockAnswers();
+    hud.setGoal(m.id);
+    if (m.passed >= MEGA_PIECES) showTimedBanner(MEGA_SPECS[m.id].title, '', 'hit', 1.6);
+    placeTarget(fit.ahead + MIN_GAP_PAST_VIEW);
+    phase = 'nitro';
+    sfx.rev();
+    hud.speedLines(true);
+  };
+
+  /** The bike is at the entry line: the elements the player earned, then the finale or a crash. */
+  const startMegaStunt = () => {
+    const m = mega;
+    if (!m || !course) return;
+    stunt = makeMegaStunt(m.id, m.passed as Passed);
+    course.reset();
+    phase = 'stunt';
+    hud.speedLines(false);
+    bikeX = originX;
   };
 
   // ---------- Stunts ----------
   const makeStunt = (k: ObstacleKind, outcome: Outcome, variant: Variant): Stunt => ({
-    kind: k,
-    outcome,
-    variant,
     t: 0,
     duration: stuntDuration(k, outcome, variant),
     events: stuntEvents(k, outcome, variant),
     next: 0,
     scale: 1,
+    outcome,
+    length: SPECS[k].length,
+    frameAt: (t, out) => void stuntFrame(k, outcome, variant, t, out),
+    propsAt: (t) => pool.get(k).update(outcome, variant, t),
+    word: stuntWord(k, outcome, variant),
+  });
+
+  /** The one long stunt of a Mega course that clears `passed` elements and crashes on the next. */
+  const makeMegaStunt = (id: MegaId, passed: Passed): Stunt => ({
+    t: 0,
+    duration: megaDuration(id, passed),
+    events: megaEvents(id, passed),
+    next: 0,
+    scale: 1,
+    outcome: passed === MEGA_PIECES ? 'clear' : 'crash',
+    length: megaLength(id),
+    frameAt: (t, out) => void megaFrame(id, passed, t, out),
+    propsAt: (t) => megaPool.get(id).update(passed, t),
+    wordAt: (t) => megaWordAt(id, passed, t),
   });
 
   const startStunt = (outcome: Outcome) => {
@@ -584,7 +756,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     const variant = pickVariant(lastVariant[key], Math.random());
     lastVariant[key] = variant;
     stunt = makeStunt(kind, outcome, variant);
-    if (obstacle) obstacle.reset();
+    obstacle?.reset();
     phase = 'stunt';
     hud.speedLines(false);
     bikeX = originX;
@@ -605,17 +777,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
         world.setMood('cheer', 2.2);
         sfx.cheer();
         cleared++;
-        if (pendingPoints > 0) {
-          const multiplier = multiplierFor(streak);
-          const before = multiplierFor(streak - 1);
-          score += pendingPoints;
-          hud.pop(`+${pendingPoints.toLocaleString()}`, bikeScreen(1.6), 'good');
-          if (multiplier > before) {
-            hud.pop(`×${multiplier} streak!`, { x: viewW / 2, y: viewH * 0.4 }, 'plain');
-          }
-          pendingPoints = 0;
-          setScoreHud(true);
-        }
+        awardPoints(bikeScreen(1.6));
         break;
       }
       case 'groan': {
@@ -628,11 +790,8 @@ function run(session: GameSession, dev: DevOptions | null): void {
         break;
       }
       case 'word': {
-        hud.showWord(
-          stuntWord(s.kind, s.outcome, s.variant),
-          bikeScreen(2.4),
-          s.outcome === 'clear',
-        );
+        const w = s.wordAt?.(e.at) ?? { text: s.word ?? '', good: s.outcome === 'clear' };
+        hud.showWord(w.text, bikeScreen(2.4), w.good);
         break;
       }
       default:
@@ -647,51 +806,54 @@ function run(session: GameSession, dev: DevOptions | null): void {
   };
 
   const finishStunt = (s: Stunt) => {
+    const m = mega;
     if (s.outcome === 'clear') {
       // Riding on from the end of the obstacle, at the speed the stunt left off.
-      stuntFrame(s.kind, s.outcome, s.variant, s.duration - 0.05, frame);
+      s.frameAt(s.duration - 0.05, frame);
       const before = frame.bike.x;
-      stuntFrame(s.kind, s.outcome, s.variant, s.duration, frame);
+      s.frameAt(s.duration, frame);
       speed = Math.max((frame.bike.x - before) / 0.05, 3);
-      bikeX = originX + SPECS[s.kind].length;
+      bikeX = originX + s.length;
       stunt = null;
       if (pendingPoints > 0) {
         score += pendingPoints;
         pendingPoints = 0;
         setScoreHud(true);
       }
-      if (megaTotal > 0) {
-        megaDone++;
-        hud.setMega(megaTotal, megaDone);
-        if (megaDone >= megaTotal) {
-          score += MEGA_BONUS;
-          setScoreHud(true);
-          effects.fireworks(bikeX, 3);
-          sfx.firework();
-          after(0.25, sfx.firework);
-          after(0.5, sfx.firework);
-          sfx.bigCheer();
-          showTimedBanner('MEGA STUNT CLEARED!', `+${MEGA_BONUS}`, 'hit', 2.2);
-          megaTotal = 0;
-          megaDone = 0;
-          megaQueue = [];
-        }
+      if (m) {
+        // All three elements: the finale, the fireworks and the bonus.
+        score += MEGA_BONUS;
+        setScoreHud(true);
+        effects.fireworks(bikeX, 3);
+        sfx.firework();
+        sfx.bigCheer();
+        showTimedBanner('MEGA STUNT CLEARED!', `+${MEGA_BONUS}`, 'hit', 2.2);
+        mega = null;
+        course = null;
+        target = 'obstacle';
+        hud.setMega(0, 0);
       }
       phase = 'riding';
       askNext();
+      // After askNext, which clears the timers of the last question.
+      if (m) {
+        after(0.25, sfx.firework);
+        after(0.5, sfx.firework);
+      }
       return;
     }
-    // A crash: the bike stays where it ended. Cut short, a Mega Stunt still uses up its numbers.
-    if (megaTotal > 0) {
-      obstacleNumber = megaFirst + MEGA_PIECES - 1;
-      megaTotal = 0;
-      megaDone = 0;
-      megaQueue = [];
+    // A crash: the bike stays where it ended. A Mega Stunt has used up its numbers already.
+    if (m) {
+      fact = m.missed;
+      timedOut = m.timedOut;
+      mega = null;
+      course = null;
+      target = 'obstacle';
       hud.setMega(0, 0);
     }
-    stuntFrame(s.kind, s.outcome, s.variant, s.duration, frame);
+    s.frameAt(s.duration, frame);
     const reach = Math.max(
-      SPECS[s.kind].length,
+      s.length,
       frame.bike.visible ? frame.bike.x : 0,
       frame.rider.mode === 'free' ? frame.rider.x : 0,
     );
@@ -961,8 +1123,11 @@ function run(session: GameSession, dev: DevOptions | null): void {
         speed = easeToward(speed, goal, 8, delta);
         bikeX = Math.min(bikeX + speed * delta, originX);
         nitroEffects(delta);
-        if (bikeX >= originX - 1e-6)
-          startStunt(chosen >= 0 && options[chosen] === fact?.answer ? 'clear' : 'crash');
+        if (bikeX >= originX - 1e-6) {
+          if (target === 'gate') passGate(chosen >= 0 && options[chosen] === fact?.answer);
+          else if (target === 'course') startMegaStunt();
+          else startStunt(chosen >= 0 && options[chosen] === fact?.answer ? 'clear' : 'crash');
+        }
         break;
       }
       default:
@@ -972,11 +1137,11 @@ function run(session: GameSession, dev: DevOptions | null): void {
     // --- The bike and rider ---
     if (phase === 'stunt' && stunt) {
       stepStunt(stunt, delta * stunt.scale);
-      stuntFrame(stunt.kind, stunt.outcome, stunt.variant, stunt.t, frame);
+      stunt.frameAt(stunt.t, frame);
       applyFrame(pair, frame, originX, delta);
       panGoal = panFor(frame);
       bikeX = originX + frame.bike.x;
-      obstacle?.update(stunt.outcome, stunt.variant, stunt.t);
+      stunt.propsAt(stunt.t);
       if (stunt.t >= stunt.duration) finishStunt(stunt);
     } else if (phase === 'result' || phase === 'respawn') {
       // Until the parachute opens the crashed bike lies where it ended.
@@ -1094,7 +1259,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     );
 
     // Obstacles' idle motion, and the ones left behind.
-    for (const l of live) l.obstacle.ambient(elapsed);
+    for (const l of live) l.item.ambient(elapsed);
     retireFar();
     world.update(camX, cuts(), delta, fit.distance, fit.camY);
     effects.update(delta);
@@ -1123,20 +1288,22 @@ function run(session: GameSession, dev: DevOptions | null): void {
   // ---------- The stunt lab (dev only) ----------
   let labState: { stunt: Stunt; phase: 'ride' | 'play' | 'hold'; t: number; x: number } | null =
     null;
+  let labItem: Placed | null = null;
+  const makeLabStunt = (l: LabStunt | LabMega): Stunt =>
+    'mega' in l ? makeMegaStunt(l.mega, l.passed) : makeStunt(l.kind, l.outcome, l.variant);
   function stepLab(delta: number, elapsed: number) {
     if (!lab) return;
     const pair = active();
     if (!labState) {
       originX = 40;
-      kind = lab.kind;
-      obstacle = pool.get(kind);
-      obstacle.reset();
-      obstacle.object.position.set(originX, 0, 0);
-      scene.add(obstacle.object);
-      obstacle.object.visible = true;
-      live.push({ obstacle, originX });
+      if ('mega' in lab) labItem = megaPool.get(lab.mega);
+      else {
+        kind = lab.kind;
+        labItem = pool.get(kind);
+      }
+      putOnRoad(labItem, originX);
       labState = {
-        stunt: makeStunt(lab.kind, lab.outcome, lab.variant),
+        stunt: makeLabStunt(lab),
         phase: dev?.at !== null && dev?.at !== undefined ? 'hold' : 'ride',
         t: 0,
         x: originX - (dev?.nitro ? 24 : 12),
@@ -1151,7 +1318,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
       // Frozen for screenshots: the stunt is posed at `at` and nothing advances.
       ctx.renderer.domElement.dataset.frozen = '1';
       applyFrame(pair, frame, originX, 0);
-      obstacle?.update(s.stunt.outcome, s.stunt.variant, s.stunt.t);
+      s.stunt.propsAt(s.stunt.t);
       camX = focus.x + fit.viewW * (0.5 - 0.28);
       bikeX = originX + frame.bike.x;
       panGoal = camPan = panFor(frame);
@@ -1167,16 +1334,16 @@ function run(session: GameSession, dev: DevOptions | null): void {
       rideAt(pair, s.x, fast ? 'duck' : 'ride', delta);
       if (s.x >= originX) {
         s.phase = 'play';
-        s.stunt = makeStunt(lab.kind, lab.outcome, lab.variant);
+        s.stunt = makeLabStunt(lab);
         hud.speedLines(false);
       }
     } else if (s.phase === 'play') {
       stunt = s.stunt;
       stepStunt(s.stunt, delta);
-      stuntFrame(s.stunt.kind, s.stunt.outcome, s.stunt.variant, s.stunt.t, frame);
+      s.stunt.frameAt(s.stunt.t, frame);
       applyFrame(pair, frame, originX, delta);
       bikeX = originX + frame.bike.x;
-      obstacle?.update(s.stunt.outcome, s.stunt.variant, s.stunt.t);
+      s.stunt.propsAt(s.stunt.t);
       if (s.stunt.t >= s.stunt.duration) {
         s.phase = 'hold';
         s.t = 0;
@@ -1185,7 +1352,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
           if (!labState) return;
           labState.phase = 'ride';
           labState.x = originX - 12;
-          obstacle?.reset();
+          labItem?.reset();
           effects.clear();
           pair.rider.setMode('seated', pair.bike.seat, scene);
           pair.bike.object.visible = true;
@@ -1200,10 +1367,10 @@ function run(session: GameSession, dev: DevOptions | null): void {
   /** Plays the lab stunt up to `at` seconds in one go, so effects and props are where they would be. */
   function scrubLab(at: number) {
     if (!labState || !lab) return;
-    const s = makeStunt(lab.kind, lab.outcome, lab.variant);
+    const s = makeLabStunt(lab);
     effects.clear();
     // Aim the camera first, so the comic word lands where the bike will be.
-    stuntFrame(s.kind, s.outcome, s.variant, Math.min(at, s.duration), frame);
+    s.frameAt(Math.min(at, s.duration), frame);
     applyFrame(active(), frame, originX, 0);
     camX = focus.x + fit.viewW * (0.5 - 0.28);
     camPan = panFor(frame);
@@ -1214,7 +1381,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
       effects.update(Math.min(step, at - t));
     }
     labState.stunt = s;
-    stuntFrame(s.kind, s.outcome, s.variant, s.t, frame);
+    s.frameAt(s.t, frame);
   }
 
   // ---------- Start ----------
@@ -1248,6 +1415,8 @@ function run(session: GameSession, dev: DevOptions | null): void {
     }
     parachute.dispose();
     pool.dispose();
+    megaPool.dispose();
+    gates.forEach((gate) => gate.dispose());
     world.dispose();
     coinGeometry.dispose();
     coinMaterial.dispose();

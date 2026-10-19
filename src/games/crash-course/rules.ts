@@ -20,7 +20,7 @@ export const GREAT_RIDING_SPEECH = 'Great riding!';
 
 /** Bikes the rider starts each run with. */
 export const BIKES = 3;
-/** Every this-many-th obstacle starts a Mega Stunt of MEGA_PIECES obstacles. */
+/** Every this-many-th obstacle starts a Mega Stunt, which uses up MEGA_PIECES obstacle numbers. */
 export const MEGA_EVERY = 8;
 /** Questions asked up front, and elements in a Mega course. */
 export const MEGA_PIECES = 3;
@@ -119,25 +119,6 @@ export function nextMega(previous: MegaId | null, random: number): MegaId {
   const others = MEGA_IDS.filter((id) => id !== previous);
   const allowed = others.length > 0 ? others : MEGA_IDS;
   return allowed[Math.min(Math.floor(clamp01(random) * allowed.length), allowed.length - 1)];
-}
-
-/**
- * Three distinct kinds for a Mega Stunt, none equal to `previous`. Picks the first kind like
- * `nextKind`, then the second from the kinds not yet used (and not `previous`), then the third
- * the same way.
- */
-export function megaKinds(
-  previous: ObstacleKind | null,
-  randoms: readonly [number, number, number],
-): ObstacleKind[] {
-  const chosen: ObstacleKind[] = [];
-  for (const random of randoms) {
-    const allowed = OBSTACLE_KINDS.filter((kind) => kind !== previous && !chosen.includes(kind));
-    chosen.push(
-      allowed[Math.min(Math.floor(clamp01(random) * allowed.length), allowed.length - 1)],
-    );
-  }
-  return chosen;
 }
 
 /**
