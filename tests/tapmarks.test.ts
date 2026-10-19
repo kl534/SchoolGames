@@ -254,4 +254,97 @@ describe('placement', () => {
     marks.update();
     expect(parseFloat(pointer.style.top)).toBe(494);
   });
+
+  /** A 2x2 grid like a phone game: the green answer is `green`, the pointer is 240x100. */
+  function grid(green: number, avoid: HTMLElement[] = []) {
+    const buttons = makeButtons();
+    const rects = [
+      rect(12, 500, 177, 72),
+      rect(201, 500, 177, 72),
+      rect(12, 582, 177, 72),
+      rect(201, 582, 177, 72),
+    ];
+    buttons.forEach((b, i) => vi.spyOn(b, 'getBoundingClientRect').mockReturnValue(rects[i]));
+    const marks = createTapMarks();
+    const pointer = document.querySelector<HTMLElement>('.sg-tap-pointer')!;
+    vi.spyOn(pointer, 'getBoundingClientRect').mockReturnValue(rect(0, 0, 240, 100));
+    marks.show(buttons, green, avoid);
+    return {
+      y: parseFloat(pointer.style.top),
+      finger: pointer.querySelector('[aria-hidden="true"]')!.textContent,
+    };
+  }
+
+  it('stays above a top-row answer and goes below a bottom-row one, never over another answer', () => {
+    const top = grid(0);
+    expect(top.y).toBe(500 - 6 - 100);
+    expect(top.finger).toBe('👇');
+    document.body.replaceChildren();
+    // Above the bottom row would sit on the top row (582 - 106 = 476 < 572).
+    const bottom = grid(2);
+    expect(bottom.y).toBe(654 + 6);
+    expect(bottom.finger).toBe('👆');
+  });
+
+  it('keeps off the banner and the question too', () => {
+    const banner = document.createElement('div');
+    document.body.appendChild(banner);
+    vi.spyOn(banner, 'getBoundingClientRect').mockReturnValue(rect(60, 380, 270, 110));
+    // Above the top row (394 to 494) would cover the banner; below the row is the other answers.
+    // Neither is clear, so it stays above, as there is room.
+    const blocked = grid(1, [banner]);
+    expect(blocked.y).toBe(394);
+    expect(blocked.finger).toBe('👇');
+    document.body.replaceChildren();
+    // A hidden banner has no size and is ignored.
+    const hidden = document.createElement('div');
+    document.body.appendChild(hidden);
+    expect(grid(1, [hidden]).y).toBe(394);
+  });
+
+  it('with both sides blocked, goes below when above would run into the top bar', () => {
+    const buttons = makeButtons();
+    const rects = [rect(10, 130, 177, 60), rect(10, 200, 177, 60)];
+    buttons
+      .slice(0, 2)
+      .forEach((b, i) => vi.spyOn(b, 'getBoundingClientRect').mockReturnValue(rects[i]));
+    const marks = createTapMarks();
+    const pointer = document.querySelector<HTMLElement>('.sg-tap-pointer')!;
+    vi.spyOn(pointer, 'getBoundingClientRect').mockReturnValue(rect(0, 0, 240, 100));
+    marks.show(buttons, 0);
+    expect(parseFloat(pointer.style.top)).toBe(196);
+  });
+});
+
+describe('pulse cap', () => {
+  const sized = (button: HTMLElement, width: number, height: number) => {
+    Object.defineProperty(button, 'offsetWidth', { value: width, configurable: true });
+    Object.defineProperty(button, 'offsetHeight', { value: height, configurable: true });
+  };
+
+  it('keeps the biggest pulse inside the screen for a button near the edge', () => {
+    const buttons = makeButtons();
+    sized(buttons[0], 177, 72);
+    // Centre 12 + 88.5 from the left edge, 288 from the right: 2 * (100.5 - 4) / 177.
+    vi.spyOn(buttons[0], 'getBoundingClientRect').mockReturnValue(rect(12, 700, 177, 72));
+    createTapMarks().show(buttons, 0);
+    expect(buttons[0].style.getPropertyValue('--sg-tap-cap')).toBe('1.090');
+  });
+
+  it('never caps below 1, and is removed again by clear', () => {
+    const buttons = makeButtons();
+    sized(buttons[0], 100, 72);
+    vi.spyOn(buttons[0], 'getBoundingClientRect').mockReturnValue(rect(0, 700, 100, 72));
+    const marks = createTapMarks();
+    marks.show(buttons, 0);
+    expect(buttons[0].style.getPropertyValue('--sg-tap-cap')).toBe('1.000');
+    marks.clear();
+    expect(buttons[0].style.getPropertyValue('--sg-tap-cap')).toBe('');
+  });
+
+  it('is left alone where the button has no layout size', () => {
+    const buttons = makeButtons();
+    createTapMarks().show(buttons, 0);
+    expect(buttons[0].style.getPropertyValue('--sg-tap-cap')).toBe('');
+  });
 });

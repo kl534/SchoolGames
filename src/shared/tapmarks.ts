@@ -2,8 +2,11 @@ import './tapmarks.css';
 import { TAP_CAPTION } from './tapgate';
 
 export interface TapMarks {
-  /** Pulses `buttons[correctIndex]`, dims the others, shows the finger and the caption. */
-  show(buttons: readonly HTMLElement[], correctIndex: number): void;
+  /**
+   * Pulses `buttons[correctIndex]`, dims the others, shows the finger and the caption. The pointer
+   * keeps off the other buttons and off `avoid` (the banner, the question) when it can.
+   */
+  show(buttons: readonly HTMLElement[], correctIndex: number, avoid?: readonly HTMLElement[]): void;
   /** A dim answer was tapped: it shakes, the green one pulses harder for ~1 s. */
   nope(index: number): void;
   /** A reminder is due: the pulse grows one step (up to 3 steps). */
@@ -22,6 +25,22 @@ const HINT_MS = 1000;
 const GAP = 6;
 /** The pointer stays this far inside the screen sideways. */
 const EDGE = 8;
+/** The pulsing button keeps this far inside the screen at its biggest. */
+const PULSE_MARGIN = 4;
+
+/** Do two rectangles share any area (a hair of overlap is ignored)? */
+function overlaps(a: Rect, b: Rect): boolean {
+  return (
+    a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1
+  );
+}
+
+interface Rect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
 
 const MARK_CLASSES = [
   'sg-tap-correct',
@@ -49,6 +68,8 @@ export function createTapMarks(container: HTMLElement = document.body): TapMarks
   /** Every button we touched, with the `aria-disabled` it had before (null: none). */
   let touched: { button: HTMLElement; ariaDisabled: string | null }[] = [];
   let correct: HTMLElement | undefined;
+  let avoid: readonly HTMLElement[] = [];
+  let lastCap = '';
   let nopeTimer: ReturnType<typeof setTimeout> | undefined;
   let nopeButton: HTMLElement | undefined;
   let hintTimer: ReturnType<typeof setTimeout> | undefined;
@@ -84,9 +105,30 @@ export function createTapMarks(container: HTMLElement = document.body): TapMarks
       if (ariaDisabled === null) button.removeAttribute('aria-disabled');
       else button.setAttribute('aria-disabled', ariaDisabled);
     }
+    correct?.style.removeProperty('--sg-tap-cap');
     touched = [];
     correct = undefined;
+    avoid = [];
+    lastCap = '';
     pointer.hidden = true;
+  };
+
+  /** The biggest the pulse may grow before the button would leave the screen. */
+  const capPulse = (target: HTMLElement, rect: DOMRect, viewW: number, viewH: number) => {
+    // Layout size, which the pulse (a transform) does not change; the pulse grows around the centre.
+    const w = target.offsetWidth;
+    const h = target.offsetHeight;
+    if (!w || !h) return;
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const room = Math.min(
+      ((Math.min(cx, viewW - cx) - PULSE_MARGIN) * 2) / w,
+      ((Math.min(cy, viewH - cy) - PULSE_MARGIN) * 2) / h,
+    );
+    const cap = Math.max(1, room).toFixed(3);
+    if (cap === lastCap) return;
+    lastCap = cap;
+    target.style.setProperty('--sg-tap-cap', cap);
   };
 
   const update = () => {
@@ -95,15 +137,32 @@ export function createTapMarks(container: HTMLElement = document.body): TapMarks
     const own = pointer.getBoundingClientRect();
     const viewW = window.innerWidth;
     const viewH = window.innerHeight;
-    const above = button.top - GAP - own.height;
-    const belowTop = button.bottom + GAP;
-    // Above the button, unless that runs into the top bar and the question; then below it.
-    const useBelow = above < Math.max(120, viewH * 0.15) && belowTop + own.height <= viewH;
-    const top = useBelow ? belowTop : above;
+    capPulse(correct, button, viewW, viewH);
     const left = Math.min(
       Math.max(button.left + button.width / 2 - own.width / 2, EDGE),
       Math.max(viewW - own.width - EDGE, EDGE),
     );
+    const above = button.top - GAP - own.height;
+    const below = button.bottom + GAP;
+    const blockers = [...touched.map((t) => t.button).filter((b) => b !== correct), ...avoid]
+      .map((node) => node.getBoundingClientRect())
+      .filter((r) => r.width > 0 && r.height > 0);
+    const isClear = (top: number) =>
+      !blockers.some((b) =>
+        overlaps({ left, top, right: left + own.width, bottom: top + own.height }, b),
+      );
+    // Too high means it would run into the top bar and the question.
+    const tooHigh = above < Math.max(120, viewH * 0.15);
+    const fitsBelow = below + own.height <= viewH;
+    // Above the button if that is clear; else below it if that is clear; else, with both blocked,
+    // above, unless that runs into the top bar and there is room below.
+    const useBelow =
+      !tooHigh && isClear(above)
+        ? false
+        : fitsBelow && isClear(below)
+          ? true
+          : tooHigh && fitsBelow;
+    const top = useBelow ? below : above;
     setFinger(useBelow);
     const leftPx = `${Math.round(left)}px`;
     const topPx = `${Math.round(top)}px`;
@@ -118,8 +177,9 @@ export function createTapMarks(container: HTMLElement = document.body): TapMarks
   };
 
   return {
-    show(buttons, correctIndex) {
+    show(buttons, correctIndex, avoidElements = []) {
       clear();
+      avoid = avoidElements;
       touched = buttons.map((button) => ({
         button,
         ariaDisabled: button.getAttribute('aria-disabled'),

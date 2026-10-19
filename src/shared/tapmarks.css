@@ -37,7 +37,8 @@
       0 0 18px 6px #5cf2b0;
   }
   50% {
-    scale: var(--sg-tap-peak);
+    /* The cap (set from the button's room) keeps the biggest pulse on screen. */
+    scale: min(var(--sg-tap-peak), var(--sg-tap-cap, 10));
     box-shadow:
       0 0 0 8px #5cf2b0,
       0 0 34px 14px #5cf2b0;
@@ -80,7 +81,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  max-width: min(92vw, 360px);
+  max-width: min(92vw, 460px);
   pointer-events: none;
   font-family:
     system-ui,

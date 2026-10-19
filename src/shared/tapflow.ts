@@ -4,8 +4,12 @@ import { createTapMarks } from './tapmarks';
 
 export interface TapFlow {
   readonly armed: boolean;
-  /** Marks the right answer and starts waiting for a tap on it. Call where the game shows the miss. */
-  arm(buttons: readonly HTMLElement[], correctIndex: number): void;
+  /**
+   * Marks the right answer and starts waiting for a tap on it. Call where the game shows the miss.
+   * `avoid` lists what the finger and caption should keep off besides the other answers (the
+   * banner with the fact, the question).
+   */
+  arm(buttons: readonly HTMLElement[], correctIndex: number, avoid?: readonly HTMLElement[]): void;
   /** The fact has been read out (call in the `speak(...)` callback). */
   readFinished(): void;
   /** Per frame, with the game's own delta (0 or not called while paused). Plays the reminder. */
@@ -36,9 +40,9 @@ export function createTapFlow(container?: HTMLElement): TapFlow {
     get armed() {
       return gate.armed;
     },
-    arm(buttons, correctIndex) {
+    arm(buttons, correctIndex, avoid) {
       gate.arm(correctIndex);
-      marks.show(buttons, correctIndex);
+      marks.show(buttons, correctIndex, avoid);
     },
     readFinished() {
       gate.readFinished();
