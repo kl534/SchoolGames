@@ -34,8 +34,8 @@ the latest `main`, and the work branches from it.
 The questions should be about the game, not about things the code already answers.
 
 - Read `CLAUDE.md` and the recent `git log` (it shows the commit style and what changed lately).
-- Read only the files the feature touches (the game's folder, the `src/shared/` modules it uses and
-  its tests in `tests/`). For files over 400 lines, read the relevant sections. For a new game, read
+- Read the game's `MAP.md`, then only the files the feature touches (the `src/shared/` modules it
+  uses and its tests in `tests/`). For files over 400 lines, read the relevant sections. For a new game, read
   `src/games/penalty-kick/` and the closest existing game.
 - Skim one or two docs in `docs/` (for example `docs/zombie-blast-endless.md`). They show the depth
   and tone a design here needs.

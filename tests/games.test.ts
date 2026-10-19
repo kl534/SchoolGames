@@ -27,5 +27,17 @@ describe('game folders', () => {
       expect(manifest.id).toBe(folder);
       if (manifest.thumbnail) expect(existsSync(resolve(dir, manifest.thumbnail))).toBe(true);
     });
+
+    it('has a MAP.md that lists every .ts file in the folder', () => {
+      const mapPath = resolve(dir, 'MAP.md');
+      expect(existsSync(mapPath)).toBe(true);
+      const map = readFileSync(mapPath, 'utf8');
+      const files = (readdirSync(dir, { recursive: true }) as string[])
+        .map((f) => f.split('\\').join('/'))
+        .filter((f) => f.endsWith('.ts'));
+      expect(files.length).toBeGreaterThan(0);
+      const unlisted = files.filter((f) => !map.includes('`' + f + '`'));
+      expect(unlisted).toEqual([]);
+    });
   });
 });

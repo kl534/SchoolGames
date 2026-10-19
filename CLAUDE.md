@@ -9,6 +9,8 @@ Mobile/tablet-first browser 3D games (TypeScript, Vite multi-page, three.js, can
   working, run just the tests you touch: `npx vitest run tests/<file>.test.ts` or
   `npx vitest related --run <changed files>`. Random sweeps use `runs(full, quick)` from
   `tests/helpers/full.ts`.
+- Each game has a `MAP.md`. Read it first, and update it when you add, remove or repurpose a file
+  or dev hook. `npm test` fails if a `.ts` file in the game's folder is missing from it.
 - Check by eye with `npm run shots -- <game-id>?<dev query> …`: one tiled sheet per state with
   all four sizes in `.shots/`. Reach hard states with the game's dev query hooks (`dev.ts`) instead
   of driving answers.
@@ -24,7 +26,7 @@ Mobile/tablet-first browser 3D games (TypeScript, Vite multi-page, three.js, can
 ## Add a game
 
 1. Copy `src/games/penalty-kick/` to `src/games/<new-id>/` (id is lowercase kebab-case).
-2. Edit `game.json` (`id` must equal the folder name; `title`, `description` required; `thumbnail` file name and `tags` optional; the menu card shows the thumbnail at 16:9, so replace the copied `thumbnail.svg` with a small picture of your game) and the page `<title>` in `index.html`.
+2. Edit `game.json` (`id` must equal the folder name; `title`, `description` required; `thumbnail` file name and `tags` optional; the menu card shows the thumbnail at 16:9, so replace the copied `thumbnail.svg` with a small picture of your game) and the page `<title>` in `index.html`. Write `MAP.md` for the game (copy the shape of `penalty-kick/MAP.md`).
 3. Build the game in `main.ts` using `createScene`, `createPointerInput`, `createBackButton`/`createPauseOverlay`/`createMuteButton`, and `createAssetLoader`.
 4. Learning loop: `startGameSession(id)` (redirect to `menuUrl()` if it returns null) → `session.chooseFacts()` → `showPreview()` → per turn `answerOptions()`, `speak(fact.spokenPrompt)`, `session.recordAnswer()` → `createRound()` handles retries → `showResults()` with `session.recordStars(starsFor(...))`. Honour `session.timerSecondsFor(fact)` (start the clock after the prompt is read). If the game speaks its own lines (callouts, score lines), build them in pure functions in `rules.ts`, list every possible one in `src/games/<id>/voice.ts` (`export const VOICE_LINES: string[]`, importing no DOM, three.js or `main.ts`), and run `npm run voice`. Open-ended lines (e.g. with a free-form number) can't be recorded; say something fixed instead.
 5. `npm test` validates every manifest and folder layout.
