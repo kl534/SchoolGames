@@ -65,3 +65,17 @@ export function fitView(width: number, height: number): Fit {
   const camY = (groundRow - h / 2) / ppu;
   return { ppu, viewW, viewH, groundRow, distance, camY, ahead: viewW * (1 - BIKE_COL) };
 }
+
+/** The camera starts rising once the highest point of the action is above this (u). */
+export const RISE_FROM = OBSTACLE_MAX_H - 0.8; // 6.4
+
+/**
+ * How far to raise the camera for a stunt that climbs above the usual view: (top - RISE_FROM),
+ * never below 0 or above `max`, and never so far that `low` (the lowest of the bike and the rider)
+ * drops within 0.5 u of the screen's bottom edge (so at most low + GROUND_MARGIN - 0.5).
+ */
+export function riseFor(top: number, low: number, max: number): number {
+  if (![top, low, max].every(Number.isFinite)) return 0;
+  const limit = Math.min(max, low + GROUND_MARGIN - 0.5);
+  return Math.max(0, Math.min(top - RISE_FROM, limit));
+}
