@@ -17,6 +17,7 @@ import { Kit, type Cut, type Placed } from '../kit';
 import type { MegaId, Passed } from '../rules';
 import { TAU } from '../stunts';
 import { MEGA_SPECS, megaCuts, megaLength, megaLocate, megaOffsets } from './mega';
+import { buildInfernoDropProps } from './inferno-drop-props';
 import { buildSkyCircusProps } from './sky-circus-props';
 import { buildTripleLoopProps, type MegaBuilt } from './triple-loop-props';
 import { buildVolcanoRushProps } from './volcano-rush-props';
@@ -32,6 +33,7 @@ const BUILDERS: Record<MegaId, (kit: Kit) => [MegaBuilt, MegaBuilt, MegaBuilt]> 
   'triple-loop': buildTripleLoopProps,
   'sky-circus': buildSkyCircusProps,
   'volcano-rush': buildVolcanoRushProps,
+  'inferno-drop': buildInfernoDropProps,
 };
 
 function createMegaCourse(id: MegaId): MegaCourse {
