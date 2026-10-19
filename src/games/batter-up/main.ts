@@ -124,7 +124,7 @@ const BANNER_FOR = 1.4;
 /** The pitcher winds up at least this long, however quickly the question is read. */
 const MIN_WIND = 0.9;
 /** Seconds into a hit before a tap can skip the rest of it. */
-const HIT_SKIP_AFTER = 1.4;
+const HIT_FAST_FORWARD_AFTER = 1.4;
 /** Seconds an announcement (a new inning, the end of one) stays up at least. */
 const ANNOUNCE_FOR = 1.8;
 
@@ -1326,7 +1326,7 @@ function run(session: GameSession): void {
   /** A tap while a good hit or call is showing skips ahead. A miss waits for the green answer. */
   const skip = () => {
     if (tapFlow.armed) return;
-    if (phase === 'hit' && playRunner.time >= HIT_SKIP_AFTER) endPlay();
+    if (phase === 'hit' && playRunner.time >= HIT_FAST_FORWARD_AFTER) endPlay();
     else if (phase === 'pitching') pitching.skip();
     else if (phase === 'announce') skipAnnounce?.();
   };
