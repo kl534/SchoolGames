@@ -366,6 +366,15 @@ describe('dev hooks', () => {
     }
   });
 
+  it('reads the Sky Circus and Volcano Rush ids', () => {
+    expect(parseDev('?megas=sky-circus,volcano-rush').megas).toEqual([
+      'sky-circus',
+      'volcano-rush',
+    ]);
+    expect(parseDev('?lab=sky-circus:3').lab).toEqual({ mega: 'sky-circus', passed: 3 });
+    expect(parseDev('?lab=volcano-rush:0').lab).toEqual({ mega: 'volcano-rush', passed: 0 });
+  });
+
   it('ignores anything malformed', () => {
     const dev = parseDev('?bikes=9&lab=ring:crash:7&at=soon');
     expect(dev).toEqual({

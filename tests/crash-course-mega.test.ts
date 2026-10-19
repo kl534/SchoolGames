@@ -13,6 +13,23 @@ import {
   MEGA_MAX_H,
   MEGA_SPECS,
 } from '../src/games/crash-course/mega/mega';
+import { createMegaCoursePool } from '../src/games/crash-course/mega/mega-obstacles';
+import {
+  ferrisPivot,
+  ferrisTurn,
+  BALLOON_PIT,
+  BALLOON_R,
+  BALLOON_X,
+  BALLOON_Y,
+  CANNON,
+  CANNON_MOUTH,
+} from '../src/games/crash-course/mega/sky-circus';
+import {
+  boulderAt,
+  BOULDER_R,
+  LAVA_FROM,
+  LAVA_TO,
+} from '../src/games/crash-course/mega/volcano-rush';
 import { MEGA_IDS, type MegaId, type Passed } from '../src/games/crash-course/rules';
 import { BIKE_Y, TAU, type Frame } from '../src/games/crash-course/stunts';
 
@@ -71,7 +88,7 @@ describe.each(MEGA_IDS)('the %s course', (id) => {
     expect(megaCuts(id)).toEqual(expected);
   });
 
-  it('keeps the loops getting bigger', () => {
+  it('keeps the elements getting bigger', () => {
     const heights = spec.elements.map((e) => e.height);
     expect(heights).toEqual([...heights].sort((x, y) => x - y));
   });
@@ -296,5 +313,126 @@ describe.each(cases)('%s with %i right', (id, passed) => {
     expect(word.endsWith('!')).toBe(true);
     const element = spec.elements[passed === 3 ? 2 : passed];
     expect(word).toBe(passed === 3 ? element.clear.word : element.crash.word);
+  });
+});
+
+describe('the course props', () => {
+  it.each(MEGA_IDS)('%s builds, follows every moment of every stunt and disposes', (id) => {
+    const pool = createMegaCoursePool();
+    const course = pool.get(id);
+    expect(pool.get(id)).toBe(course);
+    expect(course.id).toBe(id);
+    expect(course.length).toBe(megaLength(id));
+    expect(course.cuts).toEqual(megaCuts(id));
+    expect(course.object.children.length).toBeGreaterThanOrEqual(3);
+    for (const passed of PASSED) {
+      const duration = megaDuration(id, passed);
+      for (let t = 0; t <= duration + 1e-9; t += 1 / 20) {
+        course.update(passed, t);
+        course.ambient(t);
+      }
+      course.update(passed, duration + 3);
+      course.reset();
+    }
+    course.object.traverse((o) => {
+      expect(Number.isFinite(o.position.x + o.position.y + o.position.z)).toBe(true);
+    });
+    pool.dispose();
+  });
+});
+
+/** When the bike lands on each balloon in Balloon Hop (the beats of its clear). */
+const SKY_CIRCUS_BEATS = [
+  MEGA_SPECS['sky-circus'].elements[1].clear.beats.b1,
+  MEGA_SPECS['sky-circus'].elements[1].clear.beats.b2,
+  MEGA_SPECS['sky-circus'].elements[1].clear.beats.b3,
+];
+
+describe('Sky Circus specifics', () => {
+  const offsets = megaOffsets('sky-circus');
+  const at = (passed: Passed, t: number) => megaFrame('sky-circus', passed, t);
+
+  it('hides the bike inside the cannon until it fires', () => {
+    // Clear: element 0 plays from t = 0; the bike rides in the barrel between 0.6 s and the shot.
+    for (let t = 0.6; t <= 0.95; t += 0.05) {
+      const f = at(3, t);
+      const dx = f.bike.x - CANNON_MOUTH.x;
+      const dy = f.bike.y - CANNON_MOUTH.y;
+      const across = Math.abs(-Math.sin(CANNON.angle) * dx + Math.cos(CANNON.angle) * dy);
+      const along = Math.cos(CANNON.angle) * dx + Math.sin(CANNON.angle) * dy;
+      expect(across).toBeLessThan(CANNON.radius - 0.3);
+      expect(along).toBeGreaterThan(0);
+      expect(along).toBeLessThan(CANNON.length);
+    }
+  });
+
+  it('bounces on top of each balloon and flies over the pit', () => {
+    const [b1] = SKY_CIRCUS_BEATS;
+    for (const [k, x] of BALLOON_X.entries()) {
+      const t = megaSegments('sky-circus', 3)[1].start + SKY_CIRCUS_BEATS[k] + 0.07;
+      const f = at(3, t);
+      expect(Math.abs(f.bike.x - offsets[1] - x)).toBeLessThan(0.4);
+      expect(f.bike.y).toBeGreaterThan(BALLOON_Y + BALLOON_R);
+    }
+    expect(b1).toBeGreaterThan(0.5);
+    const start = megaSegments('sky-circus', 3)[1].start;
+    for (let t = start; t < start + 3.3; t += 1 / 60) {
+      const f = at(3, t);
+      const x = f.bike.x - offsets[1];
+      if (x > BALLOON_PIT[0] + 0.6 && x < BALLOON_PIT[1] - 0.6) {
+        expect(f.bike.y, `over the pit at ${t}`).toBeGreaterThan(2.5);
+      }
+    }
+  });
+
+  it('carries the bike in the loading gondola of the turning wheel', () => {
+    const start = megaSegments('sky-circus', 3)[2].start;
+    for (let t = 1.7; t <= 3.0; t += 0.05) {
+      const f = at(3, start + t);
+      const pivot = ferrisPivot(ferrisTurn('clear', t));
+      expect(f.bike.x - offsets[2]).toBeCloseTo(pivot.x, 1);
+      expect(f.bike.y).toBeCloseTo(pivot.y - 0.4, 1);
+    }
+  });
+});
+
+describe('Volcano Rush specifics', () => {
+  const offsets = megaOffsets('volcano-rush');
+
+  it('flies over the lava lake and falls into it when it lands short', () => {
+    for (let t = 0.6; t <= 1.5; t += 0.05) {
+      const f = megaFrame('volcano-rush', 3, t);
+      if (f.bike.x > LAVA_FROM + 0.6 && f.bike.x < LAVA_TO - 0.6) {
+        expect(f.bike.y, `over the lava at ${t}`).toBeGreaterThan(1.5);
+      }
+    }
+    const crash = megaSegments('volcano-rush', 0)[0];
+    const end = megaFrame('volcano-rush', 0, crash.duration);
+    expect(end.bike.x).toBeGreaterThan(LAVA_FROM);
+    expect(end.bike.x).toBeLessThan(LAVA_TO);
+    expect(end.bike.y).toBeLessThan(0);
+  });
+
+  it('never touches a boulder when the course is cleared', () => {
+    const start = megaSegments('volcano-rush', 3)[1].start;
+    for (let t = 0; t <= 2.9; t += 1 / 60) {
+      const f = megaFrame('volcano-rush', 3, start + t);
+      for (const i of [0, 1, 2] as const) {
+        const b = boulderAt('clear', i, t);
+        const d = Math.hypot(f.bike.x - offsets[1] - b.x, f.bike.y - b.y, f.bike.z - b.z);
+        expect(d, `boulder ${i} at ${t}`).toBeGreaterThan(BOULDER_R + 0.3);
+      }
+    }
+  });
+
+  it('sticks the bike to the third boulder for a while when it is bonked', () => {
+    const start = megaSegments('volcano-rush', 1)[1].start;
+    for (let t = 2.1; t <= 2.7; t += 0.05) {
+      const f = megaFrame('volcano-rush', 1, start + t);
+      const b = boulderAt('crash', 2, t);
+      const d = Math.hypot(f.bike.x - offsets[1] - b.x, f.bike.y - b.y, f.bike.z - b.z);
+      expect(d, `at ${t}`).toBeGreaterThan(BOULDER_R);
+      expect(d, `at ${t}`).toBeLessThan(BOULDER_R + 1.0);
+    }
   });
 });
