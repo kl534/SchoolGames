@@ -1,0 +1,147 @@
+/* "Tap the green answer to go on": the pulsing answer, the dim ones, the finger and the caption. */
+
+.sg-tap-correct {
+  --sg-tap-peak: 1.1;
+  --sg-tap-period: 0.7s;
+  opacity: 1 !important;
+  animation: sg-tap-pulse var(--sg-tap-period) ease-in-out infinite !important;
+}
+
+.sg-tap-correct.sg-tap-step-1 {
+  --sg-tap-peak: 1.14;
+  --sg-tap-period: 0.6s;
+}
+
+.sg-tap-correct.sg-tap-step-2 {
+  --sg-tap-peak: 1.18;
+  --sg-tap-period: 0.5s;
+}
+
+.sg-tap-correct.sg-tap-step-3 {
+  --sg-tap-peak: 1.22;
+  --sg-tap-period: 0.45s;
+}
+
+/* A dim answer was tapped: the green one pulses harder (and faster, at any step) for a second. */
+.sg-tap-correct.sg-tap-hint {
+  --sg-tap-peak: 1.2;
+  --sg-tap-period: 0.4s;
+}
+
+@keyframes sg-tap-pulse {
+  0%,
+  100% {
+    scale: 1;
+    box-shadow:
+      0 0 0 4px #5cf2b0,
+      0 0 18px 6px #5cf2b0;
+  }
+  50% {
+    scale: var(--sg-tap-peak);
+    box-shadow:
+      0 0 0 8px #5cf2b0,
+      0 0 34px 14px #5cf2b0;
+  }
+}
+
+.sg-tap-dim {
+  opacity: 0.35 !important;
+  filter: saturate(0.5);
+  cursor: default;
+}
+
+.sg-tap-nope {
+  animation: sg-tap-nope 0.3s linear;
+}
+
+@keyframes sg-tap-nope {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  17% {
+    translate: 8px 0;
+  }
+  50% {
+    translate: -8px 0;
+  }
+  83% {
+    translate: 8px 0;
+  }
+}
+
+/* The caption pill with the bouncing finger under it (or over it, when it sits below the button). */
+.sg-tap-pointer {
+  --sg-tap-dir: 1;
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 14;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: min(92vw, 360px);
+  pointer-events: none;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+}
+
+.sg-tap-pointer[hidden] {
+  display: none;
+}
+
+.sg-tap-pointer.sg-tap-below {
+  --sg-tap-dir: -1;
+  flex-direction: column-reverse;
+}
+
+.sg-tap-caption {
+  box-sizing: border-box;
+  padding: 14px 18px;
+  border: 2px solid #5cf2b0;
+  border-radius: 999px;
+  background: rgba(15, 18, 32, 0.9);
+  color: #fff;
+  font-size: clamp(16px, 4.2vmin, 22px);
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.sg-tap-finger {
+  font-size: clamp(34px, 8vmin, 48px);
+  line-height: 1.1;
+  animation: sg-tap-bounce 0.6s ease-in-out infinite;
+}
+
+@keyframes sg-tap-bounce {
+  50% {
+    transform: translateY(calc(10px * var(--sg-tap-dir)));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* A still glow instead of the pulse; nothing bounces or shakes. */
+  .sg-tap-correct {
+    animation: none !important;
+  }
+
+  button.sg-tap-correct.sg-tap-correct {
+    box-shadow:
+      0 0 0 8px #5cf2b0,
+      0 0 34px 14px #5cf2b0;
+  }
+
+  .sg-tap-finger {
+    animation: none;
+  }
+
+  .sg-tap-nope {
+    animation: none;
+    outline: 3px solid #ff6b6b;
+  }
+}
