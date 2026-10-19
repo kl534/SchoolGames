@@ -1,3 +1,4 @@
+import { fillAnswers, lockAnswers, markAnswers } from '../../shared/answers';
 import { lineX, type Aim } from './aim';
 import { BALL_R, DECK_BACK_Z, HEAD_Z, PIN_IDS, pinSpot, type PinId } from './geometry';
 import { frameMarks, position, runningTotals, totalScore, type Rolls } from './rules';
@@ -349,14 +350,7 @@ export function createHud(): Hud {
     },
     setOptions(next) {
       options = next;
-      buttons.forEach((button, i) => {
-        const text = next[i];
-        button.textContent = text ?? '';
-        button.setAttribute('aria-label', `Answer ${text ?? ''}`);
-        button.removeAttribute('aria-disabled');
-        button.className = 'sz-answer';
-        button.hidden = text === undefined;
-      });
+      fillAnswers(buttons, next, 'sz-answer');
     },
     showQuestion(visible, keepAnswers = false) {
       q.hidden = !visible;
@@ -370,12 +364,10 @@ export function createHud(): Hud {
       clockFill.style.width = left === null ? '100%' : `${Math.max(0, Math.min(1, left)) * 100}%`;
     },
     lock() {
-      buttons.forEach((b) => b.setAttribute('aria-disabled', 'true'));
+      lockAnswers(buttons);
     },
     mark(chosen, correct, right) {
-      buttons[correct]?.classList.add('right');
-      if (chosen >= 0 && !right) buttons[chosen].classList.add('wrong');
-      if (chosen >= 0 && right) buttons[chosen].classList.add('chosen');
+      markAnswers(buttons, chosen, correct, right);
     },
 
     showBanner(title, detail, kind, where) {

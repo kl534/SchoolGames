@@ -1,6 +1,20 @@
 import { preloadSpeech, speak, stopSpeaking } from './audio';
 import { createTapGate, TAP_SPEECH } from './tapgate';
 import { createTapMarks } from './tapmarks';
+import { statementSpeech, type Fact } from './topics';
+
+export interface RevealOptions {
+  /** What the finger and caption keep off besides the other answers (the banner, the question). */
+  avoid?: readonly HTMLElement[];
+  /** The question shown beside the finger, e.g. '5 + 5 = ?'; else a tap hint. */
+  problem?: string;
+  /** Said before the fact, e.g. the umpire's call. */
+  lead?: string;
+  /** Game seconds before the reading starts (it holds while paused). */
+  delay?: number;
+  /** The reading has ended and the flow is still waiting on this miss. */
+  onRead?: () => void;
+}
 
 export interface TapFlow {
   readonly armed: boolean;
@@ -15,7 +29,18 @@ export interface TapFlow {
     avoid?: readonly HTMLElement[],
     problem?: string,
   ): void;
-  /** The fact has been read out (call in the `speak(...)` callback). */
+  /**
+   * A miss on `fact`: arms on its answer among `options` and reads the fact out (`lead` first,
+   * after `delay`). The reminders start once the reading ends. A reading cut off by a disarm or a
+   * new arm counts for nothing, so the game needs no turn checks of its own.
+   */
+  reveal(
+    buttons: readonly HTMLElement[],
+    options: readonly string[],
+    fact: Fact,
+    reveal?: RevealOptions,
+  ): void;
+  /** The fact has been read out, for a game that reads it itself (call in the `speak` callback). */
   readFinished(): void;
   /** Per frame, with the game's own delta (0 or not called while paused). Plays the reminder. */
   update(delta: number): void;
@@ -40,14 +65,44 @@ export function createTapFlow(container?: HTMLElement): TapFlow {
   const marks = createTapMarks(container);
   // So the first reminder starts the moment it is due.
   preloadSpeech([TAP_SPEECH]);
+  /** Bumped by every arm and disarm, so a reading from an earlier miss knows it is stale. */
+  let armId = 0;
+  /** A reveal's reading waiting for its delay, in `gate.sinceArmed` seconds. */
+  let reading: { at: number; start: () => void } | null = null;
+
+  const arm: TapFlow['arm'] = (buttons, correctIndex, avoid, problem) => {
+    armId++;
+    reading = null;
+    gate.arm(correctIndex);
+    marks.show(buttons, correctIndex, avoid, problem);
+  };
+
+  const stop = () => {
+    armId++;
+    reading = null;
+    gate.disarm();
+  };
 
   return {
     get armed() {
       return gate.armed;
     },
-    arm(buttons, correctIndex, avoid, problem) {
-      gate.arm(correctIndex);
-      marks.show(buttons, correctIndex, avoid, problem);
+    arm,
+    reveal(buttons, options, fact, { avoid, problem, lead, delay = 0, onRead } = {}) {
+      arm(buttons, options.indexOf(fact.answer), avoid, problem);
+      const id = armId;
+      const lines = lead ? [lead, statementSpeech(fact)] : [statementSpeech(fact)];
+      const say = (i: number) => {
+        if (id !== armId) return;
+        if (i < lines.length) {
+          speak(lines[i], () => say(i + 1));
+          return;
+        }
+        gate.readFinished();
+        onRead?.();
+      };
+      if (delay > 0) reading = { at: delay, start: () => say(0) };
+      else say(0);
     },
     readFinished() {
       gate.readFinished();
@@ -58,22 +113,28 @@ export function createTapFlow(container?: HTMLElement): TapFlow {
         marks.nudge(gate.nudges);
         speak(TAP_SPEECH);
       }
+      if (reading && gate.sinceArmed >= reading.at) {
+        const { start } = reading;
+        reading = null;
+        start();
+      }
       marks.update();
     },
     tap(index) {
       const outcome = gate.tap(index);
       if (outcome === 'nope') marks.nope(index);
       if (outcome !== 'go') return false;
+      stop();
       stopSpeaking();
       marks.clear();
       return true;
     },
     disarm() {
-      gate.disarm();
+      stop();
       marks.clear();
     },
     dispose() {
-      gate.disarm();
+      stop();
       marks.dispose();
     },
   };

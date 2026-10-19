@@ -1,3 +1,4 @@
+import { fillAnswers, lockAnswers, markAnswers } from '../../shared/answers';
 import { callInPanel, questionTopBelowBug } from './layout';
 import type { Half, Side } from './rules';
 
@@ -236,14 +237,7 @@ export function createHud(): Hud {
     },
     setOptions(next) {
       options = next;
-      buttons.forEach((button, i) => {
-        const text = next[i];
-        button.textContent = text ?? '';
-        button.setAttribute('aria-label', `Answer ${text ?? ''}`);
-        button.removeAttribute('aria-disabled');
-        button.className = 'bu-answer';
-        button.hidden = text === undefined;
-      });
+      fillAnswers(buttons, next, 'bu-answer');
     },
     setClock(fraction) {
       const f = Math.min(Math.max(fraction, 0), 1);
@@ -251,12 +245,10 @@ export function createHud(): Hud {
       clockBar.classList.toggle('urgent', f < 0.4);
     },
     lock() {
-      buttons.forEach((b) => b.setAttribute('aria-disabled', 'true'));
+      lockAnswers(buttons);
     },
     mark(chosen, correct, right) {
-      buttons[correct]?.classList.add('right');
-      if (chosen >= 0 && !right) buttons[chosen].classList.add('wrong');
-      if (chosen >= 0 && right) buttons[chosen].classList.add('chosen');
+      markAnswers(buttons, chosen, correct, right);
     },
     markHit(chosen) {
       buttons.forEach((b, i) => b.classList.add(i === chosen ? 'right' : 'gone'));

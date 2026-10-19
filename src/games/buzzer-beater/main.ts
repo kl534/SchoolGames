@@ -1,15 +1,17 @@
 import './style.css';
 import { MathUtils, Vector3 } from 'three';
+import { pressAnswers } from '../../shared/answers';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
 import { createFactFeed, type FactFeed } from '../../shared/feed';
-import { createPointerInput, onPress } from '../../shared/input';
+import { createPointerInput } from '../../shared/input';
 import { showPreview } from '../../shared/preview';
 import { showResults } from '../../shared/results';
 import { starsFor } from '../../shared/round';
 import { createScene } from '../../shared/scene';
 import { startGameSession, type GameSession } from '../../shared/session';
 import { createTapFlow } from '../../shared/tapflow';
-import { answerOptions, type Fact } from '../../shared/topics';
+import { createTimers } from '../../shared/timers';
+import { answerOptions, promptSpeech, statementSpeech, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
 import { createBall } from './ball';
 import { buildCourt } from './court';
@@ -270,8 +272,8 @@ function run(session: GameSession): void {
 
   // Delayed actions run on game time so pausing freezes them too.
   let gameTime = 0;
-  let pending: { at: number; fn: () => void }[] = [];
-  const after = (seconds: number, fn: () => void) => pending.push({ at: gameTime + seconds, fn });
+  const timers = createTimers();
+  const after = timers.after;
 
   // ---------- Layout and the camera ----------
   let viewW = 0;
@@ -473,7 +475,6 @@ function run(session: GameSession): void {
   };
 
   // ---------- Asking ----------
-  const spokenFact = (f: Fact) => f.spokenStatement ?? f.statement;
 
   /** Takes the next fact and puts its question and answers up. */
   const takeFact = () => {
@@ -490,7 +491,7 @@ function run(session: GameSession): void {
   /** The question, the answers and the shot clock. The question is read; then the clock runs. */
   const ask = () => {
     if (state.over || phase === 'done') return;
-    pending = [];
+    timers.clear();
     stopSpeaking();
     hud.hideBanner();
     const thisTurn = ++turn;
@@ -524,7 +525,7 @@ function run(session: GameSession): void {
   const readQuestion = (thisTurn: number) => {
     if (!fact) return;
     const token = ++speechToken;
-    speak(fact.spokenPrompt ?? fact.prompt, () => {
+    speak(promptSpeech(fact), () => {
       if (token !== speechToken || turn !== thisTurn || phase !== 'ask') return;
       speechDone = true;
     });
@@ -617,7 +618,7 @@ function run(session: GameSession): void {
       input = { kind: 'free-throw', shooter: 'us', made: right };
       points = 1;
       title = right ? `SWISH! ${pointsText(1)}` : 'Rims out!';
-      lines = right ? [FREE_THROW_MADE_SPEECH] : [FREE_THROW_MISSED_SPEECH, spokenFact(f)];
+      lines = right ? [FREE_THROW_MADE_SPEECH] : [FREE_THROW_MISSED_SPEECH, statementSpeech(f)];
     } else if (state.ball === 'us') {
       if (right) {
         const ask = forced?.kind === 'shot' ? forced : null;
@@ -637,7 +638,7 @@ function run(session: GameSession): void {
         shown.fire = false;
         input = { kind: 'violation' };
         title = 'SHOT CLOCK VIOLATION!';
-        lines = [VIOLATION_SPEECH, spokenFact(f)];
+        lines = [VIOLATION_SPEECH, statementSpeech(f)];
       } else {
         const result = ourMiss(state, forced?.kind === 'rebound' ? 0 : rnd());
         state = result.state;
@@ -646,7 +647,7 @@ function run(session: GameSession): void {
         title = 'CLANK!';
         lines = [
           MISS_SPEECH,
-          spokenFact(f),
+          statementSpeech(f),
           result.rebound ? OFFENSIVE_REBOUND_SPEECH : THEIR_BALL_SPEECH,
         ];
         reboundKept = result.rebound;
@@ -681,7 +682,7 @@ function run(session: GameSession): void {
       theirFreeThrow = score.andOne;
       input = { kind: 'make', shooter: 'them', shot: score.shot, andOne: score.andOne };
       title = `${rival.name} ${pointsText(score.points)}`;
-      lines = [theirScoreSpeech(score), spokenFact(f)];
+      lines = [theirScoreSpeech(score), statementSpeech(f)];
     }
     keepBall = reboundKept;
     saveProgress();
@@ -931,7 +932,7 @@ function run(session: GameSession): void {
 
   /** The players jog to their places and the camera eases to the view; then the question. */
   const move = (a: number, ft: boolean, seconds: number, then: () => void) => {
-    pending = [];
+    timers.clear();
     tapFlow.disarm();
     stopSpeaking();
     hud.hideBanner();
@@ -1021,7 +1022,7 @@ function run(session: GameSession): void {
   const proceed = () => {
     tapFlow.disarm();
     stopSpeaking();
-    pending = [];
+    timers.clear();
     hud.hideBanner();
     resultDone = null;
     syncShown();
@@ -1126,7 +1127,7 @@ function run(session: GameSession): void {
 
   /** The game is won or lost: the buzzer, the banner, then the results. */
   const finishGame = () => {
-    pending = [];
+    timers.clear();
     turn++;
     tapFlow.disarm();
     syncShown();
@@ -1178,7 +1179,7 @@ function run(session: GameSession): void {
 
   // ---------- Run flow ----------
   const startRun = (withPreview: boolean) => {
-    pending = [];
+    timers.clear();
     turn++;
     announceToken++;
     skipAnnounce = null;
@@ -1267,11 +1268,7 @@ function run(session: GameSession): void {
     if (phase === 'ask') select(index);
     else skip();
   };
-  const unpress = hud.buttons.map((button, i) => {
-    // A touch press doesn't count as a user gesture for iOS audio; the release does.
-    button.addEventListener('pointerup', unlockAudio);
-    return onPress(button, () => onAnswer(i));
-  });
+  const unpress = pressAnswers(hud.buttons, onAnswer);
   hud.hear.addEventListener('click', () => {
     unlockAudio();
     if (fact && hud.callInPanel()) {
@@ -1280,14 +1277,14 @@ function run(session: GameSession): void {
       const thisTurn = turn;
       replaying++;
       speechToken++;
-      speak(spokenFact(current), () => {
+      speak(statementSpeech(current), () => {
         replaying--;
         if (turn === thisTurn) resultDone?.();
       });
     } else if (fact) {
       const token = ++speechToken;
       const thisTurn = turn;
-      speak(fact.spokenPrompt ?? fact.prompt, () => {
+      speak(promptSpeech(fact), () => {
         if (token !== speechToken || turn !== thisTurn || phase !== 'ask') return;
         speechDone = true;
       });
@@ -1310,11 +1307,7 @@ function run(session: GameSession): void {
     layout();
     gameTime += delta;
     tapFlow.update(delta);
-    const due = pending.filter((p) => p.at <= gameTime);
-    if (due.length) {
-      pending = pending.filter((p) => p.at > gameTime);
-      due.forEach((p) => p.fn());
-    }
+    timers.update(delta);
     movement?.(gameTime);
     if (moveT < 1) moveT = Math.min(1, moveT + delta / Math.max(moveDur, 1e-3));
 
@@ -1356,7 +1349,7 @@ function run(session: GameSession): void {
     window.removeEventListener('keydown', onKey);
     stopPointer();
     tapFlow.dispose();
-    unpress.forEach((fn) => fn());
+    unpress();
     pause.dispose();
     mute.dispose();
     effects.clear();

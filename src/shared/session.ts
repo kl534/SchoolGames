@@ -17,7 +17,7 @@ import {
   topicOfFact,
 } from './levels';
 import { chooseRoundFacts, KICKS_PER_ROUND } from './round';
-import { getTopic, type Fact, type Topic } from './topics';
+import { getTopic, promptSpeech, statementSpeech, type Fact, type Topic } from './topics';
 
 export interface GameParams {
   topicId: string | null;
@@ -84,9 +84,7 @@ export function startGameSession(
         ? chooseLevelFacts(progress, count)
         : chooseRoundFacts(topic.facts, progress.facts[topic.id], count);
       // Fetch the round's voice clips now, while the preview is up.
-      preloadSpeech(
-        facts.flatMap((f) => [f.spokenPrompt ?? f.prompt, f.spokenStatement ?? f.statement]),
-      );
+      preloadSpeech(facts.flatMap((f) => [promptSpeech(f), statementSpeech(f)]));
       return facts;
     },
     timerSecondsFor: (fact) =>

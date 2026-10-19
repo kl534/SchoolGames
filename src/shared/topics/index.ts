@@ -34,6 +34,11 @@ export function defaultDistractors(
   return shuffle([...others], random).slice(0, count);
 }
 
+/** What is read aloud to ask the fact. */
+export const promptSpeech = (fact: Fact): string => fact.spokenPrompt ?? fact.prompt;
+/** What is read aloud to tell the whole fact (after a miss, in the preview). */
+export const statementSpeech = (fact: Fact): string => fact.spokenStatement ?? fact.statement;
+
 /**
  * The correct answer plus up to `count - 1` distinct wrong ones, shuffled.
  * May return fewer than `count` when the topic has too few distinct answers.

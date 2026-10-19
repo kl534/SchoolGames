@@ -3,6 +3,7 @@
  * the four answers, the banner, the comic word, the pops and the screen effects. Plain elements
  * styled in style.css (prefix `cc-`); the game loop in main.ts drives them.
  */
+import { fillAnswers, lockAnswers } from '../../shared/answers';
 import type { MegaId, ObstacleKind } from './rules';
 import { BIKES, MEGA_PIECES, multiplierFor } from './rules';
 
@@ -326,16 +327,10 @@ export function createHud(avatar: string): Hud {
       else if (!banner.hidden) layoutBanner();
     },
     lockAnswers() {
-      buttons.forEach((b) => b.setAttribute('aria-disabled', 'true'));
+      lockAnswers(buttons);
     },
     setAnswers(options) {
-      buttons.forEach((button, i) => {
-        const text = options[i];
-        button.textContent = text ?? '';
-        button.setAttribute('aria-label', `Answer ${text ?? ''}`);
-        button.removeAttribute('aria-disabled');
-        button.className = 'cc-answer';
-      });
+      fillAnswers(buttons, options, 'cc-answer');
     },
     dispose() {
       created.forEach((node) => node.remove());

@@ -1,15 +1,17 @@
 import './style.css';
 import { CylinderGeometry, MathUtils, Mesh, MeshStandardMaterial, Vector3 } from 'three';
+import { pressAnswers } from '../../shared/answers';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
 import { createFactFeed, type FactFeed } from '../../shared/feed';
-import { createPointerInput, onPress } from '../../shared/input';
+import { createPointerInput } from '../../shared/input';
 import { showPreview } from '../../shared/preview';
 import { showResults } from '../../shared/results';
 import { starsFor } from '../../shared/round';
 import { createScene } from '../../shared/scene';
 import { startGameSession, type GameSession } from '../../shared/session';
 import { createTapFlow } from '../../shared/tapflow';
-import { answerOptions, type Fact } from '../../shared/topics';
+import { createTimers } from '../../shared/timers';
+import { answerOptions, promptSpeech, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
 import { createBike, createParachute, type Bike } from './bike';
 import { devOptions, type DevOptions, type LabMega, type LabStunt } from './dev';
@@ -236,8 +238,8 @@ function run(session: GameSession, dev: DevOptions | null): void {
   /** Ticks up for each question, so late callbacks can tell they are stale. */
   let turn = 0;
   let gameTime = 0;
-  let pending: { at: number; fn: () => void }[] = [];
-  const after = (seconds: number, fn: () => void) => pending.push({ at: gameTime + seconds, fn });
+  const timers = createTimers();
+  const after = timers.after;
   let bannerUntil = 0;
 
   // The Mega Stunt in progress.
@@ -437,7 +439,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
 
   // ---------- Run flow ----------
   const startRun = (withPreview: boolean) => {
-    pending = [];
+    timers.clear();
     turn++;
     tapFlow.disarm();
     feed = createFactFeed(() => session.chooseFacts());
@@ -514,7 +516,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
   /** Picks the next obstacle, or starts a Mega Stunt. */
   const askNext = () => {
     if (phase === 'ending' || phase === 'done') return;
-    pending = [];
+    timers.clear();
     tapFlow.disarm();
     stopSpeaking();
     hud.hideWord();
@@ -592,7 +594,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     hud.setTopVisible(true, options.length);
     hud.setRoad(0, { urgent: false, waiting: true });
     // The clock starts once the question has been read out, as long as this turn is current.
-    speak(current.spokenPrompt ?? current.prompt, () => {
+    speak(promptSpeech(current), () => {
       if (turn !== thisTurn || phase !== 'riding') return;
       startClock();
     });
@@ -877,7 +879,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
    */
   const beginResult = () => {
     const current = fact;
-    pending = [];
+    timers.clear();
     hud.hideWord();
     if (outOfBikes(bikes)) {
       beginEnding(current);
@@ -886,20 +888,18 @@ function run(session: GameSession, dev: DevOptions | null): void {
     phase = 'result';
     respawnDone = false;
     respawnStarted = false;
-    const thisTurn = turn;
     hud.showBanner(timedOut ? "Time's up!" : 'Wipeout!', current?.statement ?? '', 'miss');
-    if (current)
-      tapFlow.arm(buttons, options.indexOf(current.answer), [hud.top, hud.banner], current.prompt);
+    if (current) {
+      tapFlow.reveal(buttons, options, current, {
+        avoid: [hud.top, hud.banner],
+        problem: current.prompt,
+        delay: 0.6,
+      });
+    }
     after(0.6, () => {
       startRespawn();
-      if (!current) {
-        // Nothing to read or tap on: go on once the new bike is down.
-        after(RESPAWN_TIME, advance);
-        return;
-      }
-      speak(current.spokenStatement ?? current.statement, () => {
-        if (turn === thisTurn && phase === 'result') tapFlow.readFinished();
-      });
+      // Nothing to read or tap on: go on once the new bike is down.
+      if (!current) after(RESPAWN_TIME, advance);
     });
   };
 
@@ -932,7 +932,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
   const advance = () => {
     tapFlow.disarm();
     stopSpeaking();
-    pending = [];
+    timers.clear();
     if (!respawnDone) endRespawn();
     hud.hideBanner();
     askNext();
@@ -940,7 +940,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
 
   const beginEnding = (last: Fact | undefined) => {
     phase = 'ending';
-    pending = [];
+    timers.clear();
     turn++;
     clockRunning = false;
     hud.setMega(0, 0);
@@ -954,12 +954,10 @@ function run(session: GameSession, dev: DevOptions | null): void {
       return;
     }
     // The question and answers stay up: the player taps the green one before the results appear.
-    tapFlow.arm(buttons, options.indexOf(last.answer), [hud.top, hud.banner], last.prompt);
-    speak(OUT_OF_BIKES_SPEECH, () => {
-      if (turn !== thisTurn || phase !== 'ending') return;
-      speak(last.spokenStatement ?? last.statement, () => {
-        if (turn === thisTurn && phase === 'ending') tapFlow.readFinished();
-      });
+    tapFlow.reveal(buttons, options, last, {
+      avoid: [hud.top, hud.banner],
+      problem: last.prompt,
+      lead: OUT_OF_BIKES_SPEECH,
     });
   };
 
@@ -1013,14 +1011,10 @@ function run(session: GameSession, dev: DevOptions | null): void {
     if (phase === 'riding') select(index);
     else skip();
   };
-  const unpress = buttons.map((button, i) => {
-    // A touch press doesn't count as a user gesture for iOS audio; the release does.
-    button.addEventListener('pointerup', unlockAudio);
-    return onPress(button, () => onAnswer(i));
-  });
+  const unpress = pressAnswers(buttons, onAnswer);
   hud.hear.addEventListener('click', () => {
     unlockAudio();
-    if (fact) speak(fact.spokenPrompt ?? fact.prompt);
+    if (fact) speak(promptSpeech(fact));
   });
   const stopPointer = createPointerInput(ctx.renderer.domElement, {
     onDragStart: () => unlockAudio(),
@@ -1247,11 +1241,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     layout();
     gameTime += delta;
     tapFlow.update(delta);
-    const due = pending.filter((p) => p.at <= gameTime);
-    if (due.length) {
-      pending = pending.filter((p) => p.at > gameTime);
-      due.forEach((p) => p.fn());
-    }
+    timers.update(delta);
     if (bannerUntil > 0 && gameTime >= bannerUntil) {
       bannerUntil = 0;
       hud.hideBanner();
@@ -1417,7 +1407,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
   ctx.start();
   if (lab) {
     startRun(false);
-    pending = [];
+    timers.clear();
     hud.showCount(null);
     hud.setTopVisible(false, 0);
     phase = 'riding';
@@ -1430,7 +1420,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     window.removeEventListener('keydown', onKey);
     stopPointer();
     tapFlow.dispose();
-    unpress.forEach((fn) => fn());
+    unpress();
     pause.dispose();
     mute.dispose();
     hud.dispose();

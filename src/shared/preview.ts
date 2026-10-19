@@ -1,6 +1,6 @@
 import './overlays.css';
 import { speak, stopSpeaking, unlockAudio } from './audio';
-import type { Fact, Topic } from './topics';
+import { statementSpeech, type Fact, type Topic } from './topics';
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -57,7 +57,7 @@ export function showPreview(options: PreviewOptions): Preview {
     const chip = button(fact.statement, 'sg-chip');
     chip.addEventListener('click', () => {
       unlockAudio();
-      speak(fact.spokenStatement ?? fact.statement);
+      speak(statementSpeech(fact));
     });
     list.appendChild(chip);
   }

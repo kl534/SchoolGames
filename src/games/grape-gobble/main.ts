@@ -1,15 +1,16 @@
 import './style.css';
 import { MathUtils, Vector3 } from 'three';
+import { fillAnswers, lockAnswers, markAnswers, pressAnswers } from '../../shared/answers';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
 import { createFactFeed, type FactFeed } from '../../shared/feed';
-import { onPress } from '../../shared/input';
 import { showPreview } from '../../shared/preview';
 import { showResults } from '../../shared/results';
 import { starsFor } from '../../shared/round';
 import { createScene } from '../../shared/scene';
 import { startGameSession, type GameSession } from '../../shared/session';
 import { createTapFlow } from '../../shared/tapflow';
-import { answerOptions, type Fact } from '../../shared/topics';
+import { createTimers } from '../../shared/timers';
+import { answerOptions, promptSpeech, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
 import { devFrame, devRoundSeconds, forcedGag } from './dev';
 import { createEffects } from './effects';
@@ -148,8 +149,8 @@ function run(session: GameSession): void {
 
   // Delayed actions run on game time so pausing freezes them too.
   let gameTime = 0;
-  let pending: { at: number; fn: () => void }[] = [];
-  const after = (seconds: number, fn: () => void) => pending.push({ at: gameTime + seconds, fn });
+  const timers = createTimers();
+  const after = timers.after;
 
   // ---------- Camera ----------
   let viewW = 0;
@@ -279,7 +280,7 @@ function run(session: GameSession): void {
   const startRun = (withPreview: boolean) => {
     tapFlow.disarm();
     waitingForTap = false;
-    pending = [];
+    timers.clear();
     turn++;
     stopSpeaking();
     feed = createFactFeed(() => session.chooseFacts());
@@ -326,7 +327,7 @@ function run(session: GameSession): void {
         sfx.goal();
         roundTime = 0;
         askQuestion();
-        // Not an `after`: the first question may be answered (clearing `pending`) before it runs out.
+        // Not an `after`: the first question may be answered (clearing the timers) before it runs out.
         countHideAt = gameTime + EAT_WORD;
       });
     });
@@ -336,27 +337,21 @@ function run(session: GameSession): void {
   const askQuestion = () => {
     tapFlow.disarm();
     waitingForTap = false;
-    pending = [];
+    timers.clear();
     stopSpeaking();
     banner.hidden = true;
     const next = feed.take();
     fact = next;
     turn++;
     options = answerOptions(session.topic, next, buttons.length);
-    buttons.forEach((button, i) => {
-      const text = options[i];
-      button.textContent = text ?? '';
-      button.setAttribute('aria-label', `Answer ${text ?? ''}`);
-      button.removeAttribute('aria-disabled');
-      button.className = 'gg-answer';
-    });
+    fillAnswers(buttons, options, 'gg-answer');
     problemText.textContent = next.prompt;
     problem.classList.remove('statement', 'wrong');
     answers.classList.remove('shake');
     phase = 'asking';
     askedAt = gameTime;
     setHudVisible(true);
-    speak(next.spokenPrompt ?? next.prompt);
+    speak(promptSpeech(next));
   };
 
   const onAnswer = (index: number) => {
@@ -437,14 +432,15 @@ function run(session: GameSession): void {
     lastGag = gag;
     popIndex = 0;
     phase = 'gag';
-    pending = [];
+    timers.clear();
     const thisTurn = ++turn;
-    buttons.forEach((button, i) => {
-      button.setAttribute('aria-disabled', 'true');
-      if (i === index) button.classList.add('wrong');
-      else if (options[i] === current.answer) button.classList.add('right');
+    lockAnswers(buttons);
+    markAnswers(buttons, index, options.indexOf(current.answer), false);
+    tapFlow.reveal(buttons, options, current, {
+      avoid: [hud, banner],
+      problem: current.prompt,
+      delay: READ_AFTER,
     });
-    tapFlow.arm(buttons, options.indexOf(current.answer), [hud, banner], current.prompt);
     problemText.textContent = current.statement;
     problem.classList.add('statement', 'wrong');
     // At the instant of the tap, so a wrong answer never looks like eating.
@@ -455,11 +451,6 @@ function run(session: GameSession): void {
     void answers.offsetWidth;
     answers.classList.add('shake');
     refit = true;
-    after(READ_AFTER, () =>
-      speak(current.spokenStatement ?? current.statement, () => {
-        if (turn === thisTurn && phase === 'gag') tapFlow.readFinished();
-      }),
-    );
     kid.playGag(gag, onCue, () => {
       // The kid is at rest. Nothing moves on until the tap, and the round clock holds meanwhile.
       if (turn === thisTurn && phase === 'gag') waitingForTap = true;
@@ -470,7 +461,7 @@ function run(session: GameSession): void {
   const endRound = () => {
     tapFlow.disarm();
     waitingForTap = false;
-    pending = [];
+    timers.clear();
     turn++;
     stopSpeaking();
     phase = 'ending';
@@ -510,14 +501,10 @@ function run(session: GameSession): void {
   };
 
   // ---------- Input ----------
-  const unpress = buttons.map((button, i) => {
-    // A touch press doesn't count as a user gesture for iOS audio; the release does.
-    button.addEventListener('pointerup', unlockAudio);
-    return onPress(button, () => onAnswer(i));
-  });
+  const unpress = pressAnswers(buttons, onAnswer);
   hear.addEventListener('click', () => {
     unlockAudio();
-    if (fact && phase === 'asking') speak(fact.spokenPrompt ?? fact.prompt);
+    if (fact && phase === 'asking') speak(promptSpeech(fact));
   });
 
   // Keys 1-4 pick the answers from left to right.
@@ -534,11 +521,7 @@ function run(session: GameSession): void {
 
     gameTime += delta;
     tapFlow.update(delta);
-    const due = pending.filter((p) => p.at <= gameTime);
-    if (due.length) {
-      pending = pending.filter((p) => p.at > gameTime);
-      due.forEach((p) => p.fn());
-    }
+    timers.update(delta);
 
     if (gameTime >= countHideAt) {
       count.hidden = true;
@@ -595,7 +578,7 @@ function run(session: GameSession): void {
   window.addEventListener('pagehide', () => {
     stopSpeaking();
     window.removeEventListener('keydown', onKey);
-    unpress.forEach((fn) => fn());
+    unpress();
     tapFlow.dispose();
     pause.dispose();
     mute.dispose();
