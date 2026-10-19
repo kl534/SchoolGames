@@ -315,6 +315,8 @@ function buildLow(kit: Kit): MegaBuilt {
     (FOAM_Y + FOAM_FLOOR) / 2,
     -0.9,
   );
+  // Below the pit's floor a darker block runs on down, so no ground shows under the foam.
+  kit.box(width, 8, 4.2, kit.lit(0x9a6f88, 1), group, mid, FOAM_FLOOR - 4, -0.9);
   const cubes: { mesh: Mesh; x: number; y: number; z: number; jump: number }[] = [];
   const size = 0.35;
   for (let k = 0; k < 30; k++) {
