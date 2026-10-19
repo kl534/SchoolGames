@@ -28,7 +28,7 @@ Baseball over six innings: answer fast to hit when batting and to pitch when fie
 
 - `?play=<kind>`: force every ball in play to that kind. Hits: `single-liner`, `single-grounder`, `single-bloop`, `single-chopper`, `double-gap`, `double-line`, `double-wall`, `triple-corner`, `triple-gap`, `homer-liner`, `homer-moonshot`, `homer-scraper`. Outs: `pop`, `foul-pop`, `fly`, `liner`, `diving`, `ground`, `double-play`, `force-second`.
 - `?start=top|bottom&bases=101&outs=1`: begin in that half with runners on first, second, third (three digits) and 1 or 2 outs.
-- Example: `npm run shots -- "batter-up?play=double-play&start=bottom&bases=110&outs=1" --start`
+- Example: `npm run shots -- "batter-up?play=double-play&start=bottom&bases=110&outs=1" --start --wait 6000` (the "Play ball!" banner covers the first 2.5 s)
 
 ## Where changes go
 
