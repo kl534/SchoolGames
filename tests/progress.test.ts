@@ -6,6 +6,7 @@ import {
   emptyProgress,
   factWeight,
   isMastered,
+  LEARN_SPACING_MS,
   migrateAboveTenTables,
   recordAnswer,
   recordBest,
@@ -18,13 +19,59 @@ import { LEVELS, levelPassed, levelsOpen, topicOfFact, type LevelFact } from '..
 import { memoryStore } from '../src/shared/storage';
 
 describe('recordAnswer', () => {
+  const HOUR = 60 * 60 * 1000;
+
   it('tracks correct, wrong and streak', () => {
     const p = emptyProgress();
     recordAnswer(p, 't', 'f', true, 1);
     recordAnswer(p, 't', 'f', true, 2);
-    expect(p.facts.t.f).toEqual({ correct: 2, wrong: 0, streak: 2, lastSeen: 2 });
+    expect(p.facts.t.f).toEqual({
+      correct: 2,
+      wrong: 0,
+      streak: 2,
+      lastSeen: 2,
+      learnStreak: 1,
+      learnedAt: 1,
+    });
     recordAnswer(p, 't', 'f', false, 3);
-    expect(p.facts.t.f).toEqual({ correct: 2, wrong: 1, streak: 0, lastSeen: 3 });
+    expect(p.facts.t.f).toEqual({ correct: 2, wrong: 1, streak: 0, lastSeen: 3, learnStreak: 0 });
+  });
+
+  it('ignores a right retry, but counts a wrong one', () => {
+    const p = emptyProgress();
+    recordAnswer(p, 't', 'f', false, 1);
+    recordAnswer(p, 't', 'f', true, 2, true);
+    expect(p.facts.t.f).toEqual({ correct: 0, wrong: 1, streak: 0, lastSeen: 2, learnStreak: 0 });
+    recordAnswer(p, 't', 'f', false, 3, true);
+    expect(p.facts.t.f).toMatchObject({ correct: 0, wrong: 2, streak: 0, lastSeen: 3 });
+  });
+
+  it('learns a fact after 3 right answers in a row, each 6 hours apart', () => {
+    const p = emptyProgress();
+    recordAnswer(p, 't', 'f', true, 0);
+    recordAnswer(p, 't', 'f', true, 5 * HOUR);
+    recordAnswer(p, 't', 'f', true, 6 * HOUR);
+    expect(p.facts.t.f.learnStreak).toBe(2);
+    // Counted from the last right answer that added to the streak, not the last one seen.
+    recordAnswer(p, 't', 'f', true, 11 * HOUR);
+    expect(isMastered(p.facts.t.f)).toBe(false);
+    recordAnswer(p, 't', 'f', true, 12 * HOUR);
+    expect(isMastered(p.facts.t.f)).toBe(true);
+  });
+
+  it('starts the learning streak over after a miss', () => {
+    const p = emptyProgress();
+    for (let i = 0; i < 3; i++) recordAnswer(p, 't', 'f', true, i * LEARN_SPACING_MS);
+    expect(isMastered(p.facts.t.f)).toBe(true);
+    recordAnswer(p, 't', 'f', false, 3 * LEARN_SPACING_MS);
+    expect(isMastered(p.facts.t.f)).toBe(false);
+    // The first right answer after the miss counts at once, without waiting 6 hours.
+    recordAnswer(p, 't', 'f', true, 3 * LEARN_SPACING_MS + 1);
+    expect(p.facts.t.f.learnStreak).toBe(1);
+  });
+
+  it('never counts as learned from progress saved before the learning streak', () => {
+    expect(isMastered({ correct: 9, wrong: 0, streak: 9, lastSeen: 1 })).toBe(false);
   });
 });
 
@@ -96,15 +143,21 @@ describe('recordHighScore', () => {
 });
 
 describe('countMastered', () => {
-  it('counts facts answered correctly at least three times', () => {
+  it('counts facts with 3 spaced right answers in a row', () => {
     const p = emptyProgress();
-    for (let i = 0; i < 3; i++) recordAnswer(p, 't', 'a', true);
-    recordAnswer(p, 't', 'b', true);
-    recordAnswer(p, 't', 'b', true);
-    // Misses do not undo earlier correct answers.
-    recordAnswer(p, 't', 'c', false);
-    for (let i = 0; i < 3; i++) recordAnswer(p, 't', 'c', true);
-    expect(countMastered(p, 't', ['a', 'b', 'c', 'd'])).toBe(2);
+    const at = (i: number) => i * LEARN_SPACING_MS;
+    for (let i = 0; i < 3; i++) recordAnswer(p, 't', 'a', true, at(i));
+    // Right three times, but too close together.
+    for (let i = 0; i < 3; i++) recordAnswer(p, 't', 'b', true, i);
+    // A miss in the middle breaks the streak.
+    recordAnswer(p, 't', 'c', true, at(0));
+    recordAnswer(p, 't', 'c', false, at(1));
+    recordAnswer(p, 't', 'c', true, at(2));
+    recordAnswer(p, 't', 'c', true, at(3));
+    // A miss before is fine.
+    recordAnswer(p, 't', 'd', false, at(0));
+    for (let i = 1; i <= 3; i++) recordAnswer(p, 't', 'd', true, at(i));
+    expect(countMastered(p, 't', ['a', 'b', 'c', 'd', 'e'])).toBe(2);
   });
 });
 
@@ -319,7 +372,9 @@ describe('migrateAboveTenTables', () => {
     const oldProgress = (levels: number) => {
       const p = emptyProgress();
       for (const lf of LEVELS.slice(0, levels).flatMap((l) => l.facts)) {
-        for (let i = 0; i < 3; i++) recordAnswer(p, oldTopicId(lf), lf.fact.id, true);
+        for (let i = 0; i < 3; i++) {
+          recordAnswer(p, oldTopicId(lf), lf.fact.id, true, i * LEARN_SPACING_MS);
+        }
       }
       return p;
     };

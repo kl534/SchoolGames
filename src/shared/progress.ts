@@ -13,6 +13,13 @@ export interface FactStat {
   streak: number;
   /** Timestamp (ms) of the last answer. */
   lastSeen: number;
+  /**
+   * Right answers in a row that each came at least `LEARN_SPACING_MS` after the one before;
+   * reset by a wrong answer. Missing in progress saved before it existed.
+   */
+  learnStreak?: number;
+  /** Timestamp (ms) of the last right answer that added to `learnStreak`. */
+  learnedAt?: number;
 }
 
 export interface PlayerProgress {
@@ -28,8 +35,10 @@ export interface PlayerProgress {
 
 export const AVATARS = ['🦊', '🐼', '🐯', '🐸', '🐙', '🦄', '🐶', '🐱', '🐵', '🦁', '🐧', '🐢'];
 export const MAX_NAME_LENGTH = 20;
-/** A fact counts as learned once it has been answered correctly this many times. */
-export const MASTERED_CORRECT = 3;
+/** A fact counts as learned once its `learnStreak` reaches this. */
+export const LEARN_STREAK = 3;
+/** Right answers closer together than this (6 hours) add to `learnStreak` only once. */
+export const LEARN_SPACING_MS = 6 * 60 * 60 * 1000;
 
 /**
  * Seconds to answer a fact, indexed by its current streak; longer streaks get less time.
@@ -41,9 +50,9 @@ export function emptyProgress(): PlayerProgress {
   return { facts: {}, best: {}, highScores: {} };
 }
 
-/** Learned: answered correctly at least `MASTERED_CORRECT` times. */
+/** Learned: `LEARN_STREAK` right answers in a row, each at least 6 hours after the one before. */
 export function isMastered(stat: FactStat | undefined): boolean {
-  return (stat?.correct ?? 0) >= MASTERED_CORRECT;
+  return (stat?.learnStreak ?? 0) >= LEARN_STREAK;
 }
 
 /** Seconds the player gets to answer a fact: 15 when new or just missed, then 10, then 5. */
@@ -63,21 +72,32 @@ export function factWeight(stat: FactStat | undefined): number {
   return Math.min(Math.max(ratio * mastery, 0.2), 6);
 }
 
+/**
+ * Saves one answer. A right `retry` (the fact asked again soon after a miss, its answer just
+ * shown) proves nothing, so it only updates `lastSeen`; a wrong retry counts like any miss.
+ */
 export function recordAnswer(
   progress: PlayerProgress,
   topicId: string,
   factId: string,
   correct: boolean,
   now: number = Date.now(),
+  retry = false,
 ): FactStat {
   const topic = (progress.facts[topicId] ??= {});
   const stat = (topic[factId] ??= { correct: 0, wrong: 0, streak: 0, lastSeen: 0 });
-  if (correct) {
+  if (correct && !retry) {
     stat.correct++;
     stat.streak++;
-  } else {
+    if (stat.learnedAt === undefined || now - stat.learnedAt >= LEARN_SPACING_MS) {
+      stat.learnStreak = (stat.learnStreak ?? 0) + 1;
+      stat.learnedAt = now;
+    }
+  } else if (!correct) {
     stat.wrong++;
     stat.streak = 0;
+    stat.learnStreak = 0;
+    delete stat.learnedAt;
   }
   stat.lastSeen = now;
   return stat;

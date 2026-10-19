@@ -140,9 +140,9 @@ export function levelsOpen(progress: PlayerProgress): number {
   return open;
 }
 
-/** Not learned yet, or learned but missed the last time it came up. */
+/** Not learned yet. A miss always un-learns a fact, so it comes back here too. */
 export function needsWork(stat: FactStat | undefined): boolean {
-  return !isMastered(stat) || stat?.streak === 0;
+  return !isMastered(stat);
 }
 
 /**

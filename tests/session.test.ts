@@ -56,6 +56,19 @@ describe('timerSecondsFor', () => {
     expect(session.timerSecondsFor(fact)).toBe(15);
   });
 
+  it('does not count a right answer to a fact that comes back after a miss', () => {
+    const session = startAs('Retry');
+    session.recordAnswer(fact, false);
+    session.recordAnswer(fact, true);
+    expect(session.timerSecondsFor(fact)).toBe(15);
+    // The next right answer counts again.
+    session.recordAnswer(fact, true);
+    expect(session.timerSecondsFor(fact)).toBe(10);
+    const store = createProgressStore();
+    const saved = store.load(store.currentPlayer()!.id);
+    expect(saved.facts[topic.id][fact.id]).toMatchObject({ correct: 1, wrong: 1, streak: 1 });
+  });
+
   it('is always 15 seconds without a player', () => {
     createProgressStore().setCurrentPlayer(null);
     const session = startAs(null);
