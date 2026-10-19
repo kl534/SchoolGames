@@ -2,9 +2,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NUDGE_EVERY, NUDGE_FIRST, TAP_GUARD, TAP_SPEECH } from '../src/shared/tapgate';
 
-vi.mock('../src/shared/audio', () => ({ speak: vi.fn(), stopSpeaking: vi.fn() }));
+vi.mock('../src/shared/audio', () => ({
+  preloadSpeech: vi.fn(),
+  speak: vi.fn(),
+  stopSpeaking: vi.fn(),
+}));
 
-import { speak, stopSpeaking } from '../src/shared/audio';
+import { preloadSpeech, speak, stopSpeaking } from '../src/shared/audio';
 import { createTapFlow, type TapFlow } from '../src/shared/tapflow';
 
 function makeButtons(): HTMLButtonElement[] {
@@ -32,6 +36,10 @@ afterEach(() => {
 });
 
 describe('tapflow', () => {
+  it('loads the reminder clip up front', () => {
+    expect(preloadSpeech).toHaveBeenCalledWith([TAP_SPEECH]);
+  });
+
   it('arm marks the right answer and waits', () => {
     expect(flow.armed).toBe(false);
     flow.arm(buttons, 2);

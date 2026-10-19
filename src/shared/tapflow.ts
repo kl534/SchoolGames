@@ -1,4 +1,4 @@
-import { speak, stopSpeaking } from './audio';
+import { preloadSpeech, speak, stopSpeaking } from './audio';
 import { createTapGate, TAP_SPEECH } from './tapgate';
 import { createTapMarks } from './tapmarks';
 
@@ -29,6 +29,8 @@ export interface TapFlow {
 export function createTapFlow(container?: HTMLElement): TapFlow {
   const gate = createTapGate();
   const marks = createTapMarks(container);
+  // So the first reminder starts the moment it is due.
+  preloadSpeech([TAP_SPEECH]);
 
   return {
     get armed() {
