@@ -336,7 +336,12 @@ export function createHud(): Hud {
         if (!inQuestion) {
           // Keep the whole card on the screen, whatever its width.
           const wide = banner.offsetWidth / 2 + 12;
-          const x = Math.min(Math.max(viewW * asideAt, wide), viewW - wide);
+          let x = Math.min(Math.max(viewW * asideAt, wide), viewW - wide);
+          // A miss card stays up until the tap, so it must not sit on the scorebug.
+          const bugBox = bug.getBoundingClientRect();
+          if (kind === 'miss' && x - wide < bugBox.right && top < bugBox.bottom) {
+            x = Math.min(bugBox.right + wide, viewW - wide);
+          }
           banner.style.left = `${Math.round(x)}px`;
           // A miss card needs room under it for the finger. Beside the question rather than under
           // it, the card may start higher up, just below the top bar.
