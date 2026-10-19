@@ -130,6 +130,8 @@ export interface Hud {
 
 /** Room kept under a miss card for the finger and caption that point at the green answer. */
 const TAP_ROOM = 104;
+/** The back, sound and pause buttons end this far down the screen. */
+const TOP_BAR = 72;
 
 export function createHud(): Hud {
   const bug = el('div', 'bu-bug', document.body);
@@ -196,6 +198,18 @@ export function createHud(): Hud {
     el('span', 'bu-call-title', problemText).textContent = title;
     el('span', 'bu-call-statement', problemText).textContent = detail;
     hear.setAttribute('aria-label', 'Hear the answer');
+  };
+
+  /**
+   * The highest a card beside the plate may start: just below the top bar when it is clear of the
+   * scorebug and the question sideways, else `under` (below the question).
+   */
+  const cardTop = (card: DOMRect, under: number) => {
+    const clearOf = (node: HTMLElement) => {
+      const r = node.getBoundingClientRect();
+      return card.left >= r.right || card.right <= r.left;
+    };
+    return !hudBox.hidden && clearOf(bug) && clearOf(hudBox) ? Math.min(under, TOP_BAR) : under;
   };
 
   const replay = (node: HTMLElement) => {
@@ -342,7 +356,10 @@ export function createHud(): Hud {
         // goes in the question panel, above; this is only for when there is no panel.)
         if (!inQuestion) {
           banner.style.left = `${Math.round(viewW * 0.77)}px`;
-          banner.style.top = `${Math.min(Math.max((top + bottom) / 2, top + half), Math.max(bottom - half, top + half))}px`;
+          // A miss card needs room under it for the finger. Beside the question rather than under
+          // it, the card may start higher up, just below the top bar.
+          const first = kind === 'miss' ? cardTop(banner.getBoundingClientRect(), top) : top;
+          banner.style.top = `${Math.min(Math.max((first + bottom) / 2, first + half), Math.max(bottom - half, first + half))}px`;
         } else {
           banner.style.top = `${top + half}px`;
         }
