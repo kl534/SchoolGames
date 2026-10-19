@@ -228,7 +228,10 @@ function run(session: GameSession): void {
     answers.forEach((button, i) => {
       const w = button.offsetWidth || 88;
       const x = MathUtils.clamp(pts[i].x, w / 2 + 8, viewW - w / 2 - 8);
-      button.style.transform = `translate(${x - w / 2}px, ${pts[i].y - ANSWER_HEIGHT / 2}px)`;
+      // Placed with left and top, not a transform, so the pulse (a scale about the button's own
+      // centre) and the shake (a translate) of the tap marks do not move it.
+      button.style.left = `${x - w / 2}px`;
+      button.style.top = `${pts[i].y - ANSWER_HEIGHT / 2}px`;
     });
   };
 
@@ -446,7 +449,7 @@ function run(session: GameSession): void {
     showBanner(timedOut ? "Time's up!" : 'Saved!', current.statement, 'miss');
     sfx.miss();
     // The game waits here until the player taps the green answer.
-    tapFlow.arm(answers, correctIndex);
+    tapFlow.arm(answers, correctIndex, [hud, banner]);
     const thisTurn = turn;
     after(0.6, () =>
       speak(current.spokenStatement ?? current.statement, () => {
