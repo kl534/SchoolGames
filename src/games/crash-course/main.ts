@@ -1271,8 +1271,9 @@ function run(session: GameSession, dev: DevOptions | null): void {
     for (const pair of pairs) pair.rider.update(delta, elapsed);
 
     // --- Camera: follows the bike, eased so stunts are followed smoothly ---
+    // After a crash it stays on the new bike once the parachute has started, while the game waits.
     const goal =
-      phase === 'result' && respawnStarted && !respawnDone
+      phase === 'result' && respawnStarted
         ? respawnX
         : phase === 'stunt' || phase === 'result' || phase === 'ending'
           ? focus.x
