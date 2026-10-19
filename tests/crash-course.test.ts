@@ -21,7 +21,12 @@ import {
   hitPoints,
   loseBike,
   MAX_GAP,
-  megaKinds,
+  GATE_BEAT,
+  MEGA_BANNER,
+  MEGA_BONUS,
+  MEGA_IDS,
+  MEGA_PIECES,
+  nextMega,
   multiplierFor,
   NEW_HIGH_SCORE_SPEECH,
   nextKind,
@@ -37,6 +42,7 @@ import {
   startsMega,
   trailLength,
   worldSpeedFactor,
+  type MegaId,
   type ObstacleKind,
   type Variant,
 } from '../src/games/crash-course/rules';
@@ -148,19 +154,31 @@ describe('obstacle order', () => {
     for (const n of [9, 15, 17, 23]) expect(startsMega(n)).toBe(false);
   });
 
-  it('gives a Mega Stunt three different kinds, none the previous one', () => {
-    const random = lcg(11);
-    for (let i = 0; i < 1000; i++) {
-      const previous = i % 8 === 7 ? null : OBSTACLE_KINDS[i % 7];
-      const kinds = megaKinds(previous, [random(), random(), random()]);
-      expect(kinds).toHaveLength(3);
-      expect(new Set(kinds).size).toBe(3);
-      expect(kinds[0]).not.toBe(previous);
-      for (const kind of kinds) {
-        expect(OBSTACLE_KINDS).toContain(kind);
-        expect(kind).not.toBe(previous);
+  it('picks the next Mega course by index, never the previous one when there is a choice', () => {
+    expect(MEGA_IDS.length).toBeGreaterThan(0);
+    const seen = new Set<MegaId>();
+    for (let i = 0; i < 700; i++) seen.add(nextMega(null, i / 700));
+    expect([...seen].sort()).toEqual([...MEGA_IDS].sort());
+    for (const previous of MEGA_IDS) {
+      for (let i = 0; i < 600; i++) {
+        const next = nextMega(previous, i / 600);
+        expect(MEGA_IDS).toContain(next);
+        // With a single course the only choice is that course again.
+        if (MEGA_IDS.length > 1) expect(next).not.toBe(previous);
+        else expect(next).toBe(previous);
       }
     }
+    expect(nextMega(null, 0)).toBe(MEGA_IDS[0]);
+    expect(nextMega(null, 0.999)).toBe(MEGA_IDS[MEGA_IDS.length - 1]);
+    expect(nextMega(null, -3)).toBe(MEGA_IDS[0]);
+    expect(nextMega(null, 7)).toBe(MEGA_IDS[MEGA_IDS.length - 1]);
+  });
+
+  it('asks as many questions as the course has elements, with a pause after each gate', () => {
+    expect(MEGA_PIECES).toBe(3);
+    expect(MEGA_BONUS).toBe(500);
+    expect(GATE_BEAT).toBe(0.5);
+    expect(MEGA_BANNER).toBe(1.5);
   });
 
   it('picks the first variant at random, then alternates', () => {
@@ -322,6 +340,7 @@ describe('dev hooks', () => {
     );
     expect(dev).toEqual({
       kinds: ['loop', 'ramp'],
+      megas: [],
       mega: true,
       bikes: 2,
       lab: { kind: 'ring', outcome: 'crash', variant: 1 },
@@ -330,10 +349,38 @@ describe('dev hooks', () => {
     });
   });
 
+  it('reads the Mega courses and the Mega lab', () => {
+    const dev = parseDev('?megas=triple-loop,nope,triple-loop&mega=1&lab=triple-loop:2&at=1');
+    expect(dev).toEqual({
+      kinds: [],
+      megas: ['triple-loop', 'triple-loop'],
+      mega: true,
+      bikes: null,
+      lab: { mega: 'triple-loop', passed: 2 },
+      at: 1,
+      nitro: false,
+    });
+    for (const passed of [0, 1, 2, 3]) {
+      expect(parseDev(`?lab=triple-loop:${passed}`).lab).toEqual({ mega: 'triple-loop', passed });
+    }
+  });
+
   it('ignores anything malformed', () => {
     const dev = parseDev('?bikes=9&lab=ring:crash:7&at=soon');
-    expect(dev).toEqual({ kinds: [], mega: false, bikes: null, lab: null, at: null, nitro: false });
+    expect(dev).toEqual({
+      kinds: [],
+      megas: [],
+      mega: false,
+      bikes: null,
+      lab: null,
+      at: null,
+      nitro: false,
+    });
     expect(parseDev('?lab=nothing:clear:0').lab).toBeNull();
+    expect(parseDev('?lab=triple-loop:4').lab).toBeNull();
+    expect(parseDev('?lab=triple-loop:clear:0').lab).toBeNull();
+    expect(parseDev('?lab=triple-loop:1:0').lab).toBeNull();
+    expect(parseDev('?megas=nope,,').megas).toEqual([]);
     expect(parseDev('').bikes).toBeNull();
   });
 });
