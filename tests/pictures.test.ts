@@ -65,9 +65,45 @@ describe('pickWay', () => {
     expect(pickWay(add(1, 1), 1.5)?.way).toBe('add-join');
   });
 
-  it('has no ways for multiply and divide yet', () => {
-    expect(pickWay(mul(7, 3), 0)).toBeNull();
-    expect(pickWay(div(12, 3), 0)).toBeNull();
+  it('walks the times and divide ways too, skipping the ones that do not fit', () => {
+    expect(WAYS.multiply).toEqual([
+      'mul-groups',
+      'mul-line',
+      'mul-array',
+      'mul-add-up',
+      'mul-split',
+    ]);
+    expect(WAYS.divide).toEqual(['div-groups', 'div-share', 'div-line', 'div-rows']);
+    const walk = (visual: FactVisual, times: number) => {
+      const picked: Way[] = [];
+      let turn = 0;
+      for (let i = 0; i < times; i++) {
+        const pick = pickWay(visual, turn)!;
+        picked.push(pick.way);
+        turn = pick.nextTurn;
+      }
+      return picked;
+    };
+    // 7 x 3 has no split (nothing over ten).
+    expect(walk(mul(7, 3), 6)).toEqual([
+      'mul-groups',
+      'mul-line',
+      'mul-array',
+      'mul-add-up',
+      'mul-groups',
+      'mul-line',
+    ]);
+    // 12 x 14 only fits the line and the split.
+    expect(walk(mul(12, 14), 4)).toEqual(['mul-line', 'mul-split', 'mul-line', 'mul-split']);
+    expect(walk(div(12, 3), 5)).toEqual([
+      'div-groups',
+      'div-share',
+      'div-line',
+      'div-rows',
+      'div-groups',
+    ]);
+    // Too big for anything but the number line.
+    expect(walk(div(256, 16), 3)).toEqual(['div-line', 'div-line', 'div-line']);
   });
 });
 
@@ -121,6 +157,40 @@ describe('counts and captions', () => {
     expect(counts(picture(sub(13, 5), 'sub-gap'))).toEqual([null, 1, 2, 3, 4, 5, 6, 7, 8]);
   });
 
+  it('counts the times and divide ways as the design says', () => {
+    expect(counts(picture(mul(4, 3), 'mul-groups'))).toEqual([3, 6, 9, 12]);
+    expect(counts(picture(mul(4, 3), 'mul-line'))).toEqual([3, 6, 9, 12]);
+    expect(counts(picture(mul(4, 3), 'mul-array'))).toEqual([3, 6, 9, 12]);
+    expect(counts(picture(mul(4, 3), 'mul-add-up'))).toEqual([3, 6, 9, 12]);
+    expect(counts(picture(mul(7, 14), 'mul-add-up'))).toEqual([14, 28, 42, 56, 70, 84, 98]);
+    expect(counts(picture(div(12, 3), 'div-groups'))).toEqual([1, 2, 3, 4]);
+    expect(counts(picture(div(12, 3), 'div-share'))).toEqual([1, 2, 3, 4]);
+    expect(counts(picture(div(12, 3), 'div-line'))).toEqual([1, 2, 3, 4]);
+    expect(counts(picture(div(12, 3), 'div-rows'))).toEqual([1, 2, 3, 4]);
+    expect(picture(div(12, 3), 'div-share').steps.every((s) => s.move === 0.6)).toBe(true);
+  });
+
+  it('splits a times fact at ten, keeping the fact’s order', () => {
+    const rows = picture(mul(12, 14), 'mul-split');
+    expect(counts(rows)).toEqual([140, 28, 168]);
+    expect(captions(rows)).toEqual(['10 × 14 = 140', '2 × 14 = 28', '140 + 28 = 168']);
+    const columns = picture(mul(7, 14), 'mul-split');
+    expect(counts(columns)).toEqual([70, 28, 98]);
+    expect(captions(columns)).toEqual(['7 × 10 = 70', '7 × 4 = 28', '70 + 28 = 98']);
+    // Two blocks of cells: 10 x 14 and 2 x 14.
+    expect(rows.sprites.filter((s) => s.type === 'rect')).toHaveLength(168);
+  });
+
+  it('turns the sum line of 7 x 14 into bubbles but keeps critters for 4 x 3', () => {
+    const bubbles = picture(mul(7, 14), 'mul-add-up');
+    expect(critters(bubbles)).toBe(0);
+    expect(bubbles.sprites.filter((s) => s.type === 'dot').length).toBeGreaterThanOrEqual(7);
+    expect(critters(picture(mul(4, 3), 'mul-add-up'))).toBe(12);
+    // The last stop of the running total reads the answer.
+    const texts = bubbles.sprites.flatMap((s) => (s.type === 'text' ? [s.text] : []));
+    expect(texts).toContain('98');
+  });
+
   it('makes a ten from a number above ten', () => {
     const p = picture(add(14, 7), 'add-make-ten');
     expect(counts(p)).toEqual([14, 20, 21]);
@@ -137,7 +207,7 @@ function mathVisuals(): FactVisual[] {
         seen.set(`${fact.visual.kind}:${fact.visual.a}:${fact.visual.b}`, fact.visual);
     }
   }
-  return [...seen.values()].filter((v) => WAYS[v.kind].length > 0);
+  return [...seen.values()];
 }
 
 const sample = <T>(items: T[], count: number): T[] => {
@@ -146,10 +216,31 @@ const sample = <T>(items: T[], count: number): T[] => {
   return [...items].sort(() => random() - 0.5).slice(0, count);
 };
 
+/** Steps of a way: a hops or groups for times, n for divide, as the design says. */
+function stepsOf(way: Way, a: number, b: number): number {
+  if (way === 'add-make-ten' || way === 'mul-split') return 3;
+  if (way === 'sub-gap') return a - b + 1;
+  if (way.startsWith('mul')) return a;
+  if (way.startsWith('div')) return a / b;
+  return b + 1;
+}
+
+/** Critters of a way: loose piles and bunches, or one hopper, or none (blocks and bubbles). */
+function crittersOf(way: Way, a: number, b: number): number {
+  if (way.endsWith('-line')) return 1;
+  if (way === 'mul-split') return 0;
+  if (way === 'mul-add-up') return a * b > 60 ? 0 : a * b;
+  if (way.startsWith('mul')) return a * b;
+  if (way === 'add-join' || way === 'add-make-ten' || way === 'sub-gap') return a + b;
+  return a;
+}
+
 describe('every picture', () => {
   it('is sound for every math fact and usable way', () => {
     const visuals = sample(mathVisuals(), runs(10_000, 60));
     expect(visuals.length).toBeGreaterThan(50);
+    // Every math fact has at least one way.
+    expect(visuals.filter((v) => pickWay(v, 0) === null)).toEqual([]);
     // Problems are collected, not asserted one by one: there are tens of thousands of checks.
     const problems: string[] = [];
     let checked = 0;
@@ -169,20 +260,18 @@ describe('every picture', () => {
           said.every((c) => Number.isInteger(c) && c >= 1 && c <= MAX_COUNT),
           'a count is out of range',
         );
-        const rising = way.startsWith('add') || way === 'sub-gap';
-        check(
-          said.every((c, i) => i === 0 || (rising ? c > said[i - 1] : c < said[i - 1])),
-          `counts do not ${rising ? 'rise' : 'fall'}`,
-        );
+        const falling = ['sub-take-away', 'sub-line', 'sub-cross-out'].includes(way);
+        // The split counts 140, 28, 168: two parts and their sum.
+        if (way !== 'mul-split') {
+          check(
+            said.every((c, i) => i === 0 || (falling ? c < said[i - 1] : c > said[i - 1])),
+            `counts do not ${falling ? 'fall' : 'rise'}`,
+          );
+        }
         const { a, b } = visual;
-        const stepCount = way === 'add-make-ten' ? 3 : way === 'sub-gap' ? a - b + 1 : b + 1;
+        const stepCount = stepsOf(way, a, b);
         check(p.steps.length === stepCount, `${p.steps.length} steps, not ${stepCount}`);
-        const critterCount =
-          way === 'add-line' || way === 'sub-line'
-            ? 1
-            : way === 'add-join' || way === 'add-make-ten' || way === 'sub-gap'
-              ? a + b
-              : a;
+        const critterCount = crittersOf(way, a, b);
         check(critters(p) === critterCount, `${critters(p)} critters, not ${critterCount}`);
         check(p.width === STAGE_W, 'width');
         check(p.height >= 120 && p.height <= 360, `height ${p.height}`);
@@ -193,6 +282,24 @@ describe('every picture', () => {
             check(poses.length === p.sprites.length, 'pose count');
             poses.forEach((pose, i) => {
               check(Object.values(pose).every(Number.isFinite), `sprite ${i} not finite`);
+              // Rings, cells and plates lie wholly inside the stage.
+              const sprite = p.sprites[i];
+              const [halfW, halfH] =
+                sprite.type === 'ring'
+                  ? [sprite.r, sprite.r]
+                  : sprite.type === 'rect'
+                    ? [sprite.w / 2, sprite.h / 2]
+                    : sprite.type === 'plate'
+                      ? [sprite.rx, sprite.ry]
+                      : [0, 0];
+              check(
+                halfW === 0 ||
+                  (pose.x - halfW >= -0.5 &&
+                    pose.x + halfW <= STAGE_W + 0.5 &&
+                    pose.y - halfH >= -0.5 &&
+                    pose.y + halfH <= p.height + 0.5),
+                `sprite ${i} (${sprite.type}) sticks out of the stage`,
+              );
               if (pose.opacity > 0.05) {
                 check(pose.x >= 0 && pose.x <= STAGE_W, `sprite ${i} x ${pose.x}`);
                 check(pose.y >= 0 && pose.y <= p.height, `sprite ${i} y ${pose.y}`);
