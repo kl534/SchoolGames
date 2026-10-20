@@ -126,11 +126,17 @@ describe('step: the ladder', () => {
       ['solid', 'wrist-shot'],
       ['plain', 'rebound-goal'],
     ] as const) {
-      const r = step(s, true, band, 0.9, 0.9);
+      const r = step(s, true, band, 0.1, 0.9);
       expect(r.play).toBe(play);
       expect(r.goal).toBe('us');
       expect(r.state.us).toBe(1);
       expect(r.state.puck).toEqual({ kind: 'faceoff', zone: 'neutral' });
+    }
+    for (const band of ['flashy', 'solid', 'plain'] as const) {
+      const blocked = step(s, true, band, 0.25, 0);
+      expect(blocked.play).toBe('save');
+      expect(blocked.goal).toBeNull();
+      expect(blocked.state.puck).toEqual({ kind: 'faceoff', zone: 'their-end' });
     }
     const saved = step(s, false, 'plain', 0.5, 0);
     expect(saved.play).toBe('save');
