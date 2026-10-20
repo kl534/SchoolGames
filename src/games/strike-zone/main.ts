@@ -418,7 +418,7 @@ function run(session: GameSession): void {
     isGutter = !right;
     hud.mark(chosen, options.indexOf(f.answer), right);
     // After a gutter ball the green answer pulses at once and the game waits for a tap on it.
-    if (!right) tapFlow.arm(hud.buttons, options.indexOf(f.answer), hud.avoid);
+    if (!right) tapFlow.arm(hud.buttons, options.indexOf(f.answer), hud.avoid, f);
     hud.setClock(null, false);
     alley.aim.setVisible(false);
     after(HIDE_QUESTION_AFTER, () => {
