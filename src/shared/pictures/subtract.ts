@@ -1,11 +1,13 @@
 import type { FactVisual } from '../topics';
 import {
   addFrameCells,
+  addLandingDot,
   drawNumberLine,
   fitCell,
   frameLayout,
   gridSlot,
   hopArc,
+  landing,
   HOPPER_SIZE,
   LINE_HEIGHT,
   PictureBuilder,
@@ -75,9 +77,7 @@ function line({ a, b }: Subtract, looks: Looks): Picture {
   const d = a - b;
   const builder = new PictureBuilder(countDown(a, b));
   const nl = drawNumberLine(builder, d, a);
-  const rings = range(0, b).map((k) =>
-    builder.add({ type: 'ring', r: 8, color: '#ffd23f' }, nl.xOf(a - k), nl.y, { opacity: 0 }),
-  );
+  const dots = range(0, b).map((k) => addLandingDot(builder, nl.xOf(a - k), nl.y));
   const start = nl.hopperAt(a);
   const hopper = builder.add(
     { type: 'critter', emoji: looks.hopper, size: HOPPER_SIZE },
@@ -85,7 +85,8 @@ function line({ a, b }: Subtract, looks: Looks): Picture {
     start.y,
   );
   builder.move(hopper, 1, {}, { bounce: true });
-  builder.move(rings[0], 1, { opacity: 1 }, { pop: true });
+  const last = b + 1;
+  landing(builder, dots[0], 1, last);
   for (let k = 1; k <= b; k++) {
     const to = nl.hopperAt(a - k);
     builder.move(
@@ -94,7 +95,7 @@ function line({ a, b }: Subtract, looks: Looks): Picture {
       { x: to.x, y: to.y },
       { arc: hopArc(nl.xOf(a - k + 1), to.x), pop: true },
     );
-    builder.move(rings[k], k + 1, { opacity: 1 }, { pop: true });
+    landing(builder, dots[k], k + 1, last);
   }
   return builder.build('sub-line', LINE_HEIGHT);
 }

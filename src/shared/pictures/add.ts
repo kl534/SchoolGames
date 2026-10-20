@@ -1,11 +1,13 @@
 import type { FactVisual } from '../topics';
 import {
   addFrameCells,
+  addLandingDot,
   drawNumberLine,
   fitCell,
   frameLayout,
   gridSlot,
   hopArc,
+  landing,
   HOPPER_SIZE,
   LINE_HEIGHT,
   PictureBuilder,
@@ -63,10 +65,8 @@ function line({ a, b }: Add, looks: Looks): Picture {
   const steps: Step[] = [{ count: a }, ...range(1, b).map((j) => ({ count: a + j }))];
   const builder = new PictureBuilder(steps);
   const nl = drawNumberLine(builder, a, s);
-  // Rings mark the ticks the hopper has landed on.
-  const rings = range(a, s).map((v) =>
-    builder.add({ type: 'ring', r: 8, color: '#ffd23f' }, nl.xOf(v), nl.y, { opacity: 0 }),
-  );
+  // Gold dots mark the ticks the hopper has landed on.
+  const dots = range(a, s).map((v) => addLandingDot(builder, nl.xOf(v), nl.y));
   const start = nl.hopperAt(0);
   const hopper = builder.add(
     { type: 'critter', emoji: looks.hopper, size: HOPPER_SIZE },
@@ -78,7 +78,7 @@ function line({ a, b }: Add, looks: Looks): Picture {
     const fromX = nl.xOf(v === a ? 0 : v - 1);
     const to = nl.hopperAt(v);
     builder.move(hopper, step, { x: to.x, y: to.y }, { arc: hopArc(fromX, to.x), pop: true });
-    builder.move(rings[v - a], step, { opacity: 1 }, { pop: true });
+    landing(builder, dots[v - a], step, steps.length);
   }
   return builder.build('add-line', LINE_HEIGHT);
 }

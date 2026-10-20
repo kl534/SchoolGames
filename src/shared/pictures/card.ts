@@ -68,6 +68,8 @@ function drawSprite(sprite: Sprite): SVGElement {
         'stroke-linecap': 'round',
         ...(sprite.dashed ? { 'stroke-dasharray': '5 5' } : {}),
       });
+    case 'dot':
+      return svgEl('circle', { r: sprite.r, fill: sprite.color });
     case 'ring':
       return svgEl('circle', {
         r: sprite.r,

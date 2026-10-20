@@ -15,6 +15,7 @@ export type Sprite =
   | { type: 'text'; text: string; size: number; color?: string }
   | { type: 'line'; dx: number; dy: number; width: number; color?: string; dashed?: boolean }
   | { type: 'ring'; r: number; color: string }
+  | { type: 'dot'; r: number; color: string }
   | { type: 'rect'; w: number; h: number; fill: string; stroke?: string; radius?: number }
   | { type: 'plate'; rx: number; ry: number }
   | { type: 'cross'; size: number };
@@ -291,6 +292,19 @@ export function drawNumberLine(builder: PictureBuilder, lo: number, hi: number):
     xOf,
     hopperAt: (v) => ({ x: xOf(v), y: y - HOPPER_SIZE / 2 - 3 }),
   };
+}
+
+/** Scale of a landing dot that is no longer the latest (radius 5 of 7). */
+export const OLD_DOT = 5 / 7;
+
+/** A gold dot on the line at tick `v`, unseen until `landing(...)` shows it. */
+export const addLandingDot = (builder: PictureBuilder, x: number, y: number): number =>
+  builder.add({ type: 'dot', r: 7, color: '#ffd23f' }, x, y, { opacity: 0, scale: OLD_DOT });
+
+/** The dot appears big (the latest landing) in `step` and shrinks in the step after. */
+export function landing(builder: PictureBuilder, dot: number, step: number, last: number): void {
+  builder.move(dot, step, { opacity: 1, scale: 1 }, { pop: true });
+  if (step + 1 <= last) builder.move(dot, step + 1, { scale: OLD_DOT });
 }
 
 export const range = (from: number, to: number): number[] =>
