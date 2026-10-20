@@ -1,5 +1,7 @@
 import type { FactVisual } from '../topics';
 import { buildAdd } from './add';
+import { buildDivide } from './divide';
+import { buildMultiply } from './multiply';
 import { buildSubtract } from './subtract';
 import type { Way } from './ways';
 
@@ -58,7 +60,8 @@ export interface Looks {
 export function buildPicture(visual: FactVisual, way: Way, looks: Looks): Picture {
   if (visual.kind === 'add') return buildAdd(visual, way, looks);
   if (visual.kind === 'subtract') return buildSubtract(visual, way, looks);
-  throw new Error(`No picture for ${way} yet`);
+  if (visual.kind === 'multiply') return buildMultiply(visual, way, looks);
+  return buildDivide(visual, way, looks);
 }
 
 // ---------- Layout helpers shared by the builders ----------
@@ -246,6 +249,7 @@ export function addFrameCells(
 // ---------- Number lines ----------
 
 export const LINE_HEIGHT = 180;
+const LINE_COLOR = 'rgba(255,255,255,0.75)';
 
 export interface NumberLine {
   y: number;
@@ -266,7 +270,7 @@ export function drawNumberLine(builder: PictureBuilder, lo: number, hi: number):
   const x0 = broken ? 80 : 30;
   const gap = (450 - x0) / (hi - first);
   const xOf = (v: number) => (v === 0 && broken ? 30 : x0 + (v - first) * gap);
-  const color = 'rgba(255,255,255,0.75)';
+  const color = LINE_COLOR;
   const baseline = (from: number, to: number) =>
     builder.add({ type: 'line', dx: to - from, dy: 0, width: 3, color }, from, y);
   if (broken) {
@@ -280,18 +284,43 @@ export function drawNumberLine(builder: PictureBuilder, lo: number, hi: number):
     baseline(22, 458);
   }
   const values = broken ? [0, ...range(lo, hi)] : range(0, hi);
-  const alternate = gap < 34;
-  values.forEach((v, i) => {
-    const x = xOf(v);
-    builder.add({ type: 'line', dx: 0, dy: 10, width: 3, color }, x, y);
-    const drop = alternate && i % 2 === 1 ? 22 : 0;
-    builder.add({ type: 'text', text: String(v), size: 18, color: '#fff' }, x, y + 26 + drop);
-  });
+  drawTicks(builder, values, xOf, y, gap);
   return {
     y,
     xOf,
     hopperAt: (v) => ({ x: xOf(v), y: y - HOPPER_SIZE / 2 - 3 }),
   };
+}
+
+/** The tick marks under a line and their labels; alternate labels drop when ticks are close. */
+function drawTicks(
+  builder: PictureBuilder,
+  values: number[],
+  xOf: (v: number) => number,
+  y: number,
+  gap: number,
+): void {
+  const alternate = gap < 34;
+  values.forEach((v, i) => {
+    const x = xOf(v);
+    builder.add({ type: 'line', dx: 0, dy: 10, width: 3, color: LINE_COLOR }, x, y);
+    const drop = alternate && i % 2 === 1 ? 22 : 0;
+    builder.add({ type: 'text', text: String(v), size: 18, color: '#fff' }, x, y + 26 + drop);
+  });
+}
+
+/**
+ * A number line from 0 whose ticks are the given values (rising, the first is 0), spaced evenly:
+ * for counting in steps of b. The value of each tick is its position.
+ */
+export function drawTickLine(builder: PictureBuilder, ticks: number[]): NumberLine {
+  const y = LINE_HEIGHT * 0.6;
+  const top = ticks[ticks.length - 1];
+  const gap = 420 / (ticks.length - 1);
+  const xOf = (v: number) => 30 + (v / top) * 420;
+  builder.add({ type: 'line', dx: 436, dy: 0, width: 3, color: LINE_COLOR }, 22, y);
+  drawTicks(builder, ticks, xOf, y, gap);
+  return { y, xOf, hopperAt: (v) => ({ x: xOf(v), y: y - HOPPER_SIZE / 2 - 3 }) };
 }
 
 /** Scale of a landing dot that is no longer the latest (radius 5 of 7). */
@@ -313,3 +342,118 @@ export const range = (from: number, to: number): number[] =>
 /** A hop's arc: 0.6 of its length, at most 70 units high. */
 export const hopArc = (fromX: number, toX: number): number =>
   Math.min(0.6 * Math.abs(toX - fromX), 70);
+
+// ---------- Groups, piles and colours ----------
+
+/** Space kept above and below the content of a picture. */
+export const STAGE_PAD = 12;
+
+/** Colours of the rings, bands and blocks that tell groups apart, and the same as soft fills. */
+export const GROUP_COLORS = ['#5cc8ff', '#ff7a59', '#5cf2b0', '#ffd23f', '#c792ff'];
+export const GROUP_BANDS = [
+  'rgba(92,200,255,0.28)',
+  'rgba(255,122,89,0.28)',
+  'rgba(92,242,176,0.28)',
+  'rgba(255,210,63,0.28)',
+  'rgba(199,146,255,0.28)',
+];
+export const groupColor = (k: number): string => GROUP_COLORS[k % GROUP_COLORS.length];
+export const groupBand = (k: number): string => GROUP_BANDS[k % GROUP_BANDS.length];
+
+/** How `count` critters sit in one bunch: offsets from its centre in cells, and its ring radius. */
+export interface Bunch {
+  offsets: { x: number; y: number }[];
+  radius: number;
+}
+
+/** A near-square bunch with the last row centred. */
+export function bunchShape(count: number): Bunch {
+  const cols = Math.ceil(Math.sqrt(count));
+  const rows = Math.ceil(count / cols);
+  const offsets = range(0, count - 1).map((i) => {
+    const row = Math.floor(i / cols);
+    const inRow = Math.min(cols, count - row * cols);
+    return { x: (i % cols) - (inRow - 1) / 2, y: row - (rows - 1) / 2 };
+  });
+  const radius = Math.max(...offsets.map((o) => Math.hypot(o.x, o.y))) + 0.6;
+  return { offsets, radius };
+}
+
+/** Bunches (each inside a ring of its radius) laid out in rows of up to five. */
+export interface GroupFlow {
+  cell: number;
+  /** Height of the whole flow. */
+  height: number;
+  /** Centre of bunch `k`, measured from the top left of the flow's stage-wide box. */
+  centre(k: number): { x: number; y: number };
+}
+
+const GROUP_GAP = 0.2;
+
+/**
+ * The biggest cell for which `count` bunches fit in the stage, given that `reserved(cell)` units
+ * of height are used by something else. Tries 1 to 5 bunches per row.
+ */
+export function flowGroups(
+  count: number,
+  bunch: Bunch,
+  reserved: (cell: number) => number = () => 0,
+  maxHeight = 360 - 2 * STAGE_PAD,
+): GroupFlow {
+  const pitchOf = (cell: number) => (2 * bunch.radius + GROUP_GAP) * cell;
+  // Fewer rows look better than a few more units of cell: take the most bunches per row whose
+  // cell is within 15% of the biggest possible.
+  const options = range(1, Math.min(count, 5)).map((perRow) => {
+    const rows = Math.ceil(count / perRow);
+    const cell = fitCell(
+      (c) =>
+        perRow * pitchOf(c) <= STAGE_W - 2 * STAGE_PAD &&
+        reserved(c) + rows * pitchOf(c) <= maxHeight,
+    );
+    return { cell, perRow };
+  });
+  const biggest = Math.max(...options.map((o) => o.cell));
+  const best = options
+    .filter((o) => o.cell >= 0.85 * biggest)
+    .reduce((a, o) => (o.perRow > a.perRow ? o : a));
+  const { cell, perRow } = best;
+  const pitch = pitchOf(cell);
+  return {
+    cell,
+    height: Math.ceil(count / perRow) * pitch,
+    centre(k) {
+      const row = Math.floor(k / perRow);
+      const inRow = Math.min(perRow, count - row * perRow);
+      return {
+        x: (STAGE_W - inRow * pitch) / 2 + ((k % perRow) + 0.5) * pitch,
+        y: (row + 0.5) * pitch,
+      };
+    },
+  };
+}
+
+/** A loose pile: rows of ten, drawn as two bunches of five side by side. */
+export interface Pile {
+  rows: number;
+  height: number;
+  /** Centre of critter `index`, with the pile's top at `top`. */
+  slot(index: number, top: number): { x: number; y: number };
+}
+
+export function pileLayout(count: number, cell: number): Pile {
+  const cols = Math.min(count, 10);
+  const width = cols * cell + (cols > 5 ? 0.6 * cell : 0);
+  const left = (STAGE_W - width) / 2;
+  const rows = Math.ceil(count / 10);
+  return {
+    rows,
+    height: rows * cell,
+    slot(index, top) {
+      const col = index % 10;
+      return {
+        x: left + (col + 0.5) * cell + (col >= 5 ? 0.6 * cell : 0),
+        y: top + (Math.floor(index / 10) + 0.5) * cell,
+      };
+    },
+  };
+}

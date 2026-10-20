@@ -19,12 +19,12 @@ export type Way =
   | 'div-line'
   | 'div-rows';
 
-/** The ways of each operation, in rotation order. M1: multiply and divide are []. */
+/** The ways of each operation, in rotation order. */
 export const WAYS: Record<FactVisual['kind'], readonly Way[]> = {
   add: ['add-join', 'add-line', 'add-make-ten'],
   subtract: ['sub-take-away', 'sub-line', 'sub-cross-out', 'sub-gap'],
-  multiply: [],
-  divide: [],
+  multiply: ['mul-groups', 'mul-line', 'mul-array', 'mul-add-up', 'mul-split'],
+  divide: ['div-groups', 'div-share', 'div-line', 'div-rows'],
 };
 
 /** Critters in one loose picture. */
