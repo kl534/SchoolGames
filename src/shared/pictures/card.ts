@@ -179,8 +179,8 @@ export function createPictureCard(
     const sprite = picture.sprites[i];
     const delay = Math.min(i * INTRO_STAGGER, INTRO_MAX_DELAY);
     const k = clamp((t - delay) / INTRO_TIME, 0, 1);
-    let { x, y, scale, rotate } = pose;
-    let opacity = pose.opacity;
+    const { x } = pose;
+    let { y, scale, rotate, opacity } = pose;
     if (!calm) {
       scale *= k < 1 ? easeOutBack(k) : 1;
       opacity *= Math.min(1, k * 2);

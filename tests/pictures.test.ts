@@ -150,6 +150,8 @@ describe('every picture', () => {
   it('is sound for every math fact and usable way', () => {
     const visuals = sample(mathVisuals(), runs(10_000, 60));
     expect(visuals.length).toBeGreaterThan(50);
+    // Problems are collected, not asserted one by one: there are tens of thousands of checks.
+    const problems: string[] = [];
     let checked = 0;
     for (const visual of visuals) {
       const fact = mathFact(visual.kind, visual.a, visual.b);
@@ -157,64 +159,61 @@ describe('every picture', () => {
         if (!canUse(visual, way)) continue;
         checked++;
         const label = `${fact.statement} ${way}`;
+        const check = (ok: boolean, what: string) => {
+          if (!ok && problems.length < 20) problems.push(`${label}: ${what}`);
+        };
         const p = picture(visual, way);
-        const all = counts(p);
-        const said = all.filter((c): c is number => c !== null);
-        expect(said.at(-1), label).toBe(Number(fact.answer));
-        for (const c of said) {
-          expect(Number.isInteger(c) && c >= 1 && c <= MAX_COUNT, label).toBe(true);
-        }
+        const said = counts(p).filter((c): c is number => c !== null);
+        check(said.at(-1) === Number(fact.answer), `last count ${said.at(-1)}`);
+        check(
+          said.every((c) => Number.isInteger(c) && c >= 1 && c <= MAX_COUNT),
+          'a count is out of range',
+        );
         const rising = way.startsWith('add') || way === 'sub-gap';
-        for (let i = 1; i < said.length; i++) {
-          expect(rising ? said[i] > said[i - 1] : said[i] < said[i - 1], label).toBe(true);
-        }
+        check(
+          said.every((c, i) => i === 0 || (rising ? c > said[i - 1] : c < said[i - 1])),
+          `counts do not ${rising ? 'rise' : 'fall'}`,
+        );
         const { a, b } = visual;
         const stepCount = way === 'add-make-ten' ? 3 : way === 'sub-gap' ? a - b + 1 : b + 1;
-        expect(p.steps.length, label).toBe(stepCount);
+        check(p.steps.length === stepCount, `${p.steps.length} steps, not ${stepCount}`);
         const critterCount =
           way === 'add-line' || way === 'sub-line'
             ? 1
             : way === 'add-join' || way === 'add-make-ten' || way === 'sub-gap'
               ? a + b
               : a;
-        expect(critters(p), label).toBe(critterCount);
-        expect(p.width, label).toBe(STAGE_W);
-        expect(p.height >= 120 && p.height <= 360, label).toBe(true);
+        check(critters(p) === critterCount, `${critters(p)} critters, not ${critterCount}`);
+        check(p.width === STAGE_W, 'width');
+        check(p.height >= 120 && p.height <= 360, `height ${p.height}`);
 
         for (let done = 0; done <= p.steps.length; done++) {
           for (const t of [0, 0.5, 1]) {
             const poses = p.at(done, t);
-            expect(poses.length, label).toBe(p.sprites.length);
+            check(poses.length === p.sprites.length, 'pose count');
             poses.forEach((pose, i) => {
-              for (const v of Object.values(pose)) expect(Number.isFinite(v), label).toBe(true);
+              check(Object.values(pose).every(Number.isFinite), `sprite ${i} not finite`);
               if (pose.opacity > 0.05) {
-                expect(pose.x >= 0 && pose.x <= STAGE_W, `${label} sprite ${i} x ${pose.x}`).toBe(
-                  true,
-                );
-                expect(pose.y >= 0 && pose.y <= p.height, `${label} sprite ${i} y ${pose.y}`).toBe(
-                  true,
-                );
+                check(pose.x >= 0 && pose.x <= STAGE_W, `sprite ${i} x ${pose.x}`);
+                check(pose.y >= 0 && pose.y <= p.height, `sprite ${i} y ${pose.y}`);
               }
             });
           }
           // Critters at rest never overlap.
           const rest = p.at(done, 0);
-          const visible = p.sprites
-            .map((s, i) => ({ s, pose: rest[i] }))
-            .filter(({ s, pose }) => s.type === 'critter' && pose.opacity > 0.05);
-          for (let i = 0; i < visible.length; i++) {
-            for (let j = i + 1; j < visible.length; j++) {
-              const size = (visible[i].s as { size: number }).size;
-              const d = Math.hypot(
-                visible[i].pose.x - visible[j].pose.x,
-                visible[i].pose.y - visible[j].pose.y,
-              );
-              expect(d, `${label} step ${done}`).toBeGreaterThanOrEqual(0.9 * (size / 0.8) - 0.01);
+          const seen: { x: number; y: number; size: number }[] = [];
+          p.sprites.forEach((sprite, i) => {
+            if (sprite.type !== 'critter' || rest[i].opacity <= 0.05) return;
+            for (const other of seen) {
+              const d = Math.hypot(rest[i].x - other.x, rest[i].y - other.y);
+              check(d >= 0.9 * (sprite.size / 0.8) - 0.01, `step ${done}: critters ${d} apart`);
             }
-          }
+            seen.push({ x: rest[i].x, y: rest[i].y, size: sprite.size });
+          });
         }
       }
     }
+    expect(problems).toEqual([]);
     expect(checked).toBeGreaterThan(100);
   });
 });
