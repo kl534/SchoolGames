@@ -22,12 +22,23 @@ afterEach(() => {
 const options = () => ({ random: seededRandom(5), store: memoryStore() });
 
 describe('createMissPicture', () => {
-  it('is null for a fact without a picture and for multiply and divide (M1)', () => {
+  it('is null for a fact without a picture', () => {
     expect(
       createMissPicture({ id: 'w', prompt: 'p', answer: 'a', statement: 's' }, options()),
     ).toBeNull();
-    expect(createMissPicture(mathFact('multiply', 7, 3), options())).toBeNull();
-    expect(createMissPicture(mathFact('divide', 12, 3), options())).toBeNull();
+  });
+
+  it('pictures times and divide facts, each miss in the next way', () => {
+    const store = memoryStore();
+    const times = mathFact('multiply', 7, 3);
+    const look = () => createMissPicture(times, { random: seededRandom(5), store })!.card.element;
+    const first = look();
+    expect(first.querySelector('.sg-pic-eq')?.textContent).toBe('7 × 3 = ?');
+    expect(look().innerHTML).not.toBe(first.innerHTML);
+    expect(readTurn('multiply', store)).toBe(2);
+    expect(readTurn('divide', store)).toBe(0);
+    expect(createMissPicture(mathFact('divide', 12, 3), { store })).not.toBeNull();
+    expect(readTurn('divide', store)).toBe(1);
   });
 
   it('shows the next way each time and keeps the turn per operation on the device', () => {
