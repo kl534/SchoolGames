@@ -37,6 +37,8 @@ export function buildDivide(visual: Divide, way: Way, looks: Looks): Picture {
 const PAD = 12;
 /** Space between a pile and what it is dealt into, in cells. */
 const PILE_GAP = 0.6;
+/** Seconds: a treat's flight to its plate (longer than MOVE, so each one reads as a throw). */
+const SHARE_MOVE = 0.35;
 
 /** The counts 1, 2 ... n: one step for each group made. */
 const countUp = (n: number, move?: number): Step[] => range(1, n).map((k) => ({ count: k, move }));
@@ -103,7 +105,7 @@ function share({ a, b }: Divide, looks: Looks): Picture {
   const pile = pileLayout(a, cell);
   const plateY = top + pile.height + 0.4 * cell + gridRows * cell + 0.2 * cell;
   const plateX = (i: number) => PAD + (i + 0.5) * pitch;
-  const builder = new PictureBuilder(countUp(n, 0.6));
+  const builder = new PictureBuilder(countUp(n, SHARE_MOVE));
   const rx = Math.min(0.48 * pitch, 0.5 * cols * cell + 0.3 * cell);
   for (let i = 0; i < b; i++) builder.add({ type: 'plate', rx, ry: 0.4 * cell }, plateX(i), plateY);
   const treats = range(0, a - 1).map((i) => {

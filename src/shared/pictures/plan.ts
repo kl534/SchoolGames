@@ -9,7 +9,7 @@ export const STAGE_W = 480;
 /** MAX_TABLE * MAX_TABLE; every count is 1..MAX_COUNT. */
 export const MAX_COUNT = 256;
 /** Seconds a step's move takes by default. */
-export const MOVE = 0.45;
+export const MOVE = 0.25;
 export const countSpeech = (n: number): string => `${n}.`;
 
 export type Sprite =
@@ -31,7 +31,7 @@ export interface Pose {
 }
 
 export interface Step {
-  /** Said with `countSpeech` when the step's move lands; null = a silent step. */
+  /** Said with `countSpeech` when the step's move starts; null = a silent step. */
   count: number | null;
   /** Replaces the equation line while this step is the latest, e.g. '8 + 2 = 10'. */
   caption?: string;
