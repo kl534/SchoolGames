@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { collectVoiceLines, voiceLinesByKey } from '../scripts/voice/lines';
 import { finalSpeech, inningSpeech, leadSpeech } from '../src/games/batter-up/rules';
 import voiceLines from '../src/shared/voice-lines.json';
+import { countSpeech, MAX_COUNT } from '../src/shared/pictures/plan';
 import { scoreSpeech } from '../src/shared/round';
 import { TAP_SPEECH } from '../src/shared/tapgate';
 import { normalizeSpeech, voiceKey } from '../src/shared/voice';
@@ -41,6 +42,12 @@ describe('collectVoiceLines', () => {
     ]) {
       expect(lines).toContain(line);
     }
+  });
+
+  it('has every number the miss pictures count, 1 to MAX_COUNT', async () => {
+    const lines = await collectVoiceLines();
+    expect(MAX_COUNT).toBe(256);
+    for (let n = 1; n <= MAX_COUNT; n++) expect(lines).toContain(countSpeech(n));
   });
 
   it('has no duplicates and no key collisions', async () => {

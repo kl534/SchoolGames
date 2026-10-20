@@ -10,6 +10,7 @@ vi.mock('../src/shared/audio', () => ({
 
 import { preloadSpeech, speak, stopSpeaking } from '../src/shared/audio';
 import { createTapFlow, type TapFlow } from '../src/shared/tapflow';
+import { mathFact } from '../src/shared/topics/math';
 
 function makeButtons(): HTMLButtonElement[] {
   return Array.from({ length: 4 }, () => {
@@ -24,7 +25,8 @@ let flow: TapFlow;
 let buttons: HTMLButtonElement[];
 
 beforeEach(() => {
-  vi.mocked(speak).mockClear();
+  localStorage.clear();
+  vi.mocked(speak).mockReset();
   vi.mocked(stopSpeaking).mockClear();
   buttons = makeButtons();
   flow = createTapFlow();
@@ -192,5 +194,129 @@ describe('tapflow', () => {
     flow.arm(buttons, 1);
     flow.dispose();
     expect(document.querySelector('.sg-tap-pointer')).toBeNull();
+  });
+});
+
+describe('tapflow with a picture', () => {
+  const sum = mathFact('add', 8, 5);
+  const spoken = () => vi.mocked(speak).mock.calls.map((call) => call[0]);
+  /** Runs frames; each line ends right after the frame it was spoken in. */
+  const play = (seconds: number, finish = true) => {
+    let ended = vi.mocked(speak).mock.calls.length - 1;
+    for (let t = 0; t < seconds; t += 0.05) {
+      flow.update(0.05);
+      const calls = vi.mocked(speak).mock.calls;
+      if (finish && calls.length - 1 > ended) {
+        ended = calls.length - 1;
+        calls[ended][1]?.();
+      }
+    }
+  };
+
+  it('shows the card in place of the caption, and reads lead, counts, then the fact', () => {
+    flow.reveal(buttons, ['13', '12', '14', '15'], sum, { lead: 'Out!', problem: 'ignored' });
+    const pointer = document.querySelector<HTMLElement>('.sg-tap-pointer')!;
+    expect(pointer.querySelector('.sg-pic-card')).not.toBeNull();
+    expect(pointer.querySelector('.sg-tap-caption')!.textContent).toBe('');
+    // The lead is being said; the counting waits for it.
+    expect(spoken()).toEqual(['Out!']);
+    vi.mocked(speak).mock.lastCall![1]!();
+    play(10);
+    expect(spoken()).toEqual([
+      'Out!',
+      '8.',
+      '9.',
+      '10.',
+      '11.',
+      '12.',
+      '13.',
+      '8 plus 5 equals 13.',
+    ]);
+  });
+
+  it('starts the reminders only after the statement', () => {
+    const onRead = vi.fn();
+    flow.reveal(buttons, ['13', '12', '14', '15'], sum, { onRead });
+    play(10, true);
+    // Counting is over; the last line (the statement) is now being said and has ended.
+    expect(onRead).toHaveBeenCalledTimes(1);
+    flow.update(NUDGE_FIRST);
+    expect(spoken().at(-1)).toBe(TAP_SPEECH);
+
+    flow.disarm();
+    vi.mocked(speak).mockClear();
+    const late = vi.fn();
+    flow.reveal(buttons, ['13', '12', '14', '15'], sum, { onRead: late });
+    // The lines never end: no reminder, however long.
+    play(30, false);
+    expect(late).not.toHaveBeenCalled();
+    expect(spoken()).not.toContain(TAP_SPEECH);
+  });
+
+  it('shows the next way for the next miss', () => {
+    flow.reveal(buttons, ['13', '12', '14', '15'], sum);
+    const first = document.querySelector('.sg-pic-card')!.innerHTML;
+    flow.disarm();
+    flow.reveal(buttons, ['13', '12', '14', '15'], sum);
+    expect(document.querySelector('.sg-pic-card')!.innerHTML).not.toBe(first);
+  });
+
+  it('a tap on green removes the card and silences the counting', () => {
+    flow.reveal(buttons, ['13', '12', '14', '15'], sum);
+    play(1);
+    const before = spoken().length;
+    expect(flow.tap(0)).toBe(true);
+    expect(stopSpeaking).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('.sg-pic-card')).toBeNull();
+    flow.update(5);
+    vi.mocked(speak).mock.lastCall?.[1]?.();
+    flow.update(5);
+    expect(spoken().length).toBe(before);
+  });
+
+  it('keeps the plain pill for picture: false and for a fact without a picture', () => {
+    flow.reveal(buttons, ['13', '12', '14', '15'], sum, { picture: false, problem: '8 + 5 = ?' });
+    expect(document.querySelector('.sg-pic-card')).toBeNull();
+    expect(document.querySelector('.sg-tap-caption')!.textContent).toBe('8 + 5 = ?');
+    expect(spoken()).toEqual(['8 plus 5 equals 13.']);
+
+    flow.disarm();
+    vi.mocked(speak).mockClear();
+    const word = { id: 'w', prompt: 'Spell it', answer: 'said', statement: 'said' };
+    flow.reveal(buttons, ['said', 'sed'], word, { problem: 'Spell it' });
+    expect(document.querySelector('.sg-pic-card')).toBeNull();
+    expect(document.querySelector('.sg-tap-caption')!.textContent).toBe('Spell it');
+    expect(spoken()).toEqual(['said']);
+  });
+
+  it('arm with a fact counts only once the game says it has read its lines', () => {
+    flow.arm(buttons, 0, [], sum);
+    expect(document.querySelector('.sg-pic-card')).not.toBeNull();
+    play(3);
+    expect(spoken()).toEqual([]);
+    flow.readFinished();
+    play(2);
+    expect(spoken().slice(0, 2)).toEqual(['8.', '9.']);
+    // The reminders wait for the end of the counting.
+    play(2, false);
+    flow.update(100);
+    expect(spoken()).not.toContain(TAP_SPEECH);
+    flow.disarm();
+    expect(document.querySelector('.sg-pic-card')).toBeNull();
+  });
+
+  it('arm with a fact that has no picture shows its prompt', () => {
+    const word = { id: 'w', prompt: 'Spell it', answer: 'said', statement: 'said' };
+    flow.arm(buttons, 0, [], word);
+    expect(document.querySelector('.sg-tap-caption')!.textContent).toBe('Spell it');
+    flow.readFinished();
+    flow.update(NUDGE_FIRST);
+    expect(speak).toHaveBeenLastCalledWith(TAP_SPEECH);
+  });
+
+  it('holds while the game passes no time', () => {
+    flow.reveal(buttons, ['13', '12', '14', '15'], sum);
+    for (let i = 0; i < 100; i++) flow.update(0);
+    expect(spoken()).toEqual([]);
   });
 });

@@ -348,3 +348,127 @@ describe('pulse cap', () => {
     expect(buttons[0].style.getPropertyValue('--sg-tap-cap')).toBe('');
   });
 });
+
+describe('card', () => {
+  function withCard(
+    buttonRect: DOMRect,
+    { avoid = [] as HTMLElement[], pointerHeight = 200 } = {},
+  ) {
+    const buttons = makeButtons();
+    vi.spyOn(buttons[0], 'getBoundingClientRect').mockReturnValue(buttonRect);
+    const marks = createTapMarks();
+    const pointer = document.querySelector<HTMLElement>('.sg-tap-pointer')!;
+    vi.spyOn(pointer, 'getBoundingClientRect').mockReturnValue(rect(0, 0, 300, pointerHeight));
+    const card = { element: document.createElement('div'), fit: vi.fn() };
+    card.element.className = 'test-card';
+    marks.show(buttons, 0, avoid, '7 × 3 = ?', card);
+    return { marks, pointer, card, buttons };
+  }
+
+  it('takes the places of the caption, and the caption comes back after clear', () => {
+    const { marks, pointer, card } = withCard(rect(150, 700, 90, 72));
+    const caption = pointer.querySelector<HTMLElement>('.sg-tap-caption')!;
+    expect(caption.hidden).toBe(true);
+    expect(caption.textContent).toBe('');
+    expect(pointer.contains(card.element)).toBe(true);
+    expect(pointer.classList.contains('sg-tap-has-card')).toBe(true);
+    marks.clear();
+    expect(pointer.contains(card.element)).toBe(false);
+    expect(pointer.classList.contains('sg-tap-has-card')).toBe(false);
+    marks.show(makeButtons(), 0, [], '7 × 3 = ?');
+    expect(caption.hidden).toBe(false);
+    expect(caption.textContent).toBe('7 × 3 = ?');
+  });
+
+  it('sits above the answer with the biggest room, finger under it', () => {
+    const { pointer, card } = withCard(rect(150, 700, 90, 72));
+    // 700 - 6 - 40 (finger) - 76 (top limit) = 578, held to 380.
+    expect(card.fit).toHaveBeenCalledWith(374, 380);
+    expect(parseFloat(pointer.style.top)).toBe(700 - 6 - 200);
+    expect(pointer.classList.contains('sg-tap-below')).toBe(false);
+  });
+
+  it('only fits again when the room changes', () => {
+    const { marks, card } = withCard(rect(150, 700, 90, 72));
+    marks.update();
+    marks.update();
+    expect(card.fit).toHaveBeenCalledTimes(1);
+    setViewport(320, 600);
+    marks.update();
+    expect(card.fit).toHaveBeenCalledTimes(2);
+    expect(card.fit).toHaveBeenLastCalledWith(304, 360);
+  });
+
+  it('keeps below a banner that ends above the answer', () => {
+    const banner = document.createElement('div');
+    document.body.appendChild(banner);
+    vi.spyOn(banner, 'getBoundingClientRect').mockReturnValue(rect(0, 0, 390, 300));
+    const { card } = withCard(rect(150, 700, 90, 72), { avoid: [banner] });
+    // 700 - 6 - 40 - (300 + 6) = 348.
+    expect(card.fit).toHaveBeenCalledWith(374, 348);
+  });
+
+  it('ignores a banner beside the card or one that is not above the answer', () => {
+    const aside = document.createElement('div');
+    document.body.appendChild(aside);
+    vi.spyOn(aside, 'getBoundingClientRect').mockReturnValue(rect(0, 0, 4, 300));
+    const over = document.createElement('div');
+    document.body.appendChild(over);
+    vi.spyOn(over, 'getBoundingClientRect').mockReturnValue(rect(0, 650, 390, 120));
+    const { card } = withCard(rect(150, 700, 90, 72), { avoid: [aside, over] });
+    expect(card.fit).toHaveBeenCalledWith(374, 380);
+  });
+
+  it('goes below when there is more room there, finger above it', () => {
+    const { pointer, card } = withCard(rect(150, 100, 90, 72));
+    // Above: 100 - 6 - 40 - 76 = -22. Below: 844 - 8 - (172 + 6 + 40) = 618, held to 380.
+    expect(card.fit).toHaveBeenCalledWith(374, 380);
+    expect(parseFloat(pointer.style.top)).toBe(172 + 6);
+    expect(pointer.classList.contains('sg-tap-below')).toBe(true);
+  });
+
+  it('stays above in a short window when that is at least as roomy', () => {
+    setViewport(844, 390);
+    const { card, pointer } = withCard(rect(300, 300, 120, 60), { pointerHeight: 150 });
+    // 300 - 6 - 40 - 76 = 178; below only 390 - 8 - (360 + 46) < 0.
+    expect(card.fit).toHaveBeenCalledWith(480, 178);
+    expect(parseFloat(pointer.style.top)).toBe(300 - 6 - 150);
+  });
+
+  it('slides the card off a banner at its upper right; the finger stays over the button', () => {
+    const banner = document.createElement('div');
+    document.body.appendChild(banner);
+    vi.spyOn(banner, 'getBoundingClientRect').mockReturnValue(rect(280, 520, 100, 70));
+    const buttons = makeButtons();
+    vi.spyOn(buttons[0], 'getBoundingClientRect').mockReturnValue(rect(150, 700, 90, 72));
+    const marks = createTapMarks();
+    const pointer = document.querySelector<HTMLElement>('.sg-tap-pointer')!;
+    vi.spyOn(pointer, 'getBoundingClientRect').mockReturnValue(rect(0, 0, 240, 200));
+    const card = { element: document.createElement('div'), fit: vi.fn() };
+    vi.spyOn(card.element, 'getBoundingClientRect').mockReturnValue(rect(0, 0, 240, 160));
+    marks.show(buttons, 0, [banner], undefined, card);
+    // The pointer stays centred on the button (195), so the finger does too.
+    const left = parseFloat(pointer.style.left);
+    expect(left + 120).toBe(195);
+    const shift = parseFloat(card.element.style.translate);
+    expect(shift).toBeLessThan(0);
+    // The card (240 wide, 160 tall, above the finger) now ends before the banner starts.
+    expect(left + shift + 240).toBeLessThanOrEqual(280);
+    expect(left + shift).toBeGreaterThanOrEqual(8);
+    // The finger is still well inside the card.
+    expect(195).toBeGreaterThanOrEqual(left + shift + 28);
+    // A banner that is not in the way leaves the card centred.
+    vi.spyOn(banner, 'getBoundingClientRect').mockReturnValue(rect(280, 100, 100, 70));
+    marks.update();
+    expect(card.element.style.translate).toBe('');
+  });
+
+  it('shrinks the card when no slide clears the banner, never below 110', () => {
+    const banner = document.createElement('div');
+    document.body.appendChild(banner);
+    vi.spyOn(banner, 'getBoundingClientRect').mockReturnValue(rect(0, 400, 390, 100));
+    const { card } = withCard(rect(150, 700, 90, 72), { avoid: [banner] });
+    const heights = card.fit.mock.calls.map((call) => call[1]);
+    expect(Math.min(...heights)).toBeGreaterThanOrEqual(110);
+  });
+});
