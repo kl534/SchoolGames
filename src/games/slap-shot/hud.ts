@@ -1,6 +1,5 @@
 import { fillAnswers, lockAnswers, markAnswers } from '../../shared/answers';
 import type { Rect } from './layout';
-import type { Puck, Zone } from './rules';
 import type { Team } from './teams';
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -16,12 +15,6 @@ function el<K extends keyof HTMLElementTagNameMap>(
 
 const hex = (color: number) => `#${color.toString(16).padStart(6, '0')}`;
 
-/** White or dark text, whichever shows against a colour. */
-function inkFor(color: number): string {
-  const luma = ((color >> 16) & 255) * 0.3 + ((color >> 8) & 255) * 0.59 + (color & 255) * 0.11;
-  return luma > 150 ? '#14213d' : '#ffffff';
-}
-
 export interface BugInfo {
   us: Team;
   them: Team;
@@ -31,7 +24,6 @@ export interface BugInfo {
   period: string;
   /** "12:24". */
   clock: string;
-  puck: Puck;
   /** In the shootout: the shots so far (true = goal), 3 dots a side or more. */
   shots: { us: boolean[]; them: boolean[] } | null;
 }
@@ -66,12 +58,6 @@ export interface Hud {
   readonly avoid: readonly HTMLElement[];
 }
 
-const ZONES: { zone: Zone; label: string }[] = [
-  { zone: 'our-end', label: 'OUR END' },
-  { zone: 'neutral', label: 'NEUTRAL' },
-  { zone: 'their-end', label: 'THEIR END' },
-];
-
 export function createHud(): Hud {
   const bug = el('div', 'ss-bug', document.body);
   const board = el('div', 'ss-board', bug);
@@ -85,12 +71,6 @@ export function createHud(): Hud {
   const themPts = el('b', 'ss-pts', themBox);
   const periodText = el('span', 'ss-period', board);
   const clockText = el('span', 'ss-clock', board);
-  const strip = el('div', 'ss-strip', bug);
-  const cells = ZONES.map(({ label }) => {
-    const cell = el('div', 'ss-cell', strip);
-    el('span', 'ss-cell-text', cell).textContent = label;
-    return cell;
-  });
   const shootout = el('div', 'ss-shootout', bug);
   shootout.hidden = true;
 
@@ -184,7 +164,6 @@ export function createHud(): Hud {
       periodText.textContent = info.period;
       clockText.textContent = info.clock;
       const inShootout = info.shots !== null;
-      strip.hidden = inShootout;
       shootout.hidden = !inShootout;
       if (info.shots) {
         const total = Math.max(3, info.shots.us.length, info.shots.them.length);
@@ -201,22 +180,6 @@ export function createHud(): Hud {
         shootout.replaceChildren();
         row(info.us, info.shots.us);
         row(info.them, info.shots.them);
-      } else {
-        const faceoff = info.puck.kind === 'faceoff';
-        ZONES.forEach(({ zone, label }, i) => {
-          const cell = cells[i];
-          const here = info.puck.zone === zone;
-          const owner =
-            info.puck.kind === 'held' ? (info.puck.side === 'us' ? info.us : info.them) : null;
-          cell.classList.toggle('on', here && !faceoff);
-          cell.classList.toggle('faceoff', here && faceoff);
-          cell.style.background = here && owner ? hex(owner.jersey) : '';
-          cell.style.color = here && owner ? inkFor(owner.jersey) : '';
-          const text = cell.querySelector('.ss-cell-text');
-          if (text) text.textContent = here && faceoff ? 'FACEOFF' : label;
-          cell.querySelector('.ss-puckdot')?.remove();
-          if (here) el('i', 'ss-puckdot', cell);
-        });
       }
       bug.setAttribute(
         'aria-label',

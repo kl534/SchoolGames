@@ -240,7 +240,6 @@ function run(session: GameSession): void {
       themGoals: shown.them,
       period: periodShort(shown.period),
       clock: clockText(shown.clock),
-      puck: shown.puck,
       shots: shown.period === SHOOTOUT_PERIOD ? dots : null,
     });
   };
