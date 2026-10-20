@@ -221,7 +221,7 @@ describe('tapflow with a picture', () => {
     // The lead is being said; the counting waits for it.
     expect(spoken()).toEqual(['Out!']);
     vi.mocked(speak).mock.lastCall![1]!();
-    play(10);
+    play(4);
     expect(spoken()).toEqual([
       'Out!',
       '8.',
