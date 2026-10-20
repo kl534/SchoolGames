@@ -456,6 +456,32 @@ export const sfx = {
       noise(ctx, 'lowpass', 1800, 260, t, 0.13, 0.9);
       tone(ctx, 'sine', 180, 65, t, 0.16, 0.9);
     }),
+  /** A goal horn: two detuned sawtooth tones held for 1.8 s, over a crowd roar. */
+  horn: () =>
+    play((ctx, t) => {
+      tone(ctx, 'sawtooth', 180, 180, t, 1.8, 0.22);
+      tone(ctx, 'sawtooth', 183, 183, t, 1.8, 0.22);
+      crowd(ctx, t, 2.4, 0.5);
+    }),
+  /** A stick on a puck: a sharp click and a crack. */
+  slap: (volume = 1) =>
+    play((ctx, t) => {
+      noise(ctx, 'highpass', 3800, 2400, t, 0.05, 0.8 * volume);
+      tone(ctx, 'square', 2100, 500, t, 0.05, 0.16 * volume);
+      tone(ctx, 'sine', 320, 140, t, 0.08, 0.4 * volume);
+    }),
+  /** A body check into the boards: low noise over a 90 Hz thump. */
+  thud: () =>
+    play((ctx, t) => {
+      noise(ctx, 'lowpass', 900, 150, t, 0.25, 0.9);
+      tone(ctx, 'sine', 90, 50, t, 0.3, 0.9);
+    }),
+  /** The crowd's let-down when the other side scores: falling crowd noise. */
+  aww: () =>
+    play((ctx, t) => {
+      crowd(ctx, t, 1.2, 0.4);
+      tone(ctx, 'triangle', 330, 180, t, 1.0, 0.12);
+    }),
   /** A crowd cheering for a hit. */
   cheer: () =>
     play((ctx, t) => {

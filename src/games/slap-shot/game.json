@@ -1,0 +1,8 @@
+{
+  "id": "slap-shot",
+  "title": "Slap Shot",
+  "description": "Play a full hockey game — answer right to pass, deke and score, and check them off the puck!",
+  "thumbnail": "thumbnail.svg",
+  "tags": ["sports", "3d"],
+  "scoring": "score"
+}
