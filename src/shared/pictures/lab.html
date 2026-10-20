@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>Miss pictures lab</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #1b2340;
+        color: #fff;
+        font-family: system-ui, sans-serif;
+        overflow: hidden;
+      }
+      #bar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 56px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #2b3560;
+        font-size: 28px;
+        font-weight: 800;
+      }
+      #answers {
+        position: fixed;
+        left: 8px;
+        right: 8px;
+        bottom: 12px;
+        display: grid;
+        gap: 10px;
+        grid-template-columns: repeat(4, 1fr);
+      }
+      #answers.grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      #answers button {
+        height: 64px;
+        border: 0;
+        border-radius: 16px;
+        background: #ffd23f;
+        color: #1b2340;
+        font-size: 28px;
+        font-weight: 800;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="bar"></div>
+    <div id="answers"></div>
+    <script type="module" src="./lab.ts"></script>
+  </body>
+</html>

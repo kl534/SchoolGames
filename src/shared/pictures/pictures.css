@@ -32,8 +32,8 @@
 
 .sg-pic-count {
   position: absolute;
-  top: 16px;
-  right: 18px;
+  top: -14px;
+  right: -8px;
   display: flex;
   align-items: center;
   justify-content: center;

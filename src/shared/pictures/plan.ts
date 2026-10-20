@@ -282,7 +282,7 @@ export function drawNumberLine(builder: PictureBuilder, lo: number, hi: number):
   const alternate = gap < 34;
   values.forEach((v, i) => {
     const x = xOf(v);
-    builder.add({ type: 'line', dx: 0, dy: 12, width: 3, color }, x, y - 6);
+    builder.add({ type: 'line', dx: 0, dy: 10, width: 3, color }, x, y);
     const drop = alternate && i % 2 === 1 ? 22 : 0;
     builder.add({ type: 'text', text: String(v), size: 18, color: '#fff' }, x, y + 26 + drop);
   });

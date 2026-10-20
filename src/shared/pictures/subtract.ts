@@ -53,10 +53,19 @@ function takeAway({ a, b }: Subtract, looks: Looks): Picture {
     const index = a - k;
     const { x, y } = gridSlot(index, 5, cell, left, top);
     builder.move(ids[index], k + 1, { x: exit, opacity: 0 }, { arc: 8 });
-    const wave = builder.add({ type: 'text', text: '👋', size: 0.6 * cell }, x, y - 0.7 * cell, {
-      opacity: 0,
-    });
-    builder.move(wave, k + 1, { x: exit, opacity: 0 }, { from: { opacity: 1 }, arc: 8 });
+    // The hand waves from just above and behind the runner, and leaves with it.
+    const wave = builder.add(
+      { type: 'text', text: '👋', size: 0.6 * cell },
+      x + 0.55 * cell,
+      y - 0.5 * cell,
+      { opacity: 0 },
+    );
+    builder.move(
+      wave,
+      k + 1,
+      { x: exit + 0.55 * cell, opacity: 0 },
+      { from: { opacity: 1 }, arc: 8 },
+    );
   }
   return builder.build('sub-take-away', height);
 }
