@@ -434,4 +434,41 @@ describe('card', () => {
     expect(card.fit).toHaveBeenCalledWith(480, 178);
     expect(parseFloat(pointer.style.top)).toBe(300 - 6 - 150);
   });
+
+  it('slides the card off a banner at its upper right; the finger stays over the button', () => {
+    const banner = document.createElement('div');
+    document.body.appendChild(banner);
+    vi.spyOn(banner, 'getBoundingClientRect').mockReturnValue(rect(280, 520, 100, 70));
+    const buttons = makeButtons();
+    vi.spyOn(buttons[0], 'getBoundingClientRect').mockReturnValue(rect(150, 700, 90, 72));
+    const marks = createTapMarks();
+    const pointer = document.querySelector<HTMLElement>('.sg-tap-pointer')!;
+    vi.spyOn(pointer, 'getBoundingClientRect').mockReturnValue(rect(0, 0, 240, 200));
+    const card = { element: document.createElement('div'), fit: vi.fn() };
+    vi.spyOn(card.element, 'getBoundingClientRect').mockReturnValue(rect(0, 0, 240, 160));
+    marks.show(buttons, 0, [banner], undefined, card);
+    // The pointer stays centred on the button (195), so the finger does too.
+    const left = parseFloat(pointer.style.left);
+    expect(left + 120).toBe(195);
+    const shift = parseFloat(card.element.style.translate);
+    expect(shift).toBeLessThan(0);
+    // The card (240 wide, 160 tall, above the finger) now ends before the banner starts.
+    expect(left + shift + 240).toBeLessThanOrEqual(280);
+    expect(left + shift).toBeGreaterThanOrEqual(8);
+    // The finger is still well inside the card.
+    expect(195).toBeGreaterThanOrEqual(left + shift + 28);
+    // A banner that is not in the way leaves the card centred.
+    vi.spyOn(banner, 'getBoundingClientRect').mockReturnValue(rect(280, 100, 100, 70));
+    marks.update();
+    expect(card.element.style.translate).toBe('');
+  });
+
+  it('shrinks the card when no slide clears the banner, never below 110', () => {
+    const banner = document.createElement('div');
+    document.body.appendChild(banner);
+    vi.spyOn(banner, 'getBoundingClientRect').mockReturnValue(rect(0, 400, 390, 100));
+    const { card } = withCard(rect(150, 700, 90, 72), { avoid: [banner] });
+    const heights = card.fit.mock.calls.map((call) => call[1]);
+    expect(Math.min(...heights)).toBeGreaterThanOrEqual(110);
+  });
 });

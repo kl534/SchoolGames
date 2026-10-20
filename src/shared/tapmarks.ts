@@ -48,6 +48,8 @@ const CARD_TOP = 70;
 const CARD_MIN_ROOM = 110;
 const CARD_MAX_ROOM = 380;
 const CARD_MAX_WIDTH = 480;
+/** A card slid sideways keeps the finger at least this far inside its edge. */
+const CARD_FINGER_INSET = 28;
 
 /** Do two rectangles share any area (a hair of overlap is ignored)? */
 function overlaps(a: Rect, b: Rect): boolean {
@@ -99,6 +101,7 @@ export function createTapMarks(container: HTMLElement = document.body): TapMarks
   let lastTop = '';
   let card: TapCard | undefined;
   let lastFit = '';
+  let shrunk: { key: string; height: number } | undefined;
 
   const setFinger = (below: boolean) => {
     if (shownBelow === below) return;
@@ -136,6 +139,7 @@ export function createTapMarks(container: HTMLElement = document.body): TapMarks
     card?.element.remove();
     card = undefined;
     lastFit = '';
+    shrunk = undefined;
     caption.hidden = false;
     pointer.classList.remove('sg-tap-has-card');
     pointer.hidden = true;
@@ -194,21 +198,73 @@ export function createTapMarks(container: HTMLElement = document.body): TapMarks
     const maxHeight = Math.round(
       Math.min(Math.max(room, CARD_MIN_ROOM), Math.min(CARD_MAX_ROOM, viewH * 0.6)),
     );
-    const fit = `${width}x${maxHeight}`;
+    // A card that had to shrink to clear a banner keeps its size while the room stays the same.
+    const key = `${width}x${maxHeight}`;
+    const wanted = shrunk && shrunk.key === key ? shrunk.height : maxHeight;
+    const fit = `${width}x${wanted}`;
     if (fit !== lastFit) {
       lastFit = fit;
-      activeCard.fit(width, maxHeight);
+      activeCard.fit(width, wanted);
     }
     const own = pointer.getBoundingClientRect();
     const left = Math.min(
       Math.max(button.left + button.width / 2 - own.width / 2, EDGE),
       Math.max(viewW - own.width - EDGE, EDGE),
     );
+    const top = above ? button.top - GAP - own.height : button.bottom + GAP;
     setFinger(!above);
-    place(
-      `${Math.round(left)}px`,
-      `${Math.round(above ? button.top - GAP - own.height : button.bottom + GAP)}px`,
+    place(`${Math.round(left)}px`, `${Math.round(top)}px`);
+
+    // Slide the card (not the finger) sideways off the banner and the question.
+    const blockers = avoid
+      .map((node) => node.getBoundingClientRect())
+      .filter((r) => r.width > 0 && r.height > 0);
+    const box = activeCard.element.getBoundingClientRect();
+    const cardW = box.width || own.width;
+    const cardH = box.height || Math.max(own.height - fingerHeight, 0);
+    const cardLeft = left + (own.width - cardW) / 2;
+    const cardTop = above ? top : top + own.height - cardH;
+    const overlapAt = (dx: number) => {
+      let area = 0;
+      for (const r of blockers) {
+        const w = Math.min(cardLeft + dx + cardW, r.right) - Math.max(cardLeft + dx, r.left);
+        const h = Math.min(cardTop + cardH, r.bottom) - Math.max(cardTop, r.top);
+        if (w > 0 && h > 0) area += w * h;
+      }
+      return area;
+    };
+    // The finger's centre stays this far inside the card at each side.
+    const fingerX = left + own.width / 2;
+    const lowest = Math.max(EDGE - cardLeft, fingerX + CARD_FINGER_INSET - (cardLeft + cardW));
+    const highest = Math.min(
+      viewW - EDGE - (cardLeft + cardW),
+      fingerX - CARD_FINGER_INSET - cardLeft,
     );
+    let shift = 0;
+    let least = overlapAt(0);
+    if (least > 0) {
+      for (let dx = Math.ceil(lowest); dx <= highest; dx += 2) {
+        const area = overlapAt(dx);
+        if (area < least || (area === least && Math.abs(dx) < Math.abs(shift))) {
+          least = area;
+          shift = dx;
+        }
+      }
+    }
+    activeCard.element.style.translate = shift === 0 ? '' : `${shift}px 0`;
+    if (least > 0 && above && wanted > CARD_MIN_ROOM && !shrunk) {
+      // No offset clears it: shrink the card from the top, to no less than the minimum.
+      const clearTop = Math.max(
+        ...blockers
+          .filter((r) => r.bottom > cardTop && r.top < cardTop + cardH)
+          .map((r) => r.bottom),
+      );
+      const height = Math.max(Math.round(wanted - (clearTop + 4 - cardTop)), CARD_MIN_ROOM);
+      if (height < wanted) {
+        shrunk = { key, height };
+        update();
+      }
+    }
   };
 
   const update = () => {
