@@ -856,7 +856,7 @@ function theirPuckPlay(
   const X = ZONE_X['our-end'];
   if (kind === 'body-check' || kind === 'poke-check') {
     const hit = kind === 'body-check';
-    const tt = T(hit ? 0.3 : 0.35);
+    const tt = T(hit ? 0.22 : 0.3);
     const tc = b.pos('tC', tt);
     const reach = hit ? 0.9 : 1.3;
     b.path('uC', [tt, tc.x - reach, tc.z + 0.3]);
@@ -867,7 +867,7 @@ function theirPuckPlay(
     } else {
       b.event(tt, 'steal', 'uC');
     }
-    b.sendTo('uC', tt, T(hit ? 0.8 : 0.75));
+    b.sendTo('uC', tt, T(hit ? 0.75 : 0.72));
     b.finishPuck(E.carrier);
     return b.build();
   }

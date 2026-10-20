@@ -1,0 +1,562 @@
+.ss-bug,
+.ss-hud,
+.ss-answers,
+.ss-banner {
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  color: #fff;
+}
+
+/* The scorebug, top centre: goals, period and clock, with the zone strip under it. */
+.ss-bug {
+  position: fixed;
+  top: calc(max(12px, env(safe-area-inset-top)) + 58px);
+  left: 50%;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: min(330px, calc(100vw - 24px));
+  box-sizing: border-box;
+  padding: 6px 10px 8px;
+  transform: translateX(-50%);
+  border-radius: 16px;
+  background: rgba(12, 28, 56, 0.82);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  pointer-events: none;
+}
+
+.ss-board {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.ss-team {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ss-chip {
+  display: block;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  border: 2px solid #fff;
+}
+
+.ss-abbr {
+  color: #c4d8f5;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.ss-pts {
+  min-width: 14px;
+  color: #ffe066;
+  font-size: 24px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.ss-pts.on {
+  animation: ss-score 0.35s ease-out;
+}
+
+@keyframes ss-score {
+  0% {
+    transform: scale(1.6);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.ss-period {
+  color: #ffd23f;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.ss-clock {
+  font-size: 17px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Three zones; the puck's is filled in the colour of whoever has it. */
+.ss-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  height: 18px;
+}
+
+.ss-strip[hidden],
+.ss-shootout[hidden],
+.ss-hud[hidden],
+.ss-answers[hidden],
+.ss-answer[hidden],
+.ss-banner[hidden],
+.ss-banner-detail[hidden],
+.ss-ring[hidden] {
+  display: none;
+}
+
+.ss-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #a9c8f5;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.ss-cell.on {
+  border: 2px solid rgba(255, 255, 255, 0.7);
+}
+
+.ss-cell.faceoff {
+  border: 2px solid #fff;
+  color: #fff;
+}
+
+.ss-puckdot {
+  position: absolute;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #0b0b0d;
+  border: 1.5px solid #fff;
+}
+
+.ss-shootout {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.ss-so-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 18px;
+}
+
+.ss-so-name {
+  width: 38px;
+  color: #c4d8f5;
+}
+
+.ss-so-dot.goal {
+  color: #5cf2b0;
+}
+
+.ss-so-dot.miss {
+  color: #ff8787;
+}
+
+/* The question, under the scorebug on a tall screen. */
+.ss-hud {
+  position: fixed;
+  top: calc(max(12px, env(safe-area-inset-top)) + 58px + 86px);
+  left: 50%;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: max-content;
+  max-width: min(680px, calc(100vw - 24px));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.ss-problem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 14px;
+  border-radius: 20px;
+  background: rgba(12, 28, 56, 0.88);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  pointer-events: auto;
+}
+
+.ss-problem-text {
+  font-size: clamp(26px, 6.5vmin, 52px);
+  font-weight: 800;
+  text-wrap: balance;
+}
+
+.ss-hud.calling .ss-problem-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.15;
+}
+
+.ss-call-title {
+  color: #ffa8a8;
+  font-size: clamp(20px, 5vmin, 40px);
+  font-weight: 900;
+}
+
+.ss-call-statement {
+  font-size: clamp(22px, 5.4vmin, 44px);
+}
+
+.ss-hear {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* The answer clock: a ring that empties, with the seconds in it. */
+.ss-ring {
+  --p: 360deg;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: conic-gradient(#ffd23f var(--p), rgba(255, 255, 255, 0.18) 0);
+  position: relative;
+}
+
+.ss-ring::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: #0c1c38;
+}
+
+.ss-ring-text {
+  position: relative;
+  font-size: 20px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.ss-ring.urgent {
+  animation: ss-pulse 0.5s ease-in-out infinite alternate;
+  background: conic-gradient(#ff5a4d var(--p), rgba(255, 255, 255, 0.18) 0);
+}
+
+@keyframes ss-pulse {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.15);
+  }
+}
+
+/* The four answers along the bottom: two rows of two on a narrow phone. */
+.ss-answers {
+  position: fixed;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 50%;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  width: min(760px, calc(100vw - 24px));
+  transform: translateX(-50%);
+}
+
+@media (max-width: 560px) and (max-aspect-ratio: 6/5) {
+  .ss-answers {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.ss-answer {
+  min-width: 0;
+  height: 72px;
+  padding: 0 8px;
+  border: 3px solid #9cc2ff;
+  border-radius: 20px;
+  background: linear-gradient(#2f66d0, #1c3f96);
+  color: #fff;
+  font:
+    800 clamp(26px, 6vmin, 40px) system-ui,
+    sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 6px 18px rgba(4, 12, 40, 0.5);
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    opacity 0.3s;
+}
+
+@media (max-width: 560px) and (max-aspect-ratio: 6/5), (max-height: 460px) {
+  .ss-answer {
+    height: 64px;
+  }
+}
+
+.ss-answer:active:not([aria-disabled='true']) {
+  scale: 0.96;
+}
+
+.ss-answer:focus-visible {
+  outline: 4px solid #ffd43b;
+  outline-offset: 2px;
+}
+
+.ss-answer[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.ss-answer.chosen {
+  opacity: 1;
+  border-color: #fff;
+}
+
+.ss-answer.right {
+  opacity: 1;
+  border-color: #1b6b2b;
+  background: #5cf2b0;
+  color: #0c3a1d;
+  box-shadow:
+    0 0 0 5px rgba(92, 242, 176, 0.5),
+    0 0 26px 8px rgba(92, 242, 176, 0.7);
+}
+
+.ss-answer.wrong {
+  opacity: 1;
+  border-color: #8c1d1d;
+  background: #ff8787;
+  color: #4a0c0c;
+}
+
+.ss-answer.gone {
+  opacity: 0.25;
+}
+
+/* The name of a play, in the middle of the rink. */
+.ss-banner {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  max-width: min(92vw, 680px);
+  padding: 8px 24px;
+  border-radius: 22px;
+  background: rgba(12, 28, 56, 0.88);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: ss-pop 0.35s ease-out;
+}
+
+.ss-banner-title {
+  font-size: clamp(30px, 8.5vmin, 60px);
+  font-weight: 900;
+  line-height: 1.1;
+  color: #ffe066;
+}
+
+.ss-banner.good {
+  background: rgba(14, 84, 52, 0.9);
+  border-color: #5cf2b0;
+}
+
+.ss-banner.good .ss-banner-title {
+  color: #b9ffd8;
+}
+
+.ss-banner.miss .ss-banner-title {
+  color: #ffa8a8;
+}
+
+.ss-banner-detail {
+  font-size: clamp(22px, 5.4vmin, 40px);
+  font-weight: 800;
+}
+
+@keyframes ss-pop {
+  from {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Wide screens: the scorebug sits at the top centre between the corner buttons, and the
+   question goes top left under the Menu button. */
+@media (min-aspect-ratio: 6/5) {
+  .ss-bug {
+    top: max(8px, env(safe-area-inset-top));
+  }
+
+  .ss-hud {
+    top: calc(max(12px, env(safe-area-inset-top)) + 58px);
+    left: max(12px, env(safe-area-inset-left));
+    max-width: min(380px, 36vw);
+    transform: none;
+    align-items: flex-start;
+  }
+}
+
+/* A phone on its side: little height, so everything shrinks to leave the rink the middle. */
+@media (max-height: 380px) and (min-aspect-ratio: 6/5) {
+  .ss-bug {
+    top: max(4px, env(safe-area-inset-top));
+    gap: 2px;
+    padding: 3px 8px 4px;
+    width: min(270px, 40vw);
+    border-radius: 12px;
+    border-width: 1.5px;
+  }
+
+  .ss-pts {
+    font-size: 19px;
+  }
+
+  .ss-abbr,
+  .ss-period {
+    font-size: 12px;
+  }
+
+  .ss-clock {
+    font-size: 14px;
+  }
+
+  .ss-chip {
+    width: 11px;
+    height: 11px;
+  }
+
+  .ss-strip {
+    height: 14px;
+  }
+
+  .ss-cell {
+    font-size: 8px;
+  }
+
+  .ss-so-row {
+    height: 14px;
+  }
+
+  .ss-hud {
+    top: calc(max(8px, env(safe-area-inset-top)) + 48px);
+    max-width: min(300px, 34vw);
+  }
+
+  .ss-problem {
+    gap: 8px;
+    padding: 0 4px 0 12px;
+    border-radius: 16px;
+  }
+
+  .ss-problem-text {
+    font-size: clamp(20px, 7vmin, 30px);
+  }
+
+  .ss-call-title {
+    font-size: clamp(16px, 5vmin, 24px);
+  }
+
+  .ss-call-statement {
+    font-size: clamp(16px, 5vmin, 24px);
+  }
+
+  .ss-ring {
+    width: 38px;
+    height: 38px;
+  }
+
+  .ss-ring-text {
+    font-size: 17px;
+  }
+
+  .ss-hear {
+    width: 48px;
+    height: 48px;
+    font-size: 22px;
+  }
+
+  .ss-answers {
+    bottom: max(8px, env(safe-area-inset-bottom));
+    gap: 8px;
+  }
+
+  .ss-answer {
+    height: 56px;
+    border-width: 2px;
+    border-radius: 16px;
+    font-size: clamp(22px, 7vmin, 30px);
+  }
+
+  .ss-banner-title {
+    font-size: clamp(24px, 9vmin, 36px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ss-banner,
+  .ss-ring.urgent,
+  .ss-pts.on {
+    animation: none;
+  }
+}
+
+/* The quick fade to the faceoff formation after a goal. */
+.ss-fade {
+  position: fixed;
+  inset: 0;
+  z-index: 11;
+  background: #05080f;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s linear;
+}
+
+.ss-fade.on {
+  opacity: 1;
+}

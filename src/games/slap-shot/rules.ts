@@ -101,6 +101,8 @@ export type PeriodEnd = 'period' | 'regulation-tied' | 'overtime-tied' | 'final'
 
 export interface StepResult {
   state: GameState;
+  /** The puck right after the play, before a period end puts it back at the centre dot. */
+  after: Puck;
   play: PlayKind;
   goal: Side | null;
   periodEnd: PeriodEnd | null;
@@ -265,7 +267,13 @@ export function step(
     them: state.them + (outcome.goal === 'them' ? 1 : 0),
   };
   const end = endOfPlay(next, outcome.goal);
-  return { state: end.state, play: outcome.play, goal: outcome.goal, periodEnd: end.end };
+  return {
+    state: end.state,
+    after: outcome.puck,
+    play: outcome.play,
+    goal: outcome.goal,
+    periodEnd: end.end,
+  };
 }
 
 // ---------- The shootout ----------
@@ -314,7 +322,7 @@ export function shootoutStep(state: GameState, right: boolean): StepResult {
     : { ...after, shooter: 'us', round: so.round + 1 };
   const winner = shootoutDecided(next);
   if (!winner) {
-    return { state: { ...state, shootout: next }, play, goal, periodEnd: null };
+    return { state: { ...state, shootout: next }, after: state.puck, play, goal, periodEnd: null };
   }
   return {
     state: {
@@ -325,6 +333,7 @@ export function shootoutStep(state: GameState, right: boolean): StepResult {
       over: true,
       winner,
     },
+    after: state.puck,
     play,
     goal,
     periodEnd: 'final',

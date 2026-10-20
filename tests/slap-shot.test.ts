@@ -283,11 +283,11 @@ describe('the shootout', () => {
 describe('random games', () => {
   it('always end with the better side winning, and every play has words', () => {
     const n = runs(2000, 200);
+    const problems: string[] = [];
     for (let g = 0; g < n; g++) {
       let state = newGame();
       let questions = 0;
-      let wasOver = false;
-      while (!state.over) {
+      while (!state.over && questions < 3000) {
         const r = step(
           state,
           Math.random() < 0.6,
@@ -295,19 +295,17 @@ describe('random games', () => {
           Math.random(),
           Math.random(),
         );
-        expect(PLAY_LABEL[r.play]).toBeTruthy();
-        expect(callFor(r.play, 'x')).toBeTruthy();
-        expect(isTheirGoal(r.play) ? r.goal === 'them' : true).toBe(true);
-        expect(r.state.period).toBeLessThanOrEqual(5);
+        if (!PLAY_LABEL[r.play] || !callFor(r.play, 'x')) problems.push(`no words: ${r.play}`);
+        if (isTheirGoal(r.play) && r.goal !== 'them') problems.push(`goal side: ${r.play}`);
+        if (r.state.period > 5) problems.push(`period ${r.state.period}`);
         state = r.state;
-        wasOver = state.over;
         questions++;
-        expect(questions).toBeLessThan(3000);
       }
-      expect(wasOver).toBe(true);
-      expect(state.winner).toBe(state.us > state.them ? 'us' : 'them');
-      expect(state.us).not.toBe(state.them);
+      if (!state.over) problems.push('the game never ended');
+      if (state.winner !== (state.us > state.them ? 'us' : 'them')) problems.push('wrong winner');
+      if (state.us === state.them) problems.push('a tie');
     }
+    expect(problems).toEqual([]);
   });
 });
 
