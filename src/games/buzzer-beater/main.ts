@@ -708,7 +708,7 @@ function run(session: GameSession): void {
       // The green answer pulses at once. Nothing moves on by itself: the game waits for a tap on
       // it, however long that takes, and `proceedAfterMiss` finishes the play first.
       resultDone = null;
-      tapFlow.arm(hud.buttons, options.indexOf(f.answer), hud.avoid);
+      tapFlow.arm(hud.buttons, options.indexOf(f.answer), hud.avoid, f);
       sayLines(lines, thisTurn, () => {
         if (phase === 'play' || phase === 'result') tapFlow.readFinished();
       });
