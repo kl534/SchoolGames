@@ -2,6 +2,7 @@
   "voice": "af_heart",
   "lang": "a",
   "speed": 0.9,
+  "countSpeed": 1.45,
   "sampleRate": 24000,
   "leadMs": 40,
   "tailMs": 80,

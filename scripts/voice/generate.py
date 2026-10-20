@@ -14,11 +14,13 @@
 
 Run through `npm run voice` (which refreshes the line list first) or `uv run scripts/voice/generate.py`.
 Only missing clips are generated. Everything is regenerated when the settings below change
-(compared with scripts/voice/settings.json) or with --force. Model weights go to the normal
+(compared with scripts/voice/settings.json) or with --force; if only `countSpeed` differs (or
+the saved settings lack it), just the count lines are regenerated. Model weights go to the normal
 Hugging Face cache, never into the repo.
 """
 
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -30,6 +32,8 @@ from kokoro import KPipeline
 VOICE = "af_heart"
 LANG = "a"  # American English
 SPEED = 0.9  # matches the browser fallback voice's rate
+COUNT_SPEED = 1.45  # count lines ("21."), about 1.6x the normal pace
+COUNT_LINE = re.compile(r"^\d+\.$")
 SAMPLE_RATE = 24000
 LEAD_MS = 40  # silence kept before the first sound
 TAIL_MS = 80  # silence kept after the last sound, so timers that start on `end` aren't delayed
@@ -45,6 +49,7 @@ SETTINGS = {
     "voice": VOICE,
     "lang": LANG,
     "speed": SPEED,
+    "countSpeed": COUNT_SPEED,
     "sampleRate": SAMPLE_RATE,
     "leadMs": LEAD_MS,
     "tailMs": TAIL_MS,
@@ -82,14 +87,25 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
 
     previous = json.loads(SETTINGS_FILE.read_text()) if SETTINGS_FILE.exists() else None
+    counts_only = False
     if previous != SETTINGS:
-        force = True
+        rest = lambda settings: {k: v for k, v in settings.items() if k != "countSpeed"}
+        if previous is not None and rest(previous) == rest(SETTINGS):
+            counts_only = True  # only the count speed changed
+        else:
+            force = True
 
     existing = {p.stem: p for p in OUT.glob("*.mp3")}
     deleted = [key for key in existing if key not in lines]
     for key in deleted:
         existing[key].unlink()
-    todo = [key for key in sorted(lines) if force or key not in existing]
+    todo = [
+        key
+        for key in sorted(lines)
+        if force
+        or key not in existing
+        or (counts_only and COUNT_LINE.match(lines[key]))
+    ]
     kept = len(lines) - len(todo)
 
     if todo:
@@ -99,7 +115,9 @@ def main() -> None:
             text = lines[key]
             chunks = [
                 np.asarray(chunk, dtype=np.float32)
-                for _, _, chunk in pipeline(text, voice=VOICE, speed=SPEED)
+                for _, _, chunk in pipeline(
+                    text, voice=VOICE, speed=COUNT_SPEED if COUNT_LINE.match(text) else SPEED
+                )
             ]
             if not chunks:
                 raise RuntimeError(f"No audio for {key}: {text!r}")

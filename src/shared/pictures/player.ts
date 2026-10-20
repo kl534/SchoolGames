@@ -2,9 +2,9 @@ import { countSpeech, MOVE, type Picture } from './plan';
 
 export { MOVE };
 /** Seconds: the shortest step (also a silent step's length). */
-export const STEP_MIN = 0.6;
+export const STEP_MIN = 0.4;
 /** Seconds: the answer pop and confetti. */
-export const FINALE = 0.8;
+export const FINALE = 0.4;
 
 export interface PlayerState {
   phase: 'waiting' | 'counting' | 'finale' | 'done';
@@ -30,8 +30,9 @@ export interface PicturePlayer {
 }
 
 /**
- * Plays a picture's steps: each move, then its count said aloud; the next step starts when the
- * count has been said and the step has lasted `STEP_MIN`. The state says what to draw.
+ * Plays a picture's steps: each count is said aloud as its move starts (voice and move overlap);
+ * the next step starts when the move has landed, the count has been said and the step has lasted
+ * `STEP_MIN`. The state says what to draw.
  */
 export function createPicturePlayer(
   picture: Picture,
@@ -44,20 +45,26 @@ export function createPicturePlayer(
   let local = 0;
   let landed = false;
   let spoken = false;
+  /** The current step's count has been handed to `say`. */
+  let started = false;
+
+  const begin = (count: number | null) => {
+    started = true;
+    if (count === null) {
+      spoken = true;
+      return;
+    }
+    say(countSpeech(count), () => {
+      if (!stopped) spoken = true;
+    });
+  };
 
   const land = () => {
     const step = picture.steps[state.done];
     landed = true;
     state.p = 1;
     state.caption = step.caption;
-    if (step.count === null) {
-      spoken = true;
-      return;
-    }
-    state.count = step.count;
-    say(countSpeech(step.count), () => {
-      if (!stopped) spoken = true;
-    });
+    if (step.count !== null) state.count = step.count;
   };
 
   return {
@@ -74,6 +81,7 @@ export function createPicturePlayer(
       if (state.phase === 'counting') {
         local += delta;
         const step = picture.steps[state.done];
+        if (!started) begin(step.count);
         if (!landed) {
           state.p = Math.min(1, local / (step.move ?? MOVE));
           if (state.p >= 1) land();
@@ -84,6 +92,7 @@ export function createPicturePlayer(
           local = 0;
           landed = false;
           spoken = false;
+          started = false;
           if (state.done >= picture.steps.length) state.phase = 'finale';
         }
       } else if (state.phase === 'finale') {

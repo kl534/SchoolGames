@@ -5,6 +5,7 @@ import {
   buildPicture,
   countSpeech,
   MAX_COUNT,
+  MOVE,
   STAGE_W,
   type Picture,
 } from '../src/shared/pictures/plan';
@@ -167,7 +168,7 @@ describe('counts and captions', () => {
     expect(counts(picture(div(12, 3), 'div-share'))).toEqual([1, 2, 3, 4]);
     expect(counts(picture(div(12, 3), 'div-line'))).toEqual([1, 2, 3, 4]);
     expect(counts(picture(div(12, 3), 'div-rows'))).toEqual([1, 2, 3, 4]);
-    expect(picture(div(12, 3), 'div-share').steps.every((s) => s.move === 0.6)).toBe(true);
+    expect(picture(div(12, 3), 'div-share').steps.every((s) => s.move === 0.35)).toBe(true);
   });
 
   it('splits a times fact at ten, keeping the fact’s order', () => {
@@ -325,6 +326,24 @@ describe('every picture', () => {
   });
 });
 
+/** Game seconds a picture takes to count with every count clip lasting `clip` seconds. */
+function countingTime(way: Way, fact: FactVisual, clip: number): number {
+  let now = 0;
+  let ends: { at: number; onEnd: () => void }[] = [];
+  const player = createPicturePlayer(picture(fact, way), (_, onEnd) => {
+    ends.push({ at: now + clip, onEnd });
+  });
+  player.start(() => undefined);
+  const dt = 0.01;
+  while (player.state.phase === 'counting' && now < 60) {
+    now += dt;
+    for (const e of ends.filter((x) => x.at <= now)) e.onEnd();
+    ends = ends.filter((x) => x.at > now);
+    player.update(dt);
+  }
+  return now;
+}
+
 describe('player', () => {
   const small = () => picture(add(2, 2), 'add-join');
 
@@ -356,7 +375,7 @@ describe('player', () => {
     expect(player.state.phase).toBe('waiting');
     expect(v.lines).toEqual([]);
     player.start(() => done.push(1));
-    run(player, 3 * STEP_MIN + 0.01);
+    run(player, 3 * STEP_MIN + 0.15);
     expect(v.lines).toEqual(['2.', '3.', '4.']);
     expect(player.state.done).toBe(3);
     expect(player.state.phase).toBe('finale');
@@ -366,6 +385,40 @@ describe('player', () => {
     run(player, 5);
     expect(done).toEqual([1]);
     expect(player.state.count).toBe(4);
+  });
+
+  it('says the count when the step starts, and shows it only when the move lands', () => {
+    const v = voice(true);
+    const player = createPicturePlayer(small(), v.say);
+    player.start(() => undefined);
+    player.update(0.05);
+    expect(v.lines).toEqual(['2.']);
+    expect(player.state.p).toBeLessThan(1);
+    expect(player.state.count).toBeNull();
+    run(player, MOVE - 0.05);
+    expect(player.state.count).toBe(2);
+    expect(player.state.done).toBe(0);
+    run(player, STEP_MIN - MOVE + 0.06);
+    expect(player.state.done).toBe(1);
+    expect(v.lines).toEqual(['2.', '3.']);
+    expect(player.state.count).toBe(2);
+  });
+
+  it('holds a step for a clip that ends at 0.9 s, then goes on', () => {
+    let now = 0;
+    const player = createPicturePlayer(small(), (_, onEnd) => {
+      const at = now + 0.9;
+      pending.push({ at, onEnd });
+    });
+    const pending: { at: number; onEnd: () => void }[] = [];
+    player.start(() => undefined);
+    for (; now < 0.85; now += 0.05) player.update(0.05);
+    expect(player.state.done).toBe(0);
+    expect(player.state.p).toBe(1);
+    for (; now < 0.9 - 1e-9; now += 0.05) player.update(0.05);
+    pending.shift()?.onEnd();
+    player.update(0.05);
+    expect(player.state.done).toBe(1);
   });
 
   it('waits for a clip that ends later, and says the counts in order', () => {
@@ -398,7 +451,7 @@ describe('player', () => {
     player.start(() => undefined);
     run(player, 0.5);
     expect(player.state.caption).toBeUndefined();
-    run(player, 0.7);
+    run(player, 0.3);
     expect(player.state.caption).toBe('8 + 2 = 10');
   });
 
@@ -415,14 +468,19 @@ describe('player', () => {
     expect(done).not.toHaveBeenCalled();
   });
 
+  it('is quick: 8 + 5 and 4 x 3 with 0.45 s clips', () => {
+    expect(countingTime('add-join', add(8, 5), 0.45)).toBeLessThan(3.2);
+    expect(countingTime('mul-groups', mul(4, 3), 0.45)).toBeLessThan(2.2);
+  });
+
   it('says silent steps nothing', () => {
     const v = voice(true);
     const player = createPicturePlayer(picture(sub(5, 2), 'sub-gap'), v.say);
     player.start(() => undefined);
-    run(player, STEP_MIN + 0.1);
+    run(player, STEP_MIN - 0.1);
     expect(v.lines).toEqual([]);
+    run(player, 0.25);
     expect(player.state.done).toBe(1);
-    run(player, STEP_MIN);
     expect(v.lines).toEqual([countSpeech(1)]);
   });
 });
