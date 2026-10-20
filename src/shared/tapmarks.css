@@ -91,6 +91,10 @@
     sans-serif;
 }
 
+.sg-tap-pointer.sg-tap-has-card {
+  max-width: none;
+}
+
 .sg-tap-pointer[hidden] {
   display: none;
 }

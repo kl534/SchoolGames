@@ -1,16 +1,26 @@
 import './tapmarks.css';
 import { TAP_CAPTION } from './tapgate';
 
+/** A picture that takes the caption's place above (or below) the green answer. */
+export interface TapCard {
+  element: HTMLElement;
+  /** Called with the room it may use, whenever that changes: size yourself to fit. */
+  fit(maxWidth: number, maxHeight: number): void;
+}
+
 export interface TapMarks {
   /**
    * Pulses `buttons[correctIndex]`, dims the others, shows the finger and the caption (`problem`, e.g. '5 + 5 = ?', else a tap hint). The pointer
-   * keeps off the other buttons and off `avoid` (the banner, the question) when it can.
+   * keeps off the other buttons and off `avoid` (the banner, the question) when it can. With a
+   * `card` the caption is hidden and the card sits there instead, above the answer when there is
+   * room, sized to the room.
    */
   show(
     buttons: readonly HTMLElement[],
     correctIndex: number,
     avoid?: readonly HTMLElement[],
     problem?: string,
+    card?: TapCard,
   ): void;
   /** A dim answer was tapped: it shakes, the green one pulses harder for ~1 s. */
   nope(index: number): void;
@@ -32,6 +42,12 @@ const GAP = 6;
 const EDGE = 8;
 /** The pulsing button keeps this far inside the screen at its biggest. */
 const PULSE_MARGIN = 4;
+/** A card keeps this far below the top of the screen, or below the banner above it, plus 6. */
+const CARD_TOP = 70;
+/** Room above the answer (or below) a card needs to be worth showing there. */
+const CARD_MIN_ROOM = 110;
+const CARD_MAX_ROOM = 380;
+const CARD_MAX_WIDTH = 480;
 
 /** Do two rectangles share any area (a hair of overlap is ignored)? */
 function overlaps(a: Rect, b: Rect): boolean {
@@ -81,6 +97,8 @@ export function createTapMarks(container: HTMLElement = document.body): TapMarks
   let shownBelow: boolean | undefined;
   let lastLeft = '';
   let lastTop = '';
+  let card: TapCard | undefined;
+  let lastFit = '';
 
   const setFinger = (below: boolean) => {
     if (shownBelow === below) return;
@@ -115,6 +133,11 @@ export function createTapMarks(container: HTMLElement = document.body): TapMarks
     correct = undefined;
     avoid = [];
     lastCap = '';
+    card?.element.remove();
+    card = undefined;
+    lastFit = '';
+    caption.hidden = false;
+    pointer.classList.remove('sg-tap-has-card');
     pointer.hidden = true;
   };
 
@@ -136,13 +159,69 @@ export function createTapMarks(container: HTMLElement = document.body): TapMarks
     target.style.setProperty('--sg-tap-cap', cap);
   };
 
+  const place = (leftPx: string, topPx: string) => {
+    if (leftPx !== lastLeft) {
+      pointer.style.left = leftPx;
+      lastLeft = leftPx;
+    }
+    if (topPx !== lastTop) {
+      pointer.style.top = topPx;
+      lastTop = topPx;
+    }
+  };
+
+  /** Positions the pointer with a card: above the button if there is room, sized to the room. */
+  const updateCard = (activeCard: TapCard, button: DOMRect, viewW: number, viewH: number) => {
+    const fingerHeight = finger.offsetHeight || 40;
+    const width = Math.min(viewW - 2 * EDGE, CARD_MAX_WIDTH);
+    const columnLeft = Math.min(
+      Math.max(button.left + button.width / 2 - width / 2, EDGE),
+      viewW - width - EDGE,
+    );
+    let topLimit = CARD_TOP;
+    for (const node of avoid) {
+      const r = node.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) continue;
+      if (r.bottom > button.top || r.height >= viewH * 0.6) continue;
+      if (r.right <= columnLeft || r.left >= columnLeft + width) continue;
+      topLimit = Math.max(topLimit, r.bottom);
+    }
+    topLimit += 6;
+    const roomAbove = button.top - GAP - fingerHeight - topLimit;
+    const roomBelow = viewH - EDGE - (button.bottom + GAP + fingerHeight);
+    const above = roomAbove >= CARD_MIN_ROOM || roomAbove >= roomBelow;
+    const room = above ? roomAbove : roomBelow;
+    const maxHeight = Math.round(
+      Math.min(Math.max(room, CARD_MIN_ROOM), Math.min(CARD_MAX_ROOM, viewH * 0.6)),
+    );
+    const fit = `${width}x${maxHeight}`;
+    if (fit !== lastFit) {
+      lastFit = fit;
+      activeCard.fit(width, maxHeight);
+    }
+    const own = pointer.getBoundingClientRect();
+    const left = Math.min(
+      Math.max(button.left + button.width / 2 - own.width / 2, EDGE),
+      Math.max(viewW - own.width - EDGE, EDGE),
+    );
+    setFinger(!above);
+    place(
+      `${Math.round(left)}px`,
+      `${Math.round(above ? button.top - GAP - own.height : button.bottom + GAP)}px`,
+    );
+  };
+
   const update = () => {
     if (!correct || pointer.hidden) return;
     const button = correct.getBoundingClientRect();
-    const own = pointer.getBoundingClientRect();
     const viewW = window.innerWidth;
     const viewH = window.innerHeight;
     capPulse(correct, button, viewW, viewH);
+    if (card) {
+      updateCard(card, button, viewW, viewH);
+      return;
+    }
+    const own = pointer.getBoundingClientRect();
     const left = Math.min(
       Math.max(button.left + button.width / 2 - own.width / 2, EDGE),
       Math.max(viewW - own.width - EDGE, EDGE),
@@ -169,20 +248,11 @@ export function createTapMarks(container: HTMLElement = document.body): TapMarks
           : tooHigh && fitsBelow;
     const top = useBelow ? below : above;
     setFinger(useBelow);
-    const leftPx = `${Math.round(left)}px`;
-    const topPx = `${Math.round(top)}px`;
-    if (leftPx !== lastLeft) {
-      pointer.style.left = leftPx;
-      lastLeft = leftPx;
-    }
-    if (topPx !== lastTop) {
-      pointer.style.top = topPx;
-      lastTop = topPx;
-    }
+    place(`${Math.round(left)}px`, `${Math.round(top)}px`);
   };
 
   return {
-    show(buttons, correctIndex, avoidElements = [], problem) {
+    show(buttons, correctIndex, avoidElements = [], problem, newCard) {
       clear();
       avoid = avoidElements;
       touched = buttons.map((button) => ({
@@ -199,7 +269,13 @@ export function createTapMarks(container: HTMLElement = document.body): TapMarks
           button.setAttribute('aria-disabled', 'true');
         }
       }
-      caption.textContent = problem || TAP_CAPTION;
+      caption.textContent = newCard ? '' : problem || TAP_CAPTION;
+      if (newCard) {
+        card = newCard;
+        caption.hidden = true;
+        pointer.classList.add('sg-tap-has-card');
+        pointer.insertBefore(newCard.element, finger);
+      }
       pointer.hidden = false;
       shownBelow = undefined;
       update();

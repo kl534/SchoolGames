@@ -1,0 +1,91 @@
+/* The picture card: a little animated scene above the green answer, with the equation under it. */
+
+.sg-pic-card {
+  position: relative;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 2px solid #5cf2b0;
+  border-radius: 22px;
+  background: rgba(15, 18, 32, 0.92);
+  color: #fff;
+  pointer-events: none;
+}
+
+.sg-pic-card * {
+  pointer-events: none;
+}
+
+.sg-pic-stage {
+  display: block;
+  margin: 0 auto;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.07);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'Apple Color Emoji',
+    'Segoe UI Emoji',
+    sans-serif;
+}
+
+.sg-pic-count {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 40px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #ff7a59;
+  color: #fff;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.sg-pic-count[hidden] {
+  display: none;
+}
+
+.sg-pic-pop {
+  animation: sg-pic-pop 0.3s ease-out;
+}
+
+.sg-pic-eq {
+  margin-top: 6px;
+  font-size: clamp(16px, 4.2vmin, 22px);
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.sg-pic-answer {
+  display: inline-block;
+  color: #5cf2b0;
+  animation: sg-pic-pop 0.4s ease-out;
+}
+
+@keyframes sg-pic-pop {
+  0% {
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sg-pic-pop,
+  .sg-pic-answer {
+    animation: none;
+  }
+}
