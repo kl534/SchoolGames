@@ -32,6 +32,7 @@ A full 3-on-3 hockey game against a named rival over three 20:00 periods, overti
 
 - A new play: type and ladder row in `rules.ts` (with its call and label), the animation in `plays.ts`, a move in `skaters.ts` if it needs one, then `voice.ts` and `npm run voice`.
 - Times that decide the band of a play: `FLASHY_UNDER_SECONDS` and `SOLID_UNDER_SECONDS` in `rules.ts`.
+- How often our shots go in (`SCORE_CHANCE`) and how often a miss gives them a goal (`INSTANT_GOAL_CHANCE`): `rules.ts`.
 - A new rival: `teams.ts` (then `npm run voice`).
 - Rink look: `rink.ts`; skater look or moves: `person.ts` and `skaters.ts`.
 - Screen fit on phones: `layout.ts` and `style.css`.

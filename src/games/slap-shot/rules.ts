@@ -14,6 +14,8 @@ export const FLASHY_UNDER_SECONDS = 0.6;
 export const SOLID_UNDER_SECONDS = 1.2;
 /** Our puck, wrong answer: below this the other side scores straight away. */
 export const INSTANT_GOAL_CHANCE = 0.5;
+/** Our puck in their end, right answer: below this we score, otherwise their goalie saves it. */
+export const SCORE_CHANCE = 0.25;
 
 export type Side = 'us' | 'them';
 /** Always from our view: we attack their end. */
@@ -172,6 +174,9 @@ function outcomeOf(puck: Puck, right: boolean, band: Band, r1: number, r2: numbe
           ? goalAgainst('breakaway-against')
           : { puck: held('them', 'neutral'), play: 'picked-off', goal: null };
       case 'their-end':
+        if (right && r1 >= SCORE_CHANCE) {
+          return { puck: faceoff('their-end'), play: 'save', goal: null };
+        }
         if (right) {
           const play: OurPlay =
             band === 'flashy' ? 'one-timer' : band === 'solid' ? 'wrist-shot' : 'rebound-goal';
@@ -248,7 +253,8 @@ function endOfPlay(
 
 /**
  * One answer. `r1` picks the 50/50 on our wrong answers (below `INSTANT_GOAL_CHANCE` the other
- * side scores), `r2` picks between two variants of a play.
+ * side scores) and whether our shot goes in (below `SCORE_CHANCE`), `r2` picks between two
+ * variants of a play.
  */
 export function step(
   state: GameState,
