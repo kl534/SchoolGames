@@ -15,7 +15,7 @@ A full 3-on-3 hockey game against a named rival over three 20:00 periods, overti
 - `skaters.ts`: the skaters and goalies with their moves (`createSkater`, `createGoalie`)
 - `puck.ts`: the puck mesh (`createPuck`)
 - `effects.ts`: ice spray and sparkles (`createEffects`)
-- `hud.ts`: scorebug with zone strip, question panel, answer clock ring and banner (`createHud`)
+- `hud.ts`: scorebug, question panel, answer clock ring and banner (`createHud`)
 - `dev.ts`: dev query hooks (`forcedPlay`, `devGame`, `autoAnswer`, `freezeAt`)
 - `voice.ts`: every spoken line that is not a fact (`VOICE_LINES`)
 

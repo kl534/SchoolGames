@@ -11,7 +11,7 @@
   color: #fff;
 }
 
-/* The scorebug, top centre: goals, period and clock, with the zone strip under it. */
+/* The scorebug, top centre: goals, period and clock. */
 .ss-bug {
   position: fixed;
   top: calc(max(12px, env(safe-area-inset-top)) + 58px);
@@ -94,15 +94,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Three zones; the puck's is filled in the colour of whoever has it. */
-.ss-strip {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 3px;
-  height: 18px;
-}
-
-.ss-strip[hidden],
 .ss-shootout[hidden],
 .ss-hud[hidden],
 .ss-answers[hidden],
@@ -111,40 +102,6 @@
 .ss-banner-detail[hidden],
 .ss-ring[hidden] {
   display: none;
-}
-
-.ss-cell {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #a9c8f5;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-}
-
-.ss-cell.on {
-  border: 2px solid rgba(255, 255, 255, 0.7);
-}
-
-.ss-cell.faceoff {
-  border: 2px solid #fff;
-  color: #fff;
-}
-
-.ss-puckdot {
-  position: absolute;
-  right: 4px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #0b0b0d;
-  border: 1.5px solid #fff;
 }
 
 .ss-shootout {
@@ -469,14 +426,6 @@
   .ss-chip {
     width: 11px;
     height: 11px;
-  }
-
-  .ss-strip {
-    height: 14px;
-  }
-
-  .ss-cell {
-    font-size: 8px;
   }
 
   .ss-so-row {
