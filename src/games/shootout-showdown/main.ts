@@ -735,23 +735,16 @@ function run(session: GameSession): void {
       beforeShot();
       return;
     }
-    announce(
-      'SHOOTOUT',
-      [SHOOTOUT_SPEECH],
-      () => {
+    announce('SHOOTOUT', [SHOOTOUT_SPEECH], () => {
+      announce(COIN_TOSS_BANNER, [COIN_TOSS_SPEECH], () =>
         announce(
-          COIN_TOSS_BANNER,
-          [COIN_TOSS_SPEECH],
-          () =>
-            announce(
-              firstBanner(state.first, rival),
-              [state.first === 'us' ? FIRST_US_SPEECH : firstThemSpeech(rival)],
-              beforeShot,
-            ),
-        );
-        sfx.whoosh();
-      },
-    );
+          firstBanner(state.first, rival),
+          [state.first === 'us' ? FIRST_US_SPEECH : firstThemSpeech(rival)],
+          beforeShot,
+        ),
+      );
+      sfx.whoosh();
+    });
   };
 
   // ---------- Input ----------
