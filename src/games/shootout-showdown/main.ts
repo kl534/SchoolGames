@@ -167,6 +167,8 @@ function run(session: GameSession): void {
   let play: Playing | null = null;
   let playClock = 0;
   let callSpoken = false;
+  /** Says the call of a right answer's shot; runs once, when the shot's result shows. */
+  let pendingCall: (() => void) | null = null;
   let tapped = false;
   let nextQueued = false;
   let answeredRight = true;
@@ -411,17 +413,24 @@ function run(session: GameSession): void {
       hud.showBanner(title, right ? 'good' : 'miss', bandMiddle());
       after(BANNER_FOR, () => hud.hideBanner());
     }
+    // When the puck gets to the goal or the goalie: the call is not said before that.
+    const outcomeAt =
+      script.events.find((e) => e.type === 'goal' || e.type === 'save')?.t ?? script.duration;
+    pendingCall = null;
     const line = kind === 'so-goal-against' ? theirGoalSpeech(rival) : SHOT_CALL[kind];
 
     if (right) {
       // The question and answers get out of the way of the play.
       after(0.25, () => hud.hideQuestion(true));
+      // The call waits for the puck to reach the goal or the goalie (see `onPlayEvent`).
       const token = ++speechToken;
-      speak(line, () => {
-        if (token !== speechToken || turn !== thisTurn) return;
-        callSpoken = true;
-        maybeNext();
-      });
+      pendingCall = () => {
+        speak(line, () => {
+          if (token !== speechToken || turn !== thisTurn) return;
+          callSpoken = true;
+          maybeNext();
+        });
+      };
     } else {
       // The fact goes in the question panel; the play runs at once and the next question
       // waits for the green tap and the end of the play.
@@ -430,6 +439,7 @@ function run(session: GameSession): void {
         avoid: hud.avoid,
         problem: f.prompt,
         lead: line,
+        delay: outcomeAt,
       });
     }
 
@@ -464,6 +474,11 @@ function run(session: GameSession): void {
     const current = play;
     if (!current) return;
     const script = current.script;
+    if ((e.type === 'goal' || e.type === 'save') && pendingCall) {
+      const say = pendingCall;
+      pendingCall = null;
+      if (!quiet) say();
+    }
     switch (e.type) {
       case 'shot':
         if (!quiet) sfx.slap();
@@ -522,6 +537,11 @@ function run(session: GameSession): void {
     // Ice spray where a skater stops hard or is checked into: handled by the check events above.
     if (playClock >= script.duration) {
       current.ended = true;
+      if (pendingCall) {
+        const say = pendingCall;
+        pendingCall = null;
+        say();
+      }
       maybeNext();
     }
   };
