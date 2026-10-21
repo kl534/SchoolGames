@@ -3,24 +3,30 @@
  * the periods, overtime and the shootout. Pure: no three.js, no DOM. Every random choice takes
  * its number as an argument.
  */
-import type { Team } from './teams';
+import type { Band } from '../../shared/hockey/band';
+import type { Side } from '../../shared/hockey/geometry';
+import type { Team } from '../../shared/hockey/teams';
+
+export {
+  FLASHY_UNDER_SECONDS,
+  SOLID_UNDER_SECONDS,
+  bandFor,
+  type Band,
+} from '../../shared/hockey/band';
+export type { Side };
 
 export const PERIODS = 3;
 export const PERIOD_SECONDS = 1200;
 export const OT_SECONDS = 300;
 export const SECONDS_PER_QUESTION = 36;
 export const SHOOTOUT_ROUNDS = 3;
-export const FLASHY_UNDER_SECONDS = 0.6;
-export const SOLID_UNDER_SECONDS = 1.2;
 /** Our puck, wrong answer: below this the other side scores straight away. */
 export const INSTANT_GOAL_CHANCE = 0.5;
 /** Our puck in their end, right answer: below this we score, otherwise their goalie saves it. */
 export const SCORE_CHANCE = 0.25;
 
-export type Side = 'us' | 'them';
 /** Always from our view: we attack their end. */
 export type Zone = 'our-end' | 'neutral' | 'their-end';
-export type Band = 'flashy' | 'solid' | 'plain';
 export type Puck =
   /** A faceoff at that zone's dot (neutral is the centre dot). */
   { kind: 'faceoff'; zone: Zone } | { kind: 'held'; side: Side; zone: Zone };
@@ -60,13 +66,6 @@ export function newGame(): GameState {
     over: false,
     winner: null,
   };
-}
-
-/** How fast the answer was: under 0.6 s is flashy, under 1.2 s solid, else plain. */
-export function bandFor(seconds: number): Band {
-  if (seconds < FLASHY_UNDER_SECONDS) return 'flashy';
-  if (seconds < SOLID_UNDER_SECONDS) return 'solid';
-  return 'plain';
 }
 
 // ---------- Plays ----------

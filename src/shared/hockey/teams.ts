@@ -12,6 +12,11 @@ export interface Team {
   trim: number;
 }
 
+export type Role = 'C' | 'W' | 'D';
+
+/** The big number on the back of each role (the goalie is `G`). */
+export const ROLE_NUMBER: Record<Role | 'G', number> = { C: 19, W: 9, D: 4, G: 30 };
+
 export const US: Team = {
   id: 'home',
   nickname: 'Home Team',

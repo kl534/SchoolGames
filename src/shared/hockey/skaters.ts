@@ -9,13 +9,10 @@ import {
   type GoalieMove,
   type Move,
   type SkaterMove,
-} from './plays';
-import type { Team } from './teams';
+} from './script';
+import { ROLE_NUMBER, type Role, type Team } from './teams';
 
-export type Role = 'C' | 'W' | 'D';
-
-/** The big number on the back of each role. */
-export const ROLE_NUMBER: Record<Role | 'G', number> = { C: 19, W: 9, D: 4, G: 30 };
+export { ROLE_NUMBER, type Role };
 
 const clamp = (n: number, min: number, max: number) => Math.min(Math.max(n, min), max);
 const smooth = (x: number) => {

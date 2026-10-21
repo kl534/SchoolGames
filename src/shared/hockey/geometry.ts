@@ -1,5 +1,8 @@
 /** The rink's numbers and a little vector maths. Pure: no three.js and no DOM. */
 
+/** The two teams: we attack +x. */
+export type Side = 'us' | 'them';
+
 export interface Vec {
   x: number;
   y: number;
