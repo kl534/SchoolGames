@@ -1,18 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { runs } from './helpers/full';
+import { formation, maxSeconds, planPlay } from '../src/games/slap-shot/plays';
 import {
   ACTORS,
   SKATERS,
   actorAt,
-  formation,
   isGoalie,
-  maxSeconds,
-  planPlay,
   puckAt,
-  shootoutFormation,
   type PlayScript,
-} from '../src/games/slap-shot/plays';
-import { inNet, vec } from '../src/games/slap-shot/geometry';
+} from '../src/shared/hockey/script';
+import { shootoutFormation } from '../src/shared/hockey/shootout';
+import { inNet, vec } from '../src/shared/hockey/geometry';
 import {
   DROP_THE_PUCK,
   END_OF_PERIOD,
@@ -43,7 +41,7 @@ import {
   pickRival,
   rivalWinsSpeech,
   theirGoalSpeech,
-} from '../src/games/slap-shot/teams';
+} from '../src/shared/hockey/teams';
 import { VOICE_LINES } from '../src/games/slap-shot/voice';
 
 const BANDS: Band[] = ['flashy', 'solid', 'plain'];
