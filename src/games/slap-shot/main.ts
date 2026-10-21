@@ -1,4 +1,4 @@
-import './style.css';
+import '../../shared/hockey/hud.css';
 import { pressAnswers } from '../../shared/answers';
 import { preloadSpeech, sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
 import { createFactFeed, type FactFeed } from '../../shared/feed';
@@ -13,28 +13,33 @@ import { createTimers } from '../../shared/timers';
 import { answerOptions, promptSpeech, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
 import { autoAnswer, devGame, forcedPlay, freezeAt } from './dev';
-import { createEffects } from './effects';
-import { vec, type Vec } from './geometry';
-import { createHud } from './hud';
-import { cameraTarget, centreShift, fovFor, CAMERA_EASE, type PlayBand } from './layout';
+import { createEffects } from '../../shared/hockey/effects';
+import { vec, type Vec } from '../../shared/hockey/geometry';
+import { createHud } from '../../shared/hockey/hud';
+import {
+  cameraTarget,
+  centreShift,
+  fovFor,
+  CAMERA_EASE,
+  type PlayBand,
+} from '../../shared/hockey/layout';
 import {
   ACTORS,
   actorAt,
   bladePos,
   GOALIE_AHEAD,
   isGoalie,
-  planPlay,
   puckAt,
   puckSegAt,
-  shootoutFormation,
-  formation,
   type ActorId,
   type Formation,
   type PlayEvent,
   type PlayScript,
-} from './plays';
-import { createPuck } from './puck';
-import { buildRink } from './rink';
+} from '../../shared/hockey/script';
+import { shootoutFormation } from '../../shared/hockey/shootout';
+import { planPlay, formation } from './plays';
+import { createPuck } from '../../shared/hockey/puck';
+import { buildRink } from '../../shared/hockey/rink';
 import {
   bandFor,
   bannerFor,
@@ -58,7 +63,7 @@ import {
   type PlayKind,
   type StepResult,
 } from './rules';
-import { createGoalie, createSkater, type Skater } from './skaters';
+import { createGoalie, createSkater, type Skater } from '../../shared/hockey/skaters';
 import {
   outcomeText,
   pickRival,
@@ -67,7 +72,7 @@ import {
   theirGoalSpeech,
   US,
   type Team,
-} from './teams';
+} from '../../shared/hockey/teams';
 
 const GAME_ID = 'slap-shot';
 

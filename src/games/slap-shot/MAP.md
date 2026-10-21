@@ -5,19 +5,25 @@ A full 3-on-3 hockey game against a named rival over three 20:00 periods, overti
 ## Files
 
 - `main.ts`: the game loop, learning loop, play playback, periods, camera and wiring of everything below
-- `rules.ts`: pure game state and the ladder (`step`, `shootoutStep`, `shootoutDecided`, `bandFor`), the clock, periods, the fixed calls and banner words (`PLAY_CALL`, `PLAY_LABEL`)
-- `teams.ts`: our team and the six rivals, and the lines about them (`US`, `RIVALS`, `pickRival`, `theirGoalSpeech`, `rivalWinsSpeech`, `outcomeText`)
-- `geometry.ts`: rink, net and puck measurements and vector helpers (`ZONE_X`, `GOAL_LINE_X`, `inNet`)
-- `plays.ts`: pure formations (`formation`, `shootoutFormation`) and each play as a script of actor paths, puck segments and events (`planPlay`, `actorAt`, `puckAt`)
+- `rules.ts`: pure game state and the ladder (`step`, `shootoutStep`, `shootoutDecided`), the clock, periods, the fixed calls and banner words (`PLAY_CALL`, `PLAY_LABEL`); re-exports `Side`, `Band`, `bandFor` and the band times from `src/shared/hockey/`
+- `plays.ts`: pure formations (`formation`) and each play as a script of actor paths, puck segments and events (`planPlay`); its shootout plays call `shootoutShot` in `src/shared/hockey/shootout.ts`
+- `dev.ts`: dev query hooks (`forcedPlay`, `devGame`, `autoAnswer`, `freezeAt`)
+- `voice.ts`: every spoken line that is not a fact (`VOICE_LINES`)
+
+Shared with Shootout Showdown, in `src/shared/hockey/`:
+
+- `teams.ts`: our team and the six rivals, and the lines about them (`US`, `RIVALS`, `pickRival`, `theirGoalSpeech`, `rivalWinsSpeech`, `outcomeText`), `Role` and `ROLE_NUMBER`
+- `geometry.ts`: `Side`, rink, net and puck measurements and vector helpers (`ZONE_X`, `GOAL_LINE_X`, `inNet`)
+- `script.ts`: the script format (`PlayScript`, `actorAt`, `puckAt`, `bladePos`) and the `Builder` that writes scripts, with `celebration`, `scoreAt`, `netPoint`
+- `shootout.ts`: the shootout formation and one shootout shot by role and band (`shootoutFormation`, `shootoutShot`)
+- `band.ts`: how fast an answer was (`Band`, `bandFor`, `FLASHY_UNDER_SECONDS`, `SOLID_UNDER_SECONDS`)
 - `layout.ts`: HUD layout choice, the play band, and the camera follow (`hudLayout`, `playBand`, `cameraTarget`, `fovFor`)
 - `rink.ts`: ice, lines, boards, glass, crowd, nets and the goal lamps (`buildRink`)
 - `person.ts`: the jointed person rig, with helmet, skates, stick and number (`createPerson`, `Pose`)
 - `skaters.ts`: the skaters and goalies with their moves (`createSkater`, `createGoalie`)
 - `puck.ts`: the puck mesh (`createPuck`)
 - `effects.ts`: ice spray and sparkles (`createEffects`)
-- `hud.ts`: scorebug, question panel, answer clock ring and banner (`createHud`)
-- `dev.ts`: dev query hooks (`forcedPlay`, `devGame`, `autoAnswer`, `freezeAt`)
-- `voice.ts`: every spoken line that is not a fact (`VOICE_LINES`)
+- `hud.ts` and `hud.css`: scorebug, question panel, answer clock ring and banner (`createHud`) and their styles
 
 ## Dev hooks
 
@@ -30,13 +36,14 @@ A full 3-on-3 hockey game against a named rival over three 20:00 periods, overti
 
 ## Where changes go
 
-- A new play: type and ladder row in `rules.ts` (with its call and label), the animation in `plays.ts`, a move in `skaters.ts` if it needs one, then `voice.ts` and `npm run voice`.
-- Times that decide the band of a play: `FLASHY_UNDER_SECONDS` and `SOLID_UNDER_SECONDS` in `rules.ts`.
+- A new play: type and ladder row in `rules.ts` (with its call and label), the animation in `plays.ts`, a move in `src/shared/hockey/skaters.ts` if it needs one, then `voice.ts` and `npm run voice`.
+- Times that decide the band of a play: `FLASHY_UNDER_SECONDS` and `SOLID_UNDER_SECONDS` in `src/shared/hockey/band.ts`.
 - How often our shots go in (`SCORE_CHANCE`) and how often a miss gives them a goal (`INSTANT_GOAL_CHANCE`): `rules.ts`.
-- A new rival: `teams.ts` (then `npm run voice`).
-- Rink look: `rink.ts`; skater look or moves: `person.ts` and `skaters.ts`.
-- Screen fit on phones: `layout.ts` and `style.css`.
+- A new rival: `src/shared/hockey/teams.ts` (then `npm run voice`).
+- Rink look: `src/shared/hockey/rink.ts`; skater look or moves: `person.ts` and `skaters.ts` there.
+- Screen fit on phones: `layout.ts` and `hud.css` in `src/shared/hockey/`.
 
 ## Tests
 
 - `tests/slap-shot.test.ts`
+- `tests/hockey-shared.test.ts` (the shared shootout shot and formation)

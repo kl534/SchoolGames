@@ -34,8 +34,8 @@ import {
   GOAL_W,
   RINK_LENGTH,
   RINK_WIDTH,
+  type Side,
 } from './geometry';
-import type { Side } from './rules';
 
 export interface Rink {
   /** The lamp behind the net a side shoots at (we shoot at +x). */

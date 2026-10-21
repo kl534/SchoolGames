@@ -7,7 +7,7 @@ import {
   SHOOTOUT_SPEECH,
   YOU_WIN_SPEECH,
 } from './rules';
-import { RIVALS, rivalWinsSpeech, theirGoalSpeech } from './teams';
+import { RIVALS, rivalWinsSpeech, theirGoalSpeech } from '../../shared/hockey/teams';
 
 export const VOICE_LINES: string[] = [
   ...Object.values(PLAY_CALL),
