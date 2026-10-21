@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" font-family="system-ui, sans-serif" font-weight="900">
+  <defs>
+    <linearGradient id="ice" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e3eef8"/>
+      <stop offset="1" stop-color="#ffffff"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="320" height="180" fill="#1c2a45"/>
+  <!-- Boards -->
+  <rect y="44" width="320" height="22" fill="#f2f4f7"/>
+  <rect y="58" width="320" height="8" fill="#f2c230"/>
+  <!-- Ice -->
+  <rect y="66" width="320" height="114" fill="url(#ice)"/>
+  <circle cx="70" cy="152" r="5" fill="#d23a3a"/>
+  <path d="M0 160Q160 132 320 160" fill="none" stroke="#2a5fd1" stroke-width="3" opacity=".5"/>
+
+  <!-- Scoreboard dots -->
+  <rect x="104" y="6" width="112" height="30" rx="8" fill="#0f1830"/>
+  <g>
+    <circle cx="126" cy="15" r="5" fill="#ffd166"/><circle cx="144" cy="15" r="5" fill="#ffd166"/><circle cx="162" cy="15" r="5" fill="none" stroke="#7f8cab" stroke-width="2"/>
+    <circle cx="126" cy="28" r="5" fill="#ffd166"/><circle cx="144" cy="28" r="5" fill="none" stroke="#7f8cab" stroke-width="2"/><circle cx="162" cy="28" r="5" fill="#ffd166"/>
+    <text x="196" y="26" text-anchor="middle" font-size="14" fill="#fff">SO</text>
+  </g>
+
+  <!-- Net with the goalie -->
+  <g>
+    <rect x="236" y="70" width="66" height="54" fill="#fff" fill-opacity=".55" stroke="#d62828" stroke-width="5"/>
+    <path d="M248 70v54M260 70v54M272 70v54M284 70v54M236 83h66M236 96h66M236 110h66" stroke="#c9d2dc" stroke-width="1.5"/>
+    <rect x="256" y="92" width="22" height="34" rx="6" fill="#d23a3a"/>
+    <circle cx="267" cy="86" r="9" fill="#f1b48a"/>
+    <path d="M258 85a9 9 0 0 1 18 0v3h-18Z" fill="#fff"/>
+    <rect x="276" y="96" width="12" height="14" rx="4" fill="#f2c230"/>
+    <rect x="257" y="124" width="8" height="18" rx="3" fill="#15181d"/>
+    <rect x="270" y="124" width="8" height="18" rx="3" fill="#15181d"/>
+  </g>
+
+  <!-- Skater lining up -->
+  <g transform="translate(26 0)">
+    <path d="M6 160h56" stroke="#c8ced6" stroke-width="3" stroke-linecap="round"/>
+    <rect x="16" y="122" width="12" height="36" rx="5" fill="#fff"/>
+    <rect x="34" y="124" width="12" height="34" rx="5" fill="#fff" transform="rotate(14 40 124)"/>
+    <rect x="12" y="150" width="22" height="8" rx="3" fill="#15181d"/>
+    <rect x="38" y="152" width="22" height="8" rx="3" fill="#15181d"/>
+    <path d="M14 82q16-12 34 0l4 44H12Z" fill="#2a6fd1"/>
+    <rect x="12" y="104" width="40" height="7" fill="#fff"/>
+    <path d="M48 90 82 112" stroke="#f1b48a" stroke-width="9" stroke-linecap="round"/>
+    <path d="M60 134 108 150" stroke="#2b2f36" stroke-width="4" stroke-linecap="round"/>
+    <ellipse cx="118" cy="154" rx="9" ry="4.5" fill="#0b0b0d"/>
+    <circle cx="32" cy="64" r="15" fill="#f1b48a"/>
+    <path d="M16 62a16 16 0 0 1 32 0v4H16Z" fill="#fff"/>
+  </g>
+</svg>

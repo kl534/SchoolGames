@@ -1,0 +1,8 @@
+{
+  "id": "shootout-showdown",
+  "title": "Shootout Showdown",
+  "description": "Win a hockey shootout: answer right to score and to stop their shots!",
+  "thumbnail": "thumbnail.svg",
+  "tags": ["sports", "3d"],
+  "scoring": "score"
+}
