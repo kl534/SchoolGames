@@ -176,14 +176,14 @@ describe('step: the ladder', () => {
 });
 
 describe('the clock and the periods', () => {
-  it('takes 36 seconds a step and never goes below 0', () => {
+  it('takes 60 seconds a step and never goes below 0', () => {
     const s = withPuck(held('us', 'neutral'), { clock: 100 });
     expect(step(s, true, 'plain', 0, 0).state.clock).toBe(100 - SECONDS_PER_QUESTION);
     expect(step({ ...s, clock: 50 }, true, 'plain', 0, 0).state.clock).toBe(14);
   });
 
   it('period 1 ends into period 2', () => {
-    const r = step(withPuck(held('us', 'neutral'), { clock: 36 }), true, 'plain', 0, 0);
+    const r = step(withPuck(held('us', 'neutral'), { clock: SECONDS_PER_QUESTION }), true, 'plain', 0, 0);
     expect(r.periodEnd).toBe('period');
     expect(r.state.period).toBe(2);
     expect(r.state.clock).toBe(PERIOD_SECONDS);
