@@ -9,7 +9,9 @@
  * - `?auto=right|wrong`: answer the first question 0.3 s after its reading ends (0.3 answer
  *   seconds), so a play runs without taps.
  * - `?at=1.1`: freeze that first play at that script time (everything stops; the HUD stays).
+ * - `?variant=a|b`: which build-up every play uses.
  */
+import type { Variant } from './plays';
 import {
   OT_SECONDS,
   OVERTIME_PERIOD,
@@ -51,6 +53,13 @@ export function freezeAt(): number | null {
   if (!import.meta.env.DEV) return null;
   const at = query().get('at');
   return at === null || Number.isNaN(Number(at)) ? null : Number(at);
+}
+
+/** `?variant=a|b` in a dev build: which build-up every play uses. */
+export function forcedVariant(): Variant | null {
+  if (!import.meta.env.DEV) return null;
+  const variant = query().get('variant');
+  return variant === 'a' || variant === 'b' ? variant : null;
 }
 
 /** A new game, started the way the address asks for (in a dev build). */

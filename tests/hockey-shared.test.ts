@@ -130,7 +130,10 @@ describe('shootoutShot', () => {
       // Slap Shot's planPlay goes through it.
       const puck = { kind: 'faceoff', zone: 'neutral' } as const;
       const plan = planPlay(kind as ShootoutKind, puck, puck, () => (sgn === '-1' ? 0.25 : 0.75));
-      expect(JSON.parse(JSON.stringify(plan))).toEqual(old);
+      const { moment, ...script } = plan;
+      expect(JSON.parse(JSON.stringify(script))).toEqual(old);
+      const first = plan.events.find((e) => e.type === 'goal' || e.type === 'save');
+      expect(moment).toBe(first!.t);
     }
   });
 });
