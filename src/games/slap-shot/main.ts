@@ -12,7 +12,7 @@ import { createTapFlow } from '../../shared/tapflow';
 import { createTimers } from '../../shared/timers';
 import { answerOptions, promptSpeech, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
-import { autoAnswer, devGame, forcedPlay, freezeAt } from './dev';
+import { autoAnswer, devGame, forcedPlay, forcedVariant, freezeAt } from './dev';
 import { createEffects } from '../../shared/hockey/effects';
 import { vec, type Vec } from '../../shared/hockey/geometry';
 import { createHud } from '../../shared/hockey/hud';
@@ -34,10 +34,9 @@ import {
   type ActorId,
   type Formation,
   type PlayEvent,
-  type PlayScript,
 } from '../../shared/hockey/script';
 import { shootoutFormation } from '../../shared/hockey/shootout';
-import { planPlay, formation } from './plays';
+import { planPlay, formation, type SlapPlay } from './plays';
 import { createPuck } from '../../shared/hockey/puck';
 import { buildRink } from '../../shared/hockey/rink';
 import {
@@ -81,8 +80,6 @@ const INTRO_FOR = 1.6;
 /** Seconds a play's name stays up, and a goal's. */
 const BANNER_FOR = 1.2;
 const GOAL_BANNER_FOR = 2;
-/** Every play runs this many times longer than its script says, so the action is easy to follow. */
-const PLAY_SLOWDOWN = 3;
 /** The pause after a play and its call before the next question. */
 const NEXT_GAP = 0.2;
 /** The two halves of the fade to the faceoff formation after a goal. */
@@ -98,7 +95,7 @@ type Phase = 'preview' | 'intro' | 'ask' | 'play' | 'announce' | 'done';
 
 /** The play that is running or has just run. */
 interface Playing {
-  script: PlayScript;
+  script: SlapPlay;
   kind: PlayKind;
   result: StepResult;
   eventIndex: number;
@@ -169,6 +166,9 @@ function run(session: GameSession): void {
   let play: Playing | null = null;
   let playClock = 0;
   let callSpoken = false;
+  /** The banner and the call wait for the play's named moment (see `runMoment`). */
+  let pendingBanner: (() => void) | null = null;
+  let pendingCall: (() => void) | null = null;
   let tapped = false;
   let nextQueued = false;
   let answeredRight = true;
@@ -416,7 +416,7 @@ function run(session: GameSession): void {
     saveProgress();
     hud.mark(chosen, options.indexOf(f.answer), right);
 
-    const script = planPlay(result.play, before, result.after, rnd);
+    const script = planPlay(result.play, before, result.after, rnd, forcedVariant() ?? undefined);
     play = { script, kind: result.play, result, eventIndex: 0, ended: false };
     playClock = 0;
     phase = 'play';
@@ -427,30 +427,39 @@ function run(session: GameSession): void {
 
     const kind = result.play;
     const title = bannerFor(kind, rival);
-    // A goal's banner comes with the goal; any other play's with the play.
+    // A goal's banner comes with the goal; any other play's with the play's moment.
+    pendingBanner = null;
+    pendingCall = null;
     if (!result.goal) {
-      hud.showBanner(title, right ? 'good' : 'miss', bandMiddle());
-      after(BANNER_FOR, () => hud.hideBanner());
+      pendingBanner = () => {
+        hud.showBanner(title, right ? 'good' : 'miss', bandMiddle());
+        after(BANNER_FOR, () => hud.hideBanner());
+      };
     }
     const line = callFor(kind, theirGoalSpeech(rival));
 
     if (right) {
       // The question and answers get out of the way of the play.
       after(0.25, () => hud.hideQuestion(true));
+      // The call waits for the play's moment: the pass, hit, steal, save or goal.
       const token = ++speechToken;
-      speak(line, () => {
-        if (token !== speechToken || turn !== thisTurn) return;
-        callSpoken = true;
-        maybeNext();
-      });
+      pendingCall = () => {
+        speak(line, () => {
+          if (token !== speechToken || turn !== thisTurn) return;
+          callSpoken = true;
+          maybeNext();
+        });
+      };
     } else {
-      // The fact goes in the question panel; the play runs at once and the next question
-      // waits for the green tap and the end of the play.
+      // The fact goes in the question panel; the green answer is marked at once, and the call
+      // and the reading start at the play's moment. The next question waits for the green tap
+      // and the end of the play.
       hud.showCall(title, f.statement);
       tapFlow.reveal(hud.buttons, options, f, {
         avoid: hud.avoid,
         problem: f.prompt,
         lead: line,
+        delay: script.moment,
       });
     }
 
@@ -477,6 +486,7 @@ function run(session: GameSession): void {
       ) {
         onPlayEvent(current.script.events[current.eventIndex++], true);
       }
+      runMoment(true);
       updateActors(dt);
     }
   };
@@ -549,7 +559,7 @@ function run(session: GameSession): void {
   const updatePlay = (delta: number) => {
     const current = play;
     if (!current || phase !== 'play' || current.ended) return;
-    playClock += delta / PLAY_SLOWDOWN;
+    playClock += delta;
     const { script } = current;
     while (
       current.eventIndex < script.events.length &&
@@ -557,11 +567,29 @@ function run(session: GameSession): void {
     ) {
       onPlayEvent(script.events[current.eventIndex++], false);
     }
+    runMoment(false);
     // Ice spray where a skater stops hard or is checked into: handled by the check events above.
     if (playClock >= script.duration) {
       current.ended = true;
+      // Belt and braces: a call still waiting is said now.
+      runMoment(false, true);
       maybeNext();
     }
+  };
+
+  /**
+   * Once the play's moment has come (or the play has ended), shows the banner and says the call.
+   * A dev fast-forward (`quiet`) shows the banner only.
+   */
+  const runMoment = (quiet: boolean, force = false) => {
+    const current = play;
+    if (!current || (!force && playClock < current.script.moment)) return;
+    const banner = pendingBanner;
+    const call = pendingCall;
+    pendingBanner = null;
+    pendingCall = null;
+    banner?.();
+    if (!quiet) call?.();
   };
 
   /** The next question comes once the play has ended and the call has been said (or tapped). */

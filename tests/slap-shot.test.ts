@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { runs } from './helpers/full';
-import { formation, maxSeconds, planPlay } from '../src/games/slap-shot/plays';
 import {
-  ACTORS,
-  SKATERS,
-  actorAt,
-  isGoalie,
-  puckAt,
-  type PlayScript,
-} from '../src/shared/hockey/script';
+  RUSH_SECONDS,
+  formation,
+  maxSeconds,
+  planPlay,
+  type SlapPlay,
+  type Variant,
+} from '../src/games/slap-shot/plays';
+import { ACTORS, SKATERS, actorAt, isGoalie, puckAt } from '../src/shared/hockey/script';
 import { shootoutFormation } from '../src/shared/hockey/shootout';
 import { inNet, vec } from '../src/shared/hockey/geometry';
 import {
@@ -176,14 +176,22 @@ describe('step: the ladder', () => {
 });
 
 describe('the clock and the periods', () => {
-  it('takes 36 seconds a step and never goes below 0', () => {
+  it('takes 60 seconds a step and never goes below 0', () => {
     const s = withPuck(held('us', 'neutral'), { clock: 100 });
     expect(step(s, true, 'plain', 0, 0).state.clock).toBe(100 - SECONDS_PER_QUESTION);
-    expect(step({ ...s, clock: 50 }, true, 'plain', 0, 0).state.clock).toBe(14);
+    expect(step({ ...s, clock: SECONDS_PER_QUESTION + 14 }, true, 'plain', 0, 0).state.clock).toBe(
+      14,
+    );
   });
 
   it('period 1 ends into period 2', () => {
-    const r = step(withPuck(held('us', 'neutral'), { clock: 36 }), true, 'plain', 0, 0);
+    const r = step(
+      withPuck(held('us', 'neutral'), { clock: SECONDS_PER_QUESTION }),
+      true,
+      'plain',
+      0,
+      0,
+    );
     expect(r.periodEnd).toBe('period');
     expect(r.state.period).toBe(2);
     expect(r.state.clock).toBe(PERIOD_SECONDS);
@@ -351,18 +359,103 @@ describe('planPlay', () => {
     expect(kinds.size).toBe(Object.keys(PLAY_LABEL).length);
   });
 
+  const VARIANTS: Variant[] = ['a', 'b'];
   for (const c of cases) {
     const name = `${c.kind} from ${JSON.stringify(c.before)}`;
     it(`${name}: a well-formed script`, () => {
       for (const roll of [0.1, 0.9]) {
-        const script = planPlay(c.kind, c.before, c.after, () => roll);
-        checkScript(script, c.kind, c.after);
+        for (const variant of VARIANTS) {
+          const script = planPlay(c.kind, c.before, c.after, () => roll, variant);
+          checkScript(script, c.kind, c.before, c.after);
+        }
       }
     });
+    if (!SHOOTOUT_KINDS.includes(c.kind)) {
+      it(`${name}: the two build-ups differ`, () => {
+        for (const roll of [0.1, 0.9]) {
+          const a = planPlay(c.kind, c.before, c.after, () => roll, 'a');
+          const b = planPlay(c.kind, c.before, c.after, () => roll, 'b');
+          expect(JSON.stringify(a)).not.toBe(JSON.stringify(b));
+        }
+      });
+    }
   }
+
+  it('picks the build-up with a second roll: below 0.5 is a, otherwise b', () => {
+    const before = held('us', 'their-end');
+    const after = { kind: 'faceoff', zone: 'neutral' } as const;
+    const rolls =
+      (...r: number[]) =>
+      () =>
+        r.shift() ?? 0.5;
+    const a = planPlay('one-timer', before, after, rolls(0.9, 0.1));
+    const b = planPlay('one-timer', before, after, rolls(0.9, 0.7));
+    expect(JSON.stringify(a)).toBe(
+      JSON.stringify(planPlay('one-timer', before, after, () => 0.9, 'a')),
+    );
+    expect(JSON.stringify(b)).toBe(
+      JSON.stringify(planPlay('one-timer', before, after, () => 0.9, 'b')),
+    );
+  });
 });
 
-function checkScript(script: PlayScript, kind: PlayKind, after: Puck) {
+/** How long each play should last, from the design. */
+function expectedSeconds(kind: PlayKind, before: Puck): number {
+  const zone = before.kind === 'held' ? before.zone : 'our-end';
+  switch (kind) {
+    case 'faceoff-win':
+    case 'faceoff-loss':
+      return 3.6;
+    case 'stretch-pass':
+    case 'tape-to-tape':
+    case 'skate-out':
+    case 'spin-o-rama':
+    case 'toe-drag':
+    case 'give-and-go':
+    case 'dump-and-chase':
+    case 'picked-off':
+      return 4.5;
+    case 'save':
+      return 6.0;
+    case 'one-timer':
+    case 'wrist-shot':
+    case 'rebound-goal':
+    case 'steal-score':
+    case 'breakaway-against':
+    case 'they-score-wrister':
+    case 'they-score-deke':
+      return 8.4;
+    case 'counter-rush':
+      return 9.6;
+    case 'body-check':
+    case 'poke-check':
+    case 'intercept':
+    case 'shot-block':
+    case 'goalie-save':
+      return 3.6 + RUSH_SECONDS[zone];
+    default:
+      return 2.8;
+  }
+}
+
+const OUR_GOALS: PlayKind[] = ['one-timer', 'wrist-shot', 'rebound-goal', 'so-goal'];
+
+/** Positions at 1/60 s steps, compared over 0.1 s windows: the fastest metres a second. */
+function topSpeed(script: SlapPlay, id: (typeof ACTORS)[number]): number {
+  const step = 1 / 60;
+  const window = 6;
+  const n = Math.floor(script.duration / step);
+  let top = 0;
+  for (let i = 0; i + window <= n; i++) {
+    const a = actorAt(script.actors[id], i * step).pos;
+    const b = actorAt(script.actors[id], (i + window) * step).pos;
+    top = Math.max(top, Math.hypot(b.x - a.x, b.z - a.z) / (window * step));
+  }
+  return top;
+}
+
+function checkScript(script: SlapPlay, kind: PlayKind, before: Puck, after: Puck) {
+  const shootout = SHOOTOUT_KINDS.includes(kind);
   expect(script.duration).toBeLessThanOrEqual(maxSeconds(kind) + 1e-9);
   // The puck covers 0..duration with no gaps.
   let t = 0;
@@ -391,7 +484,7 @@ function checkScript(script: PlayScript, kind: PlayKind, after: Puck) {
     expect(Number.isFinite(p.x + p.y + p.z)).toBe(true);
   }
   const goal = script.events.find((e) => e.type === 'goal');
-  if (isTheirGoal(kind) || ['one-timer', 'wrist-shot', 'rebound-goal', 'so-goal'].includes(kind)) {
+  if (isTheirGoal(kind) || OUR_GOALS.includes(kind)) {
     expect(goal).toBeTruthy();
     expect(script.goal).toBe(isTheirGoal(kind) ? 'them' : 'us');
     expect(inNet(puckAt(script, script.duration), script.goal!)).toBe(true);
@@ -399,7 +492,7 @@ function checkScript(script: PlayScript, kind: PlayKind, after: Puck) {
   } else {
     expect(goal).toBeUndefined();
     expect(script.goal).toBeNull();
-    if (!SHOOTOUT_KINDS.includes(kind)) {
+    if (!shootout) {
       const f = formation(after);
       for (const id of ACTORS) {
         const end = actorAt(script.actors[id], script.duration).pos;
@@ -407,6 +500,38 @@ function checkScript(script: PlayScript, kind: PlayKind, after: Puck) {
         expect(end.z).toBeCloseTo(f.spots[id].pos.z, 4);
       }
     }
+  }
+  if (shootout) {
+    const first = script.events.find((e) => e.type === 'goal' || e.type === 'save');
+    expect(script.moment).toBe(first!.t);
+    return;
+  }
+  // The length, and where the named moment sits.
+  expect(script.duration).toBeCloseTo(expectedSeconds(kind, before), 6);
+  if (goal) {
+    expect(Math.abs(goal.t - (script.duration - 2.0))).toBeLessThanOrEqual(0.3);
+    expect(script.moment).toBe(goal.t);
+  } else {
+    expect(script.moment).toBeGreaterThanOrEqual(0.5 * script.duration - 1e-9);
+    expect(script.moment).toBeLessThanOrEqual(script.duration - 0.6 + 1e-9);
+  }
+  // Real speed: skaters and goalies, passes and shots.
+  for (const id of ACTORS) {
+    expect(topSpeed(script, id), `${kind} ${id} speed`).toBeLessThanOrEqual(isGoalie(id) ? 6 : 11);
+  }
+  const shots = script.events.filter((e) => e.type === 'shot').map((e) => e.t);
+  for (const seg of script.puck) {
+    if (seg.kind !== 'slide' && seg.kind !== 'air') continue;
+    const length = Math.hypot(seg.b.x - seg.a.x, seg.b.y - seg.a.y, seg.b.z - seg.a.z);
+    const mps = length / (seg.t1 - seg.t0);
+    const isShot = shots.some((s) => Math.abs(s - seg.t0) < 0.01);
+    const what = `${kind} ${seg.kind} at ${seg.t0.toFixed(2)} (${length.toFixed(1)} m)`;
+    if (isShot) expect(mps, what).toBeGreaterThanOrEqual(18);
+    else if (length > 3) expect(mps, what).toBeGreaterThanOrEqual(8);
+  }
+  // Every shot leaves the stick at its event.
+  for (const s of shots) {
+    expect(script.puck.some((seg) => seg.kind === 'air' && Math.abs(seg.t0 - s) < 0.01)).toBe(true);
   }
 }
 

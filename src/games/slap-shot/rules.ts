@@ -18,7 +18,7 @@ export type { Side };
 export const PERIODS = 3;
 export const PERIOD_SECONDS = 1200;
 export const OT_SECONDS = 300;
-export const SECONDS_PER_QUESTION = 36;
+export const SECONDS_PER_QUESTION = 60;
 export const SHOOTOUT_ROUNDS = 3;
 /** Our puck, wrong answer: below this the other side scores straight away. */
 export const INSTANT_GOAL_CHANCE = 0.5;
