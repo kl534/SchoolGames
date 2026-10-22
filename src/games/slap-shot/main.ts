@@ -81,6 +81,8 @@ const INTRO_FOR = 1.6;
 /** Seconds a play's name stays up, and a goal's. */
 const BANNER_FOR = 1.2;
 const GOAL_BANNER_FOR = 2;
+/** Every play runs this many times longer than its script says, so the action is easy to follow. */
+const PLAY_SLOWDOWN = 3;
 /** The pause after a play and its call before the next question. */
 const NEXT_GAP = 0.2;
 /** The two halves of the fade to the faceoff formation after a goal. */
@@ -547,7 +549,7 @@ function run(session: GameSession): void {
   const updatePlay = (delta: number) => {
     const current = play;
     if (!current || phase !== 'play' || current.ended) return;
-    playClock += delta;
+    playClock += delta / PLAY_SLOWDOWN;
     const { script } = current;
     while (
       current.eventIndex < script.events.length &&
