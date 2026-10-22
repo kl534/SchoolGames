@@ -6,8 +6,8 @@ A full 3-on-3 hockey game against a named rival over three 20:00 periods, overti
 
 - `main.ts`: the game loop, learning loop, play playback, periods, camera and wiring of everything below
 - `rules.ts`: pure game state and the ladder (`step`, `shootoutStep`, `shootoutDecided`), the clock, periods, the fixed calls and banner words (`PLAY_CALL`, `PLAY_LABEL`); re-exports `Side`, `Band`, `bandFor` and the band times from `src/shared/hockey/`
-- `plays.ts`: pure formations (`formation`) and each play as a script of actor paths, puck segments and events (`planPlay`); its shootout plays call `shootoutShot` in `src/shared/hockey/shootout.ts`
-- `dev.ts`: dev query hooks (`forcedPlay`, `devGame`, `autoAnswer`, `freezeAt`)
+- `plays.ts`: pure formations (`formation`) and each play as a script of actor paths, puck segments and events (`planPlay`: two build-ups per play, `Variant` `a` or `b`, and `moment`, the script time of the pass, hit, steal, save or goal the call and banner wait for); its shootout plays call `shootoutShot` in `src/shared/hockey/shootout.ts`
+- `dev.ts`: dev query hooks (`forcedPlay`, `forcedVariant`, `devGame`, `autoAnswer`, `freezeAt`)
 - `voice.ts`: every spoken line that is not a fact (`VOICE_LINES`)
 
 Shared with Shootout Showdown, in `src/shared/hockey/`:
@@ -31,6 +31,7 @@ Shared with Shootout Showdown, in `src/shared/hockey/`:
 - `?puck=faceoff-neutral|us-our-end|us-neutral|us-their-end|them-their-end|them-neutral|them-our-end`: the starting puck.
 - `?start=p2|p3|ot|so`: start in that period; `?score=2-1` and `?clock=40` set the goals (us-them) and the seconds left.
 - `?auto=right|wrong`: answer the first question 0.3 s after its reading ends (and skip the intro), so a play runs without taps.
+- `?variant=a|b`: which build-up every play uses.
 - `?at=1.1`: freeze the first play at that script time; the HUD stays.
 - Example: `npm run shots -- "slap-shot?puck=us-their-end&auto=right&play=one-timer&at=1.6" --start`
 

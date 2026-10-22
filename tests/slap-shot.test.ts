@@ -8,13 +8,7 @@ import {
   type SlapPlay,
   type Variant,
 } from '../src/games/slap-shot/plays';
-import {
-  ACTORS,
-  SKATERS,
-  actorAt,
-  isGoalie,
-  puckAt,
-} from '../src/shared/hockey/script';
+import { ACTORS, SKATERS, actorAt, isGoalie, puckAt } from '../src/shared/hockey/script';
 import { shootoutFormation } from '../src/shared/hockey/shootout';
 import { inNet, vec } from '../src/shared/hockey/geometry';
 import {
@@ -185,11 +179,19 @@ describe('the clock and the periods', () => {
   it('takes 60 seconds a step and never goes below 0', () => {
     const s = withPuck(held('us', 'neutral'), { clock: 100 });
     expect(step(s, true, 'plain', 0, 0).state.clock).toBe(100 - SECONDS_PER_QUESTION);
-    expect(step({ ...s, clock: SECONDS_PER_QUESTION + 14 }, true, 'plain', 0, 0).state.clock).toBe(14);
+    expect(step({ ...s, clock: SECONDS_PER_QUESTION + 14 }, true, 'plain', 0, 0).state.clock).toBe(
+      14,
+    );
   });
 
   it('period 1 ends into period 2', () => {
-    const r = step(withPuck(held('us', 'neutral'), { clock: SECONDS_PER_QUESTION }), true, 'plain', 0, 0);
+    const r = step(
+      withPuck(held('us', 'neutral'), { clock: SECONDS_PER_QUESTION }),
+      true,
+      'plain',
+      0,
+      0,
+    );
     expect(r.periodEnd).toBe('period');
     expect(r.state.period).toBe(2);
     expect(r.state.clock).toBe(PERIOD_SECONDS);
@@ -382,11 +384,18 @@ describe('planPlay', () => {
   it('picks the build-up with a second roll: below 0.5 is a, otherwise b', () => {
     const before = held('us', 'their-end');
     const after = { kind: 'faceoff', zone: 'neutral' } as const;
-    const rolls = (...r: number[]) => () => r.shift() ?? 0.5;
+    const rolls =
+      (...r: number[]) =>
+      () =>
+        r.shift() ?? 0.5;
     const a = planPlay('one-timer', before, after, rolls(0.9, 0.1));
     const b = planPlay('one-timer', before, after, rolls(0.9, 0.7));
-    expect(JSON.stringify(a)).toBe(JSON.stringify(planPlay('one-timer', before, after, () => 0.9, 'a')));
-    expect(JSON.stringify(b)).toBe(JSON.stringify(planPlay('one-timer', before, after, () => 0.9, 'b')));
+    expect(JSON.stringify(a)).toBe(
+      JSON.stringify(planPlay('one-timer', before, after, () => 0.9, 'a')),
+    );
+    expect(JSON.stringify(b)).toBe(
+      JSON.stringify(planPlay('one-timer', before, after, () => 0.9, 'b')),
+    );
   });
 });
 

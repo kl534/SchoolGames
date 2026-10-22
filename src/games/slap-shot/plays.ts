@@ -124,7 +124,6 @@ export function formation(puck: Puck): Formation {
   };
 }
 
-
 // ---------- Writing plays ----------
 
 const flat = (a: Vec, b: Vec) => Math.hypot(a.x - b.x, a.z - b.z);
@@ -232,7 +231,12 @@ export function planPlay(
   variant?: Variant,
 ): SlapPlay {
   const sgn = random() < 0.5 ? -1 : 1;
-  if (kind === 'so-goal' || kind === 'so-saved' || kind === 'so-stopped' || kind === 'so-goal-against') {
+  if (
+    kind === 'so-goal' ||
+    kind === 'so-saved' ||
+    kind === 'so-stopped' ||
+    kind === 'so-goal-against'
+  ) {
     const script = shootoutShot(kind, 'C', 'solid', sgn);
     return done(script, firstResult(script));
   }
