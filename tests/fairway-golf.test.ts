@@ -246,7 +246,11 @@ describe('resolveShot', () => {
 describe('finishShot', () => {
   const h = HOLES[0];
   const plan = planShot(h, { x: 0, z: 100 }, 'fairway', 0);
-  const end = (x: number, z: number) => ({ quality: 'perfect' as const, end: { x, z }, side: 1 as const });
+  const end = (x: number, z: number) => ({
+    quality: 'perfect' as const,
+    end: { x, z },
+    side: 1 as const,
+  });
 
   it('holes anything that ends within the cup radius', () => {
     expect(finishShot(h, plan, end(0, h.length)).kind).toBe('holed');
@@ -344,7 +348,12 @@ describe('afterShot, holeScore and holeOver', () => {
     expect(vsPar(2, 4)).toBe(-2);
     const pars = HOLES.map((x) => x.par);
     expect(totalVsPar(pars, pars)).toBe(0);
-    expect(totalVsPar(pars.map((p) => p + 1), pars)).toBe(9);
+    expect(
+      totalVsPar(
+        pars.map((p) => p + 1),
+        pars,
+      ),
+    ).toBe(9);
     expect(totalVsPar([3, 7, 4], [4, 4, 4])).toBe(2);
   });
 });

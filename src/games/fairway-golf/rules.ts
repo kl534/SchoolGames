@@ -1,5 +1,5 @@
 /** Golf scoring, the stored score and every line the announcer says. Pure: no DOM, no three.js. */
-import { HOLES, surfaceAt, type Hole } from './course';
+import { centreX, HOLES, surfaceAt, type Hole } from './course';
 import type { Lie, Quality, Result } from './shot';
 
 export const STROKE_CAP = 7;
@@ -12,8 +12,8 @@ export interface HoleState {
   holed: boolean;
 }
 
-export function startHole(_hole: Hole): HoleState {
-  return { strokes: 0, penalties: 0, lie: 'tee', at: { x: 0, z: 0 }, holed: false };
+export function startHole(hole: Hole): HoleState {
+  return { strokes: 0, penalties: 0, lie: 'tee', at: { x: centreX(hole, 0), z: 0 }, holed: false };
 }
 
 export function afterShot(state: HoleState, hole: Hole, result: Result): HoleState {
@@ -84,15 +84,7 @@ export function roundOutcome(total: number, rel: number): string {
 // ---------- Spoken lines ----------
 
 export type CallKind =
-  | 'fairway'
-  | 'rough'
-  | 'sand'
-  | 'green'
-  | 'water'
-  | 'holed'
-  | 'puttGood'
-  | 'puttMiss'
-  | 'duff';
+  'fairway' | 'rough' | 'sand' | 'green' | 'water' | 'holed' | 'puttGood' | 'puttMiss' | 'duff';
 
 const SHOT_CALLS: Record<CallKind, string> = {
   fairway: 'Fairway!',

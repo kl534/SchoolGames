@@ -1,0 +1,117 @@
+import {
+  CircleGeometry,
+  DoubleSide,
+  Group,
+  Mesh,
+  MeshBasicMaterial,
+  MeshStandardMaterial,
+  RingGeometry,
+  SphereGeometry,
+} from 'three';
+import { DUFF_FRACTION, isPutt, type Outcome, type Plan } from './shot';
+
+/** The ball is drawn a lot bigger than life so it can be seen on a phone from behind. */
+export const BALL_R = 0.16;
+/** Putts roll at this speed, yards a second. */
+export const PUTT_SPEED = 8;
+
+export interface Ball {
+  object: Group;
+  /** Puts the ball's centre at `p` (height `p.y` above the ground); the shadow follows below. */
+  place(p: { x: number; y: number; z: number }): void;
+  setVisible(visible: boolean): void;
+  /** A ring of water spreading from `at`, `t` seconds in; null hides it. */
+  splash(at: { x: number; z: number } | null, t?: number): void;
+}
+
+export function createBall(): Ball {
+  const object = new Group();
+  const sphere = new Mesh(
+    new SphereGeometry(BALL_R, 20, 14),
+    new MeshStandardMaterial({ color: 0xffffff, roughness: 0.35 }),
+  );
+  object.add(sphere);
+  const shadow = new Mesh(
+    new CircleGeometry(BALL_R * 1.1, 16),
+    new MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }),
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.renderOrder = 4;
+  object.add(shadow);
+
+  const ring = new Mesh(
+    new RingGeometry(0.85, 1, 28),
+    new MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.8,
+      side: DoubleSide,
+      depthWrite: false,
+    }),
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.visible = false;
+  ring.renderOrder = 5;
+
+  return {
+    object,
+    place(p) {
+      object.position.set(p.x, 0, p.z);
+      sphere.position.y = Math.max(p.y, BALL_R);
+      shadow.position.y = 0.12;
+      const s = 1 / (1 + Math.max(p.y - BALL_R, 0) * 0.08);
+      shadow.scale.setScalar(s);
+    },
+    setVisible(visible) {
+      object.visible = visible;
+    },
+    splash(at, t = 0) {
+      if (!at) {
+        ring.visible = false;
+        return;
+      }
+      if (!ring.parent) object.parent?.add(ring);
+      ring.visible = t < 1.2;
+      ring.position.set(at.x, 0.2, at.z);
+      ring.scale.setScalar(0.5 + t * 4);
+      (ring.material as MeshBasicMaterial).opacity = Math.max(0, 0.8 - t * 0.7);
+    },
+  };
+}
+
+/** How long the ball is in the air (or rolling) for a struck shot, seconds. */
+export function flightSeconds(plan: Plan, outcome: Outcome): number {
+  const d = Math.hypot(outcome.end.x - plan.from.x, outcome.end.z - plan.from.z);
+  if (isPutt(plan)) return Math.max(d / PUTT_SPEED, 0.4);
+  const carry = outcome.quality === 'duff' ? DUFF_FRACTION * plan.carry : plan.carry;
+  return 0.9 + carry / 120;
+}
+
+/**
+ * Where the ball is `t` (0 to 1) of the way along its flight: a straight run from the tee to
+ * the ring with a parabola for height. A hook or slice bends in late, so the ball starts on line.
+ */
+export function flightPoint(
+  plan: Plan,
+  outcome: Outcome,
+  t: number,
+): { x: number; y: number; z: number } {
+  const { from } = plan;
+  const u = Math.min(Math.max(t, 0), 1);
+  if (isPutt(plan)) {
+    return {
+      x: from.x + (outcome.end.x - from.x) * u,
+      y: BALL_R,
+      z: from.z + (outcome.end.z - from.z) * u,
+    };
+  }
+  const aimedAt = outcome.quality === 'duff' ? outcome.end : plan.landing;
+  const bend = { x: outcome.end.x - aimedAt.x, z: outcome.end.z - aimedAt.z };
+  const carry = outcome.quality === 'duff' ? DUFF_FRACTION * plan.carry : plan.carry;
+  const height = outcome.quality === 'duff' ? 0.5 : 1;
+  return {
+    x: from.x + (aimedAt.x - from.x) * u + bend.x * u * u,
+    y: BALL_R + 4 * plan.club.apex * carry * u * (1 - u) * height,
+    z: from.z + (aimedAt.z - from.z) * u + bend.z * u * u,
+  };
+}
