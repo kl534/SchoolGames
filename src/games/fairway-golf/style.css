@@ -1,0 +1,762 @@
+.fg-card,
+.fg-map,
+.fg-controls,
+.fg-q,
+.fg-answers,
+.fg-banner,
+.fg-pill {
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  color: #fff;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/*
+ * The layouts mirror hudLayout in views.ts: upright screens (aspect <= 6/5) stack the card and
+ * question up the top with the controls along the bottom; wider ones put the controls in a column
+ * on the right and the question on the left.
+ */
+
+/* ---------- The scorecard: nine holes across the top ---------- */
+.fg-card {
+  position: fixed;
+  top: calc(max(12px, env(safe-area-inset-top)) + 58px);
+  left: max(12px, env(safe-area-inset-left));
+  right: max(12px, env(safe-area-inset-right));
+  z-index: 10;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 3px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(12, 28, 24, 0.82);
+  pointer-events: none;
+}
+
+.fg-f {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 1px 0 2px;
+  border: 2px solid transparent;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.08);
+  text-align: center;
+}
+
+.fg-f.cur {
+  border-color: #ffd166;
+  background: rgba(255, 209, 102, 0.22);
+}
+
+.fg-fn {
+  color: #b8e6a8;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 12px;
+}
+
+.fg-par {
+  color: #9db3a8;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 10px;
+  white-space: nowrap;
+}
+
+.fg-s {
+  height: 20px;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fg-total {
+  display: none;
+  grid-column: 1 / -1;
+  padding: 4px 0 2px;
+  color: #ffd166;
+  font-size: 22px;
+  font-weight: 900;
+  text-align: center;
+}
+
+/* The big scorecard at the end of the round. */
+.fg-card.big {
+  top: 50%;
+  right: auto;
+  left: 50%;
+  z-index: 12;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  width: min(92vw, 520px);
+  padding: 10px;
+  transform: translate(-50%, -50%);
+}
+
+.fg-card.big .fg-total {
+  display: block;
+}
+
+.fg-card.big .fg-fn {
+  font-size: 14px;
+  line-height: 16px;
+}
+
+.fg-card.big .fg-par {
+  font-size: 12px;
+  line-height: 14px;
+}
+
+.fg-card.big .fg-s {
+  height: 30px;
+  font-size: 26px;
+  line-height: 30px;
+}
+
+/* ---------- The hole map ---------- */
+.fg-map {
+  position: fixed;
+  top: calc(var(--fg-card-bottom, 130px) + 8px);
+  right: max(12px, env(safe-area-inset-right));
+  z-index: 9;
+  box-sizing: border-box;
+  width: 64px;
+  height: 112px;
+  padding: 3px;
+  border-radius: 10px;
+  background: rgba(12, 28, 24, 0.7);
+  pointer-events: none;
+}
+
+.fg-map-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+/* ---------- The aim controls: nudge, Swing! and the chips ---------- */
+.fg-controls {
+  position: fixed;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  left: max(12px, env(safe-area-inset-left));
+  z-index: 11;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.fg-controls > * {
+  pointer-events: none;
+}
+
+.fg-row > * {
+  pointer-events: auto;
+}
+
+.fg-chips {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fg-chipcol {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.fg-chipleft {
+  align-items: flex-start;
+}
+
+.fg-chip {
+  padding: 5px 14px;
+  border-radius: 999px;
+  background: rgba(12, 28, 24, 0.82);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.fg-lie[data-surface='Sand'] {
+  border-color: #ffb830;
+  color: #ffd98a;
+}
+
+.fg-lie[data-surface='Water!'] {
+  border-color: #ff4b4b;
+  color: #ffb3b3;
+}
+
+.fg-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fg-swing {
+  flex: 1;
+  min-width: 160px;
+  max-width: 280px;
+  height: 68px;
+  padding: 0 24px;
+  border: 3px solid #ffe9a8;
+  border-radius: 34px;
+  background: linear-gradient(#ffb02e, #ff8a00);
+  color: #fff;
+  font:
+    800 28px system-ui,
+    sans-serif;
+  text-shadow: 0 2px 0 rgba(120, 50, 0, 0.5);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 6px 18px rgba(4, 12, 40, 0.5);
+}
+
+.fg-swing:active {
+  scale: 0.96;
+}
+
+.fg-nudge {
+  flex: none;
+  width: 60px;
+  height: 60px;
+  padding: 0;
+  border: 2px solid #b8e6a8;
+  border-radius: 50%;
+  background: linear-gradient(#2f9c55, #1b6b3a);
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 4px 12px rgba(4, 12, 40, 0.5);
+}
+
+.fg-nudge:active {
+  scale: 0.92;
+}
+
+.fg-swing:focus-visible,
+.fg-nudge:focus-visible,
+.fg-answer:focus-visible,
+.fg-hear:focus-visible {
+  outline: 4px solid #ffd43b;
+  outline-offset: 2px;
+}
+
+/* ---------- The question, the clock and the four answers ---------- */
+.fg-q {
+  position: fixed;
+  top: calc(var(--fg-card-bottom, 70px) + 8px);
+  left: 50%;
+  z-index: 10;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(560px, calc(100vw - 24px));
+  padding: 6px 6px 22px 20px;
+  border-radius: 20px;
+  background: rgba(12, 28, 56, 0.88);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  transform: translateX(-50%);
+}
+
+.fg-q-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 30px;
+  font-weight: 800;
+  text-wrap: balance;
+}
+
+.fg-hear {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 22px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.fg-clock {
+  position: absolute;
+  right: 16px;
+  bottom: 6px;
+  left: 16px;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.fg-clock i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 5px;
+  background: #5cf2b0;
+}
+
+.fg-clock.urgent i {
+  background: #ff6b6b;
+}
+
+.fg-answers {
+  position: fixed;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 50%;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  width: min(760px, calc(100vw - 24px));
+  transform: translateX(-50%);
+}
+
+.fg-answer {
+  min-width: 0;
+  height: 72px;
+  padding: 0 8px;
+  overflow: hidden;
+  border: 3px solid #9cc2ff;
+  border-radius: 20px;
+  background: linear-gradient(#2f66d0, #1c3f96);
+  color: #fff;
+  font:
+    800 clamp(24px, 6vmin, 38px) system-ui,
+    sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 6px 18px rgba(4, 12, 40, 0.5);
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    opacity 0.3s;
+}
+
+.fg-answer:active:not([aria-disabled='true']) {
+  scale: 0.96;
+}
+
+.fg-answer[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.fg-answer.chosen {
+  opacity: 1;
+  border-color: #fff;
+}
+
+.fg-answer.right {
+  opacity: 1;
+  border-color: #1b6b2b;
+  background: #5cf2b0;
+  color: #0c3a1d;
+  box-shadow:
+    0 0 0 5px rgba(92, 242, 176, 0.5),
+    0 0 26px 8px rgba(92, 242, 176, 0.7);
+}
+
+.fg-answer.wrong {
+  opacity: 1;
+  border-color: #8c1d1d;
+  background: #ff8787;
+  color: #4a0c0c;
+}
+
+/* ---------- Messages: the banner and the pill ---------- */
+.fg-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 120px;
+  z-index: 12;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: max-content;
+  max-width: 92%;
+  padding: 8px 22px;
+  border-radius: 20px;
+  background: rgba(12, 28, 24, 0.9);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.fg-banner-title {
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.fg-banner.info .fg-banner-title {
+  color: #ffe066;
+}
+
+.fg-banner.miss .fg-banner-title {
+  color: #ffa8a8;
+}
+
+.fg-banner.good {
+  background: rgba(14, 84, 52, 0.9);
+  border-color: #5cf2b0;
+}
+
+.fg-banner-detail {
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.fg-pill {
+  position: fixed;
+  left: 50%;
+  z-index: 12;
+  padding: 7px 22px;
+  border-radius: 999px;
+  background: rgba(12, 28, 24, 0.88);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  font-size: 22px;
+  font-weight: 900;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.fg-pill.on {
+  animation: fg-pill 1.6s ease-out forwards;
+}
+
+@keyframes fg-pill {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -10px);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---------- Upright screens (aspect <= 6/5) ---------- */
+@media (max-aspect-ratio: 6/5) {
+  .fg-map {
+    width: 64px;
+    height: 112px;
+  }
+
+  .fg-q {
+    width: calc(100vw - 24px);
+  }
+}
+
+@media (max-aspect-ratio: 6/5) and (max-width: 560px) {
+  .fg-answers {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .fg-answer {
+    height: 64px;
+  }
+}
+
+@media (max-aspect-ratio: 6/5) and (min-width: 561px) {
+  .fg-f {
+    padding: 4px 0 4px;
+  }
+
+  .fg-fn {
+    font-size: 14px;
+    line-height: 16px;
+  }
+
+  .fg-par {
+    font-size: 12px;
+    line-height: 14px;
+  }
+
+  .fg-s {
+    height: 28px;
+    font-size: 22px;
+    line-height: 28px;
+  }
+
+  .fg-chip {
+    font-size: 20px;
+  }
+
+  .fg-map {
+    width: 80px;
+    height: 140px;
+  }
+}
+
+@media (max-aspect-ratio: 6/5) {
+  .fg-card.big {
+    top: 50%;
+    right: auto;
+    left: 50%;
+  }
+}
+
+/* ---------- Wide screens: scorecard across the top, controls down the right, question left ---------- */
+@media (min-aspect-ratio: 6/5) {
+  .fg-card {
+    top: max(12px, env(safe-area-inset-top));
+    right: auto;
+    left: 50%;
+    width: min(520px, calc(100vw - 280px));
+    transform: translateX(-50%);
+  }
+
+  .fg-card.big {
+    top: 50%;
+    width: min(92vw, 560px);
+    transform: translate(-50%, -50%);
+  }
+
+  .fg-map {
+    right: auto;
+    left: max(12px, env(safe-area-inset-left));
+  }
+
+  .fg-controls {
+    left: auto;
+    width: 176px;
+    align-items: stretch;
+  }
+
+  .fg-chips {
+    flex-direction: column-reverse;
+    align-items: flex-end;
+    gap: 6px;
+  }
+
+  .fg-chipcol {
+    flex-direction: column-reverse;
+  }
+
+  .fg-chip {
+    padding: 3px 12px;
+    font-size: 15px;
+  }
+
+  .fg-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      'swing swing'
+      'left right';
+    justify-items: stretch;
+    gap: 8px;
+  }
+
+  .fg-swing {
+    grid-area: swing;
+    min-width: 0;
+    max-width: none;
+    height: 64px;
+    padding: 0;
+    font-size: 26px;
+  }
+
+  .fg-left {
+    grid-area: left;
+    justify-self: start;
+  }
+
+  .fg-right {
+    grid-area: right;
+    justify-self: end;
+  }
+
+  .fg-q {
+    left: max(12px, env(safe-area-inset-left));
+    width: min(34vw, 340px);
+    transform: none;
+  }
+
+  .fg-q-text {
+    font-size: 26px;
+  }
+
+  .fg-answers {
+    left: max(12px, env(safe-area-inset-left));
+    grid-template-columns: repeat(2, 1fr);
+    width: min(34vw, 340px);
+    transform: none;
+  }
+
+  .fg-answer {
+    height: 64px;
+  }
+}
+
+@media (min-aspect-ratio: 6/5) and (max-height: 380px) {
+  .fg-f {
+    padding: 0 0 1px;
+  }
+
+  .fg-fn {
+    font-size: 10px;
+    line-height: 11px;
+  }
+
+  .fg-par {
+    font-size: 8px;
+    line-height: 9px;
+  }
+
+  .fg-s {
+    height: 18px;
+    font-size: 15px;
+    line-height: 18px;
+  }
+
+  .fg-map {
+    width: 48px;
+    height: 96px;
+  }
+
+  .fg-swing {
+    height: 56px;
+    font-size: 24px;
+  }
+
+  .fg-nudge {
+    width: 52px;
+    height: 52px;
+  }
+
+  .fg-q {
+    padding: 4px 4px 20px 14px;
+    border-radius: 16px;
+  }
+
+  .fg-q-text {
+    font-size: 20px;
+  }
+
+  .fg-answers {
+    bottom: max(8px, env(safe-area-inset-bottom));
+    gap: 8px;
+  }
+
+  .fg-answer {
+    height: 52px;
+    border-width: 2px;
+    border-radius: 16px;
+    font-size: clamp(20px, 7vmin, 28px);
+  }
+
+  .fg-banner-title {
+    font-size: 22px;
+  }
+
+  .fg-banner-detail {
+    font-size: 18px;
+  }
+}
+
+/* ---------- Big landscape screens (tablets, desktops) ---------- */
+@media (min-aspect-ratio: 6/5) and (min-height: 700px) {
+  .fg-card {
+    width: min(640px, calc(100vw - 320px));
+  }
+
+  .fg-f {
+    padding: 4px 0;
+  }
+
+  .fg-fn {
+    font-size: 14px;
+    line-height: 16px;
+  }
+
+  .fg-par {
+    font-size: 12px;
+    line-height: 14px;
+  }
+
+  .fg-s {
+    height: 28px;
+    font-size: 22px;
+    line-height: 28px;
+  }
+
+  .fg-controls {
+    width: 240px;
+  }
+
+  .fg-chip {
+    padding: 4px 14px;
+    font-size: 19px;
+  }
+
+  .fg-swing {
+    height: 80px;
+    font-size: 32px;
+  }
+
+  .fg-nudge {
+    width: 72px;
+    height: 72px;
+    font-size: 28px;
+  }
+
+  .fg-map {
+    width: 80px;
+    height: 140px;
+  }
+
+  .fg-q {
+    width: min(34vw, 420px);
+  }
+
+  .fg-answers {
+    width: min(34vw, 420px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fg-pill.on {
+    animation: none;
+  }
+}
