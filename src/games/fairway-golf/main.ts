@@ -67,7 +67,9 @@ import { aimView, followView, introView, landView, type CamView, type Vec } from
 const GAME_ID = 'fairway-golf';
 
 /** Seconds the hole is shown from above before the golfer is lined up. */
-const INTRO_FOR = 1.8;
+const INTRO_FOR = 2.6;
+/** The flyover sweeps from the tee to the green over this many seconds of the intro. */
+const SWEEP_FOR = 2.4;
 /** Seconds the shot call stays up, and the hole call. */
 const SHOT_HOLD = 1.2;
 const HOLE_HOLD = 2.0;
@@ -197,6 +199,7 @@ function run(session: GameSession): void {
     play: { top: 0, bottom: 0 },
   };
   let goal: ViewKind = 'intro';
+  let introAt = 0;
   const cur: CamView = {
     pos: { x: 0, y: 55, z: -45 },
     look: { x: 0, y: 0, z: 100 },
@@ -220,7 +223,7 @@ function run(session: GameSession): void {
   const buildView = (kind: ViewKind): CamView => {
     switch (kind) {
       case 'intro':
-        return introView(hole, viewW, viewH, bands.play);
+        return introView(hole, viewW, viewH, bands.play, (gameTime - introAt) / SWEEP_FOR);
       case 'aim':
         return aimView(plan, hole, golferAt(), viewW, viewH, bands.aim);
       case 'ask':
@@ -271,7 +274,7 @@ function run(session: GameSession): void {
   };
 
   const applyCamera = () => {
-    if (goal === 'follow') target = buildView('follow');
+    if (goal === 'follow' || goal === 'intro') target = buildView(goal);
     const e = moveT >= 1 ? 1 : ease(moveT);
     const a = moveT >= 1 ? target : from;
     cur.pos = lerpVec(a.pos, target.pos, e);
@@ -382,6 +385,7 @@ function run(session: GameSession): void {
       return;
     }
     phase = 'intro';
+    introAt = gameTime;
     goTo('intro', 0);
     hud.showBanner(`Hole ${index + 1}`, `Par ${hole.par} · ${hole.length} yd`, 'info', 'aim');
     const lines = [holeIntro(index)];
@@ -565,6 +569,7 @@ function run(session: GameSession): void {
     const p = flightPoint(plan, outcome, Math.min(u, 1) * stop);
     ballPos = p;
     ball.place(p);
+    ball.trail(gameTime, p);
     if (u >= 1) land();
   };
 
@@ -910,6 +915,7 @@ function run(session: GameSession): void {
     // A miss whose reveal has not been tapped yet leaves the ball where it landed.
     if (splashAt >= 0 && result?.kind === 'water') ball.splash(result.splash, gameTime - splashAt);
 
+    ball.trail(gameTime);
     golfer.play(golfMove, gameTime - golfSince, delta);
     caddie.update(delta);
     holeScene?.update(gameTime);

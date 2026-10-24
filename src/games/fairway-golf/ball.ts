@@ -1,7 +1,11 @@
 import {
   CircleGeometry,
   DoubleSide,
+  BufferAttribute,
+  BufferGeometry,
   Group,
+  Line,
+  LineBasicMaterial,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
@@ -22,7 +26,16 @@ export interface Ball {
   setVisible(visible: boolean): void;
   /** A ring of water spreading from `at`, `t` seconds in; null hides it. */
   splash(at: { x: number; z: number } | null, t?: number): void;
+  /**
+   * The short trail behind a flying ball: pass the ball's point to add it, and call every frame
+   * with `now` (seconds) so points older than TRAIL_SECONDS drop off the tail.
+   */
+  trail(now: number, p?: { x: number; y: number; z: number }): void;
 }
+
+/** A shot's trail follows the ball for this long, seconds. */
+export const TRAIL_SECONDS = 1;
+const TRAIL_POINTS = 60;
 
 export function createBall(): Ball {
   const object = new Group();
@@ -53,8 +66,36 @@ export function createBall(): Ball {
   ring.visible = false;
   ring.renderOrder = 5;
 
+  const trailGeometry = new BufferGeometry();
+  const trailPositions = new Float32Array(TRAIL_POINTS * 3);
+  trailGeometry.setAttribute('position', new BufferAttribute(trailPositions, 3));
+  const trailLine = new Line(
+    trailGeometry,
+    new LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75 }),
+  );
+  trailLine.frustumCulled = false;
+  trailLine.visible = false;
+  trailLine.renderOrder = 6;
+  const trail: { x: number; y: number; z: number; t: number }[] = [];
+
   return {
     object,
+    trail(now, p) {
+      if (p) trail.push({ ...p, t: now });
+      while (trail.length && now - trail[0].t > TRAIL_SECONDS) trail.shift();
+      if (trail.length < 2) {
+        trailLine.visible = false;
+        return;
+      }
+      if (!trailLine.parent) object.parent?.add(trailLine);
+      const last = trail.slice(-TRAIL_POINTS);
+      for (let i = 0; i < TRAIL_POINTS; i++) {
+        const q = last[Math.min(i, last.length - 1)];
+        trailPositions.set([q.x, q.y, q.z], i * 3);
+      }
+      trailGeometry.attributes.position.needsUpdate = true;
+      trailLine.visible = true;
+    },
     place(p) {
       object.position.set(p.x, 0, p.z);
       sphere.position.y = Math.max(p.y, BALL_R);

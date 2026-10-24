@@ -13,9 +13,9 @@ Nine holes of real golf: each shot is one question. A club is picked from the di
 - `golfer.ts`: the golfer and the swing, cheer and groan poses (`createGolfer`, `SWING_SECONDS`, `IMPACT_AT`)
 - `caddie.ts`: the caddie with the bag, who idles, cheers or groans for 1.3 s (`createCaddie`, `REACTION_SECONDS`)
 - `person.ts`: the jointed person rig the golfer uses (`createPerson`, `Pose`, `neutralPose`)
-- `ball.ts`: the ball with its shadow and splash, and the flight path (`createBall`, `flightPoint`, `flightSeconds`)
+- `ball.ts`: the ball with its shadow, splash and one-second shot trail, and the flight path (`createBall`, `flightPoint`, `flightSeconds`)
 - `guide.ts`: the landing ring and the dotted aim line (`createGuide`, `ringRadius`)
-- `views.ts`: the camera views and screen fitting (`aimView`, `followView`, `landView`, `introView`, `fitView`)
+- `views.ts`: the camera views and screen fitting (`aimView`, `followView`, `landView`, `introView` (the tee-to-green flyover), `fitView`)
 - `hud.ts`: scorecard strip, hole map, chips, controls, question, answers, banner and pill (`createHud`, `windChip`)
 - `dev.ts`: dev query hooks (`devStart`, `devHoleState`, `devAim`, `devSide`, `devQuality`, `devHolesOk`, `devSkipIntro`)
 
