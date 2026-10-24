@@ -95,6 +95,27 @@ describe('resultsSummary', () => {
     expect(s.badge).toBeNull();
   });
 
+  it('shows the text overrides in place of the score and high score lines', () => {
+    const s = resultsSummary({
+      ...base,
+      score: 95,
+      highScore: 97,
+      scoreText: '+5',
+      highScoreText: 'Best: +3',
+    });
+    expect(s.score).toBe('+5');
+    expect(s.highScore).toBe('Best: +3');
+    expect(resultsSummary({ ...base, score: 100, scoreText: 'E' }).score).toBe('E');
+    // A text override never makes a stars game a score game.
+    expect(resultsSummary({ ...base, scoreText: '+5', highScoreText: 'x' }).score).toBeNull();
+  });
+
+  it('is unchanged without the text overrides', () => {
+    const s = resultsSummary({ ...base, score: 2400, highScore: 2400 });
+    expect(s.score).toBe((2400).toLocaleString());
+    expect(s.highScore).toBe(`High score: ${(2400).toLocaleString()}`);
+  });
+
   it('passes on a line about how the game went', () => {
     expect(resultsSummary({ ...base, outcome: 'You beat the Bulls 9–6!' }).outcome).toBe(
       'You beat the Bulls 9–6!',

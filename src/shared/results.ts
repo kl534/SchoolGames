@@ -16,6 +16,10 @@ export interface ResultsOptions {
   score?: number;
   /** The player's high score, including this run when it set a new one. */
   highScore?: number;
+  /** Replaces the score as text (e.g. golf's '+5'); the number is still what is stored. */
+  scoreText?: string;
+  /** Replaces the 'High score: …' line (e.g. 'Best: +3'). */
+  highScoreText?: string;
   newHighScore?: boolean;
   /** One line about how the game went, shown under the heading, e.g. "You beat the Bulls 9–6!". */
   outcome?: string;
@@ -58,10 +62,10 @@ export function resultsSummary(options: ResultsOptions): ResultsSummary {
   return {
     heading: `${HEADINGS[options.stars] ?? HEADINGS[0]}${name}!`,
     outcome: options.outcome ?? null,
-    score: scored ? options.score!.toLocaleString() : null,
+    score: scored ? (options.scoreText ?? options.score!.toLocaleString()) : null,
     highScore:
       scored && options.highScore !== undefined
-        ? `High score: ${options.highScore.toLocaleString()}`
+        ? (options.highScoreText ?? `High score: ${options.highScore.toLocaleString()}`)
         : null,
     badge: scored
       ? options.newHighScore
