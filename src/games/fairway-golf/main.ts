@@ -24,6 +24,7 @@ import {
   devSkipIntro,
   devStart,
 } from './dev';
+import { createCaddie } from './caddie';
 import { createGolfer, IMPACT_AT, SWING_SECONDS, type GolfMove } from './golfer';
 import { createGuide } from './guide';
 import { buildHole, SKY, type HoleScene } from './hole';
@@ -38,6 +39,7 @@ import {
   LAST_HOLE_SPEECH,
   NEW_BEST_SPEECH,
   nameFor,
+  reactionFor,
   pillFor,
   relFromStored,
   relText,
@@ -65,7 +67,9 @@ import { aimView, followView, introView, landView, type CamView, type Vec } from
 const GAME_ID = 'fairway-golf';
 
 /** Seconds the hole is shown from above before the golfer is lined up. */
-const INTRO_FOR = 1.8;
+const INTRO_FOR = 2.6;
+/** The flyover sweeps from the tee to the green over this many seconds of the intro. */
+const SWEEP_FOR = 2.4;
 /** Seconds the shot call stays up, and the hole call. */
 const SHOT_HOLD = 1.2;
 const HOLE_HOLD = 2.0;
@@ -123,6 +127,8 @@ function run(session: GameSession): void {
   scene.add(guide.object);
   const golfer = createGolfer();
   scene.add(golfer.root);
+  const caddie = createCaddie();
+  scene.add(caddie.root);
   let holeScene: HoleScene | null = null;
 
   // ---------- HUD ----------
@@ -193,6 +199,7 @@ function run(session: GameSession): void {
     play: { top: 0, bottom: 0 },
   };
   let goal: ViewKind = 'intro';
+  let introAt = 0;
   const cur: CamView = {
     pos: { x: 0, y: 55, z: -45 },
     look: { x: 0, y: 0, z: 100 },
@@ -216,7 +223,7 @@ function run(session: GameSession): void {
   const buildView = (kind: ViewKind): CamView => {
     switch (kind) {
       case 'intro':
-        return introView(hole, viewW, viewH, bands.play);
+        return introView(hole, viewW, viewH, bands.play, (gameTime - introAt) / SWEEP_FOR);
       case 'aim':
         return aimView(plan, hole, golferAt(), viewW, viewH, bands.aim);
       case 'ask':
@@ -267,7 +274,7 @@ function run(session: GameSession): void {
   };
 
   const applyCamera = () => {
-    if (goal === 'follow') target = buildView('follow');
+    if (goal === 'follow' || goal === 'intro') target = buildView(goal);
     const e = moveT >= 1 ? 1 : ease(moveT);
     const a = moveT >= 1 ? target : from;
     cur.pos = lerpVec(a.pos, target.pos, e);
@@ -306,6 +313,7 @@ function run(session: GameSession): void {
 
   const placeGolfer = () => {
     golfer.stand(hstate.at, plan.dir);
+    caddie.stand(golfer.root.position, plan.dir);
   };
 
   /** Plans the shot from the current aim and shows the ring, the chips and the map. */
@@ -377,6 +385,7 @@ function run(session: GameSession): void {
       return;
     }
     phase = 'intro';
+    introAt = gameTime;
     goTo('intro', 0);
     hud.showBanner(`Hole ${index + 1}`, `Par ${hole.par} · ${hole.length} yd`, 'info', 'aim');
     const lines = [holeIntro(index)];
@@ -504,7 +513,7 @@ function run(session: GameSession): void {
     result = finishShot(hole, plan, outcome);
     afterHole = afterShot(hstate, hole, result);
     missed = !right;
-    flightDur = flightSeconds(plan, outcome);
+    flightDur = flightSeconds(plan, outcome) * (result.kind === 'rest' ? (result.tree ?? 1) : 1);
 
     after(HIDE_QUESTION_AFTER, () => {
       if (turn !== thisTurn) return;
@@ -555,9 +564,12 @@ function run(session: GameSession): void {
     if (phase !== 'flight' || !outcome) return;
     flightT += delta;
     const u = flightT / flightDur;
-    const p = flightPoint(plan, outcome, Math.min(u, 1));
+    // A ball that hits a tree stops flying at that point of its path.
+    const stop = result?.kind === 'rest' ? (result.tree ?? 1) : 1;
+    const p = flightPoint(plan, outcome, Math.min(u, 1) * stop);
     ballPos = p;
     ball.place(p);
+    ball.trail(gameTime, p);
     if (u >= 1) land();
   };
 
@@ -567,6 +579,8 @@ function run(session: GameSession): void {
     if (!outcome || !result) return;
     phase = 'landed';
     hstate = afterHole;
+    // The golfer and the caddie walk up to the ball, so their reactions are in the landing view.
+    placeGolfer();
     if (result.kind === 'holed') {
       ball.setVisible(false);
     } else if (result.kind === 'water') {
@@ -601,6 +615,14 @@ function run(session: GameSession): void {
     else if (holed || (result.kind === 'rest' && result.surface === 'green' && !isPutt(plan))) {
       setGolf('cheer');
     } else setGolf('follow');
+    // The caddie reacts to the shot, or to the hole when this shot ends it.
+    caddie.react(
+      reactionFor(
+        result,
+        holeOver(hstate) ? nameFor(holeScore(hstate), hole.par, hstate.holed) : null,
+        { quality: outcome.quality, putt: isPutt(plan) },
+      ),
+    );
     speechOver = false;
     holdOver = false;
     sayLines([call], thisTurn, () => (speechOver = true));
@@ -895,7 +917,9 @@ function run(session: GameSession): void {
     // A miss whose reveal has not been tapped yet leaves the ball where it landed.
     if (splashAt >= 0 && result?.kind === 'water') ball.splash(result.splash, gameTime - splashAt);
 
+    ball.trail(gameTime);
     golfer.play(golfMove, gameTime - golfSince, delta);
+    caddie.update(delta);
     holeScene?.update(gameTime);
     applyCamera();
   });

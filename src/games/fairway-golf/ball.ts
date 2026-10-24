@@ -1,14 +1,18 @@
 import {
   CircleGeometry,
   DoubleSide,
+  BufferAttribute,
+  BufferGeometry,
   Group,
+  Line,
+  LineBasicMaterial,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
   RingGeometry,
   SphereGeometry,
 } from 'three';
-import { DUFF_FRACTION, isPutt, type Outcome, type Plan } from './shot';
+import { DUFF_FRACTION, isPutt, pathAt, type Outcome, type Plan } from './shot';
 
 /** The ball is drawn a lot bigger than life so it can be seen on a phone from behind. */
 export const BALL_R = 0.16;
@@ -22,7 +26,16 @@ export interface Ball {
   setVisible(visible: boolean): void;
   /** A ring of water spreading from `at`, `t` seconds in; null hides it. */
   splash(at: { x: number; z: number } | null, t?: number): void;
+  /**
+   * The short trail behind a flying ball: pass the ball's point to add it, and call every frame
+   * with `now` (seconds) so points older than TRAIL_SECONDS drop off the tail.
+   */
+  trail(now: number, p?: { x: number; y: number; z: number }): void;
 }
+
+/** A shot's trail follows the ball for this long, seconds. */
+export const TRAIL_SECONDS = 1;
+const TRAIL_POINTS = 60;
 
 export function createBall(): Ball {
   const object = new Group();
@@ -53,8 +66,36 @@ export function createBall(): Ball {
   ring.visible = false;
   ring.renderOrder = 5;
 
+  const trailGeometry = new BufferGeometry();
+  const trailPositions = new Float32Array(TRAIL_POINTS * 3);
+  trailGeometry.setAttribute('position', new BufferAttribute(trailPositions, 3));
+  const trailLine = new Line(
+    trailGeometry,
+    new LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75 }),
+  );
+  trailLine.frustumCulled = false;
+  trailLine.visible = false;
+  trailLine.renderOrder = 6;
+  const trail: { x: number; y: number; z: number; t: number }[] = [];
+
   return {
     object,
+    trail(now, p) {
+      if (p) trail.push({ ...p, t: now });
+      while (trail.length && now - trail[0].t > TRAIL_SECONDS) trail.shift();
+      if (trail.length < 2) {
+        trailLine.visible = false;
+        return;
+      }
+      if (!trailLine.parent) object.parent?.add(trailLine);
+      const last = trail.slice(-TRAIL_POINTS);
+      for (let i = 0; i < TRAIL_POINTS; i++) {
+        const q = last[Math.min(i, last.length - 1)];
+        trailPositions.set([q.x, q.y, q.z], i * 3);
+      }
+      trailGeometry.attributes.position.needsUpdate = true;
+      trailLine.visible = true;
+    },
     place(p) {
       object.position.set(p.x, 0, p.z);
       sphere.position.y = Math.max(p.y, BALL_R);
@@ -96,22 +137,6 @@ export function flightPoint(
   outcome: Outcome,
   t: number,
 ): { x: number; y: number; z: number } {
-  const { from } = plan;
-  const u = Math.min(Math.max(t, 0), 1);
-  if (isPutt(plan)) {
-    return {
-      x: from.x + (outcome.end.x - from.x) * u,
-      y: BALL_R,
-      z: from.z + (outcome.end.z - from.z) * u,
-    };
-  }
-  const aimedAt = outcome.quality === 'duff' ? outcome.end : plan.landing;
-  const bend = { x: outcome.end.x - aimedAt.x, z: outcome.end.z - aimedAt.z };
-  const carry = outcome.quality === 'duff' ? DUFF_FRACTION * plan.carry : plan.carry;
-  const height = outcome.quality === 'duff' ? 0.5 : 1;
-  return {
-    x: from.x + (aimedAt.x - from.x) * u + bend.x * u * u,
-    y: BALL_R + 4 * plan.club.apex * carry * u * (1 - u) * height,
-    z: from.z + (aimedAt.z - from.z) * u + bend.z * u * u,
-  };
+  const p = pathAt(plan, outcome, t);
+  return { x: p.x, y: BALL_R + p.h, z: p.z };
 }

@@ -148,7 +148,13 @@ export function resolveShot(
 
 export type Result =
   | { kind: 'holed' }
-  | { kind: 'rest'; at: { x: number; z: number }; surface: Surface }
+  | {
+      kind: 'rest';
+      at: { x: number; z: number };
+      surface: Surface;
+      /** Set when the ball hit a tree: how far along its flight (0 to 1) it dropped. */
+      tree?: number;
+    }
   | { kind: 'water'; splash: { x: number; z: number }; drop: { x: number; z: number } };
 
 /** A putt or shot ending this close to the pin is holed (a generous "gimme"). */
@@ -163,9 +169,69 @@ export function clampEnd(h: Hole, p: { x: number; z: number }): { x: number; z: 
   };
 }
 
+/** A tree is this tall, yards: a ball flying lower than this through its circle is stopped. */
+export const TREE_HEIGHT = 12;
+
+/**
+ * Where the ball is `t` (0 to 1) along its flight: a straight run from the tee to the ring with a
+ * parabola for height (`h`, above the ground). A hook or slice bends in late, so the ball starts on
+ * line. A putt rolls straight.
+ */
+export function pathAt(
+  plan: Plan,
+  outcome: Outcome,
+  t: number,
+): { x: number; h: number; z: number } {
+  const { from } = plan;
+  const u = Math.min(Math.max(t, 0), 1);
+  if (isPutt(plan)) {
+    return {
+      x: from.x + (outcome.end.x - from.x) * u,
+      h: 0,
+      z: from.z + (outcome.end.z - from.z) * u,
+    };
+  }
+  const duff = outcome.quality === 'duff';
+  const aimedAt = duff ? outcome.end : plan.landing;
+  const bend = { x: outcome.end.x - aimedAt.x, z: outcome.end.z - aimedAt.z };
+  const carry = duff ? DUFF_FRACTION * plan.carry : plan.carry;
+  return {
+    x: from.x + (aimedAt.x - from.x) * u + bend.x * u * u,
+    h: 4 * plan.club.apex * carry * u * (1 - u) * (duff ? 0.5 : 1),
+    z: from.z + (aimedAt.z - from.z) * u + bend.z * u * u,
+  };
+}
+
+/**
+ * Walks the flight in 1 yd steps and returns the first point where the ball is inside a tree's
+ * circle lower than TREE_HEIGHT, or null. A putt never hits a tree, and a tree the ball already
+ * stands in (after a previous hit) is ignored.
+ */
+export function treeHit(
+  h: Hole,
+  plan: Plan,
+  outcome: Outcome,
+): { t: number; at: { x: number; z: number } } | null {
+  if (isPutt(plan) || h.trees.length === 0) return null;
+  const trees = h.trees.filter((tr) => Math.hypot(plan.from.x - tr.x, plan.from.z - tr.z) > tr.r);
+  const dist = Math.hypot(outcome.end.x - plan.from.x, outcome.end.z - plan.from.z);
+  const steps = Math.max(Math.ceil(dist), 1);
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const p = pathAt(plan, outcome, t);
+    if (p.h >= TREE_HEIGHT) continue;
+    if (trees.some((tr) => Math.hypot(p.x - tr.x, p.z - tr.z) <= tr.r)) {
+      return { t, at: { x: p.x, z: p.z } };
+    }
+  }
+  return null;
+}
+
 export function finishShot(h: Hole, plan: Plan, outcome: Outcome): Result {
   const end = clampEnd(h, outcome.end);
   if (Math.hypot(end.x - h.pin.x, end.z - h.pin.z) <= CUP_R) return { kind: 'holed' };
+  const hit = treeHit(h, plan, { ...outcome, end });
+  if (hit) return { kind: 'rest', at: hit.at, surface: 'rough', tree: hit.t };
   const surface = surfaceAt(h, end.x, end.z);
   if (surface !== 'water') return { kind: 'rest', at: end, surface };
   // The drop: step back towards where the shot was played from until the ground is dry.

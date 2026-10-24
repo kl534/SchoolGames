@@ -220,12 +220,27 @@ export function landView(
   };
 }
 
-/** The hole from above the tee, for the intro. */
-export function introView(hole: Hole, width: number, height: number, band: PlayBand): CamView {
-  const mid = Math.min(hole.length * 0.5, 150);
+/**
+ * The hole from above, for the intro: a sweep from the tee towards the pin. `progress` runs 0
+ * (looking down the first part of the hole from behind the tee) to 1 (hovering over the green).
+ */
+export function introView(
+  hole: Hole,
+  width: number,
+  height: number,
+  band: PlayBand,
+  progress = 0,
+): CamView {
+  const u = clamp(progress, 0, 1);
+  const e = u * u * (3 - 2 * u);
+  const lookFrom = Math.min(hole.length * 0.3, 70);
+  const lookTo = hole.length - 10;
+  const lookZ = lookFrom + (lookTo - lookFrom) * e;
+  const camTo = Math.max(-45, hole.length - 95);
+  const camZ = -45 + (camTo + 45) * e;
   return {
-    pos: { x: centreX(hole, 0), y: 55, z: -45 },
-    look: { x: centreX(hole, mid), y: 0, z: mid },
+    pos: { x: centreX(hole, Math.max(camZ, 0)), y: 55 - 10 * e, z: camZ },
+    look: { x: centreX(hole, lookZ), y: 0, z: lookZ },
     fov: 55,
     shift: centreShift(height, band),
     shiftX: centreShiftX(width, band),

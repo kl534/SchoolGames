@@ -20,10 +20,14 @@ import {
   DUFF_FRACTION,
   finishShot,
   MAX_SIDE,
+  pathAt,
   planShot,
   resolveShot,
+  TREE_HEIGHT,
+  treeHit,
   type Lie,
   type Plan,
+  type Result,
 } from '../src/games/fairway-golf/shot';
 import {
   afterShot,
@@ -36,6 +40,7 @@ import {
   nameFor,
   pillFor,
   relFromStored,
+  reactionFor,
   relText,
   roundOutcome,
   shotCall,
@@ -67,7 +72,6 @@ describe('the nine holes', () => {
     for (const h of HOLES) {
       expect(h.pin).toEqual({ x: 0, z: h.length });
       expect(centreX(h, h.length)).toBeCloseTo(0, 9);
-      expect(h.trees).toEqual([]);
     }
   });
 });
@@ -409,6 +413,7 @@ function bestAim(h: Hole, at: { x: number; z: number }, lie: Lie): number {
 interface Played {
   state: HoleState;
   wet: boolean;
+  trees: number;
 }
 
 /** Plays a hole, `answer` deciding each shot's answer and time. */
@@ -418,6 +423,7 @@ function playHole(
 ): Played {
   let state = startHole(h);
   let wet = false;
+  let trees = 0;
   for (let shot = 0; !holeOver(state); shot++) {
     if (shot > 20) throw new Error('hole never ended');
     const a = answer(shot);
@@ -426,16 +432,18 @@ function playHole(
     const outcome = resolveShot(plan, a.right, a.used, 10, a.side);
     const result = finishShot(h, plan, outcome);
     if (result.kind === 'water') wet = true;
+    if (result.kind === 'rest' && result.tree !== undefined) trees++;
     state = afterShot(state, h, result);
   }
-  return { state, wet };
+  return { state, wet, trees };
 }
 
 describe('perfect play', () => {
   HOLES.forEach((h, i) => {
-    it(`hole ${i + 1} (par ${h.par}) takes par or a little better and stays dry`, () => {
-      const { state, wet } = playHole(h, () => ({ right: true, used: 0.2, side: 1 }));
+    it(`hole ${i + 1} (par ${h.par}) takes par or a little better and stays dry and clear of trees`, () => {
+      const { state, wet, trees } = playHole(h, () => ({ right: true, used: 0.2, side: 1 }));
       expect(wet).toBe(false);
+      expect(trees).toBe(0);
       expect(state.holed).toBe(true);
       expect(state.strokes).toBeLessThanOrEqual(h.par);
       expect(state.strokes).toBeGreaterThanOrEqual(h.par - 2);
@@ -561,5 +569,123 @@ describe('plan', () => {
     expect(Object.keys(p).sort()).toEqual(
       ['aimDeg', 'carry', 'club', 'dir', 'from', 'landing'].sort(),
     );
+  });
+});
+
+// ---------- Trees and the caddie ----------
+
+describe('trees', () => {
+  it('stand only on holes 3, 6, 7 and 9, two or three each, well off the centre line', () => {
+    HOLES.forEach((h, i) => {
+      if ([2, 5, 6, 8].includes(i)) expect(h.trees.length).toBeGreaterThanOrEqual(2);
+      else expect(h.trees).toEqual([]);
+      expect(h.trees.length).toBeLessThanOrEqual(3);
+      for (const t of h.trees) {
+        expect(Math.abs(t.x - centreX(h, t.z)) - t.r).toBeGreaterThanOrEqual(22 - t.r);
+        expect(Math.abs(t.x - centreX(h, t.z))).toBeGreaterThanOrEqual(22);
+        expect(surfaceAt(h, t.x, t.z)).toBe('rough');
+        expect(h.hazards.every((hz) => surfaceAt(h, t.x, t.z) !== hz.kind)).toBe(true);
+      }
+    });
+  });
+
+  const h: Hole = {
+    ...HOLES[0],
+    trees: [{ x: 30, z: 100, r: 4 }],
+  };
+  const shot = (from: { x: number; z: number }, aim: number, end?: { x: number; z: number }) => {
+    const plan = planShot(h, from, 'fairway', aim);
+    return {
+      plan,
+      outcome: { quality: 'perfect' as const, end: end ?? plan.landing, side: 1 as const },
+    };
+  };
+
+  it('a low ball through a tree drops in the rough at the first point inside it', () => {
+    // A driver off the tee is still low 10 yd out.
+    const near: Hole = { ...HOLES[0], trees: [{ x: 30, z: 10, r: 4 }] };
+    const plan = planShot(near, { x: 30, z: 0 }, 'tee', 0);
+    const outcome = { quality: 'perfect' as const, end: { x: 30, z: 240 }, side: 1 as const };
+    expect(pathAt(plan, outcome, 10 / 240).h).toBeLessThan(TREE_HEIGHT);
+    const hit = treeHit(near, plan, outcome);
+    expect(hit).not.toBeNull();
+    expect(Math.hypot(hit!.at.x - 30, hit!.at.z - 10)).toBeLessThanOrEqual(4);
+    expect(hit!.at.z).toBeLessThan(10);
+    const r = finishShot(near, plan, outcome);
+    expect(r).toMatchObject({ kind: 'rest', surface: 'rough', at: hit!.at });
+    expect(r.kind === 'rest' && r.tree).toBeCloseTo(hit!.t, 9);
+  });
+
+  it('a ball above the tops flies over', () => {
+    const plan = planShot(h, { x: 30, z: 0 }, 'tee', 0);
+    const outcome = { quality: 'perfect' as const, end: { x: 30, z: 240 }, side: 1 as const };
+    expect(pathAt(plan, outcome, 100 / 240).h).toBeGreaterThan(TREE_HEIGHT);
+    expect(treeHit(h, plan, outcome)).toBeNull();
+    expect(finishShot(h, plan, outcome)).toMatchObject({ kind: 'rest' });
+  });
+
+  it('a ball that misses the tree sideways is not stopped', () => {
+    const { plan, outcome } = shot({ x: 0, z: 60 }, 0, { x: 0, z: 150 });
+    expect(treeHit(h, plan, outcome)).toBeNull();
+  });
+
+  it('a putt never hits a tree, and a ball standing in a tree can play on', () => {
+    const near: Hole = { ...HOLES[0], trees: [{ x: 0, z: h.length - 5, r: 4 }] };
+    const putt = planShot(near, { x: 0, z: near.length - 12 }, 'green', 0);
+    expect(
+      treeHit(near, putt, { quality: 'perfect', end: { x: 0, z: near.length }, side: 1 }),
+    ).toBeNull();
+    const inTree = planShot(h, { x: 30, z: 100 }, 'rough', 0);
+    const o = { quality: 'perfect' as const, end: { x: 30, z: 180 }, side: 1 as const };
+    expect(treeHit(h, inTree, o)).toBeNull();
+  });
+
+  it('a duff into a tree stops there too', () => {
+    const plan = planShot(h, { x: 30, z: 60 }, 'fairway', 0);
+    const outcome = resolveShot(plan, false, 0, 10, 1);
+    const hit = treeHit(
+      { ...h, trees: [{ x: outcome.end.x, z: outcome.end.z, r: 2 }] },
+      plan,
+      outcome,
+    );
+    expect(hit).not.toBeNull();
+  });
+});
+
+describe('reactionFor', () => {
+  const rest = (surface: 'fairway' | 'rough' | 'sand' | 'green'): Result => ({
+    kind: 'rest',
+    at: { x: 0, z: 100 },
+    surface,
+  });
+  const water: Result = { kind: 'water', splash: { x: 0, z: 1 }, drop: { x: 0, z: 0 } };
+
+  it('cheers a hole out and a full shot onto the green', () => {
+    expect(reactionFor({ kind: 'holed' }, null)).toBe('cheer');
+    expect(reactionFor(rest('green'), null)).toBe('cheer');
+    expect(reactionFor(rest('green'), null, { putt: true })).toBe('idle');
+  });
+
+  it('groans at water and duffs, even when a name is given', () => {
+    expect(reactionFor(water, null)).toBe('groan');
+    expect(reactionFor(rest('rough'), null, { quality: 'duff' })).toBe('groan');
+    expect(reactionFor({ kind: 'holed' }, 'Birdie', { quality: 'duff' })).toBe('groan');
+  });
+
+  it('follows the hole name when the hole ends', () => {
+    for (const n of ['Hole in one', 'Albatross', 'Eagle', 'Birdie']) {
+      expect(reactionFor({ kind: 'holed' }, n)).toBe('cheer');
+    }
+    expect(reactionFor({ kind: 'holed' }, 'Par')).toBe('cheer');
+    for (const n of ['Bogey', 'Double bogey', 'Triple bogey', '+4', 'Pick up']) {
+      expect(reactionFor(rest('rough'), n)).toBe('groan');
+    }
+    expect(reactionFor(rest('fairway'), 'Par')).toBe('idle');
+  });
+
+  it('is idle for an ordinary shot', () => {
+    expect(reactionFor(rest('fairway'), null)).toBe('idle');
+    expect(reactionFor(rest('rough'), null)).toBe('idle');
+    expect(reactionFor(rest('sand'), null)).toBe('idle');
   });
 });
