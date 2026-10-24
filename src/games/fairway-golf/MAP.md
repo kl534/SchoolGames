@@ -1,4 +1,4 @@
-# Fairway Golf map
+# Fore! map
 
 Nine holes of real golf: each shot is one question. A club is picked from the distance, a ring shows where a perfect shot lands, a quick right answer flies to the ring, a slow one hooks or slices, a wrong one is a duff. Scored in strokes against par with a seven-stroke cap and an announcer. The ball flight is analytic (no physics engine). Trees on four holes stop a low ball, and a caddie reacts beside the golfer.
 
