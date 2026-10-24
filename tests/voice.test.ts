@@ -69,7 +69,8 @@ describe('recorded clips', () => {
       (key) => !existsSync(resolve(import.meta.dirname, `../public/voice/${key}.mp3`)),
     );
     expect(missing, 'Missing clips: run `npm run voice`').toEqual([]);
-  });
+    // Thousands of file checks: slow on a network or WSL drive while the other tests run.
+  }, 60_000);
 });
 
 describe('spoken score lines', () => {
