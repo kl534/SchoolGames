@@ -64,7 +64,7 @@ import {
 } from './shot';
 import { aimView, followView, introView, landView, type CamView, type Vec } from './views';
 
-const GAME_ID = 'fairway-golf';
+const GAME_ID = 'fore';
 
 /** Seconds the hole is shown from above before the golfer is lined up. */
 const INTRO_FOR = 2.6;

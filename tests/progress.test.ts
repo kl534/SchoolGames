@@ -8,6 +8,7 @@ import {
   isMastered,
   LEARN_SPACING_MS,
   migrateAboveTenTables,
+  migrateRenamedGames,
   recordAnswer,
   recordBest,
   recordHighScore,
@@ -400,5 +401,20 @@ describe('migrateAboveTenTables', () => {
       expect(levelPassed(LEVELS[18], loaded.facts)).toBe(true);
       expect(levelsOpen(loaded)).toBeGreaterThanOrEqual(25);
     });
+  });
+});
+
+describe('migrateRenamedGames', () => {
+  it('copies the old golf id to fore, keeps the better value and is repeatable', () => {
+    const p = emptyProgress();
+    p.best['times-7'] = { 'fairway-golf': 2 };
+    p.highScores['times-7'] = { 'fairway-golf': 95, fore: 90 };
+    p.highScores['times-8'] = { 'fairway-golf': 80, fore: 99 };
+    expect(migrateRenamedGames(p)).toBe(true);
+    expect(p.best['times-7'].fore).toBe(2);
+    expect(p.highScores['times-7'].fore).toBe(95);
+    expect(p.highScores['times-8'].fore).toBe(99);
+    expect(p.highScores['times-7']['fairway-golf']).toBe(95);
+    expect(migrateRenamedGames(p)).toBe(false);
   });
 });

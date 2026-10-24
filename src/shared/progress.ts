@@ -194,6 +194,30 @@ export function migrateAboveTenTables(progress: PlayerProgress): boolean {
   return changed;
 }
 
+/** Games whose id changed: old id -> new id. */
+const RENAMED_GAMES: Record<string, string> = { 'fairway-golf': 'fore' };
+
+/**
+ * Copies the stars and high scores saved under a game's old id to its new id. Copies only (the
+ * old entries stay) and keeps the better value, so running it again changes nothing. Returns true
+ * when it changed something.
+ */
+export function migrateRenamedGames(progress: PlayerProgress): boolean {
+  let changed = false;
+  for (const records of [progress.best, progress.highScores]) {
+    for (const games of Object.values(records)) {
+      for (const [oldId, newId] of Object.entries(RENAMED_GAMES)) {
+        const value = games[oldId];
+        if (value !== undefined && value > (games[newId] ?? 0)) {
+          games[newId] = value;
+          changed = true;
+        }
+      }
+    }
+  }
+  return changed;
+}
+
 const PLAYERS_KEY = 'sg:players';
 const CURRENT_KEY = 'sg:current-player';
 const progressKey = (playerId: string) => `sg:progress:${playerId}`;
@@ -252,6 +276,7 @@ export function createProgressStore(store: KeyValueStore = deviceStore()): Progr
       };
       if (typeof data.levelsOpen === 'number') progress.levelsOpen = data.levelsOpen;
       migrateAboveTenTables(progress);
+      migrateRenamedGames(progress);
       return progress;
     },
     save(playerId, progress) {

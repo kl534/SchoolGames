@@ -11,7 +11,7 @@ import {
   ROUGH_HALF,
   surfaceAt,
   type Hole,
-} from '../src/games/fairway-golf/course';
+} from '../src/games/fore/course';
 import {
   AIM_MAX,
   clubFor,
@@ -28,7 +28,7 @@ import {
   type Lie,
   type Plan,
   type Result,
-} from '../src/games/fairway-golf/shot';
+} from '../src/games/fore/shot';
 import {
   afterShot,
   allCallLines,
@@ -50,17 +50,17 @@ import {
   totalVsPar,
   vsPar,
   type HoleState,
-} from '../src/games/fairway-golf/rules';
-import { VOICE_LINES } from '../src/games/fairway-golf/voice';
+} from '../src/games/fore/rules';
+import { VOICE_LINES } from '../src/games/fore/voice';
 
-const dir = resolve(import.meta.dirname, '../src/games/fairway-golf');
+const dir = resolve(import.meta.dirname, '../src/games/fore');
 const RAD = Math.PI / 180;
 
 describe('manifest', () => {
   it('is valid, matches its folder and is scored in points', () => {
     const manifest = JSON.parse(readFileSync(resolve(dir, 'game.json'), 'utf8'));
     expect(validateManifest(manifest)).toEqual([]);
-    expect(manifest.id).toBe('fairway-golf');
+    expect(manifest.id).toBe('fore');
     expect(manifest.scoring).toBe('score');
   });
 });

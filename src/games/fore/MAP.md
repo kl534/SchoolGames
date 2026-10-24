@@ -29,7 +29,7 @@ Nine holes of real golf: each shot is one question. A club is picked from the di
 - `?side=-1|1|0`: force the wobble and duff side (0 or absent is random).
 - `?quality=perfect|wobbly|duff`: force the next shot's quality, whatever the answer.
 - `?holes=ok`: play every hole instantly and show the results.
-- Example: `npm run shots -- "fairway-golf?hole=2&lie=sand" --start`
+- Example: `npm run shots -- "fore?hole=2&lie=sand" --start`
 
 ## Where changes go
 
@@ -41,4 +41,4 @@ Nine holes of real golf: each shot is one question. A club is picked from the di
 
 ## Tests
 
-- `tests/fairway-golf.test.ts`
+- `tests/fore.test.ts`
