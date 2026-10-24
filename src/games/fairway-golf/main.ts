@@ -24,6 +24,7 @@ import {
   devSkipIntro,
   devStart,
 } from './dev';
+import { createCaddie } from './caddie';
 import { createGolfer, IMPACT_AT, SWING_SECONDS, type GolfMove } from './golfer';
 import { createGuide } from './guide';
 import { buildHole, SKY, type HoleScene } from './hole';
@@ -38,6 +39,7 @@ import {
   LAST_HOLE_SPEECH,
   NEW_BEST_SPEECH,
   nameFor,
+  reactionFor,
   pillFor,
   relFromStored,
   relText,
@@ -123,6 +125,8 @@ function run(session: GameSession): void {
   scene.add(guide.object);
   const golfer = createGolfer();
   scene.add(golfer.root);
+  const caddie = createCaddie();
+  scene.add(caddie.root);
   let holeScene: HoleScene | null = null;
 
   // ---------- HUD ----------
@@ -306,6 +310,7 @@ function run(session: GameSession): void {
 
   const placeGolfer = () => {
     golfer.stand(hstate.at, plan.dir);
+    caddie.stand(golfer.root.position, plan.dir);
   };
 
   /** Plans the shot from the current aim and shows the ring, the chips and the map. */
@@ -603,6 +608,14 @@ function run(session: GameSession): void {
     else if (holed || (result.kind === 'rest' && result.surface === 'green' && !isPutt(plan))) {
       setGolf('cheer');
     } else setGolf('follow');
+    // The caddie reacts to the shot, or to the hole when this shot ends it.
+    caddie.react(
+      reactionFor(
+        result,
+        holeOver(hstate) ? nameFor(holeScore(hstate), hole.par, hstate.holed) : null,
+        { quality: outcome.quality, putt: isPutt(plan) },
+      ),
+    );
     speechOver = false;
     holdOver = false;
     sayLines([call], thisTurn, () => (speechOver = true));
@@ -898,6 +911,7 @@ function run(session: GameSession): void {
     if (splashAt >= 0 && result?.kind === 'water') ball.splash(result.splash, gameTime - splashAt);
 
     golfer.play(golfMove, gameTime - golfSince, delta);
+    caddie.update(delta);
     holeScene?.update(gameTime);
     applyCamera();
   });
