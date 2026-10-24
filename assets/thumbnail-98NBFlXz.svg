@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" font-family="system-ui, sans-serif" font-weight="800">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6a45c4"/>
+      <stop offset=".55" stop-color="#e47fa8"/>
+      <stop offset="1" stop-color="#ffb07a"/>
+    </linearGradient>
+    <radialGradient id="boom" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#fff6c4"/>
+      <stop offset=".5" stop-color="#ffcf33"/>
+      <stop offset="1" stop-color="#ff7a1a" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="shine" cx=".35" cy=".3" r=".8">
+      <stop offset="0" stop-color="#5a5a6a"/>
+      <stop offset="1" stop-color="#1e1e26"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="640" height="360" fill="url(#sky)"/>
+  <circle cx="470" cy="150" r="52" fill="#ffe9a3"/>
+  <rect y="150" width="640" height="210" fill="#5db04a"/>
+  <path d="M0 150H640V190H0Z" fill="#f7b58f" fill-opacity=".7"/>
+  <path d="M0 232H640V268H0Z M0 330H640V360H0Z" fill="#55a643"/>
+
+  <!-- Tombstone -->
+  <path d="M70 228V176a30 30 0 0 1 60 0V228Z" fill="#b9b3cf"/>
+  <text x="100" y="206" text-anchor="middle" font-size="20" fill="#2d2a45">RIP</text>
+
+  <!-- Barricade -->
+  <g fill="#b7773f" stroke="#7a4a1d" stroke-width="3">
+    <rect x="0" y="286" width="640" height="18" rx="3"/>
+    <rect x="0" y="312" width="640" height="18" rx="3" fill="#c98a4b"/>
+  </g>
+  <g fill="#9c6532" stroke="#7a4a1d" stroke-width="3">
+    <rect x="60" y="262" width="18" height="86" rx="3"/>
+    <rect x="300" y="262" width="18" height="86" rx="3"/>
+    <rect x="560" y="262" width="18" height="86" rx="3"/>
+  </g>
+
+  <!-- Zombie -->
+  <g transform="translate(400 80)">
+    <ellipse cx="0" cy="184" rx="52" ry="9" fill="#000" fill-opacity=".22"/>
+    <rect x="-34" y="130" width="22" height="52" rx="10" fill="#4b5fd6"/>
+    <rect x="12" y="130" width="22" height="52" rx="10" fill="#4b5fd6"/>
+    <rect x="-44" y="52" width="88" height="86" rx="24" fill="#ff5fa2"/>
+    <path d="M-44 128l10 14 10-14 12 14 12-14 12 14 12-14 10 14" fill="#ff5fa2"/>
+    <path d="M-38 70L-96 38M38 70L96 38" stroke="#ff5fa2" stroke-width="22" stroke-linecap="round"/>
+    <circle cx="-100" cy="36" r="14" fill="#7ed957"/>
+    <circle cx="100" cy="36" r="14" fill="#7ed957"/>
+    <circle cx="0" cy="22" r="46" fill="#7ed957"/>
+    <circle cx="-17" cy="14" r="15" fill="#fff"/>
+    <circle cx="19" cy="16" r="11" fill="#fff"/>
+    <circle cx="-13" cy="16" r="6" fill="#1b1b1b"/>
+    <circle cx="16" cy="18" r="4.5" fill="#1b1b1b"/>
+    <path d="M-20 38q22 24 44 -2q-22 8 -44 2Z" fill="#5a1230"/>
+    <rect x="-8" y="37" width="7" height="8" fill="#fff"/>
+    <rect x="6" y="38" width="7" height="8" fill="#fff"/>
+    <path d="M-14 -22l-4-16M0 -26l0-18M14 -22l5-15" stroke="#2f4a2a" stroke-width="5" stroke-linecap="round"/>
+  </g>
+
+  <!-- Answer sign -->
+  <g text-anchor="middle">
+    <rect x="364" y="14" width="74" height="50" rx="12" fill="#fff1cc" stroke="#7a4a1d" stroke-width="5"/>
+    <path d="M394 66h14l-7 12Z" fill="#7a4a1d"/>
+    <text x="401" y="49" font-size="30" fill="#3b2410">42</text>
+  </g>
+
+  <!-- Bomb in flight, with a spark and a motion trail -->
+  <path d="M120 270Q190 120 290 168" fill="none" stroke="#fff" stroke-opacity=".7" stroke-width="4" stroke-dasharray="3 12" stroke-linecap="round"/>
+  <g transform="translate(300 176) rotate(-20)">
+    <circle r="26" fill="url(#shine)"/>
+    <ellipse cx="-9" cy="-10" rx="6" ry="4" fill="#fff" fill-opacity=".7"/>
+    <rect x="-8" y="-36" width="16" height="12" rx="3" fill="#777b88"/>
+    <path d="M2 -36q10 -12 18 -2" fill="none" stroke="#d9b778" stroke-width="4" stroke-linecap="round"/>
+    <g transform="translate(22 -44)">
+      <circle r="6" fill="#ffd43b"/>
+      <path d="M-14 0H14M0 -14V14M-10 -10L10 10M10 -10L-10 10" stroke="#ff9f1a" stroke-width="3" stroke-linecap="round"/>
+    </g>
+  </g>
+
+  <!-- Brains -->
+  <g>
+    <g transform="translate(44 40)">
+      <ellipse rx="19" ry="15" fill="#ff9ec4" stroke="#d6457f" stroke-width="3"/>
+      <path d="M0 -14V14M-10 -8q6 4 0 9M10 -8q-6 4 0 9" fill="none" stroke="#d6457f" stroke-width="2.5" stroke-linecap="round"/>
+    </g>
+    <g transform="translate(88 40)">
+      <ellipse rx="19" ry="15" fill="#ff9ec4" stroke="#d6457f" stroke-width="3"/>
+      <path d="M0 -14V14M-10 -8q6 4 0 9M10 -8q-6 4 0 9" fill="none" stroke="#d6457f" stroke-width="2.5" stroke-linecap="round"/>
+    </g>
+    <g transform="translate(132 40)">
+      <ellipse rx="19" ry="15" fill="#ff9ec4" stroke="#d6457f" stroke-width="3"/>
+      <path d="M0 -14V14M-10 -8q6 4 0 9M10 -8q-6 4 0 9" fill="none" stroke="#d6457f" stroke-width="2.5" stroke-linecap="round"/>
+    </g>
+  </g>
+</svg>
