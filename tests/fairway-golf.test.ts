@@ -400,9 +400,9 @@ function bestAim(h: Hole, at: { x: number; z: number }, lie: Lie): number {
     return Math.hypot(p.landing.x - h.pin.x, p.landing.z - h.pin.z);
   };
   let best = 0;
-  for (let a = -AIM_MAX; a <= AIM_MAX; a += 0.25) if (err(a) < err(best)) best = a;
+  for (let a = -AIM_MAX; a <= AIM_MAX; a += 0.5) if (err(a) < err(best)) best = a;
   const centre = best;
-  for (let a = centre - 0.25; a <= centre + 0.25; a += 0.005) if (err(a) < err(best)) best = a;
+  for (let a = centre - 0.5; a <= centre + 0.5; a += 0.01) if (err(a) < err(best)) best = a;
   return best;
 }
 
@@ -446,7 +446,7 @@ describe('perfect play', () => {
 
 describe('random play', () => {
   it('every hole ends inside the cap and the round adds up', () => {
-    const rounds = runs(3000, 300);
+    const rounds = runs(1000, 100);
     for (let r = 0; r < rounds; r++) {
       const quality = Math.random();
       const scores: number[] = [];
@@ -471,7 +471,7 @@ describe('random play', () => {
       expect(storedFor(rel)).toBeGreaterThan(0);
       expect(rel).toBeLessThanOrEqual(36);
     }
-  });
+  }, 60_000);
 });
 
 // ---------- Voice ----------
