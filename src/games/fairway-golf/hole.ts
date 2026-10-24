@@ -2,6 +2,7 @@ import {
   BoxGeometry,
   BufferGeometry,
   CircleGeometry,
+  ConeGeometry,
   CylinderGeometry,
   DoubleSide,
   Float32BufferAttribute,
@@ -12,9 +13,16 @@ import {
   PlaneGeometry,
   type Material,
 } from 'three';
+import { TREE_HEIGHT } from './shot';
 import { centreX, FAIRWAY_HALF, GREEN_R, ROUGH_HALF, type Ellipse, type Hole } from './course';
 
 export const SKY = 0x8fd0ff;
+
+/** Markers across the fairway: yards from the pin and their colour. */
+const MARKERS: readonly [number, number][] = [
+  [150, 0xffffff],
+  [100, 0xffe45c],
+];
 
 export interface HoleScene {
   object: Group;
@@ -121,6 +129,40 @@ export function buildHole(h: Hole): HoleScene {
       ),
     );
     marker.position.set(side * 3.4, 0.35, -2.6);
+  }
+
+  // Distance markers across the fairway: 150 yd (white) and 100 yd (yellow) from the pin, with a
+  // post on each edge so they read from the tee.
+  for (const [yd, color] of MARKERS) {
+    const z = h.length - yd;
+    if (z < 30) continue;
+    const c = centreX(h, z);
+    const stripe = own(flat(new PlaneGeometry(FAIRWAY_HALF * 2, 0.7), layer(color, 2.5), 0.07));
+    stripe.position.set(c, 0.07, z);
+    for (const side of [-1, 1]) {
+      const post = own(
+        new Mesh(new CylinderGeometry(0.2, 0.2, 1.6, 8), new MeshStandardMaterial({ color })),
+      );
+      post.position.set(c + side * (FAIRWAY_HALF + 0.6), 0.8, z);
+    }
+  }
+
+  // Trees: a trunk under a cone, as tall as the flight check says (TREE_HEIGHT).
+  for (const tr of h.trees) {
+    const trunk = own(
+      new Mesh(
+        new CylinderGeometry(tr.r * 0.16, tr.r * 0.22, 2.6, 8),
+        new MeshStandardMaterial({ color: 0x6b4a2b }),
+      ),
+    );
+    trunk.position.set(tr.x, 1.3, tr.z);
+    const leaves = own(
+      new Mesh(
+        new ConeGeometry(tr.r, TREE_HEIGHT - 2.4, 12),
+        new MeshStandardMaterial({ color: 0x2f7d3a, roughness: 0.9 }),
+      ),
+    );
+    leaves.position.set(tr.x, 2.4 + (TREE_HEIGHT - 2.4) / 2, tr.z);
   }
 
   // The flag: a pole, a waving cloth and a dark cup.

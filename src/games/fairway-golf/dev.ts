@@ -5,12 +5,15 @@
  * - `?lie=green|sand|rough|tee|water` starts that hole with the ball in that lie near the pin
  *   (12 yd on the green, 20 yd otherwise). `sand` uses the hole's first bunker when it has one;
  *   `water` stands where a club's carry reaches the first pond, ring aimed at it (the ring turns red).
+ * - `?lie=tree` (on a hole with trees) starts on the fairway with the ring aimed so a perfect shot
+ *   flies low through the first tree it can (the ball drops in the rough there).
  * - `?strokes=N` presets the strokes already taken on the hole (to check the cap).
  * - `?side=-1|1|0` forces the wobble and duff side (0 or absent is random).
  * - `?quality=perfect|wobbly|duff` forces the next shot's quality, whatever the answer.
+ * - `?intro=1` keeps the hole intro (the flyover) even with `hole`, `lie` or `strokes`.
  * - `?holes=ok` plays every hole instantly, so the results can be seen at once.
  */
-import { AIM_MAX, planShot, type Lie, type Quality } from './shot';
+import { AIM_MAX, planShot, treeHit, type Lie, type Quality } from './shot';
 import { centreX, HOLES, surfaceAt, type Hole } from './course';
 import { startHole, type HoleState } from './rules';
 
@@ -28,6 +31,22 @@ export function devStart(): DevStart {
   const n = Number(params().get('hole'));
   const hole = Number.isInteger(n) && n >= 1 && n <= HOLES.length ? n - 1 : 0;
   return { hole, scores: HOLES.slice(0, hole).map((h) => h.par) };
+}
+
+/** A start and an aim from which a perfect shot hits a tree: the farthest-back such start. */
+function treeShot(h: Hole): { at: { x: number; z: number }; lie: Lie; aim: number } | null {
+  const tree = h.trees[0];
+  if (!tree) return null;
+  for (let z = Math.max(tree.z - 120, 0); z < tree.z; z += 5) {
+    const at = { x: centreX(h, z), z };
+    const lie: Lie = z > 0 ? 'fairway' : 'tee';
+    for (let a = -AIM_MAX; a <= AIM_MAX; a += 0.5) {
+      const plan = planShot(h, at, lie, a);
+      const outcome = { quality: 'perfect' as const, end: plan.landing, side: 1 as const };
+      if (treeHit(h, plan, outcome)) return { at, lie, aim: a };
+    }
+  }
+  return null;
 }
 
 /** The state of the first shot on a hole: the address's lie and strokes, or a fresh tee. */
@@ -48,6 +67,14 @@ export function devHoleState(h: Hole): HoleState {
       const bunker = h.hazards.find((hz) => hz.kind === 'sand');
       state.at = bunker ? { x: bunker.at.x, z: bunker.at.z } : { x: 0, z: short(20) };
       state.lie = 'sand';
+      break;
+    }
+    case 'tree': {
+      const found = treeShot(h);
+      if (found) {
+        state.at = found.at;
+        state.lie = found.lie;
+      }
       break;
     }
     case 'rough':
@@ -83,6 +110,7 @@ export function devHoleState(h: Hole): HoleState {
 
 /** The aim a dev address wants (ring on the first pond for `lie=water`), or null for the pin. */
 export function devAim(h: Hole, state: HoleState): number | null {
+  if (import.meta.env.DEV && params().get('lie') === 'tree') return treeShot(h)?.aim ?? null;
   if (!import.meta.env.DEV || params().get('lie') !== 'water') return null;
   const pond = h.hazards.find((hz) => hz.kind === 'water');
   if (!pond) return null;
@@ -118,7 +146,7 @@ export function devQuality(): Quality | null {
 export function devSkipIntro(): boolean {
   if (!import.meta.env.DEV) return false;
   const q = params();
-  return q.has('hole') || q.has('lie') || q.has('strokes');
+  return (q.has('hole') || q.has('lie') || q.has('strokes')) && !q.has('intro');
 }
 
 /** Whether to play every hole at once and go straight to the results. */
