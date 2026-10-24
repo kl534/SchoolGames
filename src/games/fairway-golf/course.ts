@@ -26,7 +26,7 @@ export interface Hole {
   /** Yards of sideways break per 10 yd of putt; + is toward +x. */
   slope: number;
   hazards: { kind: 'sand' | 'water'; at: Ellipse }[];
-  /** Trees (M2); the M1 holes have none. */
+  /** Trees in the rough, 22 yd or more off the centre line; the ball can hit them in flight. */
   trees: { x: number; z: number; r: number }[];
 }
 
@@ -44,7 +44,22 @@ const hole = (
   wind: number,
   slope: number,
   hazards: Hole['hazards'],
-): Hole => ({ par, length, bend, pin: { x: 0, z: length }, wind, slope, hazards, trees: [] });
+  trees: TreeSpec[] = [],
+): Hole => ({
+  par,
+  length,
+  bend,
+  pin: { x: 0, z: length },
+  wind,
+  slope,
+  hazards,
+  trees: trees.map(([z, off, r]) => ({ x: bendAt(bend, length, z) + off, z, r })),
+});
+
+/** A tree as [z down the hole, yards off the centre line, radius]. */
+type TreeSpec = [number, number, number];
+
+const bendAt = (bend: number, length: number, z: number) => bend * Math.sin((Math.PI * z) / length);
 
 const sand = (x: number, z: number, rx: number, rz: number) => ({
   kind: 'sand' as const,
@@ -58,13 +73,61 @@ const water = (x: number, z: number, rx: number, rz: number) => ({
 export const HOLES: readonly Hole[] = [
   hole(4, 340, 0, 0, 0, []),
   hole(3, 140, 0, 2, 0.3, [sand(-10, 128, 9, 7)]),
-  hole(4, 360, 14, -2, 0, [sand(20, 230, 10, 14)]),
+  hole(
+    4,
+    360,
+    14,
+    -2,
+    0,
+    [sand(20, 230, 10, 14)],
+    [
+      [150, -28, 4],
+      [215, -34, 4.5],
+      [290, 30, 4],
+    ],
+  ),
   hole(5, 470, -12, 3, -0.3, [water(12, 340, 16, 12)]),
   hole(4, 330, 0, 4, 0.4, [water(-14, 200, 10, 30)]),
-  hole(3, 165, 0, -3, -0.4, [water(0, 140, 22, 10)]),
-  hole(4, 380, -16, 0, 0.3, [sand(-24, 250, 8, 16), sand(8, 352, 9, 8)]),
+  hole(
+    3,
+    165,
+    0,
+    -3,
+    -0.4,
+    [water(0, 140, 22, 10)],
+    [
+      [60, -30, 4],
+      [100, 32, 4.5],
+      [122, -27, 4],
+    ],
+  ),
+  hole(
+    4,
+    380,
+    -16,
+    0,
+    0.3,
+    [sand(-24, 250, 8, 16), sand(8, 352, 9, 8)],
+    [
+      [120, 30, 4.5],
+      [200, -32, 4],
+      [310, 28, 4],
+    ],
+  ),
   hole(5, 490, 10, -3, 0, [sand(14, 250, 10, 14), water(-6, 400, 14, 10)]),
-  hole(4, 350, 0, 2, -0.3, [sand(0, 320, 12, 8)]),
+  hole(
+    4,
+    350,
+    0,
+    2,
+    -0.3,
+    [sand(0, 320, 12, 8)],
+    [
+      [90, -28, 4],
+      [170, 30, 4.5],
+      [250, -30, 4],
+    ],
+  ),
 ];
 
 /** The x of the fairway's centre line at distance z down the hole. */

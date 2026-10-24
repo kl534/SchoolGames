@@ -504,7 +504,7 @@ function run(session: GameSession): void {
     result = finishShot(hole, plan, outcome);
     afterHole = afterShot(hstate, hole, result);
     missed = !right;
-    flightDur = flightSeconds(plan, outcome);
+    flightDur = flightSeconds(plan, outcome) * (result.kind === 'rest' ? (result.tree ?? 1) : 1);
 
     after(HIDE_QUESTION_AFTER, () => {
       if (turn !== thisTurn) return;
@@ -555,7 +555,9 @@ function run(session: GameSession): void {
     if (phase !== 'flight' || !outcome) return;
     flightT += delta;
     const u = flightT / flightDur;
-    const p = flightPoint(plan, outcome, Math.min(u, 1));
+    // A ball that hits a tree stops flying at that point of its path.
+    const stop = result?.kind === 'rest' ? (result.tree ?? 1) : 1;
+    const p = flightPoint(plan, outcome, Math.min(u, 1) * stop);
     ballPos = p;
     ball.place(p);
     if (u >= 1) land();

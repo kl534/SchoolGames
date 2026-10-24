@@ -113,6 +113,7 @@ export function callKindFor(result: Result, quality: Quality, putt: boolean): Ca
 export function pillFor(result: Result): string {
   if (result.kind === 'holed') return 'In the hole';
   if (result.kind === 'water') return 'Water +1';
+  if (result.tree !== undefined) return 'Hit a tree';
   const names = {
     fairway: 'Fairway',
     rough: 'Rough',
@@ -122,6 +123,30 @@ export function pillFor(result: Result): string {
     tree: 'Rough',
   };
   return names[result.surface];
+}
+
+export type Reaction = 'idle' | 'cheer' | 'groan';
+
+/**
+ * What the caddie does after a shot. `name` is the `nameFor` of the hole when this shot ended it
+ * (else null). A hole in the water or a duff groans; holing out, a birdie or better, or a full
+ * shot onto the green cheers; a bogey or worse groans; anything else is nothing special.
+ */
+export function reactionFor(
+  result: Result,
+  name: string | null,
+  how: { quality?: Quality; putt?: boolean } = {},
+): Reaction {
+  if (result.kind === 'water' || how.quality === 'duff') return 'groan';
+  if (name) {
+    if (name === 'Par') return result.kind === 'holed' ? 'cheer' : 'idle';
+    const bad = ['Bogey', 'Double bogey', 'Triple bogey', 'Pick up'];
+    if (bad.includes(name) || /^\+/.test(name)) return 'groan';
+    return 'cheer';
+  }
+  if (result.kind === 'holed') return 'cheer';
+  if (result.surface === 'green' && !how.putt) return 'cheer';
+  return 'idle';
 }
 
 const HOLE_CALLS: Record<string, string> = {

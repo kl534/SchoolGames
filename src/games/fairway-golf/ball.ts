@@ -8,7 +8,7 @@ import {
   RingGeometry,
   SphereGeometry,
 } from 'three';
-import { DUFF_FRACTION, isPutt, type Outcome, type Plan } from './shot';
+import { DUFF_FRACTION, isPutt, pathAt, type Outcome, type Plan } from './shot';
 
 /** The ball is drawn a lot bigger than life so it can be seen on a phone from behind. */
 export const BALL_R = 0.16;
@@ -96,22 +96,6 @@ export function flightPoint(
   outcome: Outcome,
   t: number,
 ): { x: number; y: number; z: number } {
-  const { from } = plan;
-  const u = Math.min(Math.max(t, 0), 1);
-  if (isPutt(plan)) {
-    return {
-      x: from.x + (outcome.end.x - from.x) * u,
-      y: BALL_R,
-      z: from.z + (outcome.end.z - from.z) * u,
-    };
-  }
-  const aimedAt = outcome.quality === 'duff' ? outcome.end : plan.landing;
-  const bend = { x: outcome.end.x - aimedAt.x, z: outcome.end.z - aimedAt.z };
-  const carry = outcome.quality === 'duff' ? DUFF_FRACTION * plan.carry : plan.carry;
-  const height = outcome.quality === 'duff' ? 0.5 : 1;
-  return {
-    x: from.x + (aimedAt.x - from.x) * u + bend.x * u * u,
-    y: BALL_R + 4 * plan.club.apex * carry * u * (1 - u) * height,
-    z: from.z + (aimedAt.z - from.z) * u + bend.z * u * u,
-  };
+  const p = pathAt(plan, outcome, t);
+  return { x: p.x, y: BALL_R + p.h, z: p.z };
 }
