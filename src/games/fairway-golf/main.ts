@@ -579,6 +579,8 @@ function run(session: GameSession): void {
     if (!outcome || !result) return;
     phase = 'landed';
     hstate = afterHole;
+    // The golfer and the caddie walk up to the ball, so their reactions are in the landing view.
+    placeGolfer();
     if (result.kind === 'holed') {
       ball.setVisible(false);
     } else if (result.kind === 'water') {
