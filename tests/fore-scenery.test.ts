@@ -1,12 +1,6 @@
 import { InstancedMesh, Mesh, type BufferGeometry, type Object3D } from 'three';
 import { describe, expect, it } from 'vitest';
-import {
-  centreX,
-  GREEN_R,
-  HOLES,
-  inEllipse,
-  type Hole,
-} from '../src/games/fore/course';
+import { centreX, GREEN_R, HOLES, inEllipse, type Hole } from '../src/games/fore/course';
 import { groundTextures } from '../src/games/fore/ground';
 import { buildHole } from '../src/games/fore/hole';
 import { placeScenery, LINE_CLEAR, LOW_MIN_OFF } from '../src/games/fore/scenery';
@@ -40,7 +34,8 @@ describe('scenery placement', () => {
   it('keeps bushes and rocks well off the line, with counts inside the limits', () => {
     for (const h of HOLES) {
       const s = placeScenery(h);
-      for (const b of [...s.bushes, ...s.rocks]) expect(off(h, b)).toBeGreaterThanOrEqual(LOW_MIN_OFF);
+      for (const b of [...s.bushes, ...s.rocks])
+        expect(off(h, b)).toBeGreaterThanOrEqual(LOW_MIN_OFF);
       expect(s.trees.length).toBeGreaterThanOrEqual(120);
       expect(s.trees.length).toBeLessThanOrEqual(260);
       expect(s.bushes.length).toBeGreaterThanOrEqual(80);

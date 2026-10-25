@@ -153,7 +153,7 @@ function run(session: GameSession): void {
   const sky = createSky();
   scene.add(sky.object);
   ctx.renderer.toneMapping = ACESFilmicToneMapping;
-  ctx.renderer.toneMappingExposure = 1;
+  ctx.renderer.toneMappingExposure = 0.9;
   // One shadow map for the people and the flag; its box (14 x 14 yd) follows the golfer.
   const shadows = devShadows();
   if (shadows) {
