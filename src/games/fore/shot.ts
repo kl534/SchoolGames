@@ -75,7 +75,8 @@ export function planShot(h: Hole, from: { x: number; z: number }, lie: Lie, aimD
   const c = clubFor(lie, dist);
   const aim = Math.min(Math.max(aimDeg, -AIM_MAX), AIM_MAX);
   const base = Math.atan2(h.pin.x - from.x, h.pin.z - from.z);
-  const dir = base + aim * RAD;
+  // The camera looks down +z, so +x is screen-left: a positive aim (right arrow) turns toward -x.
+  const dir = base - aim * RAD;
   const putt = c.id === 'putter';
   const nominal = byId(c.id).carry === c.carry;
   const carry = putt ? Math.max(dist, 1) : c.carry * (lie === 'rough' && nominal ? LIE_FACTOR : 1);

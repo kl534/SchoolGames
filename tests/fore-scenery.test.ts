@@ -94,7 +94,8 @@ describe('gameplay trees', () => {
 
   it('leave finishShot results unchanged for fixed plans', () => {
     const results = HOLES.map((h) =>
-      [-4, 0, 3].map((aim) => {
+      // Aims are mirrored from when the snapshot was taken (positive aim is now screen-right, -x).
+      [4, 0, -3].map((aim) => {
         const plan = planShot(h, { x: 0, z: 0 }, 'tee', aim);
         const outcome = resolveShot(plan, true, 0.5, 6, 1);
         return JSON.stringify(finishShot(h, plan, outcome));
