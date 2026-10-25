@@ -160,6 +160,14 @@ export type Result =
 /** A putt or shot ending this close to the pin is holed (a generous "gimme"). */
 export const CUP_R = 1.2;
 
+/**
+ * The outcome for drawing a holed shot: the ball flies to the pin itself (the cup is drawn true size,
+ * much smaller than the generous CUP_R that counts), keeping the quality and side.
+ */
+export function holedOutcome(outcome: Outcome, pin: { x: number; z: number }): Outcome {
+  return { ...outcome, end: { x: pin.x, z: pin.z } };
+}
+
 /** Keeps a ball inside the rough wall and not far behind the tee. */
 export function clampEnd(h: Hole, p: { x: number; z: number }): { x: number; z: number } {
   const c = centreX(h, p.z);

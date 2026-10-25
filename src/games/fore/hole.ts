@@ -1,5 +1,4 @@
 import {
-  BoxGeometry,
   BufferGeometry,
   CircleGeometry,
   ConeGeometry,
@@ -11,12 +10,22 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   PlaneGeometry,
+  RingGeometry,
   type Material,
 } from 'three';
 import { TREE_HEIGHT } from './shot';
 import { centreX, FAIRWAY_HALF, GREEN_R, ROUGH_HALF, type Ellipse, type Hole } from './course';
 
 export const SKY = 0x8fd0ff;
+
+/** The cup is drawn true size (4.25 in across), much smaller than the CUP_R that counts as holed. */
+export const CUP_VISUAL_R = 0.06;
+/** The flash ring that helps the eye find the cup, and how near the pin must be for it to show. */
+const FLASH_R = 0.9;
+export const CUP_AID_RANGE = 40;
+const POLE_H = 2.4;
+const CLOTH_W = 0.55;
+const CLOTH_H = 0.36;
 
 /** Markers across the fairway: yards from the pin and their colour. */
 const MARKERS: readonly [number, number][] = [
@@ -26,8 +35,10 @@ const MARKERS: readonly [number, number][] = [
 
 export interface HoleScene {
   object: Group;
-  /** Waves the flag; `t` in seconds. */
+  /** Waves the flag and pulses the cup's flash ring; `t` in seconds. */
   update(t: number): void;
+  /** Shows the flash ring around the cup (when the ball is on the green or the pin is near). */
+  setCupAid(on: boolean): void;
   dispose(): void;
 }
 
@@ -165,28 +176,53 @@ export function buildHole(h: Hole): HoleScene {
     leaves.position.set(tr.x, 2.4 + (TREE_HEIGHT - 2.4) / 2, tr.z);
   }
 
-  // The flag: a pole, a waving cloth and a dark cup.
+  // The flag: a thin pole, a two-sided cloth that waves, and a true-size cup with a white rim.
   const pole = own(
-    new Mesh(new CylinderGeometry(0.08, 0.08, 5, 8), new MeshStandardMaterial({ color: 0xf4f4f4 })),
+    new Mesh(
+      new CylinderGeometry(0.015, 0.015, POLE_H, 8),
+      new MeshStandardMaterial({ color: 0xf4f4f4 }),
+    ),
   );
-  pole.position.set(h.pin.x, 2.5, h.pin.z);
+  pole.position.set(h.pin.x, POLE_H / 2, h.pin.z);
   const cloth = own(
     new Mesh(
-      new BoxGeometry(1.8, 1.1, 0.05),
+      new PlaneGeometry(CLOTH_W, CLOTH_H),
       new MeshStandardMaterial({ color: 0xff3d3d, side: DoubleSide }),
     ),
   );
-  cloth.position.set(h.pin.x + 0.9, 4.4, h.pin.z);
-  cloth.geometry.translate(0, 0, 0);
-  const cup = own(ellipse({ x: h.pin.x, z: h.pin.z, rx: 0.9, rz: 0.9 }, layer(0x1b1b1b, 5), 0.14));
+  cloth.geometry.translate(CLOTH_W / 2, 0, 0);
+  cloth.position.set(h.pin.x, POLE_H - CLOTH_H / 2 - 0.02, h.pin.z);
+  const pin = { x: h.pin.x, z: h.pin.z };
+  const cup = own(
+    ellipse({ ...pin, rx: CUP_VISUAL_R, rz: CUP_VISUAL_R }, layer(0x1b1b1b, 5), 0.14),
+  );
   cup.name = 'cup';
+  const rim = own(flat(new RingGeometry(0.07, 0.09, 24), layer(0xffffff, 5.5), 0.145));
+  rim.position.set(pin.x, 0.145, pin.z);
+  rim.name = 'rim';
+  const flashMaterial = new MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.55,
+    side: DoubleSide,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const flash = own(flat(new RingGeometry(FLASH_R - 0.1, FLASH_R, 40), flashMaterial, 0.16));
+  flash.position.set(pin.x, 0.16, pin.z);
+  flash.renderOrder = 7;
+  flash.name = 'flash';
+  flash.visible = false;
 
   return {
     object,
     update(t) {
-      cloth.rotation.y = Math.sin(t * 3) * 0.25;
-      cloth.position.x = h.pin.x + 0.9 * Math.cos(cloth.rotation.y);
-      cloth.position.z = h.pin.z + 0.9 * Math.sin(-cloth.rotation.y);
+      // The cloth swings about the pole.
+      cloth.rotation.y = Math.sin(t * 3) * 0.3 + Math.sin(t * 7.3) * 0.08;
+      flashMaterial.opacity = 0.55 + 0.25 * Math.sin(t * 2 * Math.PI * 1.2);
+    },
+    setCupAid(on) {
+      flash.visible = on;
     },
     dispose() {
       geometries.forEach((g) => g.dispose());

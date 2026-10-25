@@ -176,7 +176,7 @@ export function aimView(
   ];
   const toPin = Math.hypot(hole.pin.x - plan.from.x, hole.pin.z - plan.from.z);
   if (toPin <= PIN_IN_VIEW) {
-    keys.push({ x: hole.pin.x, y: 0, z: hole.pin.z }, { x: hole.pin.x, y: 5, z: hole.pin.z });
+    keys.push({ x: hole.pin.x, y: 0, z: hole.pin.z }, { x: hole.pin.x, y: 2.4, z: hole.pin.z });
   }
   return fitView(cam, keys, width, height, band);
 }

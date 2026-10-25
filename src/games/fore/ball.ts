@@ -1,5 +1,8 @@
 import {
+  BoxGeometry,
+  CanvasTexture,
   CircleGeometry,
+  CylinderGeometry,
   DoubleSide,
   BufferAttribute,
   BufferGeometry,
@@ -10,19 +13,39 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   RingGeometry,
+  Sprite,
+  SpriteMaterial,
   SphereGeometry,
 } from 'three';
-import { DUFF_FRACTION, isPutt, pathAt, type Outcome, type Plan } from './shot';
+import { DUFF_FRACTION, isPutt, pathAt, type Lie, type Outcome, type Plan } from './shot';
 
-/** The ball is drawn a lot bigger than life so it can be seen on a phone from behind. */
-export const BALL_R = 0.16;
+/** The ball is true size (1.68 in across); a ring and a halo help the eye find it. */
+export const BALL_R = 0.047;
 /** Putts roll at this speed, yards a second. */
 export const PUTT_SPEED = 8;
+/** A ball on a tee peg sits this high above a ball on the ground, yards. */
+export const TEE_H = 0.05;
+/** The little pieces thrown up when the club hits the ground, and how long they fly, seconds. */
+const PUFF_PIECES = 12;
+export const PUFF_SECONDS = 0.6;
+const PUFF_COLOURS = { grass: 0x4f8a3a, sand: 0xe8cf8f } as const;
+export type PuffKind = keyof typeof PUFF_COLOURS | 'none';
 
 export interface Ball {
   object: Group;
-  /** Puts the ball's centre at `p` (height `p.y` above the ground); the shadow follows below. */
-  place(p: { x: number; y: number; z: number }): void;
+  /**
+   * Puts the ball's centre at `p` (height `p.y` above the ground); the shadow follows below. Pass
+   * the lie when the ball is at rest: on the tee it sits on a peg.
+   */
+  place(p: { x: number; y: number; z: number }, lie?: Lie): void;
+  /** Sinks the ball into the cup at `at`, `u` (0 to 1) of the way down. */
+  sink(at: { x: number; z: number }, u: number): void;
+  /** True while the ball sits at address: the pulsing ring shows and the halo does not. */
+  setAddress(on: boolean): void;
+  /** Throws up grass or sand where the club met the ground; call `update` every frame. */
+  puff(kind: PuffKind, at: { x: number; z: number }, now: number, dir?: number): void;
+  /** Pulses the aids and flies the puff. */
+  update(now: number): void;
   setVisible(visible: boolean): void;
   /** A ring of water spreading from `at`, `t` seconds in; null hides it. */
   splash(at: { x: number; z: number } | null, t?: number): void;
@@ -51,6 +74,70 @@ export function createBall(): Ball {
   shadow.rotation.x = -Math.PI / 2;
   shadow.renderOrder = 4;
   object.add(shadow);
+
+  // A tee peg under the ball while it is on the tee.
+  const peg = new Mesh(
+    new CylinderGeometry(0.014, 0.004, TEE_H, 8),
+    new MeshStandardMaterial({ color: 0xf1ead6, roughness: 0.6 }),
+  );
+  peg.position.y = TEE_H / 2;
+  peg.visible = false;
+  object.add(peg);
+  let restH = BALL_R;
+
+  // Aids so a true-size ball can still be found: a ring on the ground at address and a halo after.
+  const aimRing = new Mesh(
+    new RingGeometry(0.35, 0.4, 36),
+    new MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.7,
+      side: DoubleSide,
+      depthTest: false,
+      depthWrite: false,
+    }),
+  );
+  aimRing.rotation.x = -Math.PI / 2;
+  aimRing.position.y = 0.04;
+  aimRing.renderOrder = 8;
+  object.add(aimRing);
+  const haloCanvas = document.createElement('canvas');
+  haloCanvas.width = haloCanvas.height = 64;
+  const hctx = haloCanvas.getContext('2d');
+  if (hctx) {
+    const gradient = hctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gradient.addColorStop(0, 'rgba(255,255,255,0.95)');
+    gradient.addColorStop(0.35, 'rgba(255,255,255,0.45)');
+    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    hctx.fillStyle = gradient;
+    hctx.fillRect(0, 0, 64, 64);
+  }
+  const halo = new Sprite(
+    new SpriteMaterial({
+      map: new CanvasTexture(haloCanvas),
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      sizeAttenuation: false,
+    }),
+  );
+  halo.scale.setScalar(0.035);
+  halo.renderOrder = 9;
+  halo.visible = false;
+  object.add(halo);
+  let atAddress = true;
+  let flying = false;
+
+  const puffGeometry = new BoxGeometry(0.03, 0.03, 0.03);
+  const puffMaterial = new MeshBasicMaterial({ color: PUFF_COLOURS.grass });
+  const puffPieces = Array.from({ length: PUFF_PIECES }, () => {
+    const piece = new Mesh(puffGeometry, puffMaterial);
+    piece.visible = false;
+    return piece;
+  });
+  const puffVelocity = puffPieces.map(() => ({ x: 0, y: 0, z: 0 }));
+  let puffAt = -1;
+  let puffFrom = { x: 0, z: 0 };
 
   const ring = new Mesh(
     new RingGeometry(0.85, 1, 28),
@@ -96,12 +183,72 @@ export function createBall(): Ball {
       trailGeometry.attributes.position.needsUpdate = true;
       trailLine.visible = true;
     },
-    place(p) {
+    place(p, lie) {
+      if (lie !== undefined) {
+        const onTee = lie === 'tee';
+        peg.visible = onTee;
+        restH = onTee ? BALL_R + TEE_H : BALL_R;
+      }
       object.position.set(p.x, 0, p.z);
-      sphere.position.y = Math.max(p.y, BALL_R);
-      shadow.position.y = 0.12;
+      sphere.position.y = Math.max(p.y, restH);
+      shadow.position.y = 0.012;
       const s = 1 / (1 + Math.max(p.y - BALL_R, 0) * 0.08);
       shadow.scale.setScalar(s);
+      flying = p.y > restH + 0.02;
+      halo.position.y = sphere.position.y;
+    },
+    sink(at, u) {
+      object.position.set(at.x, 0, at.z);
+      peg.visible = false;
+      sphere.position.y = BALL_R + (-0.12 - BALL_R) * Math.min(Math.max(u, 0), 1);
+      halo.visible = false;
+      shadow.visible = u < 0.2;
+    },
+    setAddress(on) {
+      atAddress = on;
+    },
+    puff(kind, at, now, dir = 0) {
+      if (kind === 'none') return;
+      puffMaterial.color.setHex(PUFF_COLOURS[kind]);
+      puffAt = now;
+      puffFrom = { ...at };
+      if (!puffPieces[0].parent) puffPieces.forEach((piece) => object.parent?.add(piece));
+      puffPieces.forEach((piece, i) => {
+        // Up and forward along the shot, fanned a little either side.
+        const fan = ((i % 4) - 1.5) * 0.35;
+        const speed = 1.2 + (i % 3) * 0.5;
+        puffVelocity[i] = {
+          x: Math.sin(dir + fan) * speed,
+          y: 1.4 + (i % 5) * 0.35,
+          z: Math.cos(dir + fan) * speed,
+        };
+        piece.visible = true;
+        piece.position.set(at.x, 0.03, at.z);
+      });
+    },
+    update(now) {
+      shadow.visible = true;
+      const pulse = 0.675 + 0.225 * Math.sin(now * 2 * Math.PI * 1.2);
+      (aimRing.material as MeshBasicMaterial).opacity = pulse;
+      aimRing.visible = object.visible && atAddress && !flying;
+      halo.visible = object.visible && !atAddress && sphere.position.y > -0.05;
+      (halo.material as SpriteMaterial).opacity = 0.85;
+      if (puffAt >= 0) {
+        const age = now - puffAt;
+        puffPieces.forEach((piece, i) => {
+          if (age > PUFF_SECONDS || age < 0) {
+            piece.visible = false;
+            return;
+          }
+          const v = puffVelocity[i];
+          piece.position.set(
+            puffFrom.x + v.x * age,
+            Math.max(0.03 + v.y * age - 4.9 * age * age, 0.02),
+            puffFrom.z + v.z * age,
+          );
+        });
+        if (age > PUFF_SECONDS) puffAt = -1;
+      }
     },
     setVisible(visible) {
       object.visible = visible;

@@ -17,17 +17,21 @@ import { BALL_R, createBall, flightPoint, flightSeconds } from './ball';
 import { HOLES, surfaceAt, type Hole } from './course';
 import {
   devAim,
+  devCam,
+  devClubPlan,
   devHoleState,
   devHolesOk,
   devQuality,
   devSide,
   devSkipIntro,
   devStart,
+  devSwing,
+  type DevCam,
 } from './dev';
 import { createCaddie } from './caddie';
-import { createGolfer, IMPACT_AT, SWING_SECONDS, type GolfMove } from './golfer';
+import { createGolfer, type GolfMove } from './golfer';
 import { createGuide } from './guide';
-import { buildHole, SKY, type HoleScene } from './hole';
+import { buildHole, CUP_AID_RANGE, SKY, type HoleScene } from './hole';
 import { createHud, SURFACE_NAMES, windChip, type Bands, type CardCell } from './hud';
 import {
   afterShot,
@@ -55,6 +59,7 @@ import {
   AIM_MAX,
   AIM_STEP,
   finishShot,
+  holedOutcome,
   isPutt,
   planShot,
   resolveShot,
@@ -62,7 +67,17 @@ import {
   type Plan,
   type Result,
 } from './shot';
-import { aimView, followView, introView, landView, type CamView, type Vec } from './views';
+import { timingFor } from './swing';
+import {
+  aimView,
+  centreShift,
+  centreShiftX,
+  followView,
+  introView,
+  landView,
+  type CamView,
+  type Vec,
+} from './views';
 
 const GAME_ID = 'fore';
 
@@ -82,6 +97,8 @@ const HIDE_QUESTION_AFTER = 0.5;
 const SKIP_RESULT_AFTER = 0.6;
 /** A tap in flight lands the ball once it has been flying this long. */
 const FAST_AFTER = 0.3;
+/** A holed ball takes this long to drop out of sight in the cup, seconds. */
+const HOLE_DROP_FOR = 0.15;
 /** Degrees of aim for each pixel of a sideways drag. */
 const DEG_PER_PX = 0.12;
 
@@ -153,7 +170,7 @@ function run(session: GameSession): void {
   let hstate: HoleState = startHole(hole);
   let scores: number[] = [];
   let aimDeg = 0;
-  let plan: Plan = planShot(hole, hstate.at, hstate.lie, aimDeg);
+  let plan: Plan = devClubPlan(planShot(hole, hstate.at, hstate.lie, aimDeg), hstate.lie);
   let devPending = true;
   let fact: Fact | undefined;
   let options: string[] = [];
@@ -175,6 +192,9 @@ function run(session: GameSession): void {
   let swingAt = 0;
   let flightT = 0;
   let flightDur = 1;
+  /** The outcome the ball is drawn flying: a holed shot flies to the pin. */
+  let flightOutcome: Outcome | null = null;
+  let holeDropAt = -1;
   let launched = false;
   let golfMove: GolfMove = 'address';
   let golfSince = 0;
@@ -220,7 +240,34 @@ function run(session: GameSession): void {
     z: golfer.root.position.z,
   });
 
+  /** A dev camera 5 yd from the golfer at chest height, for checking the swing from each side. */
+  const devCamView = (cam: DevCam): CamView => {
+    const g = golfer.root.position;
+    const chest = { x: -Math.cos(plan.dir), z: Math.sin(plan.dir) };
+    const line = { x: Math.sin(plan.dir), z: Math.cos(plan.dir) };
+    const ballAt = hstate.at;
+    const eye = (x: number, z: number): Vec => ({ x, y: 1.2, z });
+    const [pos, look]: [Vec, Vec] =
+      cam === 'face'
+        ? [eye(g.x + chest.x * 5, g.z + chest.z * 5), { x: g.x, y: 1, z: g.z }]
+        : cam === 'dtl'
+          ? [
+              eye(ballAt.x - line.x * 5, ballAt.z - line.z * 5),
+              { x: ballAt.x + line.x * 5, y: 0.9, z: ballAt.z + line.z * 5 },
+            ]
+          : [eye(g.x + line.x * 5, g.z + line.z * 5), { x: g.x, y: 1, z: g.z }];
+    return {
+      pos,
+      look,
+      fov: 40,
+      shift: centreShift(viewH, bands.aim),
+      shiftX: centreShiftX(viewW, bands.aim),
+    };
+  };
+
   const buildView = (kind: ViewKind): CamView => {
+    const dev = devCam();
+    if (dev && kind !== 'intro') return devCamView(dev);
     switch (kind) {
       case 'intro':
         return introView(hole, viewW, viewH, bands.play, (gameTime - introAt) / SWEEP_FOR);
@@ -311,14 +358,21 @@ function run(session: GameSession): void {
     golfSince = gameTime;
   };
 
+  const makePlan = (): Plan =>
+    devClubPlan(planShot(hole, hstate.at, hstate.lie, aimDeg), hstate.lie);
+
   const placeGolfer = () => {
-    golfer.stand(hstate.at, plan.dir);
+    golfer.setClub(plan.club);
+    golfer.stand(hstate.at, plan.dir, plan.club.id);
     caddie.stand(golfer.root.position, plan.dir);
+    // The flash ring around the cup shows on the green and when the pin is near.
+    const toPin = Math.hypot(hole.pin.x - hstate.at.x, hole.pin.z - hstate.at.z);
+    holeScene?.setCupAid(hstate.lie === 'green' || toPin <= CUP_AID_RANGE);
   };
 
   /** Plans the shot from the current aim and shows the ring, the chips and the map. */
   const refreshAim = () => {
-    plan = planShot(hole, hstate.at, hstate.lie, aimDeg);
+    plan = makePlan();
     aimDeg = plan.aimDeg;
     const over = surfaceAt(hole, plan.landing.x, plan.landing.z);
     guide.update(plan, over);
@@ -372,14 +426,15 @@ function run(session: GameSession): void {
     hud.showControls(false);
     hud.showMap(false);
     guide.setVisible(false);
-    plan = planShot(hole, hstate.at, hstate.lie, aimDeg);
+    plan = makePlan();
     placeGolfer();
     ball.setVisible(true);
     ball.splash(null);
-    ball.place({ x: hstate.at.x, y: BALL_R, z: hstate.at.z });
+    ball.place({ x: hstate.at.x, y: BALL_R, z: hstate.at.z }, hstate.lie);
     hud.renderMap(hole, hstate.at, null);
     renderCard();
     setGolf('address');
+    ball.setAddress(false);
     if (skipIntro) {
       beginAim(0);
       return;
@@ -403,7 +458,8 @@ function run(session: GameSession): void {
     guide.setVisible(true);
     ball.setVisible(true);
     ball.splash(null);
-    ball.place({ x: hstate.at.x, y: BALL_R, z: hstate.at.z });
+    ball.place({ x: hstate.at.x, y: BALL_R, z: hstate.at.z }, hstate.lie);
+    ball.setAddress(true);
     refreshAim();
     renderCard();
     hud.showControls(true);
@@ -513,7 +569,10 @@ function run(session: GameSession): void {
     result = finishShot(hole, plan, outcome);
     afterHole = afterShot(hstate, hole, result);
     missed = !right;
-    flightDur = flightSeconds(plan, outcome) * (result.kind === 'rest' ? (result.tree ?? 1) : 1);
+    // A holed shot is drawn flying to the pin, since the cup is drawn much smaller than the holing radius.
+    flightOutcome = result.kind === 'holed' ? holedOutcome(outcome, hole.pin) : outcome;
+    flightDur =
+      flightSeconds(plan, flightOutcome) * (result.kind === 'rest' ? (result.tree ?? 1) : 1);
 
     after(HIDE_QUESTION_AFTER, () => {
       if (turn !== thisTurn) return;
@@ -532,7 +591,7 @@ function run(session: GameSession): void {
       tapFlow.reveal(hud.buttons, options, f, {
         avoid: hud.avoid,
         problem: f.prompt,
-        delay: SWING_SECONDS + flightDur,
+        delay: timingFor(plan.club).seconds + flightDur,
       });
     }
     startSwing();
@@ -545,15 +604,20 @@ function run(session: GameSession): void {
     swingAt = gameTime;
     flightT = 0;
     ballPos = { x: plan.from.x, y: BALL_R, z: plan.from.z };
+    ball.setAddress(false);
     setGolf('swing');
     goTo('follow', 0.6);
   };
 
   const updateSwing = () => {
     if (phase !== 'swing') return;
-    if (!launched && gameTime - swingAt >= IMPACT_AT) {
+    if (!launched && gameTime - swingAt >= timingFor(plan.club).impact) {
       launched = true;
       sfx.kick();
+      // The club throws up grass or sand where it meets the ground (the putter just rolls it).
+      if (!isPutt(plan)) {
+        ball.puff(hstate.lie === 'sand' ? 'sand' : 'grass', plan.from, gameTime, plan.dir);
+      }
       phase = 'flight';
       flightT = 0;
       ballPos = { x: plan.from.x, y: BALL_R, z: plan.from.z };
@@ -561,14 +625,14 @@ function run(session: GameSession): void {
   };
 
   const updateFlight = (delta: number) => {
-    if (phase !== 'flight' || !outcome) return;
+    if (phase !== 'flight' || !outcome || !flightOutcome) return;
     flightT += delta;
     const u = flightT / flightDur;
     // A ball that hits a tree stops flying at that point of its path.
     const stop = result?.kind === 'rest' ? (result.tree ?? 1) : 1;
-    const p = flightPoint(plan, outcome, Math.min(u, 1) * stop);
+    const p = flightPoint(plan, flightOutcome, Math.min(u, 1) * stop);
     ballPos = p;
-    ball.place(p);
+    ball.place(p, 'rough');
     ball.trail(gameTime, p);
     if (u >= 1) land();
   };
@@ -582,13 +646,15 @@ function run(session: GameSession): void {
     // The golfer and the caddie walk up to the ball, so their reactions are in the landing view.
     placeGolfer();
     if (result.kind === 'holed') {
-      ball.setVisible(false);
+      // The ball drops into the cup (see the loop) and then goes.
+      ball.place({ x: hole.pin.x, y: BALL_R, z: hole.pin.z }, 'green');
+      holeDropAt = gameTime;
     } else if (result.kind === 'water') {
       ball.setVisible(false);
       splashAt = gameTime;
       ball.splash(result.splash, 0);
     } else {
-      ball.place({ x: result.at.x, y: BALL_R, z: result.at.z });
+      ball.place({ x: result.at.x, y: BALL_R, z: result.at.z }, result.surface);
     }
     if (result.kind === 'water' || outcome.quality === 'duff') sfx.miss();
     else if (result.kind === 'holed') sfx.cheer();
@@ -652,7 +718,7 @@ function run(session: GameSession): void {
     }
     // Back to the aim from the new lie.
     aimDeg = 0;
-    plan = planShot(hole, hstate.at, hstate.lie, aimDeg);
+    plan = makePlan();
     ball.setVisible(true);
     ball.splash(null);
     splashAt = -1;
@@ -802,7 +868,7 @@ function run(session: GameSession): void {
     phase = 'preview';
     holeIndex = start.hole;
     hole = HOLES[holeIndex];
-    plan = planShot(hole, hstate.at, hstate.lie, aimDeg);
+    plan = makePlan();
     goTo('intro', 0);
     showPreview({
       topic: session.topic,
@@ -918,7 +984,18 @@ function run(session: GameSession): void {
     if (splashAt >= 0 && result?.kind === 'water') ball.splash(result.splash, gameTime - splashAt);
 
     ball.trail(gameTime);
-    golfer.play(golfMove, gameTime - golfSince, delta);
+    if (holeDropAt >= 0) {
+      const u = (gameTime - holeDropAt) / HOLE_DROP_FOR;
+      ball.sink(hole.pin, u);
+      if (u >= 1) {
+        ball.setVisible(false);
+        holeDropAt = -1;
+      }
+    }
+    ball.update(gameTime);
+    const frozen = devSwing();
+    if (frozen !== null) golfer.play('swing', frozen, delta);
+    else golfer.play(golfMove, gameTime - golfSince, delta);
     caddie.update(delta);
     holeScene?.update(gameTime);
     applyCamera();
