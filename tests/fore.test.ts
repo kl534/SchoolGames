@@ -174,7 +174,8 @@ describe('planShot', () => {
 
   it('aim turns the shot from the line to the pin and is clamped', () => {
     const p = planShot(flat, from, 'tee', 10);
-    expect(p.landing.x).toBeCloseTo(240 * Math.sin(10 * RAD), 9);
+    // Positive aim is right on screen; the camera looks down +z, so right is -x.
+    expect(p.landing.x).toBeCloseTo(-240 * Math.sin(10 * RAD), 9);
     expect(p.landing.z).toBeCloseTo(240 * Math.cos(10 * RAD), 9);
     expect(planShot(flat, from, 'tee', 90).aimDeg).toBe(AIM_MAX);
     expect(planShot(flat, from, 'tee', -90).aimDeg).toBe(-AIM_MAX);
