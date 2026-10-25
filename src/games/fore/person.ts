@@ -32,8 +32,8 @@ export const RIG = {
   forearm: 0.3,
   /** The hand joint hangs this far below the wrist end of the forearm. */
   hand: 0.03,
-  headY: 0.86,
-  headR: 0.09,
+  headY: 0.78,
+  headR: 0.145,
 } as const;
 
 export type HatStyle = 'cap' | 'headband' | 'none';
@@ -202,7 +202,10 @@ function joint(parent: Object3D, x: number, y: number, z = 0): Group {
   return g;
 }
 
-const eyeMaterial = new MeshStandardMaterial({ color: 0x1b1b24, roughness: 0.4 });
+const eyeMaterial = new MeshStandardMaterial({ color: 0x1b1b24, roughness: 0.3 });
+const eyeWhite = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 });
+const cheekMaterial = new MeshStandardMaterial({ color: 0xf2837a, roughness: 0.8 });
+const mouthMaterial = new MeshStandardMaterial({ color: 0x8a2a2a, roughness: 0.6 });
 const shadowMaterial = new MeshBasicMaterial({
   color: 0x000000,
   transparent: true,
@@ -245,17 +248,17 @@ export function createPerson(style: PersonStyle): Person {
     const ankle = joint(knee, 0, -shin);
     ankle.rotation.order = 'YXZ';
     if (style.trousers) {
-      mesh(new CapsuleGeometry(0.088, thigh - 0.176, 4, 12), pants, hip, 0, -thigh / 2);
-      mesh(new CapsuleGeometry(0.068, shin - 0.136, 4, 12), pants, knee, 0, -shin / 2 + 0.01);
+      mesh(new CapsuleGeometry(0.1, thigh - 0.2, 4, 12), pants, hip, 0, -thigh / 2);
+      mesh(new CapsuleGeometry(0.08, shin - 0.16, 4, 12), pants, knee, 0, -shin / 2 + 0.01);
     } else {
-      mesh(new CapsuleGeometry(0.082, thigh - 0.164, 4, 12), skin, hip, 0, -thigh / 2);
+      mesh(new CapsuleGeometry(0.094, thigh - 0.188, 4, 12), skin, hip, 0, -thigh / 2);
       // Shorts: a wider, shorter tube over the top of the thigh.
-      mesh(new CapsuleGeometry(0.098, 0.12, 4, 12), pants, hip, 0, -0.12);
-      mesh(new CapsuleGeometry(0.063, shin - 0.126, 4, 12), skin, knee, 0, -shin / 2 + 0.01);
+      mesh(new CapsuleGeometry(0.112, 0.12, 4, 12), pants, hip, 0, -0.12);
+      mesh(new CapsuleGeometry(0.074, shin - 0.148, 4, 12), skin, knee, 0, -shin / 2 + 0.01);
     }
-    // A golf shoe: dark upper on a white sole, toes forward.
-    mesh(new BoxGeometry(0.105, 0.05, 0.25), shoe, ankle, 0, -0.03, 0.06);
-    mesh(new BoxGeometry(0.11, 0.02, 0.27), sole, ankle, 0, -0.06, 0.06);
+    // A chunky round golf shoe: a rounded upper on a white sole, toes forward.
+    mesh(new SphereGeometry(0.07, 14, 10), shoe, ankle, 0, -0.012, 0.055).scale.set(0.95, 0.8, 2.1);
+    mesh(new SphereGeometry(0.072, 14, 8), sole, ankle, 0, -0.05, 0.055).scale.set(0.97, 0.3, 2.14);
     return { hip, knee, ankle };
   };
   const legL = makeLeg(1);
@@ -270,87 +273,109 @@ export function createPerson(style: PersonStyle): Person {
     const strap = mesh(new CylinderGeometry(0.153, 0.153, 0.035, 18), belt, torso, 0, 0.07);
     strap.scale.set(1.45, 1, 0.87);
   }
-  mesh(new CylinderGeometry(0.05, 0.056, 0.18, 10), skin, torso, 0, 0.68);
+  // A short, thick neck: the big head sits almost on the shoulders.
+  mesh(new CylinderGeometry(0.065, 0.075, 0.1, 12), skin, torso, 0, 0.6);
   // The polo collar: a ring at the neck and a small placket down the chest.
-  const collar = mesh(new TorusGeometry(0.075, 0.02, 6, 16), shirt, torso, 0, 0.62, 0.0);
+  const collar = mesh(new TorusGeometry(0.09, 0.024, 6, 16), shirt, torso, 0, 0.6, 0.0);
   collar.rotation.x = Math.PI / 2;
   collar.scale.set(1, 1, 1.4);
   mesh(new BoxGeometry(0.035, 0.12, 0.012), shirt, torso, 0, 0.5, 0.13);
 
+  // A big round cartoon head with a friendly face.
   const head = joint(torso, 0, headY);
   head.rotation.order = 'YXZ';
-  const skull = mesh(new SphereGeometry(headR, 24, 18), skin, head);
-  skull.scale.set(1, 1.22, 1.08);
+  const skull = mesh(new SphereGeometry(headR, 28, 20), skin, head);
+  skull.scale.set(1.06, 1.02, 1);
+  const face = headR * 0.9;
   for (const side of [-1, 1]) {
-    mesh(new SphereGeometry(0.013, 8, 6), eyeMaterial, head, side * 0.033, 0.018, headR * 1.08);
-    mesh(
-      new BoxGeometry(0.036, 0.007, 0.01),
-      hair,
-      head,
-      side * 0.033,
-      0.043,
-      headR * 1.08 - 0.004,
+    // Big shiny eyes: a white, a dark pupil and a catch-light.
+    const eyeX = side * 0.052;
+    mesh(new SphereGeometry(0.034, 12, 10), eyeWhite, head, eyeX, 0.012, face).scale.set(
+      1,
+      1.15,
+      0.5,
+    );
+    mesh(new SphereGeometry(0.021, 10, 8), eyeMaterial, head, eyeX, 0.008, face + 0.012).scale.set(
+      1,
+      1.15,
+      0.5,
+    );
+    mesh(new SphereGeometry(0.007, 6, 5), eyeWhite, head, eyeX + side * 0.004, 0.02, face + 0.02);
+    // A thick, lifted eyebrow.
+    const brow = mesh(new BoxGeometry(0.05, 0.012, 0.012), hair, head, eyeX, 0.058, face + 0.005);
+    brow.rotation.z = side * -0.18;
+    // Rosy cheek.
+    mesh(new SphereGeometry(0.028, 8, 6), cheekMaterial, head, side * 0.09, -0.03, 0.105).scale.set(
+      1,
+      0.8,
+      0.35,
     );
     mesh(
-      new SphereGeometry(0.022, 8, 6),
+      new SphereGeometry(0.03, 8, 6),
       skin,
       head,
-      side * (headR + 0.002),
+      side * (headR * 1.05),
       -0.005,
       -0.004,
     ).scale.set(0.45, 1, 0.8);
   }
-  mesh(new SphereGeometry(0.017, 8, 6), skin, head, 0, -0.012, headR * 1.08 + 0.004);
+  // A round nose and a wide smile.
+  mesh(new SphereGeometry(0.022, 10, 8), skin, head, 0, -0.022, headR * 0.98);
+  const smile = mesh(new TorusGeometry(0.04, 0.0055, 6, 14, Math.PI), mouthMaterial, head);
+  smile.position.set(0, -0.032, headR * 0.9);
+  smile.rotation.z = Math.PI;
 
   /** Everything worn on the head, so a mask or cap can come off. */
   const headWear = joint(head, 0, 0);
   const hatStyle = style.hat ?? 'headband';
+  // The hair sits back on the head with a high front hairline above the brows.
   const hairCap = mesh(
-    new SphereGeometry(headR + 0.006, 24, 14, 0, Math.PI * 2, 0, 1.7),
+    new SphereGeometry(headR + 0.006, 28, 16, 0, Math.PI * 2, 0, 1.6),
     hair,
     headWear,
     0,
-    0.0,
-    -0.012,
+    0.004,
+    -0.006,
   );
-  hairCap.scale.set(1, 1.22, 1.08);
+  hairCap.scale.set(1.06, 1.02, 1);
+  hairCap.rotation.x = -0.4;
   if (hatStyle === 'headband') {
-    const band = mesh(new TorusGeometry(headR + 0.004, 0.016, 8, 28), hat, headWear, 0, 0.06, 0);
+    const band = mesh(new TorusGeometry(headR + 0.004, 0.02, 8, 32), hat, headWear, 0, 0.085, 0);
     band.rotation.x = Math.PI / 2;
   } else if (hatStyle === 'cap') {
     const dome = mesh(
-      new SphereGeometry(headR + 0.014, 24, 12, 0, Math.PI * 2, 0, 1.3),
+      new SphereGeometry(headR + 0.016, 28, 14, 0, Math.PI * 2, 0, 1.08),
       hat,
       headWear,
       0,
       0.004,
       -0.004,
     );
-    dome.scale.set(1, 1.22, 1.08);
+    dome.scale.set(1.06, 1.02, 1);
     const peak = mesh(
-      new CylinderGeometry(0.075, 0.075, 0.007, 14, 1, false, -Math.PI / 2, Math.PI),
+      new CylinderGeometry(0.095, 0.095, 0.01, 16, 1, false, -Math.PI / 2, Math.PI),
       hat,
       headWear,
       0,
-      0.05,
-      headR * 0.9,
+      0.082,
+      headR * 0.86,
     );
-    peak.rotation.x = 0.14;
+    peak.rotation.x = 0.12;
   }
 
   const makeArm = (side: number) => {
     const shoulder = joint(torso, side * shoulderX, shoulderY);
     shoulder.rotation.order = 'YXZ';
-    mesh(new SphereGeometry(0.072, 12, 8), shirt, shoulder);
+    mesh(new SphereGeometry(0.078, 12, 8), shirt, shoulder);
     // Bare upper arm under a short sleeve that ends above the elbow.
-    mesh(new CapsuleGeometry(0.049, UPPER_ARM - 0.1, 4, 10), skin, shoulder, 0, -UPPER_ARM / 2);
-    mesh(new CapsuleGeometry(0.063, 0.1, 4, 10), shirt, shoulder, 0, -0.12);
+    mesh(new CapsuleGeometry(0.058, UPPER_ARM - 0.116, 4, 10), skin, shoulder, 0, -UPPER_ARM / 2);
+    mesh(new CapsuleGeometry(0.075, 0.1, 4, 10), shirt, shoulder, 0, -0.12);
     const elbow = joint(shoulder, 0, -UPPER_ARM);
-    mesh(new CapsuleGeometry(0.043, FOREARM - 0.086, 4, 10), skin, elbow, 0, -FOREARM / 2);
+    mesh(new CapsuleGeometry(0.052, FOREARM - 0.104, 4, 10), skin, elbow, 0, -FOREARM / 2);
     const hand = joint(elbow, 0, -FOREARM - RIG.hand);
-    const palm = mesh(new SphereGeometry(0.045, 10, 8), side > 0 ? glove : skin, hand);
-    palm.scale.set(0.85, 1.15, 0.85);
-    mesh(new SphereGeometry(0.02, 8, 6), side > 0 ? glove : skin, hand, side * -0.02, 0.01, 0.035);
+    const palm = mesh(new SphereGeometry(0.058, 12, 8), side > 0 ? glove : skin, hand);
+    palm.scale.set(0.85, 1.1, 0.85);
+    mesh(new SphereGeometry(0.026, 8, 6), side > 0 ? glove : skin, hand, side * -0.026, 0.01, 0.04);
     return { shoulder, elbow, hand };
   };
   const armL = makeArm(1);
