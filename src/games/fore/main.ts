@@ -109,6 +109,8 @@ const PILL_FOR = 1.6;
 const HIDE_QUESTION_AFTER = 0.5;
 /** Seconds after a result is ready before a tap skips ahead. */
 const SKIP_RESULT_AFTER = 0.6;
+/** A tap cuts the hole flyover short once it has been running this long (not by a double tap). */
+const SKIP_INTRO_AFTER = 0.3;
 /** A tap in flight lands the ball once it has been flying this long. */
 const FAST_AFTER = 0.3;
 /** A holed ball takes this long to drop out of sight in the cup, seconds. */
@@ -950,7 +952,12 @@ function run(session: GameSession): void {
 
   const skip = () => {
     if (tapFlow.armed) return;
-    if ((phase === 'flight' || phase === 'swing') && gameTime - swingAt >= FAST_AFTER) {
+    if (phase === 'intro' && gameTime - introAt >= SKIP_INTRO_AFTER && devIntroAt() === null) {
+      // Cut the flyover and the hole's introduction short and line up the shot.
+      speechToken++;
+      stopSpeaking();
+      beginAim(0.6);
+    } else if ((phase === 'flight' || phase === 'swing') && gameTime - swingAt >= FAST_AFTER) {
       land();
     } else if (phase === 'result' && gameTime - resultAt >= SKIP_RESULT_AFTER) {
       advance();
@@ -1009,6 +1016,11 @@ function run(session: GameSession): void {
     const index = Number(e.key) - 1;
     if ((phase === 'ask' || tapFlow.armed) && index >= 0 && index < hud.buttons.length) {
       onAnswer(index);
+      return;
+    }
+    if (phase === 'intro' && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      skip();
       return;
     }
     if (phase !== 'aim') return;
