@@ -283,12 +283,22 @@ export function createPerson(style: PersonStyle): Person {
   skull.scale.set(1, 1.22, 1.08);
   for (const side of [-1, 1]) {
     mesh(new SphereGeometry(0.013, 8, 6), eyeMaterial, head, side * 0.033, 0.018, headR * 1.08);
-    mesh(new BoxGeometry(0.036, 0.007, 0.01), hair, head, side * 0.033, 0.043, headR * 1.08 - 0.004);
-    mesh(new SphereGeometry(0.022, 8, 6), skin, head, side * (headR + 0.002), -0.005, -0.004).scale.set(
-      0.45,
-      1,
-      0.8,
+    mesh(
+      new BoxGeometry(0.036, 0.007, 0.01),
+      hair,
+      head,
+      side * 0.033,
+      0.043,
+      headR * 1.08 - 0.004,
     );
+    mesh(
+      new SphereGeometry(0.022, 8, 6),
+      skin,
+      head,
+      side * (headR + 0.002),
+      -0.005,
+      -0.004,
+    ).scale.set(0.45, 1, 0.8);
   }
   mesh(new SphereGeometry(0.017, 8, 6), skin, head, 0, -0.012, headR * 1.08 + 0.004);
 

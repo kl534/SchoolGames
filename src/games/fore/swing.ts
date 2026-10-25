@@ -126,7 +126,8 @@ function fullTime(t: number): number {
   if (t <= half.impact) return (t / half.impact) * IMPACT_FULL_AT;
   return (
     IMPACT_FULL_AT +
-    ((t - half.impact) / (half.seconds - half.impact)) * (SWING_TIMING.full.seconds - IMPACT_FULL_AT)
+    ((t - half.impact) / (half.seconds - half.impact)) *
+      (SWING_TIMING.full.seconds - IMPACT_FULL_AT)
   );
 }
 

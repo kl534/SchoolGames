@@ -8,7 +8,13 @@ import { HOLES } from '../src/games/fore/course';
 import { CUP_VISUAL_R, buildHole } from '../src/games/fore/hole';
 import { neutralPose } from '../src/games/fore/person';
 import { CLUBS, CUP_R, holedOutcome } from '../src/games/fore/shot';
-import { SWING_TIMING, swingFrame, swingKind, timingFor, type SwingKind } from '../src/games/fore/swing';
+import {
+  SWING_TIMING,
+  swingFrame,
+  swingKind,
+  timingFor,
+  type SwingKind,
+} from '../src/games/fore/swing';
 
 const RAD = Math.PI / 180;
 const club = (id: string, carry?: number) => {
@@ -103,7 +109,10 @@ describe('the grip', () => {
         const R = g.person.handWorld('R', new Vector3());
         for (const h of [L, R]) {
           const rel = h.clone().sub(a);
-          const off = rel.clone().sub(line.clone().multiplyScalar(rel.dot(line))).length();
+          const off = rel
+            .clone()
+            .sub(line.clone().multiplyScalar(rel.dot(line)))
+            .length();
           expect(off).toBeLessThan(0.05);
           expect(rel.dot(line)).toBeLessThan(len);
         }
@@ -125,7 +134,12 @@ describe('address and impact', () => {
       const ball = new Vector3(0, BALL_R, 0);
       expect(h.distanceTo(ball)).toBeLessThan(0.1);
       expect(h.y).toBeLessThan(0.06);
-      expect(ball.clone().sub(h).dot(new Vector3(Math.sin(0.3), 0, Math.cos(0.3)))).toBeGreaterThan(0);
+      expect(
+        ball
+          .clone()
+          .sub(h)
+          .dot(new Vector3(Math.sin(0.3), 0, Math.cos(0.3))),
+      ).toBeGreaterThan(0);
     }
   });
 

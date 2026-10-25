@@ -109,7 +109,11 @@ export function createCaddie(): Caddie {
       // The golfer faces (-cos dir, sin dir); his back is the other way.
       const back = { x: Math.cos(dir), z: -Math.sin(dir) };
       const along = { x: Math.sin(dir), z: Math.cos(dir) };
-      root.position.set(golfer.x + back.x * 2 + along.x * 0.5, 0, golfer.z + back.z * 2 + along.z * 0.5);
+      root.position.set(
+        golfer.x + back.x * 2 + along.x * 0.5,
+        0,
+        golfer.z + back.z * 2 + along.z * 0.5,
+      );
       root.rotation.y = dir - Math.PI / 2;
     },
   };

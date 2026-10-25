@@ -305,7 +305,10 @@ function bodyPose(frame: SwingFrame, lean0: number, p: Pose): void {
   p.headPitch = -0.3 * (1 - frame.up);
   const lead = frame.leadKnee;
   p.lift = -kneeDrop((lead + frame.trailKnee) / 2);
-  const trail = frame.trailHeel > 0.02 ? Math.max(frame.trailKnee, plantedBend(p.lift, frame.trailHeel)) : frame.trailKnee;
+  const trail =
+    frame.trailHeel > 0.02
+      ? Math.max(frame.trailKnee, plantedBend(p.lift, frame.trailHeel))
+      : frame.trailKnee;
   p.legL.out = p.legR.out = 0.16;
   p.legL.raise = kneeRaise(lead);
   p.legL.bend = lead;
@@ -390,7 +393,10 @@ export function createGolfer(): Golfer {
   const setTilt = (deg: number) => tilt.set(0, -Math.sin(deg * RAD), Math.cos(deg * RAD));
   /** A direction in the swing plane: 0 down the slope, positive turning back, away from the target. */
   const inPlane = (deg: number, out: Vector3) =>
-    out.copy(tilt).multiplyScalar(Math.cos(deg * RAD)).addScaledVector(EX, -Math.sin(deg * RAD));
+    out
+      .copy(tilt)
+      .multiplyScalar(Math.cos(deg * RAD))
+      .addScaledVector(EX, -Math.sin(deg * RAD));
 
   /** Reads the shoulders (in the golfer's own frame) and the point between them. */
   const readShoulders = () => {
@@ -474,7 +480,12 @@ export function createGolfer(): Golfer {
         handPlace(ARM0, maxReach * LEAD_REACH);
         headAt(shaft, out);
         target.set(-(BALL_R + 0.012 + head.faceOff), head.sole, reach);
-        return [out.x - target.x, out.y - target.y, out.z - target.z, 0.15 * ((shaft - ARM0) * RAD - WRIST0)];
+        return [
+          out.x - target.x,
+          out.y - target.y,
+          out.z - target.z,
+          0.15 * ((shaft - ARM0) * RAD - WRIST0),
+        ];
       },
       [prefer, 55, 8],
     );
@@ -499,7 +510,13 @@ export function createGolfer(): Golfer {
     );
     probe.dispose();
     model = saved;
-    const made: Fit = { lean, tilt: tiltDeg, arm0, shaft0, fix: { arms: result[0], cock: result[1] } };
+    const made: Fit = {
+      lean,
+      tilt: tiltDeg,
+      arm0,
+      shaft0,
+      fix: { arms: result[0], cock: result[1] },
+    };
     fits.set(key, made);
     return made;
   };
@@ -601,7 +618,10 @@ export function createGolfer(): Golfer {
     if (up) dHold.set(-0.35, 0.93, 0.1);
     else {
       const y = Math.min(Math.max((pHold.y - 0.06) / model.shaftLength, 0), 0.85);
-      dHold.set(-1, 0, 0.25).normalize().multiplyScalar(Math.sqrt(1 - y * y));
+      dHold
+        .set(-1, 0, 0.25)
+        .normalize()
+        .multiplyScalar(Math.sqrt(1 - y * y));
       dHold.y = -y;
     }
     dHold.normalize();
@@ -688,7 +708,8 @@ export function createGolfer(): Golfer {
         }
       });
       const step = delta / 0.15;
-      ikWeight = ikGoal > ikWeight ? Math.min(ikGoal, ikWeight + step) : Math.max(ikGoal, ikWeight - step);
+      ikWeight =
+        ikGoal > ikWeight ? Math.min(ikGoal, ikWeight + step) : Math.max(ikGoal, ikWeight - step);
       const wgt = ikWeight;
       if (ikGoal === 1 || wgt > 0) {
         hands(frame);
