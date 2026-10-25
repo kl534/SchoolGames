@@ -11,6 +11,8 @@
  * - `?side=-1|1|0` forces the wobble and duff side (0 or absent is random).
  * - `?quality=perfect|wobbly|duff` forces the next shot's quality, whatever the answer.
  * - `?intro=1` keeps the hole intro (the flyover) even with `hole`, `lie` or `strokes`.
+ * - `?introAt=<0..1>` freezes the hole flyover at that progress (and keeps the intro).
+ * - `?shadows=off` turns the real shadow map off and brings back the round blobs under the people.
  * - `?holes=ok` plays every hole instantly, so the results can be seen at once.
  * - `?swing=<seconds>` freezes the golfer that many seconds into the swing for the club in play
  *   (clamped to the swing's length), and pauses the game's own swing.
@@ -154,7 +156,9 @@ export function devQuality(): Quality | null {
 export function devSkipIntro(): boolean {
   if (!import.meta.env.DEV) return false;
   const q = params();
-  return (q.has('hole') || q.has('lie') || q.has('strokes')) && !q.has('intro');
+  return (
+    (q.has('hole') || q.has('lie') || q.has('strokes')) && !q.has('intro') && !q.has('introAt')
+  );
 }
 
 /** Whether to play every hole at once and go straight to the results. */
@@ -196,4 +200,18 @@ export function devCam(): DevCam | null {
   if (!import.meta.env.DEV) return null;
   const cam = params().get('cam');
   return cam === 'face' || cam === 'dtl' || cam === 'front' ? cam : null;
+}
+
+/** Progress (0 to 1) to freeze the hole flyover at, or null. */
+export function devIntroAt(): number | null {
+  if (!import.meta.env.DEV) return null;
+  const raw = params().get('introAt');
+  if (raw === null || raw === '') return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? Math.min(Math.max(n, 0), 1) : null;
+}
+
+/** False when the real shadow map is switched off. */
+export function devShadows(): boolean {
+  return !(import.meta.env.DEV && params().get('shadows') === 'off');
 }

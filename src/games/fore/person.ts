@@ -364,6 +364,7 @@ export function createPerson(style: PersonStyle): Person {
   const shadow = mesh(new CircleGeometry(0.4, 20), shadowMaterial, root);
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = 0.012;
+  shadow.name = 'blob';
 
   const legLength = thigh + shin;
   const apply = (pose: Pose) => {

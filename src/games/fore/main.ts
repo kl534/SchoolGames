@@ -1,5 +1,15 @@
 import './style.css';
-import { Color, DirectionalLight, Fog, HemisphereLight, MathUtils, Vector3 } from 'three';
+import {
+  ACESFilmicToneMapping,
+  Color,
+  DirectionalLight,
+  Fog,
+  HemisphereLight,
+  MathUtils,
+  PCFShadowMap,
+  Vector3,
+  type Object3D,
+} from 'three';
 import { pressAnswers } from '../../shared/answers';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
 import { createFactFeed, type FactFeed } from '../../shared/feed';
@@ -21,7 +31,9 @@ import {
   devClubPlan,
   devHoleState,
   devHolesOk,
+  devIntroAt,
   devQuality,
+  devShadows,
   devSide,
   devSkipIntro,
   devStart,
@@ -32,6 +44,7 @@ import { createCaddie } from './caddie';
 import { createGolfer, type GolfMove } from './golfer';
 import { createGuide } from './guide';
 import { buildHole, CUP_AID_RANGE, SKY, type HoleScene } from './hole';
+import { createSky } from './sky';
 import { createHud, SURFACE_NAMES, windChip, type Bands, type CardCell } from './hud';
 import {
   afterShot,
@@ -134,10 +147,28 @@ function run(session: GameSession): void {
   const { scene, camera } = ctx;
   scene.background = new Color(SKY);
   scene.fog = new Fog(0xcfe9ff, 320, 820);
-  scene.add(new HemisphereLight(0xffffff, 0x6a8f50, 2.4));
-  const sun = new DirectionalLight(0xfff4e0, 2.0);
-  sun.position.set(60, 120, -50);
-  scene.add(sun);
+  scene.add(new HemisphereLight(0xdff0ff, 0x5e8a46, 1.6));
+  const sun = new DirectionalLight(0xfff0d0, 2.4);
+  scene.add(sun, sun.target);
+  const sky = createSky();
+  scene.add(sky.object);
+  ctx.renderer.toneMapping = ACESFilmicToneMapping;
+  ctx.renderer.toneMappingExposure = 1;
+  // One shadow map for the people and the flag; its box (14 x 14 yd) follows the golfer.
+  const shadows = devShadows();
+  if (shadows) {
+    ctx.renderer.shadowMap.enabled = true;
+    ctx.renderer.shadowMap.type = PCFShadowMap;
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
+    const box = sun.shadow.camera;
+    box.left = box.bottom = -7;
+    box.right = box.top = 7;
+    box.near = 1;
+    box.far = 160;
+    sun.shadow.bias = -0.0005;
+    sun.shadow.normalBias = 0.03;
+  }
   const ball = createBall();
   scene.add(ball.object);
   const guide = createGuide();
@@ -146,6 +177,13 @@ function run(session: GameSession): void {
   scene.add(golfer.root);
   const caddie = createCaddie();
   scene.add(caddie.root);
+  // Real shadows from the people; the round blob under them is the fallback with shadows off.
+  for (const root of [golfer.root, caddie.root]) {
+    root.traverse((o: Object3D) => {
+      if (o.name === 'blob') o.visible = !shadows;
+      else if ((o as { isMesh?: boolean }).isMesh) o.castShadow = shadows;
+    });
+  }
   let holeScene: HoleScene | null = null;
 
   // ---------- HUD ----------
@@ -270,7 +308,13 @@ function run(session: GameSession): void {
     if (dev && kind !== 'intro') return devCamView(dev);
     switch (kind) {
       case 'intro':
-        return introView(hole, viewW, viewH, bands.play, (gameTime - introAt) / SWEEP_FOR);
+        return introView(
+          hole,
+          viewW,
+          viewH,
+          bands.play,
+          devIntroAt() ?? (gameTime - introAt) / SWEEP_FOR,
+        );
       case 'aim':
         return aimView(plan, hole, golferAt(), viewW, viewH, bands.aim);
       case 'ask':
@@ -364,6 +408,8 @@ function run(session: GameSession): void {
   const placeGolfer = () => {
     golfer.setClub(plan.club);
     golfer.stand(hstate.at, plan.dir, plan.club.id);
+    sun.target.position.copy(golfer.root.position);
+    sun.position.set(golfer.root.position.x + 36, 72, golfer.root.position.z - 30);
     caddie.stand(golfer.root.position, plan.dir);
     // The flash ring around the cup shows on the green and when the pin is near.
     const toPin = Math.hypot(hole.pin.x - hstate.at.x, hole.pin.z - hstate.at.z);
@@ -447,7 +493,7 @@ function run(session: GameSession): void {
     if (index === HOLES.length - 1) lines.push(LAST_HOLE_SPEECH);
     sayLines(lines, thisTurn, () => undefined);
     after(INTRO_FOR, () => {
-      if (turn === thisTurn && phase === 'intro') beginAim(0.9);
+      if (turn === thisTurn && phase === 'intro' && devIntroAt() === null) beginAim(0.9);
     });
   };
 
@@ -998,6 +1044,7 @@ function run(session: GameSession): void {
     else golfer.play(golfMove, gameTime - golfSince, delta);
     caddie.update(delta);
     holeScene?.update(gameTime);
+    sky.update(gameTime, camera.position, hole.length / 2);
     applyCamera();
   });
 
@@ -1015,6 +1062,7 @@ function run(session: GameSession): void {
     mute.dispose();
     hud.dispose();
     holeScene?.dispose();
+    sky.dispose();
     ctx.dispose();
   });
 }
