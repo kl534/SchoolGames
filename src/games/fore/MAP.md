@@ -1,6 +1,6 @@
 # Fore! map
 
-Nine holes of real golf: each shot is one question. A club is picked from the distance, a ring shows where a perfect shot lands, a quick right answer flies to the ring, a slow one hooks or slices, a wrong one is a duff. Scored in strokes against par with a seven-stroke cap and an announcer. The ball flight is analytic (no physics engine). Trees on four holes stop a low ball, and a caddie reacts beside the golfer.
+Nine holes of real golf: each shot is one question. A club is picked from the distance, a ring shows where a perfect shot comes to rest, a quick right answer lands just short of it, hops and rolls on to the ring, a slow one hooks or slices, a wrong one is a duff. Scored in strokes against par with a seven-stroke cap and an announcer. The ball flight is analytic (no physics engine). Trees on four holes stop a low ball, and a caddie reacts beside the golfer.
 
 ## Files
 
@@ -18,7 +18,8 @@ Nine holes of real golf: each shot is one question. A club is picked from the di
 - `golfer.ts`: the right-handed golfer: stands side-on to the ball, holds the club in both hands (arm solver), swings per `swing.ts`, cheers and groans (`createGolfer`, `createClub`, `REACH`)
 - `caddie.ts`: the caddie with the bag, who idles, cheers or groans for 1.3 s (`createCaddie`, `REACTION_SECONDS`)
 - `person.ts`: the jointed person rig the golfer uses (`createPerson`, `Pose`, `neutralPose`; a 2 yd cartoon grown-up with a big round face, short neck, chunky limbs, pelvis, hips, slide and heel-raise)
-- `ball.ts`: the true-size ball with its tee peg, shadow, splash, one-second shot trail, ring and halo aids and impact puff, and the flight path (`createBall`, `flightPoint`, `flightSeconds`)
+- `ball.ts`: the true-size dimpled ball (it spins as it rolls) with its tee peg, shadow, splash, one-second shot trail, ring and halo aids and impact puff, and the flight path (`createBall`, `flightPoint`, `flightSeconds`)
+- `travel.ts`: how a struck ball gets to where `finishShot` says it rests: the flight, touchdown short of the ring, hops that get lower and an evenly slowing roll (more off a driver on the fairway, little in rough, none in sand or water), and a putt that slows to a stop; scoring is unaffected (`createTravel`, `Travel`)
 - `guide.ts`: the landing ring and the dotted aim line (`createGuide`, `ringRadius`)
 - `views.ts`: the camera views and screen fitting (`aimView`, `followView`, `landView`, `introView` (the tee-to-green flyover), `fitView`)
 - `hud.ts`: scorecard strip, hole map, chips, controls, question, answers, banner and pill (`createHud`, `windChip`)

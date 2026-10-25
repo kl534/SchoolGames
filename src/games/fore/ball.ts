@@ -16,6 +16,7 @@ import {
   Sprite,
   SpriteMaterial,
   SphereGeometry,
+  Vector3,
 } from 'three';
 import { DUFF_FRACTION, isPutt, pathAt, type Lie, type Outcome, type Plan } from './shot';
 
@@ -60,12 +61,37 @@ export interface Ball {
 export const TRAIL_SECONDS = 1;
 const TRAIL_POINTS = 60;
 
+/** A white ball pitted with grey dimples, so its spin can be seen when it rolls. */
+function dimpleTexture(): CanvasTexture | null {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 64;
+  const c = canvas.getContext('2d');
+  if (!c) return null;
+  c.fillStyle = '#ffffff';
+  c.fillRect(0, 0, 128, 64);
+  c.fillStyle = '#b9c3cf';
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 16; col++) {
+      c.beginPath();
+      c.arc(col * 8 + (row % 2) * 4 + 2, row * 8 + 4, 1.8, 0, Math.PI * 2);
+      c.fill();
+    }
+  }
+  return new CanvasTexture(canvas);
+}
+
+/** The ball only spins to match a move this short (yards); a long jump is a flight or a reset. */
+const SPIN_MAX_STEP = 0.6;
+const spinAxis = new Vector3();
+
 export function createBall(): Ball {
   const object = new Group();
   const sphere = new Mesh(
     new SphereGeometry(BALL_R, 20, 14),
-    new MeshStandardMaterial({ color: 0xffffff, roughness: 0.35 }),
+    new MeshStandardMaterial({ color: 0xffffff, roughness: 0.35, map: dimpleTexture() }),
   );
+  let last: { x: number; z: number } | null = null;
   object.add(sphere);
   const shadow = new Mesh(
     new CircleGeometry(BALL_R * 1.1, 16),
@@ -189,6 +215,17 @@ export function createBall(): Ball {
         peg.visible = onTee;
         restH = onTee ? BALL_R + TEE_H : BALL_R;
       }
+      // Rolling turns the ball about the axis across its way, a turn of distance / radius.
+      if (last) {
+        const dx = p.x - last.x;
+        const dz = p.z - last.z;
+        const step = Math.hypot(dx, dz);
+        if (step > 1e-6 && step < SPIN_MAX_STEP) {
+          spinAxis.set(dz, 0, -dx).normalize();
+          sphere.rotateOnWorldAxis(spinAxis, step / BALL_R);
+        }
+      }
+      last = { x: p.x, z: p.z };
       object.position.set(p.x, 0, p.z);
       sphere.position.y = Math.max(p.y, restH);
       shadow.position.y = 0.012;

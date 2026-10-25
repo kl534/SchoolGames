@@ -24,6 +24,7 @@ import { createTimers } from '../../shared/timers';
 import { answerOptions, promptSpeech, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
 import { BALL_R, createBall, flightPoint, flightSeconds } from './ball';
+import { createTravel, type Travel } from './travel';
 import { HOLES, surfaceAt, type Hole } from './course';
 import {
   devAim,
@@ -232,6 +233,8 @@ function run(session: GameSession): void {
   let flightDur = 1;
   /** The outcome the ball is drawn flying: a holed shot flies to the pin. */
   let flightOutcome: Outcome | null = null;
+  /** How the ball gets there: the flight, the hops and the roll (not for a tree or the water). */
+  let travel: Travel | null = null;
   let holeDropAt = -1;
   let launched = false;
   let golfMove: GolfMove = 'address';
@@ -617,8 +620,18 @@ function run(session: GameSession): void {
     missed = !right;
     // A holed shot is drawn flying to the pin, since the cup is drawn much smaller than the holing radius.
     flightOutcome = result.kind === 'holed' ? holedOutcome(outcome, hole.pin) : outcome;
-    flightDur =
-      flightSeconds(plan, flightOutcome) * (result.kind === 'rest' ? (result.tree ?? 1) : 1);
+    if (result.kind === 'rest' && result.tree !== undefined) {
+      // A ball that hits a tree stops flying and drops there.
+      travel = null;
+      flightDur = flightSeconds(plan, flightOutcome) * result.tree;
+    } else {
+      // Otherwise it lands short, hops and rolls to where it rests.
+      const end = result.kind === 'rest' ? result.at : flightOutcome.end;
+      const surface =
+        result.kind === 'holed' ? 'green' : result.kind === 'rest' ? result.surface : null;
+      travel = createTravel(plan, { ...flightOutcome, end }, surface);
+      flightDur = travel.seconds;
+    }
 
     after(HIDE_QUESTION_AFTER, () => {
       if (turn !== thisTurn) return;
@@ -676,7 +689,7 @@ function run(session: GameSession): void {
     const u = flightT / flightDur;
     // A ball that hits a tree stops flying at that point of its path.
     const stop = result?.kind === 'rest' ? (result.tree ?? 1) : 1;
-    const p = flightPoint(plan, flightOutcome, Math.min(u, 1) * stop);
+    const p = travel ? travel.at(flightT) : flightPoint(plan, flightOutcome, Math.min(u, 1) * stop);
     ballPos = p;
     ball.place(p, 'rough');
     ball.trail(gameTime, p);
