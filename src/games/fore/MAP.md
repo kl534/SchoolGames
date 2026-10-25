@@ -9,15 +9,16 @@ Nine holes of real golf: each shot is one question. A club is picked from the di
 - `shot.ts`: clubs, the planned shot, how it was struck and where the ball ends (`clubFor`, `planShot`, `resolveShot`, `finishShot`, `treeHit`, `pathAt`, `TREE_HEIGHT`, `Plan`, `Outcome`, `Result`)
 - `rules.ts`: pure golf scoring, the stored score and the announcer's lines (`afterShot`, `holeScore`, `holeOver`, `nameFor`, `storedFor`, `shotCall`, `holeCall`, `holeIntro`, `allCallLines`, `reactionFor`)
 - `voice.ts`: every spoken line that is not a fact (`VOICE_LINES`)
-- `hole.ts`: the ground, fairway, green, hazards, trees, 150 and 100 yd markers, tee and flag as meshes (`buildHole`)
-- `golfer.ts`: the golfer and the swing, cheer and groan poses (`createGolfer`, `SWING_SECONDS`, `IMPACT_AT`)
+- `hole.ts`: the ground, fairway, green, hazards, trees, 150 and 100 yd markers, tee, true-size cup with its flash ring, and flag as meshes (`buildHole`, `CUP_VISUAL_R`)
+- `swing.ts`: pure swing numbers: the kind of swing for a club, its timing and the body and arm angles over time (`swingKind`, `timingFor`, `SWING_TIMING`, `swingFrame`)
+- `golfer.ts`: the right-handed golfer: stands side-on to the ball, holds the club in both hands (arm solver), swings per `swing.ts`, cheers and groans (`createGolfer`, `createClub`, `REACH`)
 - `caddie.ts`: the caddie with the bag, who idles, cheers or groans for 1.3 s (`createCaddie`, `REACTION_SECONDS`)
-- `person.ts`: the jointed person rig the golfer uses (`createPerson`, `Pose`, `neutralPose`)
-- `ball.ts`: the ball with its shadow, splash and one-second shot trail, and the flight path (`createBall`, `flightPoint`, `flightSeconds`)
+- `person.ts`: the jointed person rig the golfer uses (`createPerson`, `Pose`, `neutralPose`; a 2 yd grown-up with pelvis, hips, slide and heel-raise)
+- `ball.ts`: the true-size ball with its tee peg, shadow, splash, one-second shot trail, ring and halo aids and impact puff, and the flight path (`createBall`, `flightPoint`, `flightSeconds`)
 - `guide.ts`: the landing ring and the dotted aim line (`createGuide`, `ringRadius`)
 - `views.ts`: the camera views and screen fitting (`aimView`, `followView`, `landView`, `introView` (the tee-to-green flyover), `fitView`)
 - `hud.ts`: scorecard strip, hole map, chips, controls, question, answers, banner and pill (`createHud`, `windChip`)
-- `dev.ts`: dev query hooks (`devStart`, `devHoleState`, `devAim`, `devSide`, `devQuality`, `devHolesOk`, `devSkipIntro`)
+- `dev.ts`: dev query hooks (`devStart`, `devHoleState`, `devAim`, `devSide`, `devQuality`, `devHolesOk`, `devSkipIntro`, `devSwing`, `devClubPlan`, `devCam`)
 
 ## Dev hooks
 
@@ -29,6 +30,9 @@ Nine holes of real golf: each shot is one question. A club is picked from the di
 - `?side=-1|1|0`: force the wobble and duff side (0 or absent is random).
 - `?quality=perfect|wobbly|duff`: force the next shot's quality, whatever the answer.
 - `?holes=ok`: play every hole instantly and show the results.
+- `?swing=<seconds>`: freeze the golfer that many seconds into the swing for the club in play (also stops the game's own swing).
+- `?club=driver|iron3|iron5|iron7|wedge|sand|putter`: force the club (on the green only `putter`; `?carry=N` sets its carry, e.g. a wedge at 30 for the half swing).
+- `?cam=face|dtl|front`: camera 5 yd from the golfer at chest height: across the line at his front, behind the ball along the line, or from the target side.
 - Example: `npm run shots -- "fore?hole=2&lie=sand" --start`
 
 ## Where changes go
@@ -42,3 +46,4 @@ Nine holes of real golf: each shot is one question. A club is picked from the di
 ## Tests
 
 - `tests/fore.test.ts`
+- `tests/fore-swing.test.ts`: handedness, sizes, the grip, address, impact, top and finish of the swing

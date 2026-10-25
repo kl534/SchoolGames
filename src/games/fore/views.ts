@@ -170,13 +170,15 @@ export function aimView(
     { x: plan.landing.x - side.x * r, y: 0, z: plan.landing.z - side.z * r },
     { x: plan.landing.x + side.x * r, y: 0, z: plan.landing.z + side.z * r },
     { x: plan.landing.x, y: 1, z: plan.landing.z },
+    // The ball itself, so it is never cut off below the screen.
+    { x: plan.from.x, y: 0, z: plan.from.z },
     // The golfer, head to toe on an upright screen; a short landscape band shows from the knees.
     { x: golfer.x, y: 2.1, z: golfer.z },
     { x: golfer.x, y: width / Math.max(height, 1) > 1.2 ? 0.9 : 0.1, z: golfer.z },
   ];
   const toPin = Math.hypot(hole.pin.x - plan.from.x, hole.pin.z - plan.from.z);
   if (toPin <= PIN_IN_VIEW) {
-    keys.push({ x: hole.pin.x, y: 0, z: hole.pin.z }, { x: hole.pin.x, y: 5, z: hole.pin.z });
+    keys.push({ x: hole.pin.x, y: 0, z: hole.pin.z }, { x: hole.pin.x, y: 2.4, z: hole.pin.z });
   }
   return fitView(cam, keys, width, height, band);
 }

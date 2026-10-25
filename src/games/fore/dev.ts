@@ -12,8 +12,16 @@
  * - `?quality=perfect|wobbly|duff` forces the next shot's quality, whatever the answer.
  * - `?intro=1` keeps the hole intro (the flyover) even with `hole`, `lie` or `strokes`.
  * - `?holes=ok` plays every hole instantly, so the results can be seen at once.
+ * - `?swing=<seconds>` freezes the golfer that many seconds into the swing for the club in play
+ *   (clamped to the swing's length), and pauses the game's own swing.
+ * - `?club=driver|iron3|iron5|iron7|wedge|sand|putter` forces the club (on the green only `putter`
+ *   is valid; anywhere else `putter` is ignored). `?carry=N` also sets its carry in yards, to reach
+ *   the half swing of a chip (a wedge or sand wedge at 40 yd or less).
+ * - `?cam=face|dtl|front` puts the camera 5 yd from the golfer at chest height (1.2 yd): `face`
+ *   across the line looking at his front, `dtl` 5 yd behind the ball looking along the line,
+ *   `front` from the target side looking back at him.
  */
-import { AIM_MAX, planShot, treeHit, type Lie, type Quality } from './shot';
+import { AIM_MAX, CLUBS, planShot, treeHit, type Lie, type Plan, type Quality } from './shot';
 import { centreX, HOLES, surfaceAt, type Hole } from './course';
 import { startHole, type HoleState } from './rules';
 
@@ -152,4 +160,40 @@ export function devSkipIntro(): boolean {
 /** Whether to play every hole at once and go straight to the results. */
 export function devHolesOk(): boolean {
   return import.meta.env.DEV && params().get('holes') === 'ok';
+}
+
+/** Seconds into the swing to freeze the golfer at, or null. */
+export function devSwing(): number | null {
+  if (!import.meta.env.DEV) return null;
+  const raw = params().get('swing');
+  if (raw === null || raw === '') return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/** A forced club on the plan, or the plan itself (the putter is only valid on the green). */
+export function devClubPlan(plan: Plan, lie: Lie): Plan {
+  if (!import.meta.env.DEV) return plan;
+  const q = params();
+  const club = CLUBS.find((c) => c.id === q.get('club'));
+  if (!club || (club.id === 'putter') !== (lie === 'green')) return plan;
+  const carry = Number(q.get('carry'));
+  const yards = club.id === 'putter' ? plan.carry : carry > 0 ? carry : club.carry;
+  return {
+    ...plan,
+    club: { ...club, carry: yards },
+    carry: yards,
+    landing: {
+      x: plan.from.x + yards * Math.sin(plan.dir),
+      z: plan.from.z + yards * Math.cos(plan.dir),
+    },
+  };
+}
+
+export type DevCam = 'face' | 'dtl' | 'front';
+
+export function devCam(): DevCam | null {
+  if (!import.meta.env.DEV) return null;
+  const cam = params().get('cam');
+  return cam === 'face' || cam === 'dtl' || cam === 'front' ? cam : null;
 }
