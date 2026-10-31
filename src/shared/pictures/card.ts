@@ -1,5 +1,6 @@
 import './pictures.css';
 import type { TapCard } from '../tapmarks';
+import { statementParts, type Fact } from '../topics';
 import { clamp, type Pose, type Picture, type Sprite } from './plan';
 import type { PicturePlayer } from './player';
 import { FINALE } from './player';
@@ -111,7 +112,7 @@ function drawSprite(sprite: Sprite): SVGElement {
 export function createPictureCard(
   picture: Picture,
   player: PicturePlayer,
-  fact: { prompt: string; statement: string },
+  fact: Pick<Fact, 'prompt' | 'statement' | 'visual'>,
 ): PictureCard {
   const calm = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
   const element = document.createElement('div');
@@ -165,16 +166,16 @@ export function createPictureCard(
       eq.textContent = s.caption ?? fact.prompt;
       return;
     }
-    const at = fact.statement.lastIndexOf('= ');
+    const parts = statementParts(fact);
     eq.textContent = '';
-    if (at < 0) {
+    if (!parts) {
       eq.textContent = fact.statement;
       return;
     }
     const answer = document.createElement('span');
     answer.className = 'sg-pic-answer';
-    answer.textContent = fact.statement.slice(at + 2);
-    eq.append(fact.statement.slice(0, at + 2), answer);
+    answer.textContent = parts.answer;
+    eq.append(parts.before, answer, parts.after);
   };
 
   const place = (i: number, pose: Pose, t: number) => {
