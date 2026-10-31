@@ -1,11 +1,12 @@
 import { shuffle, type Random } from '../random';
+import { stateCapitals } from './capitals';
 import { MATH_TOPICS } from './math';
 import type { Fact, Topic } from './types';
 
 export type { DistractorFn, Fact, FactVisual, Topic } from './types';
 
 /** Every topic, in menu order. Add new topic lists here. */
-export const TOPICS: Topic[] = [...MATH_TOPICS];
+export const TOPICS: Topic[] = [...MATH_TOPICS, stateCapitals];
 
 export function getTopic(
   id: string | null | undefined,
@@ -38,6 +39,18 @@ export function defaultDistractors(
 export const promptSpeech = (fact: Fact): string => fact.spokenPrompt ?? fact.prompt;
 /** What is read aloud to tell the whole fact (after a miss, in the preview). */
 export const statementSpeech = (fact: Fact): string => fact.spokenStatement ?? fact.statement;
+
+/**
+ * What is read after a miss: the line for the wrong answer picked (if the fact has one), then the
+ * statement.
+ */
+export function missSpeech(fact: Fact, chosen?: string): string[] {
+  const line =
+    chosen !== undefined && fact.wrongLines && Object.hasOwn(fact.wrongLines, chosen)
+      ? fact.wrongLines[chosen]
+      : undefined;
+  return line ? [line, statementSpeech(fact)] : [statementSpeech(fact)];
+}
 
 /**
  * The correct answer plus up to `count - 1` distinct wrong ones, shuffled.

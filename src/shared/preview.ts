@@ -1,6 +1,7 @@
 import './overlays.css';
 import { speak, stopSpeaking, unlockAudio } from './audio';
 import { statementSpeech, type Fact, type Topic } from './topics';
+import { fitText } from './answers';
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -71,6 +72,8 @@ export function showPreview(options: PreviewOptions): Preview {
   );
   overlay.appendChild(card);
   container.appendChild(overlay);
+  // A long word (Massachusetts:) shrinks to its chip instead of being clipped.
+  list.querySelectorAll<HTMLElement>('.sg-chip').forEach((chip) => fitText(chip, undefined, true));
 
   let disposed = false;
   const dispose = () => {

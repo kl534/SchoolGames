@@ -11,7 +11,7 @@ import { createScene } from '../../shared/scene';
 import { startGameSession, type GameSession } from '../../shared/session';
 import { createTapFlow } from '../../shared/tapflow';
 import { createTimers } from '../../shared/timers';
-import { answerOptions, promptSpeech, statementSpeech, type Fact } from '../../shared/topics';
+import { answerOptions, missSpeech, promptSpeech, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
 import {
   arrowTipX,
@@ -562,7 +562,7 @@ function run(session: GameSession): void {
     // The announcer, then the fact after a wrong answer.
     speechOver = false;
     const lines = callSpeech(call);
-    if (gutter && f) lines.push(statementSpeech(f));
+    if (gutter && f) lines.push(...missSpeech(f, options[chosen]));
     sayLines(lines, thisTurn, () => {
       speechOver = true;
       if (gutter) tapFlow.readFinished();

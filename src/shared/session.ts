@@ -16,6 +16,7 @@ import {
   myLevelTopic,
   topicOfFact,
 } from './levels';
+import { devFacts } from './devfacts';
 import { chooseRoundFacts, KICKS_PER_ROUND } from './round';
 import { getTopic, promptSpeech, statementSpeech, type Fact, type Topic } from './topics';
 
@@ -85,11 +86,21 @@ export function startGameSession(
     player,
     // My Level reads the live progress, so a refill picks up levels opened since the last one.
     chooseFacts(count = KICKS_PER_ROUND) {
-      const facts = isMyLevel
+      let facts = isMyLevel
         ? chooseLevelFacts(progress, count)
         : chooseRoundFacts(topic.facts, progress.facts[topic.id], count);
+      const forced = devFacts(topic, search);
+      if (forced.length > 0) {
+        facts = [...forced, ...facts.filter((f) => !forced.includes(f))].slice(0, count);
+      }
       // Fetch the round's voice clips now, while the preview is up.
-      preloadSpeech(facts.flatMap((f) => [promptSpeech(f), statementSpeech(f)]));
+      preloadSpeech(
+        facts.flatMap((f) => [
+          promptSpeech(f),
+          statementSpeech(f),
+          ...Object.values(f.wrongLines ?? {}),
+        ]),
+      );
       return facts;
     },
     timerSecondsFor: (fact) =>

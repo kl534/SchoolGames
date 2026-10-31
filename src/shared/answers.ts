@@ -1,6 +1,79 @@
 import { unlockAudio } from './audio';
 import { onPress } from './input';
 
+/** A fitted text never shrinks below this share of its CSS font size. */
+export const MIN_FIT_SCALE = 0.5;
+
+/**
+ * The font size (px) that makes text `needed` px wide at `base` px fit in `available` px, with a
+ * 2% margin, never below `base * minScale`, rounded down to 0.1 px; null when it already fits or
+ * nothing can be measured (available <= 0).
+ */
+export function fittedFontSize(
+  base: number,
+  available: number,
+  needed: number,
+  minScale = MIN_FIT_SCALE,
+): number | null {
+  if (needed <= available || available <= 0) return null;
+  return Math.floor(10 * base * Math.max(minScale, (0.98 * available) / needed)) / 10;
+}
+
+let measureContext: CanvasRenderingContext2D | null | undefined;
+let observer: ResizeObserver | undefined;
+/** The width each fitted node was last fitted at, so a font change can't loop the observer. */
+const fittedAt = new WeakMap<HTMLElement, number>();
+const fitOptions = new WeakMap<HTMLElement, { minScale: number; words: boolean }>();
+
+function measureText(font: string, text: string): number | null {
+  if (measureContext === undefined) {
+    measureContext = document.createElement('canvas').getContext('2d');
+  }
+  if (!measureContext) return null;
+  measureContext.font = font;
+  return measureContext.measureText(text).width;
+}
+
+function fit(node: HTMLElement, minScale: number, words: boolean): void {
+  node.style.fontSize = '';
+  if (node.clientWidth === 0) {
+    fittedAt.delete(node);
+    return;
+  }
+  const style = getComputedStyle(node);
+  const base = parseFloat(style.fontSize);
+  const padding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+  const available = node.clientWidth - (Number.isNaN(padding) ? 0 : padding);
+  const font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  const text = node.textContent ?? '';
+  // Text that wraps only has to fit its longest word.
+  const needed = words
+    ? Math.max(0, ...text.split(/\s+/).map((word) => measureText(font, word) ?? 0))
+    : measureText(font, text);
+  if (needed === null || Number.isNaN(base)) return;
+  const size = fittedFontSize(base, available, needed, minScale);
+  if (size !== null) node.style.fontSize = `${size}px`;
+  fittedAt.set(node, node.clientWidth);
+}
+
+/**
+ * Shrinks `node`'s one-line text to fit its width, and refits when its width changes. With
+ * `words`, the text may wrap and only its longest word has to fit.
+ */
+export function fitText(node: HTMLElement, minScale = MIN_FIT_SCALE, words = false): void {
+  fit(node, minScale, words);
+  if (typeof ResizeObserver === 'undefined') return;
+  observer ??= new ResizeObserver((entries) => {
+    for (const { target } of entries) {
+      const el = target as HTMLElement;
+      const { minScale, words } = fitOptions.get(el) ?? { minScale: MIN_FIT_SCALE, words: false };
+      if (el.clientWidth !== fittedAt.get(el)) fit(el, minScale, words);
+    }
+  });
+  fitOptions.set(node, { minScale, words });
+  observer.observe(node);
+}
+
 /**
  * Puts `options` on the answer buttons: text, label, `className` (which drops last turn's marks)
  * and enabled, or disabled when `locked`. A button with no option is hidden.
@@ -17,6 +90,7 @@ export function fillAnswers(
     button.textContent = text ?? '';
     button.setAttribute('aria-label', `Answer ${text ?? ''}`);
     button.className = className;
+    if (text !== undefined) fitText(button);
     if (locked) button.setAttribute('aria-disabled', 'true');
     else button.removeAttribute('aria-disabled');
   });

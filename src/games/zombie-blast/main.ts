@@ -625,6 +625,7 @@ function run(session: GameSession): void {
     tapFlow.reveal(buttons, q.options, q.fact, {
       avoid: [hud, banner],
       problem: q.fact.prompt,
+      chosen: q.options[q.chosen],
       delay: 0.6,
       onRead: () => (revealSpoken = true),
     });

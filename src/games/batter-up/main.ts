@@ -623,7 +623,11 @@ function run(session: GameSession): void {
     hud.showBanner(call.title, current.statement, 'miss', 'aside');
     sfx.miss();
     // The green answer pulses at once. The game waits for a tap on it, however long that takes.
-    tapFlow.reveal(hud.buttons, options, current, { avoid: hud.avoid, lead: call.spoken });
+    tapFlow.reveal(hud.buttons, options, current, {
+      avoid: hud.avoid,
+      lead: call.spoken,
+      chosen: options[chosen],
+    });
   };
 
   /** After a result: the same batter again, or the next one if that was an out. */

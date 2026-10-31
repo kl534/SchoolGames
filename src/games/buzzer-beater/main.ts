@@ -11,7 +11,13 @@ import { createScene } from '../../shared/scene';
 import { startGameSession, type GameSession } from '../../shared/session';
 import { createTapFlow } from '../../shared/tapflow';
 import { createTimers } from '../../shared/timers';
-import { answerOptions, promptSpeech, statementSpeech, type Fact } from '../../shared/topics';
+import {
+  answerOptions,
+  missSpeech,
+  promptSpeech,
+  statementSpeech,
+  type Fact,
+} from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
 import { createBall } from './ball';
 import { buildCourt } from './court';
@@ -601,6 +607,7 @@ function run(session: GameSession): void {
       feed.recordMiss(f);
       session.recordAnswer(f, false);
     }
+    const chosenText = options[chosen];
     const forced = forcedPlay();
     let input: PlayInput;
     let side: Side = 'us';
@@ -618,7 +625,9 @@ function run(session: GameSession): void {
       input = { kind: 'free-throw', shooter: 'us', made: right };
       points = 1;
       title = right ? `SWISH! ${pointsText(1)}` : 'Rims out!';
-      lines = right ? [FREE_THROW_MADE_SPEECH] : [FREE_THROW_MISSED_SPEECH, statementSpeech(f)];
+      lines = right
+        ? [FREE_THROW_MADE_SPEECH]
+        : [FREE_THROW_MISSED_SPEECH, ...missSpeech(f, chosenText)];
     } else if (state.ball === 'us') {
       if (right) {
         const ask = forced?.kind === 'shot' ? forced : null;
@@ -638,7 +647,7 @@ function run(session: GameSession): void {
         shown.fire = false;
         input = { kind: 'violation' };
         title = 'SHOT CLOCK VIOLATION!';
-        lines = [VIOLATION_SPEECH, statementSpeech(f)];
+        lines = [VIOLATION_SPEECH, ...missSpeech(f, chosenText)];
       } else {
         const result = ourMiss(state, forced?.kind === 'rebound' ? 0 : rnd());
         state = result.state;
@@ -647,7 +656,7 @@ function run(session: GameSession): void {
         title = 'CLANK!';
         lines = [
           MISS_SPEECH,
-          statementSpeech(f),
+          ...missSpeech(f, chosenText),
           result.rebound ? OFFENSIVE_REBOUND_SPEECH : THEIR_BALL_SPEECH,
         ];
         reboundKept = result.rebound;
@@ -682,7 +691,7 @@ function run(session: GameSession): void {
       theirFreeThrow = score.andOne;
       input = { kind: 'make', shooter: 'them', shot: score.shot, andOne: score.andOne };
       title = `${rival.name} ${pointsText(score.points)}`;
-      lines = [theirScoreSpeech(score), statementSpeech(f)];
+      lines = [theirScoreSpeech(score), ...missSpeech(f, chosenText)];
     }
     keepBall = reboundKept;
     saveProgress();

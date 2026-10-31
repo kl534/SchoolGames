@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { AVATARS, createProgressStore, recordAnswer } from '../src/shared/progress';
 import { LEVELS, MY_LEVEL_ID } from '../src/shared/levels';
+import { devFacts } from '../src/shared/devfacts';
 import { gameUrl, parseGameParams, startGameSession } from '../src/shared/session';
-import { answerOptions, TOPICS } from '../src/shared/topics';
+import { answerOptions, getTopic, TOPICS } from '../src/shared/topics';
 
 describe('parseGameParams', () => {
   it('reads the topic', () => {
@@ -221,5 +222,30 @@ describe('My Level session', () => {
     session.recordAnswer(fact, true);
     expect(session.timerSecondsFor(fact)).toBe(15);
     expect(session.chooseFacts(10)).toHaveLength(10);
+  });
+});
+
+describe('forced dev facts', () => {
+  const capitals = getTopic('state-capitals')!;
+  const byId = (id: string) => capitals.facts.find((f) => f.id === id)!;
+
+  it('reads ?facts= ids of the topic in order and drops unknown ones', () => {
+    expect(devFacts(capitals, '?facts=ohio,nope,texas')).toEqual([byId('ohio'), byId('texas')]);
+    expect(devFacts(capitals, '?topic=state-capitals&facts=texas,texas')).toEqual([byId('texas')]);
+    expect(devFacts(capitals, '?facts=')).toEqual([]);
+    expect(devFacts(capitals, '?topic=state-capitals')).toEqual([]);
+  });
+
+  it('opens the round with them and keeps the count', () => {
+    const search = '?topic=state-capitals&facts=missouri,new-york';
+    const session = startGameSession('forced', search)!;
+    for (const count of [10, 2, 1]) {
+      const facts = session.chooseFacts(count);
+      expect(facts).toHaveLength(count);
+      expect(facts.slice(0, 2).map((f) => f.id)).toEqual(['missouri', 'new-york'].slice(0, count));
+      expect(new Set(facts.map((f) => f.id)).size).toBe(count);
+    }
+    const plain = startGameSession('plain', '?topic=state-capitals')!.chooseFacts(10);
+    expect(plain).toHaveLength(10);
   });
 });

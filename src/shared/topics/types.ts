@@ -21,6 +21,8 @@ export interface Fact {
   spokenPrompt?: string;
   /** Read aloud with the statement; defaults to `statement`. */
   spokenStatement?: string;
+  /** Said after a miss when the player picked this wrong answer, before the statement. */
+  wrongLines?: Readonly<Record<string, string>>;
   visual?: FactVisual;
 }
 

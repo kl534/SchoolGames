@@ -439,6 +439,7 @@ function run(session: GameSession): void {
     tapFlow.reveal(answers, options, current, {
       avoid: [hud, banner],
       problem: current.prompt,
+      chosen: options[chosen],
       delay: 0.6,
     });
   };

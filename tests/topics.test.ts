@@ -5,9 +5,18 @@ import {
   getTopic,
   groupBySubject,
   listTopic,
+  missSpeech,
+  statementSpeech,
   TOPICS,
   validateTopic,
 } from '../src/shared/topics';
+import {
+  capitalDistractors,
+  DIVISION_REGION,
+  STATE_CAPITALS,
+  stateCapitals,
+} from '../src/shared/topics/capitals';
+import { runs } from './helpers/full';
 import { mathFact, numericDistractors } from '../src/shared/topics/math';
 
 describe('built-in topics', () => {
@@ -193,6 +202,7 @@ describe('built-in topics', () => {
       'Subtraction',
       'Multiplication',
       'Division',
+      'Social Studies',
     ]);
     const ids = (subject: string) =>
       groupBySubject()
@@ -286,5 +296,124 @@ describe('validateTopic', () => {
     expect(errors.some((e) => e.includes('kebab-case'))).toBe(true);
     expect(errors.some((e) => e.includes('duplicate fact id'))).toBe(true);
     expect(errors.some((e) => e.includes('two different answers'))).toBe(true);
+  });
+});
+
+describe('state capitals', () => {
+  const fact = (id: string) => stateCapitals.facts.find((f) => f.id === id)!;
+
+  it('has the 50 states, alphabetical, with kebab-case ids', () => {
+    expect(stateCapitals.facts).toHaveLength(50);
+    const ids = stateCapitals.facts.map((f) => f.id);
+    expect(new Set(ids).size).toBe(50);
+    for (const id of ids) expect(id).toMatch(/^[a-z]+(-[a-z]+)*$/);
+    const states = STATE_CAPITALS.map((row) => row.state);
+    expect(states).toEqual([...states].sort());
+    expect(fact('new-york').answer).toBe('Albany');
+    expect(fact('south-dakota').prompt).toBe('South Dakota');
+  });
+
+  it('has the Census division sizes', () => {
+    const counts: Record<string, number> = {};
+    for (const row of STATE_CAPITALS) counts[row.division] = (counts[row.division] ?? 0) + 1;
+    expect(counts).toEqual({
+      'new-england': 6,
+      'middle-atlantic': 3,
+      'east-north-central': 5,
+      'west-north-central': 7,
+      'south-atlantic': 8,
+      'east-south-central': 4,
+      'west-south-central': 4,
+      mountain: 8,
+      pacific: 5,
+    });
+    expect(Object.keys(DIVISION_REGION)).toHaveLength(9);
+  });
+
+  it('builds the fact for Ohio', () => {
+    expect(fact('ohio')).toEqual({
+      id: 'ohio',
+      prompt: 'Ohio',
+      answer: 'Columbus',
+      statement: 'Ohio: Columbus',
+      spokenPrompt: 'What is the capital of Ohio?',
+      spokenStatement: 'The capital of Ohio is Columbus.',
+    });
+    expect(fact('ohio').visual).toBeUndefined();
+  });
+
+  it('says a few names differently', () => {
+    expect(fact('washington').prompt).toBe('Washington');
+    expect(fact('washington').spokenPrompt).toBe('What is the capital of Washington State?');
+    expect(fact('washington').spokenStatement).toBe('The capital of Washington State is Olympia.');
+    expect(fact('south-dakota').answer).toBe('Pierre');
+    expect(fact('south-dakota').spokenStatement).toMatch(/is Peer\.$/);
+    expect(fact('missouri').wrongLines).toEqual({
+      'St. Louis': 'Saint Louis is a big city, but the capital is Jefferson City.',
+    });
+  });
+
+  it("gives 16 states a trap city that is nobody's capital", () => {
+    expect(stateCapitals.facts.filter((f) => f.wrongLines)).toHaveLength(16);
+    const capitals = new Set(STATE_CAPITALS.map((row) => row.capital));
+    for (const row of STATE_CAPITALS) {
+      if (row.trap) expect(capitals.has(row.trap.city)).toBe(false);
+    }
+  });
+
+  it('picks wrong answers from the trap, then the division, then the region', () => {
+    const rows = new Map(STATE_CAPITALS.map((row) => [row.state, row]));
+    for (let seed = 0; seed < runs(200, 20); seed++) {
+      for (const f of stateCapitals.facts) {
+        const row = rows.get(f.prompt)!;
+        const picks = capitalDistractors(f, 3, seededRandom(seed));
+        expect(picks).toHaveLength(3);
+        expect(new Set(picks).size).toBe(3);
+        expect(picks).not.toContain(f.answer);
+        if (row.trap) expect(picks).toContain(row.trap.city);
+        const sameDivision = new Set(
+          STATE_CAPITALS.filter((o) => o !== row && o.division === row.division).map(
+            (o) => o.capital,
+          ),
+        );
+        const wanted = Math.min(3 - (row.trap ? 1 : 0), sameDivision.size);
+        expect(picks.filter((p) => sameDivision.has(p))).toHaveLength(wanted);
+      }
+    }
+    expect(capitalDistractors({ ...fact('ohio'), id: 'nope' }, 3, seededRandom(1))).toEqual([]);
+  });
+
+  it('puts New York City first for New York, then nearby capitals', () => {
+    const picks = capitalDistractors(fact('new-york'), 3, seededRandom(4));
+    expect(picks[0]).toBe('New York City');
+    expect(picks.slice(1).sort()).toEqual(['Harrisburg', 'Trenton']);
+    const more = capitalDistractors(fact('new-york'), 4, seededRandom(4));
+    const fourth = STATE_CAPITALS.find((r) => r.capital === more[3])!;
+    expect(DIVISION_REGION[fourth.division]).toBe('northeast');
+  });
+
+  it('is the last menu group, Social Studies', () => {
+    expect(groupBySubject().at(-1)).toEqual({ subject: 'Social Studies', topics: [stateCapitals] });
+  });
+});
+
+describe('missSpeech', () => {
+  const illinois = stateCapitals.facts.find((f) => f.id === 'illinois')!;
+  const statement = statementSpeech(illinois);
+
+  it('reads the line for the trap city, then the statement', () => {
+    expect(missSpeech(illinois, 'Chicago')).toEqual([
+      'Chicago is a big city, but the capital is Springfield.',
+      statement,
+    ]);
+  });
+
+  it('reads just the statement otherwise', () => {
+    expect(missSpeech(illinois, 'Lansing')).toEqual([statement]);
+    expect(missSpeech(illinois, undefined)).toEqual([statement]);
+    expect(missSpeech(illinois)).toEqual([statement]);
+    expect(missSpeech(illinois, 'constructor')).toEqual([statement]);
+    const sum = mathFact('add', 2, 2);
+    expect(missSpeech(sum, '5')).toEqual([statementSpeech(sum)]);
   });
 });
