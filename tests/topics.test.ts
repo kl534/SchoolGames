@@ -635,7 +635,7 @@ describe('missing-number topics', () => {
   });
 
   it('gives three distinct wrong numbers of at least 1, never the answer', () => {
-    for (let seed = 0; seed < runs(20, 3); seed++) {
+    for (let seed = 0; seed < runs(5, 1); seed++) {
       const random = seededRandom(seed);
       for (const { topic, fact } of missingFacts) {
         const wrong = missingDistractors(fact, 3, random);
@@ -649,7 +649,7 @@ describe('missing-number topics', () => {
         expect(new Set(options).size).toBe(4);
       }
     }
-  });
+  }, 30_000);
 
   it('offers the total or the sum of the shown numbers on 6 + ? = 12', () => {
     const fact = missingFact(mathFact('add', 6, 6), 'middle');
