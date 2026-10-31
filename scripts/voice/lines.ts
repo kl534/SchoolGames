@@ -25,12 +25,13 @@ function sharedLines(): string[] {
   return lines;
 }
 
-/** Every fact's prompt and statement, as the games pass them to `speak`. */
+/** Every fact's prompt, statement and wrong-answer lines, as the games pass them to `speak`. */
 function factLines(): string[] {
   return TOPICS.flatMap((topic) =>
     topic.facts.flatMap((fact) => [
       fact.spokenPrompt ?? fact.prompt,
       fact.spokenStatement ?? fact.statement,
+      ...Object.values(fact.wrongLines ?? {}),
     ]),
   );
 }

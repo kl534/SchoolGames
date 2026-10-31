@@ -2,7 +2,7 @@ import { preloadSpeech, speak, stopSpeaking } from './audio';
 import { createMissPicture, type MissPicture } from './pictures';
 import { createTapGate, TAP_SPEECH } from './tapgate';
 import { createTapMarks } from './tapmarks';
-import { statementSpeech, type Fact } from './topics';
+import { missSpeech, type Fact } from './topics';
 
 export interface RevealOptions {
   /** What the finger and caption keep off besides the other answers (the banner, the question). */
@@ -18,6 +18,8 @@ export interface RevealOptions {
   lead?: string;
   /** Game seconds before the reading starts (it holds while paused). */
   delay?: number;
+  /** The wrong answer the player picked; undefined after a time-out. Picks the fact's wrong-answer line. */
+  chosen?: string;
   /** The reading has ended and the flow is still waiting on this miss. */
   onRead?: () => void;
 }
@@ -39,7 +41,8 @@ export interface TapFlow {
   ): void;
   /**
    * A miss on `fact`: arms on its answer among `options` and reads the fact out (`lead` first,
-   * after `delay`; a math fact is counted out in a picture between the lead and the fact). The
+   * after `delay`, then the line for the wrong answer `chosen` if the fact has one; a math fact is
+   * counted out in a picture between those and the fact). The
    * reminders start once the reading ends. A reading cut off by a disarm or a
    * new arm counts for nothing, so the game needs no turn checks of its own.
    */
@@ -134,7 +137,7 @@ export function createTapFlow(container?: HTMLElement): TapFlow {
       buttons,
       options,
       fact,
-      { avoid, problem, lead, delay = 0, onRead, picture: show = true } = {},
+      { avoid, problem, lead, chosen, delay = 0, onRead, picture: show = true } = {},
     ) {
       armWith(
         buttons,
@@ -145,7 +148,10 @@ export function createTapFlow(container?: HTMLElement): TapFlow {
       );
       const id = armId;
       const parts: ((next: () => void) => void)[] = [];
+      const lines = missSpeech(fact, chosen);
+      const statement = lines[lines.length - 1];
       if (lead) parts.push((next) => speak(lead, next));
+      for (const line of lines.slice(0, -1)) parts.push((next) => speak(line, next));
       if (picture) {
         const shown = picture;
         parts.push((next) => {
@@ -153,7 +159,7 @@ export function createTapFlow(container?: HTMLElement): TapFlow {
           shown.start(next);
         });
       }
-      parts.push((next) => speak(statementSpeech(fact), next));
+      parts.push((next) => speak(statement, next));
       const say = (i: number) => {
         if (id !== armId) return;
         if (i < parts.length) {

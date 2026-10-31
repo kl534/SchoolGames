@@ -10,6 +10,7 @@ vi.mock('../src/shared/audio', () => ({
 
 import { preloadSpeech, speak, stopSpeaking } from '../src/shared/audio';
 import { createTapFlow, type TapFlow } from '../src/shared/tapflow';
+import { stateCapitals } from '../src/shared/topics/capitals';
 import { mathFact } from '../src/shared/topics/math';
 
 function makeButtons(): HTMLButtonElement[] {
@@ -162,6 +163,52 @@ describe('tapflow', () => {
     expect(speak).toHaveBeenLastCalledWith('Strike three!', expect.any(Function));
     endSpeech();
     expect(speak).toHaveBeenLastCalledWith('2 plus 2 is 4', expect.any(Function));
+  });
+
+  it('reveal reads the line for the wrong answer picked, then the statement', () => {
+    const illinois = stateCapitals.facts.find((f) => f.id === 'illinois')!;
+    const options = ['Chicago', 'Springfield', 'Lansing', 'Madison'];
+    flow.reveal(buttons, options, illinois, { chosen: 'Chicago' });
+    expect(speak).toHaveBeenLastCalledWith(
+      'Chicago is a big city, but the capital is Springfield.',
+      expect.any(Function),
+    );
+    endSpeech();
+    expect(speak).toHaveBeenLastCalledWith(
+      'The capital of Illinois is Springfield.',
+      expect.any(Function),
+    );
+    expect(speak).toHaveBeenCalledTimes(2);
+  });
+
+  it('reveal reads only the statement for another wrong answer', () => {
+    const illinois = stateCapitals.facts.find((f) => f.id === 'illinois')!;
+    flow.reveal(buttons, ['Chicago', 'Springfield', 'Lansing', 'Madison'], illinois, {
+      chosen: 'Lansing',
+    });
+    expect(speak).toHaveBeenCalledTimes(1);
+    expect(speak).toHaveBeenLastCalledWith(
+      'The capital of Illinois is Springfield.',
+      expect.any(Function),
+    );
+  });
+
+  it('reveal reads the lead, the wrong-answer line, then the statement', () => {
+    const illinois = stateCapitals.facts.find((f) => f.id === 'illinois')!;
+    flow.reveal(buttons, ['Chicago', 'Springfield', 'Lansing', 'Madison'], illinois, {
+      lead: 'Out!',
+      chosen: 'Chicago',
+    });
+    const said: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      said.push(vi.mocked(speak).mock.lastCall![0]);
+      endSpeech();
+    }
+    expect(said).toEqual([
+      'Out!',
+      'Chicago is a big city, but the capital is Springfield.',
+      'The capital of Illinois is Springfield.',
+    ]);
   });
 
   it('a reading cut off by a disarm or a new arm counts for nothing', () => {

@@ -38,6 +38,9 @@ describe('collectVoiceLines', () => {
       "Top of the 3rd. You're up to bat!",
       'Today you play the Toledo Mud Hens!',
       'You scored 1 run!',
+      'What is the capital of Ohio?',
+      'The capital of Ohio is Columbus.',
+      'Chicago is a big city, but the capital is Springfield.',
       TAP_SPEECH,
     ]) {
       expect(lines).toContain(line);

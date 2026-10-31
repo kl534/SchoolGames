@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
-import { fillAnswers, lockAnswers, markAnswers, pressAnswers } from '../src/shared/answers';
+import {
+  fillAnswers,
+  fittedFontSize,
+  lockAnswers,
+  markAnswers,
+  pressAnswers,
+} from '../src/shared/answers';
 import { createTimers } from '../src/shared/timers';
 import { promptSpeech, statementSpeech } from '../src/shared/topics';
 
@@ -81,5 +87,27 @@ describe('timers', () => {
     timers.update(1);
     timers.update(5);
     expect(ran).not.toHaveBeenCalled();
+  });
+});
+
+describe('fittedFontSize', () => {
+  it('is null when the text fits or nothing can be measured', () => {
+    expect(fittedFontSize(40, 200, 150)).toBeNull();
+    expect(fittedFontSize(40, 0, 100)).toBeNull();
+  });
+
+  it('shrinks by the ratio with a margin, down to the floor', () => {
+    expect(fittedFontSize(40, 160, 200)).toBe(31.3);
+    expect(fittedFontSize(40, 100, 400)).toBe(24);
+    expect(fittedFontSize(40, 100, 400, 0.5)).toBe(20);
+  });
+});
+
+describe('fillAnswers fits long text', () => {
+  it('leaves the font size alone when nothing can be measured (jsdom) and does not throw', () => {
+    const buttons = makeButtons();
+    fillAnswers(buttons, ['Jefferson City', 'Lincoln', 'Topeka', 'St. Louis'], 'x-answer');
+    expect(buttons.map((b) => b.style.fontSize)).toEqual(['', '', '', '']);
+    expect(buttons[0].textContent).toBe('Jefferson City');
   });
 });
