@@ -161,6 +161,8 @@
 }
 
 .pk-answer.right {
+  /* Above the banner, which a long word's wide button can reach. */
+  z-index: 13;
   opacity: 1;
   background: #2f9e44;
 }
