@@ -413,7 +413,7 @@ describe('missSpeech', () => {
     expect(missSpeech(illinois, undefined)).toEqual([statement]);
     expect(missSpeech(illinois)).toEqual([statement]);
     expect(missSpeech(illinois, 'constructor')).toEqual([statement]);
-    const sum = mathFact(2, 2, '+');
+    const sum = mathFact('add', 2, 2);
     expect(missSpeech(sum, '5')).toEqual([statementSpeech(sum)]);
   });
 });

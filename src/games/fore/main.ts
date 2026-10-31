@@ -652,6 +652,7 @@ function run(session: GameSession): void {
       tapFlow.reveal(hud.buttons, options, f, {
         avoid: hud.avoid,
         problem: f.prompt,
+        chosen: options[chosen],
         delay: timingFor(plan.club).seconds + flightDur,
       });
     }

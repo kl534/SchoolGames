@@ -417,7 +417,11 @@ export function createPitching(host: PitchingHost): Pitching {
     const mark = startResult(true, false, true);
     // The green answer pulses at once; the game waits for a tap on it, however long it takes.
     // The hit is called, then the fact is read out.
-    tapFlow.reveal(hud.buttons, options, current, { avoid: hud.avoid, lead: cpuHitSpeech(hit) });
+    tapFlow.reveal(hud.buttons, options, current, {
+      avoid: hud.avoid,
+      lead: cpuHitSpeech(hit),
+      chosen: options[chosen],
+    });
     const { spots, leads } = host.snapshot();
     const script = planPlay({
       ball: path,

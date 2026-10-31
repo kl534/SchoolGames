@@ -893,6 +893,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
       tapFlow.reveal(buttons, options, current, {
         avoid: [hud.top, hud.banner],
         problem: current.prompt,
+        chosen: options[chosen],
         delay: 0.6,
       });
     }
@@ -958,6 +959,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
       avoid: [hud.top, hud.banner],
       problem: last.prompt,
       lead: OUT_OF_BIKES_SPEECH,
+      chosen: options[chosen],
     });
   };
 

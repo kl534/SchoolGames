@@ -439,6 +439,7 @@ function run(session: GameSession): void {
         avoid: hud.avoid,
         problem: f.prompt,
         lead: line,
+        chosen: options[chosen],
         delay: outcomeAt,
       });
     }

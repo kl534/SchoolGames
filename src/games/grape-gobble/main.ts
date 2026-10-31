@@ -439,6 +439,7 @@ function run(session: GameSession): void {
     tapFlow.reveal(buttons, options, current, {
       avoid: [hud, banner],
       problem: current.prompt,
+      chosen: options[index],
       delay: READ_AFTER,
     });
     problemText.textContent = current.statement;

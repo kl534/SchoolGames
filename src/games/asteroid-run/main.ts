@@ -674,6 +674,7 @@ function run(session: GameSession): void {
     tapFlow.reveal(buttons, options, current, {
       avoid: [hud, banner],
       problem: current.prompt,
+      chosen: options[chosen],
       delay: 0.6,
     });
   };
@@ -721,6 +722,7 @@ function run(session: GameSession): void {
       avoid: [hud, banner],
       problem: last.prompt,
       lead: SHIP_DESTROYED_SPEECH,
+      chosen: options[chosen],
     });
   };
 
