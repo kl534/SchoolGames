@@ -37,12 +37,14 @@ import { createMegaCoursePool } from '../src/games/crash-course/mega/mega-obstac
 import {
   ferrisPivot,
   ferrisTurn,
-  BALLOON_PIT,
-  BALLOON_R,
+  ferrisTilt,
+  BALLOON_TOP,
   BALLOON_X,
-  BALLOON_Y,
   CANNON,
   CANNON_MOUTH,
+  FERRIS,
+  OFFSETS,
+  TOP_TURN,
 } from '../src/games/crash-course/mega/sky-circus';
 import {
   boulderAt,
@@ -386,16 +388,14 @@ describe('the course props', () => {
   });
 });
 
-/** When the bike lands on each balloon in Balloon Hop (the beats of its clear). */
-const SKY_CIRCUS_BEATS = [
-  MEGA_SPECS['sky-circus'].elements[1].clear.beats.b1,
-  MEGA_SPECS['sky-circus'].elements[1].clear.beats.b2,
-  MEGA_SPECS['sky-circus'].elements[1].clear.beats.b3,
-];
-
 describe('Sky Circus specifics', () => {
   const offsets = megaOffsets('sky-circus');
   const at = (passed: Passed, t: number) => megaFrame('sky-circus', passed, t);
+  const [cannon, hop, ferris] = MEGA_SPECS['sky-circus'].elements.map((e) => e.clear.beats);
+  const plan = megaSegments('sky-circus', 3);
+  /** Course time of a beat of element `i`. */
+  const when = (i: 0 | 1 | 2, beat: number) => plan[i].start + beat;
+  const catchAt = when(2, ferris.catch);
 
   it('hides the bike inside the cannon until it fires', () => {
     // Clear: element 0 plays from t = 0; the bike rides in the barrel between 0.6 s and the shot.
@@ -411,33 +411,73 @@ describe('Sky Circus specifics', () => {
     }
   });
 
-  it('bounces on top of each balloon and flies over the pit', () => {
-    const [b1] = SKY_CIRCUS_BEATS;
-    for (const [k, x] of BALLOON_X.entries()) {
-      const t = megaSegments('sky-circus', 3)[1].start + SKY_CIRCUS_BEATS[k] + 0.07;
+  it('flies from the cannon straight onto balloon 1', () => {
+    const hit = when(1, hop.b1);
+    expect(hit).toBeGreaterThan(cannon.out);
+    for (let t = when(0, cannon.out); t < hit; t += 1 / 60) {
       const f = at(3, t);
-      expect(Math.abs(f.bike.x - offsets[1] - x)).toBeLessThan(0.4);
-      expect(f.bike.y).toBeGreaterThan(BALLOON_Y + BALLOON_R);
-    }
-    expect(b1).toBeGreaterThan(0.5);
-    const start = megaSegments('sky-circus', 3)[1].start;
-    for (let t = start; t < start + 3.3; t += 1 / 60) {
-      const f = at(3, t);
-      const x = f.bike.x - offsets[1];
-      if (x > BALLOON_PIT[0] + 0.6 && x < BALLOON_PIT[1] - 0.6) {
-        expect(f.bike.y, `over the pit at ${t}`).toBeGreaterThan(2.5);
-      }
+      expect(f.bike.grounded, `grounded at ${t}`).toBe(false);
+      expect(f.bike.y, `low at ${t}`).toBeGreaterThan(BIKE_Y + 1);
     }
   });
 
-  it('carries the bike in the loading gondola of the turning wheel', () => {
-    const start = megaSegments('sky-circus', 3)[2].start;
-    for (let t = 1.7; t <= 3.0; t += 0.05) {
-      const f = at(3, start + t);
-      const pivot = ferrisPivot(ferrisTurn('clear', t));
-      expect(f.bike.x - offsets[2]).toBeCloseTo(pivot.x, 1);
-      expect(f.bike.y).toBeCloseTo(pivot.y - 0.4, 1);
+  it('bounces on top of each balloon and stays high over the pit', () => {
+    for (const [k, x] of BALLOON_X.entries()) {
+      const f = at(3, when(1, [hop.b1, hop.b2, hop.b3][k]) + 0.07);
+      expect(Math.abs(f.bike.x - offsets[1] - x)).toBeLessThan(0.4);
+      // The third balloon takes the deeper dip of the big bounce, and the bike sinks with it.
+      expect(f.bike.y).toBeGreaterThan(BALLOON_TOP - (k === 2 ? 0.2 : 0));
     }
+    for (let t = plan[1].start; t < plan[1].start + plan[1].duration; t += 1 / 60) {
+      expect(at(3, t).bike.y, `over the pit at ${t}`).toBeGreaterThan(2.5);
+    }
+  });
+
+  it('drops from balloon 3 straight into the waiting gondola', () => {
+    for (let t = when(1, hop.b3); t < catchAt; t += 1 / 60) {
+      const f = at(3, t);
+      expect(f.bike.y, `low at ${t}`).toBeGreaterThan(2);
+      expect(f.bike.grounded, `grounded at ${t}`).toBe(false);
+    }
+    for (const outcome of ['clear', 'crash'] as const) {
+      for (let t = 0; t <= ferris.catch; t += 1 / 60) {
+        expect(ferrisTurn(outcome, t), `${outcome} turn at ${t}`).toBe(0);
+      }
+    }
+    const f = at(3, catchAt);
+    const pivot = ferrisPivot(0);
+    expect(f.bike.x).toBeCloseTo(offsets[2] + pivot.x, 1);
+    expect(Math.abs(f.bike.x - offsets[2] - pivot.x)).toBeLessThan(0.05);
+    expect(Math.abs(f.bike.y - (pivot.y - FERRIS.drop))).toBeLessThan(0.05);
+  });
+
+  it('carries the bike in the loading gondola up to the top', () => {
+    for (let t = ferris.catch; t <= ferris.tip; t += 0.05) {
+      const f = at(3, plan[2].start + t);
+      const pivot = ferrisPivot(ferrisTurn('clear', t));
+      const tilt = ferrisTilt('clear', t);
+      expect(
+        Math.abs(f.bike.x - offsets[2] - (pivot.x + FERRIS.drop * Math.sin(tilt))),
+      ).toBeLessThan(0.05);
+      expect(Math.abs(f.bike.y - (pivot.y - FERRIS.drop * Math.cos(tilt)))).toBeLessThan(0.05);
+    }
+    expect(ferrisTurn('clear', ferris.tip)).toBeCloseTo(TOP_TURN, 9);
+  });
+
+  it('never touches the road between the cannon and the finale landing', () => {
+    for (let t = when(0, cannon.out); t < when(2, ferris.land); t += 1 / 60) {
+      expect(at(3, t).bike.grounded, `grounded at ${t}`).toBe(false);
+    }
+    expect(at(3, when(2, ferris.land) + 0.2).bike.grounded).toBe(true);
+  });
+
+  it('spins the gondola two whole turns before DIZZY!', () => {
+    const crash = MEGA_SPECS['sky-circus'].elements[2].crash.beats;
+    expect(ferrisTurn('crash', crash.fling)).toBeGreaterThanOrEqual(2 * TAU);
+  });
+
+  it('has offsets that match the element lengths', () => {
+    expect(OFFSETS).toEqual(megaOffsets('sky-circus'));
   });
 });
 
@@ -484,7 +524,7 @@ describe('Volcano Rush specifics', () => {
 
 describe('megaRate', () => {
   it('is 1 for the courses without slow motion', () => {
-    for (const id of ['triple-loop', 'sky-circus', 'volcano-rush'] as const) {
+    for (const id of ['triple-loop', 'volcano-rush'] as const) {
       for (const passed of PASSED) {
         const total = megaDuration(id, passed);
         for (let i = 0; i < 200; i++) expect(megaRate(id, passed, Math.random() * total)).toBe(1);
@@ -530,6 +570,26 @@ describe('megaRate', () => {
     }
     expect(minima).toBe(beats);
   });
+
+  it.each([
+    [0, 0],
+    [1, 1],
+    [2, 2],
+    [3, 2],
+  ] as const)(
+    'slows to SLOW_RATE out of the cannon and at the catch with %i right',
+    (passed, beats) => {
+      const total = megaDuration('sky-circus', passed);
+      let minima = 0;
+      let wasLow = false;
+      for (let t = 0; t <= total; t += 1 / 1000) {
+        const low = megaRate('sky-circus', passed, t) === SLOW_RATE;
+        if (low && !wasLow) minima++;
+        wasLow = low;
+      }
+      expect(minima).toBe(beats);
+    },
+  );
 
   it('is 1 for NaN', () => {
     for (const id of MEGA_IDS) expect(megaRate(id, 3, Number.NaN)).toBe(1);

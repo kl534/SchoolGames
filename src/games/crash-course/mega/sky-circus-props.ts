@@ -1,7 +1,7 @@
 /**
- * The props of the Sky Circus: a striped human cannon that fires the bike over a haystack, three
- * big balloons over a hay pit (they squash, pop and bob) and a Ferris wheel whose gondola carries
- * the bike up and launches it. Bright painted primitives like obstacles.ts; everything is built
+ * The props of the Sky Circus: a striped human cannon that fires the bike high over a haystack,
+ * three big balloons over a hay pit (they squash, pop and bob) and a tall Ferris wheel whose
+ * gondola waits at 9 o'clock to catch the bike, carries it to the top and tips it off. Bright painted primitives like obstacles.ts; everything is built
  * once and only moved.
  */
 import {
@@ -14,7 +14,7 @@ import {
   SphereGeometry,
   TorusGeometry,
 } from 'three';
-import { ribbon, ribbonMaterial, smooth, type Kit } from '../kit';
+import { smooth, type Kit } from '../kit';
 import { TAU } from '../stunts';
 import { bump } from './anim';
 import {
@@ -27,13 +27,12 @@ import {
   CANNON,
   CANNON_MOUTH,
   ferrisPivot,
-  ferrisSurface,
   ferrisTilt,
   ferrisTurn,
   FERRIS,
-  FERRIS_RAMP,
   HAY_TOP,
   SKY_CIRCUS,
+  X_LAND,
 } from './sky-circus';
 import type { MegaBuilt } from './triple-loop-props';
 
@@ -157,7 +156,6 @@ function buildCannon(kit: Kit): MegaBuilt {
   kit.box(2.6, 0.18, 0.18, dark, group, 5.75, 0.55, -1.0);
   kit.box(2.6, 0.18, 0.18, dark, group, 5.75, 0.55, 1.0);
   haystack(kit, group, 12.8);
-  pole(kit, group, 18.5, -1.8, 5.0);
 
   const place = (recoil: number, jolt: number, flashSize: number) => {
     barrel.position.set(
@@ -293,6 +291,8 @@ function buildBalloons(kit: Kit): MegaBuilt {
   group.add(wear);
 
   let playing = false;
+  let clock = 0;
+  const bob = (k: number) => BALLOON_Y + 0.12 * Math.sin(clock * 1.5 + k * 1.7);
   const rest = (k: number) => {
     const b = balloons[k];
     b.root.position.y = BALLOON_Y;
@@ -315,26 +315,30 @@ function buildBalloons(kit: Kit): MegaBuilt {
         rest(k);
         const a = hits[k];
         if (outcome === 'crash' && k >= 1) {
+          const popped = k === 1 && t >= CRASH_2.pop;
           if (k === 1) {
-            const popped = t >= CRASH_2.pop;
             balloons[k].body.visible = !popped;
             balloons[k].rag.visible = popped;
-            if (!popped) balloons[k].root.position.y = BALLOON_Y + 0.05 * Math.sin(t * 6);
           }
+          if (!popped) balloons[k].root.position.y = bob(k);
           continue;
         }
-        if (t < a) continue;
+        if (t < a) {
+          // Not hit yet: keep bobbing in time with the ambient clock, so nothing jumps.
+          balloons[k].root.position.y = bob(k);
+          continue;
+        }
         const dip = bump(t, a + 0.07, 0.1);
         const wobble = Math.sin((t - a) * 18) * Math.exp(-(t - a) * 3.5);
-        show(k, dip, wobble);
+        // The third balloon gives the big bounce: it dips 1.6 times as deep.
+        show(k, k === 2 ? dip * 1.6 : dip, wobble);
       }
       wear.visible = outcome === 'crash' && t >= CRASH_2.sit;
     },
     ambient(time) {
+      clock = time;
       if (playing) return;
-      for (let k = 0; k < 3; k++) {
-        balloons[k].root.position.y = BALLOON_Y + 0.12 * Math.sin(time * 1.5 + k * 1.7);
-      }
+      for (let k = 0; k < 3; k++) balloons[k].root.position.y = bob(k);
     },
     reset() {
       playing = false;
@@ -350,15 +354,8 @@ function buildFerris(kit: Kit): MegaBuilt {
   const group = new Group();
   const steel = kit.lit(0xdfe6f2, 0.4);
   const frame = kit.lit(0x8791a8, 0.5);
-  const rib = ribbonMaterial(kit);
-  // The ramp onto the loading platform.
-  kit.mesh(
-    ribbon(ferrisSurface, FERRIS_RAMP.from, FERRIS_RAMP.end, 0.4, 0, 1.5, RED, WHITE),
-    rib,
-    group,
-  );
-  // A landing pad for the finale.
-  kit.box(6, 0.08, 3.0, kit.lit(0xffd43b, 0.6), group, CANDY.x + 3.2, 0.04, -0.3);
+  // A landing pad for the finale, from X_LAND - 2 to X_LAND + 4.
+  kit.box(6, 0.08, 3.0, kit.lit(0xffd43b, 0.6), group, X_LAND + 1, 0.04, -0.3);
   for (let i = 0; i < 6; i++) {
     kit.box(
       0.5,
@@ -366,7 +363,7 @@ function buildFerris(kit: Kit): MegaBuilt {
       3.02,
       i % 2 ? kit.lit(RED, 0.6) : kit.lit(WHITE, 0.6),
       group,
-      CANDY.x + 0.75 + i,
+      X_LAND - 1.25 + i,
       0.045,
       -0.3,
     );
@@ -379,7 +376,7 @@ function buildFerris(kit: Kit): MegaBuilt {
   for (const z of [-0.35, 0.35]) {
     kit.mesh(new TorusGeometry(FERRIS.r, 0.1, 8, 64), steel, wheel, 0, 0, z);
   }
-  const bulbCount = 24;
+  const bulbCount = 36;
   const bulbOff = kit.basic(0x4d566e);
   const bulbOn = kit.basic(0xffe066);
   const bulbFlash = kit.basic(0xff4fa0);
@@ -401,14 +398,14 @@ function buildFerris(kit: Kit): MegaBuilt {
     const spoke = kit.box(FERRIS.r * 2, 0.07, 0.08, steel, wheel);
     spoke.rotation.z = (i / FERRIS.gondolas) * Math.PI;
   }
-  kit.mesh(new SphereGeometry(0.4, 14, 10), kit.lit(GOLD, 0.3), wheel, 0, 0, 0.1);
-  // The A-frame legs behind.
+  kit.mesh(new SphereGeometry(0.55, 14, 10), kit.lit(GOLD, 0.3), wheel, 0, 0, 0.1);
+  // The A-frame legs behind, from the hub down to the road.
   for (const side of [-1, 1]) {
-    const dx = side * 2.4;
+    const dx = side * 3.4;
     const len = Math.hypot(dx, FERRIS.cy);
-    const leg = kit.box(0.28, len, 0.28, frame, group, FERRIS.cx + dx / 2, FERRIS.cy / 2, -1.5);
-    leg.rotation.z = Math.atan2(dx, FERRIS.cy) * -1;
-    kit.box(1.0, 0.2, 0.9, frame, group, FERRIS.cx + dx, 0.1, -1.5);
+    const leg = kit.box(0.34, len, 0.34, frame, group, FERRIS.cx + dx / 2, FERRIS.cy / 2, -1.5);
+    leg.rotation.z = Math.atan2(dx, FERRIS.cy);
+    kit.box(1.2, 0.2, 0.9, frame, group, FERRIS.cx + dx, 0.1, -1.5);
   }
 
   // Gondolas: they hang upright from the rim whatever the wheel does.
@@ -447,10 +444,9 @@ function buildFerris(kit: Kit): MegaBuilt {
     cabins.push(cabin);
   }
 
-  let playing = false;
   let flashing = false;
   const pose = (theta: number, tilt: number) => {
-    wheel.rotation.z = theta;
+    wheel.rotation.z = -theta;
     for (let i = 0; i < FERRIS.gondolas; i++) {
       const p = ferrisPivot(theta, i);
       gondolas[i].position.set(p.x, p.y, -0.1);
@@ -468,7 +464,6 @@ function buildFerris(kit: Kit): MegaBuilt {
   return {
     group,
     update(outcome, t) {
-      playing = true;
       const turn = ferrisTurn(outcome, t);
       pose(turn, ferrisTilt(outcome, t));
       flashing = outcome === 'clear' && t >= CLEAR_3.tip;
@@ -476,11 +471,9 @@ function buildFerris(kit: Kit): MegaBuilt {
     },
     ambient(time) {
       clock = time;
-      if (!playing) pose(0.04 * Math.sin(time * 0.8), 0);
       lightBulbs(time);
     },
     reset() {
-      playing = false;
       flashing = false;
       pose(0, 0);
     },
