@@ -98,8 +98,8 @@ describe('fittedFontSize', () => {
 
   it('shrinks by the ratio with a margin, down to the floor', () => {
     expect(fittedFontSize(40, 160, 200)).toBe(31.3);
-    expect(fittedFontSize(40, 100, 400)).toBe(24);
-    expect(fittedFontSize(40, 100, 400, 0.5)).toBe(20);
+    expect(fittedFontSize(40, 100, 400)).toBe(20);
+    expect(fittedFontSize(40, 100, 400, 0.6)).toBe(24);
   });
 });
 

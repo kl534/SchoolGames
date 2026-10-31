@@ -2,7 +2,7 @@ import { unlockAudio } from './audio';
 import { onPress } from './input';
 
 /** A fitted text never shrinks below this share of its CSS font size. */
-export const MIN_FIT_SCALE = 0.6;
+export const MIN_FIT_SCALE = 0.5;
 
 /**
  * The font size (px) that makes text `needed` px wide at `base` px fit in `available` px, with a
