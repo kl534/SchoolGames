@@ -1,6 +1,6 @@
 import './overlays.css';
 import { speak, stopSpeaking, unlockAudio } from './audio';
-import { statementSpeech, type Fact, type Topic } from './topics';
+import { statementParts, statementSpeech, type Fact, type Topic } from './topics';
 import { fitText } from './answers';
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -56,6 +56,12 @@ export function showPreview(options: PreviewOptions): Preview {
   const list = el('div', 'sg-preview');
   for (const fact of facts) {
     const chip = button(fact.statement, 'sg-chip');
+    const parts = fact.visual?.blank ? statementParts(fact) : null;
+    if (parts) {
+      // A missing-number fact: the number the player finds is green.
+      chip.textContent = '';
+      chip.append(parts.before, el('span', 'sg-chip-answer', parts.answer), parts.after);
+    }
     chip.addEventListener('click', () => {
       unlockAudio();
       speak(statementSpeech(fact));

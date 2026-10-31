@@ -138,6 +138,10 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+.sg-chip-answer {
+  color: #5cf2b0;
+}
+
 .sg-chip:active {
   transform: scale(0.97);
 }

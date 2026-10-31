@@ -31,6 +31,8 @@ export interface PlayerProgress {
   highScores: Record<string, Record<string, number>>;
   /** How many My Level levels the player has opened; it never goes down. */
   levelsOpen?: number;
+  /** Which `LEVELS` layout `levelsOpen` counts in; see `migrateMissingNumberLevels`. */
+  levelsVersion?: number;
 }
 
 export const AVATARS = ['🦊', '🐼', '🐯', '🐸', '🐙', '🦄', '🐶', '🐱', '🐵', '🦁', '🐧', '🐢'];
@@ -194,6 +196,34 @@ export function migrateAboveTenTables(progress: PlayerProgress): boolean {
   return changed;
 }
 
+/** The My Level layout `levelsOpen` is counted in. Version 2 added the missing-number levels. */
+export const LEVELS_VERSION = 2;
+
+/**
+ * Where old level `i + 1` (of the 30 before the missing-number levels) sits now, 1-based. The
+ * levels test checks it against the old titles.
+ */
+export const OLD_LEVEL_SPOTS = [
+  1, 2, 5, 6, 13, 14, 17, 18, 21, 22, 25, 26, 37, 38, 41, 42, 45, 46, 55, 56, 59, 60, 63, 64, 73,
+  74, 77, 78, 81, 82,
+];
+
+/**
+ * Moves `levelsOpen` from the old 30-level layout to the current one (the same plain level, with
+ * every level before it open) and stamps the version. Returns true when it changed `levelsOpen`;
+ * running it again changes nothing.
+ */
+export function migrateMissingNumberLevels(progress: PlayerProgress): boolean {
+  let changed = false;
+  if (progress.levelsVersion !== LEVELS_VERSION && typeof progress.levelsOpen === 'number') {
+    const old = Math.min(Math.max(1, Math.floor(progress.levelsOpen)), OLD_LEVEL_SPOTS.length);
+    progress.levelsOpen = OLD_LEVEL_SPOTS[old - 1];
+    changed = true;
+  }
+  progress.levelsVersion = LEVELS_VERSION;
+  return changed;
+}
+
 /** Games whose id changed: old id -> new id. */
 const RENAMED_GAMES: Record<string, string> = { 'fairway-golf': 'fore' };
 
@@ -277,6 +307,8 @@ export function createProgressStore(store: KeyValueStore = deviceStore()): Progr
       if (typeof data.levelsOpen === 'number') progress.levelsOpen = data.levelsOpen;
       migrateAboveTenTables(progress);
       migrateRenamedGames(progress);
+      if (typeof data.levelsVersion === 'number') progress.levelsVersion = data.levelsVersion;
+      migrateMissingNumberLevels(progress);
       return progress;
     },
     save(playerId, progress) {

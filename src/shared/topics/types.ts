@@ -1,11 +1,14 @@
 import type { Random } from '../random';
 
-/** What kind of sum a math fact is, with its numbers. */
+/**
+ * What kind of sum a math fact is, with its numbers. `blank` is set on missing-number facts: the
+ * operand of the shown equation that is the answer.
+ */
 export type FactVisual =
-  | { kind: 'add'; a: number; b: number }
-  | { kind: 'subtract'; a: number; b: number }
-  | { kind: 'multiply'; a: number; b: number }
-  | { kind: 'divide'; a: number; b: number };
+  | { kind: 'add'; a: number; b: number; blank?: 'a' | 'b' }
+  | { kind: 'subtract'; a: number; b: number; blank?: 'a' | 'b' }
+  | { kind: 'multiply'; a: number; b: number; blank?: 'a' | 'b' }
+  | { kind: 'divide'; a: number; b: number; blank?: 'a' | 'b' };
 
 /** One thing to learn: a prompt with a single correct answer. Answers are text, so words work too. */
 export interface Fact {

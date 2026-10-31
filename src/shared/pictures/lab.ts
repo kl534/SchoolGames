@@ -1,11 +1,11 @@
 /**
  * Dev-only lab for the miss pictures (not part of the build). Query:
  * `fact=<add|sub|mul|div>:<a>:<b>`, `way=<Way>`, `at=<seconds>` (freeze there), `answers=row|grid`,
- * `green=0..3`. Without `at` it plays and loops. It speaks nothing: every count ends at once.
+ * `green=0..3`, `blank=middle|first` (a missing-number fact like 6 + ? = 12 or ? + 6 = 12). Without `at` it plays and loops. It speaks nothing: every count ends at once.
  */
 import { seededRandom } from '../random';
 import { createTapMarks } from '../tapmarks';
-import { mathFact } from '../topics/math';
+import { mathFact, missingFact, type Blank } from '../topics/math';
 import { createPictureCard } from './card';
 import { HOPPERS, pickCritters } from './critters';
 import { buildPicture } from './plan';
@@ -16,7 +16,12 @@ const params = new URLSearchParams(location.search);
 const KINDS = { add: 'add', sub: 'subtract', mul: 'multiply', div: 'divide' } as const;
 const [op, aText, bText] = (params.get('fact') ?? 'add:8:5').split(':');
 const kind = KINDS[op as keyof typeof KINDS] ?? 'add';
-const fact = mathFact(kind, Number(aText), Number(bText));
+const plain = mathFact(kind, Number(aText), Number(bText));
+const blankParam = params.get('blank');
+const fact =
+  blankParam === 'middle' || blankParam === 'first'
+    ? missingFact(plain, blankParam as Blank)
+    : plain;
 const visual = fact.visual!;
 const requested = params.get('way');
 const way: Way =

@@ -1,7 +1,7 @@
 import { factWeight, isMastered, type FactStat, type PlayerProgress } from './progress';
 import { shuffle, weightedSample, type Random } from './random';
 import { answerOptions, type Fact, type Topic } from './topics';
-import { MATH_TOPICS } from './topics/math';
+import { MATH_TOPICS, missingTwin, type Blank } from './topics/math';
 
 /** Pseudo topic id: My Level stars and high scores are saved under it. It is not in `TOPICS`. */
 export const MY_LEVEL_ID = 'my-level';
@@ -61,56 +61,196 @@ const BIG_TOPIC: Record<TableKind, string> = {
 /** The table a times or divide fact belongs to: 3 in 7 × 3 and in 21 ÷ 3. */
 const tableOf = (fact: Fact) => fact.visual?.b ?? 0;
 
-/** Facts of these tables up to × 10, table by table (levels 5 to 12). */
+/** Facts of these tables up to × 10, table by table (levels 13 to 28). */
 const tableFacts = (kind: TableKind, numbers: number[]) =>
   factsOf(tables(SMALL_PREFIX[kind], numbers));
-/** The same tables from × 11 to × 16, table by table (levels 19 to 24). */
+/** The same tables from × 11 to × 16, table by table (levels 55 to 66). */
 const stretchFacts = (kind: TableKind, numbers: number[]) =>
   numbers.flatMap((n) =>
     factsOf([BIG_TOPIC[kind]], (f) => tableOf(f) === n && multiplierAbove10(f)),
   );
-/** Every fact of these tables, × 1 to × 16, table by table (levels 25 to 30; the tables are 11 to 16). */
+/** Every fact of these tables, × 1 to × 16, table by table (levels 73 to 84; the tables are 11 to 16). */
 const bigTableFacts = (kind: TableKind, numbers: number[]) =>
   numbers.flatMap((n) => factsOf([BIG_TOPIC[kind]], (f) => tableOf(f) === n));
 
-/** Easiest first. Only how many are open is saved, so titles and order can change. */
+const sums10: Level = { title: 'Sums to 10', facts: factsOf(['addition-1-10'], answerAtMost10) };
+const takeAway10: Level = {
+  title: 'Take-away within 10',
+  facts: factsOf(['subtraction-1-10'], startsAtMost10),
+};
+const sums20: Level = {
+  title: 'Sums to 20',
+  facts: factsOf(['addition-1-10'], (f) => !answerAtMost10(f)),
+};
+const takeAway20: Level = {
+  title: 'Take-away within 20',
+  facts: factsOf(['subtraction-1-10'], (f) => !startsAtMost10(f)),
+};
+const times1: Level = { title: '× 1, 2, 5, 10', facts: tableFacts('times', [1, 2, 5, 10]) };
+const divide1: Level = { title: '÷ 1, 2, 5, 10', facts: tableFacts('divide', [1, 2, 5, 10]) };
+const times3: Level = { title: '× 3, 4', facts: tableFacts('times', [3, 4]) };
+const divide3: Level = { title: '÷ 3, 4', facts: tableFacts('divide', [3, 4]) };
+const times6: Level = { title: '× 6, 7', facts: tableFacts('times', [6, 7]) };
+const divide6: Level = { title: '÷ 6, 7', facts: tableFacts('divide', [6, 7]) };
+const times8: Level = { title: '× 8, 9', facts: tableFacts('times', [8, 9]) };
+const divide8: Level = { title: '÷ 8, 9', facts: tableFacts('divide', [8, 9]) };
+// Addition and subtraction with numbers up to 16: after the tables up to 10, before the 11s.
+const sums24: Level = {
+  title: 'Sums to 24',
+  facts: factsOf(['addition-11-16'], biggest(11, 12)),
+};
+const takeAway24: Level = {
+  title: 'Take-away within 24',
+  facts: factsOf(['subtraction-11-16'], biggest(11, 12)),
+};
+const sums28: Level = {
+  title: 'Sums to 28',
+  facts: factsOf(['addition-11-16'], biggest(13, 14)),
+};
+const takeAway28: Level = {
+  title: 'Take-away within 28',
+  facts: factsOf(['subtraction-11-16'], biggest(13, 14)),
+};
+const sums32: Level = {
+  title: 'Sums to 32',
+  facts: factsOf(['addition-11-16'], biggest(15, 16)),
+};
+const takeAway32: Level = {
+  title: 'Take-away within 32',
+  facts: factsOf(['subtraction-11-16'], biggest(15, 16)),
+};
+// The 11 to 16 times of the tables up to 10 (11 × 3 up to 16 × 3), then the tables 11 to 16.
+const stretchTimes1: Level = {
+  title: '× up to 16: 1, 2, 5, 10',
+  facts: stretchFacts('times', [1, 2, 5, 10]),
+};
+const stretchDivide1: Level = {
+  title: '÷ up to 16: 1, 2, 5, 10',
+  facts: stretchFacts('divide', [1, 2, 5, 10]),
+};
+const stretchTimes3: Level = { title: '× up to 16: 3, 4', facts: stretchFacts('times', [3, 4]) };
+const stretchDivide3: Level = { title: '÷ up to 16: 3, 4', facts: stretchFacts('divide', [3, 4]) };
+const stretchTimes6: Level = {
+  title: '× up to 16: 6, 7, 8, 9',
+  facts: stretchFacts('times', [6, 7, 8, 9]),
+};
+const stretchDivide6: Level = {
+  title: '÷ up to 16: 6, 7, 8, 9',
+  facts: stretchFacts('divide', [6, 7, 8, 9]),
+};
+const bigLevels = [11, 13, 15].map((from) => ({
+  times: { title: `× ${from}, ${from + 1}`, facts: bigTableFacts('times', [from, from + 1]) },
+  divide: { title: `÷ ${from}, ${from + 1}`, facts: bigTableFacts('divide', [from, from + 1]) },
+}));
+
+/** The missing-number twins of a plain level's facts, in the same order. */
+const twins = (plain: Level, blank: Blank, shape: string): Level => ({
+  title: `${plain.title}: ${shape}`,
+  facts: plain.facts.map(({ fact }) => missingTwin(fact, blank)),
+});
+
+/**
+ * Easiest first, in sections. Each section runs a plain pair (add or take away, times or divide),
+ * the middle-blank twins of that pair (`4 + ? = 9`), and ends with the first-blank twins of all its
+ * levels (`? + 5 = 9`), the hardest kind. 90 levels in all: the 30 plain levels, then 60 twins.
+ * Only how many are open is saved (see `OLD_LEVEL_SPOTS`), so change titles freely but not the order.
+ */
 export const LEVELS: Level[] = [
-  { title: 'Sums to 10', facts: factsOf(['addition-1-10'], answerAtMost10) },
-  { title: 'Take-away within 10', facts: factsOf(['subtraction-1-10'], startsAtMost10) },
-  { title: 'Sums to 20', facts: factsOf(['addition-1-10'], (f) => !answerAtMost10(f)) },
-  {
-    title: 'Take-away within 20',
-    facts: factsOf(['subtraction-1-10'], (f) => !startsAtMost10(f)),
-  },
-  { title: '× 1, 2, 5, 10', facts: tableFacts('times', [1, 2, 5, 10]) },
-  { title: '÷ 1, 2, 5, 10', facts: tableFacts('divide', [1, 2, 5, 10]) },
-  { title: '× 3, 4', facts: tableFacts('times', [3, 4]) },
-  { title: '÷ 3, 4', facts: tableFacts('divide', [3, 4]) },
-  { title: '× 6, 7', facts: tableFacts('times', [6, 7]) },
-  { title: '÷ 6, 7', facts: tableFacts('divide', [6, 7]) },
-  { title: '× 8, 9', facts: tableFacts('times', [8, 9]) },
-  { title: '÷ 8, 9', facts: tableFacts('divide', [8, 9]) },
-  // Addition and subtraction with numbers up to 16: after the tables up to 10, before the 11s.
-  { title: 'Sums to 24', facts: factsOf(['addition-11-16'], biggest(11, 12)) },
-  { title: 'Take-away within 24', facts: factsOf(['subtraction-11-16'], biggest(11, 12)) },
-  { title: 'Sums to 28', facts: factsOf(['addition-11-16'], biggest(13, 14)) },
-  { title: 'Take-away within 28', facts: factsOf(['subtraction-11-16'], biggest(13, 14)) },
-  { title: 'Sums to 32', facts: factsOf(['addition-11-16'], biggest(15, 16)) },
-  { title: 'Take-away within 32', facts: factsOf(['subtraction-11-16'], biggest(15, 16)) },
-  // The 11 to 16 times of the tables up to 10 (11 × 3 up to 16 × 3), then the tables 11 to 16.
-  { title: '× up to 16: 1, 2, 5, 10', facts: stretchFacts('times', [1, 2, 5, 10]) },
-  { title: '÷ up to 16: 1, 2, 5, 10', facts: stretchFacts('divide', [1, 2, 5, 10]) },
-  { title: '× up to 16: 3, 4', facts: stretchFacts('times', [3, 4]) },
-  { title: '÷ up to 16: 3, 4', facts: stretchFacts('divide', [3, 4]) },
-  { title: '× up to 16: 6, 7, 8, 9', facts: stretchFacts('times', [6, 7, 8, 9]) },
-  { title: '÷ up to 16: 6, 7, 8, 9', facts: stretchFacts('divide', [6, 7, 8, 9]) },
-  ...[11, 13, 15].flatMap((from) => [
-    { title: `× ${from}, ${from + 1}`, facts: bigTableFacts('times', [from, from + 1]) },
-    {
-      title: `÷ ${from}, ${from + 1}`,
-      facts: bigTableFacts('divide', [from, from + 1]),
-    },
-  ]),
+  // Up to 20: levels 1 to 12.
+  sums10,
+  takeAway10,
+  twins(sums10, 'middle', '4 + ? = 9'),
+  twins(takeAway10, 'middle', '9 − ? = 4'),
+  sums20,
+  takeAway20,
+  twins(sums20, 'middle', '8 + ? = 15'),
+  twins(takeAway20, 'middle', '15 − ? = 8'),
+  twins(sums10, 'first', '? + 5 = 9'),
+  twins(takeAway10, 'first', '? − 5 = 4'),
+  twins(sums20, 'first', '? + 7 = 15'),
+  twins(takeAway20, 'first', '? − 7 = 8'),
+  // Tables up to 10: levels 13 to 36.
+  times1,
+  divide1,
+  twins(times1, 'middle', '5 × ? = 30'),
+  twins(divide1, 'middle', '30 ÷ ? = 5'),
+  times3,
+  divide3,
+  twins(times3, 'middle', '4 × ? = 28'),
+  twins(divide3, 'middle', '28 ÷ ? = 4'),
+  times6,
+  divide6,
+  twins(times6, 'middle', '6 × ? = 48'),
+  twins(divide6, 'middle', '48 ÷ ? = 6'),
+  times8,
+  divide8,
+  twins(times8, 'middle', '9 × ? = 63'),
+  twins(divide8, 'middle', '63 ÷ ? = 9'),
+  twins(times1, 'first', '? × 5 = 30'),
+  twins(divide1, 'first', '? ÷ 5 = 6'),
+  twins(times3, 'first', '? × 4 = 28'),
+  twins(divide3, 'first', '? ÷ 4 = 7'),
+  twins(times6, 'first', '? × 6 = 48'),
+  twins(divide6, 'first', '? ÷ 6 = 8'),
+  twins(times8, 'first', '? × 9 = 63'),
+  twins(divide8, 'first', '? ÷ 9 = 7'),
+  // Sums and take-aways up to 32: levels 37 to 54.
+  sums24,
+  takeAway24,
+  twins(sums24, 'middle', '9 + ? = 21'),
+  twins(takeAway24, 'middle', '21 − ? = 12'),
+  sums28,
+  takeAway28,
+  twins(sums28, 'middle', '6 + ? = 19'),
+  twins(takeAway28, 'middle', '19 − ? = 13'),
+  sums32,
+  takeAway32,
+  twins(sums32, 'middle', '8 + ? = 23'),
+  twins(takeAway32, 'middle', '23 − ? = 15'),
+  twins(sums24, 'first', '? + 12 = 21'),
+  twins(takeAway24, 'first', '? − 9 = 12'),
+  twins(sums28, 'first', '? + 13 = 19'),
+  twins(takeAway28, 'first', '? − 6 = 13'),
+  twins(sums32, 'first', '? + 15 = 23'),
+  twins(takeAway32, 'first', '? − 8 = 15'),
+  // The 11 to 16 times of the tables up to 10: levels 55 to 72.
+  stretchTimes1,
+  stretchDivide1,
+  twins(stretchTimes1, 'middle', '5 × ? = 60'),
+  twins(stretchDivide1, 'middle', '60 ÷ ? = 5'),
+  stretchTimes3,
+  stretchDivide3,
+  twins(stretchTimes3, 'middle', '3 × ? = 42'),
+  twins(stretchDivide3, 'middle', '42 ÷ ? = 3'),
+  stretchTimes6,
+  stretchDivide6,
+  twins(stretchTimes6, 'middle', '7 × ? = 91'),
+  twins(stretchDivide6, 'middle', '91 ÷ ? = 7'),
+  twins(stretchTimes1, 'first', '? × 5 = 60'),
+  twins(stretchDivide1, 'first', '? ÷ 5 = 12'),
+  twins(stretchTimes3, 'first', '? × 3 = 42'),
+  twins(stretchDivide3, 'first', '? ÷ 3 = 14'),
+  twins(stretchTimes6, 'first', '? × 7 = 91'),
+  twins(stretchDivide6, 'first', '? ÷ 7 = 13'),
+  // The tables 11 to 16: levels 73 to 90.
+  bigLevels[0].times,
+  bigLevels[0].divide,
+  twins(bigLevels[0].times, 'middle', '12 × ? = 84'),
+  twins(bigLevels[0].divide, 'middle', '84 ÷ ? = 12'),
+  bigLevels[1].times,
+  bigLevels[1].divide,
+  twins(bigLevels[1].times, 'middle', '13 × ? = 52'),
+  twins(bigLevels[1].divide, 'middle', '52 ÷ ? = 13'),
+  bigLevels[2].times,
+  bigLevels[2].divide,
+  twins(bigLevels[2].times, 'middle', '15 × ? = 90'),
+  twins(bigLevels[2].divide, 'middle', '90 ÷ ? = 15'),
+  twins(bigLevels[0].times, 'first', '? × 12 = 84'),
+  twins(bigLevels[0].divide, 'first', '? ÷ 12 = 7'),
+  twins(bigLevels[1].times, 'first', '? × 13 = 52'),
+  twins(bigLevels[1].divide, 'first', '? ÷ 13 = 4'),
+  twins(bigLevels[2].times, 'first', '? × 15 = 90'),
+  twins(bigLevels[2].divide, 'first', '? ÷ 15 = 6'),
 ];
 
 const topicByFact = new Map<Fact, Topic>(
@@ -178,7 +318,7 @@ export function chooseLevelFacts(
   return shuffle([...fill(work, count - reviewSlots), ...fill(review, reviewSlots)], random);
 }
 
-/** 'Level 3 of 12: Sums to 20' */
+/** 'Level 5 of 90: Sums to 20' */
 export function levelLabel(open: number): string {
   return `Level ${open} of ${LEVELS.length}: ${LEVELS[open - 1].title}`;
 }

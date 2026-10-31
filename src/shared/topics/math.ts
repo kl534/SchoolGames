@@ -81,6 +81,92 @@ function mathDistractors(fact: Fact, count: number, random: Random): string[] {
   return numericDistractors(answer, candidates, count, random, 1);
 }
 
+export type Blank = 'middle' | 'first';
+
+/**
+ * The missing-number twin of a plain math fact: `6 + ? = 12` (middle) or `? + 6 = 12` (first).
+ * `visual` holds the shown equation's operands, with `blank` naming the one that is the answer.
+ * The statement is always a plain fact somewhere else, so its voice clip already exists.
+ */
+export function missingFact(plain: Fact, blank: Blank): Fact {
+  const v = plain.visual;
+  if (!v) throw new Error(`Fact ${plain.id} is not a plain math fact`);
+  const { kind, a, b } = v;
+  const r = Number(plain.answer);
+  const sym = SYMBOL[kind];
+  const idSym = ID_SYMBOL[kind];
+  const word = WORD[kind];
+  const first = blank === 'first';
+  // The shown equation's x, y and result, the number to find, and which operand it is.
+  let shown: { x: number; y: number; z: number };
+  let answer: number;
+  let visual: { a: number; b: number };
+  if (first) {
+    shown = { x: a, y: b, z: r };
+    answer = a;
+    visual = { a, b };
+  } else if (kind === 'multiply') {
+    shown = { x: b, y: a, z: r };
+    answer = a;
+    visual = { a: b, b: a };
+  } else if (kind === 'divide') {
+    shown = { x: a, y: r, z: b };
+    answer = r;
+    visual = { a, b: r };
+  } else {
+    shown = { x: a, y: b, z: r };
+    answer = b;
+    visual = { a, b };
+  }
+  const { x, y, z } = shown;
+  let prompt: string;
+  let id: string;
+  let spokenPrompt: string;
+  if (first) {
+    prompt = `? ${sym} ${b} = ${r}`;
+    id = `_${idSym}${b}=${r}`;
+    spokenPrompt = `What ${word} ${b} equals ${r}?`;
+  } else if (kind === 'multiply') {
+    prompt = `${b} ${sym} ? = ${r}`;
+    id = `${b}${idSym}_=${r}`;
+    spokenPrompt = `${b} ${word} what equals ${r}?`;
+  } else if (kind === 'divide') {
+    prompt = `${a} ${sym} ? = ${b}`;
+    id = `${a}${idSym}_=${b}`;
+    spokenPrompt = `${a} ${word} what equals ${b}?`;
+  } else {
+    prompt = `${a} ${sym} ? = ${r}`;
+    id = `${a}${idSym}_=${r}`;
+    spokenPrompt = `${a} ${word} what equals ${r}?`;
+  }
+  return {
+    id,
+    prompt,
+    answer: String(answer),
+    statement: `${x} ${sym} ${y} = ${z}`,
+    spokenPrompt,
+    spokenStatement: `${x} ${word} ${y} equals ${z}.`,
+    visual: { kind, ...visual, blank: first ? 'a' : 'b' },
+  };
+}
+
+/** Wrong answers for a missing-number fact: the usual slips for finding that number. */
+export function missingDistractors(fact: Fact, count: number, random: Random): string[] {
+  const x = Number(fact.answer);
+  if (!fact.visual) return numericDistractors(x, [], count, random, 1);
+  const { kind, a, b, blank } = fact.visual;
+  const near = [x - 1, x + 1, x - 2, x + 2];
+  const r = compute(kind, a, b);
+  const o = blank === 'a' ? b : a;
+  let candidates: number[];
+  if (kind === 'add') candidates = [r, r + o];
+  else if (kind === 'subtract')
+    candidates = blank === 'a' ? [Math.abs(r - o), r, o] : [r, a + r, a];
+  else if (kind === 'multiply') candidates = [r - o, o, r];
+  else candidates = blank === 'a' ? [x - o, x + o, r, o] : [a - r, r, a];
+  return numericDistractors(x, [...candidates, ...near], count, random, 1);
+}
+
 const addition: Topic = {
   id: 'addition-1-10',
   title: 'Addition 1–10',
@@ -180,13 +266,121 @@ const bigDivision: Topic = {
   distractors: mathDistractors,
 };
 
+const twinsOf = new Map<Fact, { middle: Fact; first: Fact }>();
+const topicOfTwin = new Map<Fact, Topic>();
+
+/** A topic of every plain fact's two missing-number twins: all middle blanks, then all first. */
+function missingTopic(
+  id: string,
+  subject: string,
+  title: string,
+  description: string,
+  sources: Topic[],
+): Topic {
+  const plain = sources.flatMap((t) => t.facts);
+  const pairs = plain.map((fact) => ({
+    fact,
+    middle: missingFact(fact, 'middle'),
+    first: missingFact(fact, 'first'),
+  }));
+  const topic: Topic = {
+    id,
+    title,
+    subject,
+    description,
+    facts: [...pairs.map((p) => p.middle), ...pairs.map((p) => p.first)],
+    distractors: missingDistractors,
+  };
+  for (const { fact, middle, first } of pairs) {
+    twinsOf.set(fact, { middle, first });
+    topicOfTwin.set(middle, topic);
+    topicOfTwin.set(first, topic);
+  }
+  return topic;
+}
+
+const TITLE_1_10 = 'Missing numbers 1–10';
+const TITLE_11_16 = 'Missing numbers 11–16';
+const addMissing10 = missingTopic(
+  'addition-missing-1-10',
+  'Addition',
+  TITLE_1_10,
+  'Find the missing number, like 6 + ? = 12 and ? + 4 = 9.',
+  [addition],
+);
+const addMissing16 = missingTopic(
+  'addition-missing-11-16',
+  'Addition',
+  TITLE_11_16,
+  'Like 9 + ? = 21 and ? + 13 = 19.',
+  [bigAddition],
+);
+const subMissing10 = missingTopic(
+  'subtraction-missing-1-10',
+  'Subtraction',
+  TITLE_1_10,
+  'Like 12 − ? = 6 and ? − 5 = 4.',
+  [subtraction],
+);
+const subMissing16 = missingTopic(
+  'subtraction-missing-11-16',
+  'Subtraction',
+  TITLE_11_16,
+  'Like 21 − ? = 12 and ? − 6 = 13.',
+  [bigSubtraction],
+);
+const mulMissing10 = missingTopic(
+  'multiplication-missing-1-10',
+  'Multiplication',
+  TITLE_1_10,
+  'Like 4 × ? = 28 and ? × 6 = 48.',
+  timesTables,
+);
+const mulMissing16 = missingTopic(
+  'multiplication-missing-11-16',
+  'Multiplication',
+  TITLE_11_16,
+  'Like 5 × ? = 60 and ? × 12 = 84.',
+  [bigMultiplication],
+);
+const divMissing10 = missingTopic(
+  'division-missing-1-10',
+  'Division',
+  TITLE_1_10,
+  'Like 28 ÷ ? = 4 and ? ÷ 6 = 8.',
+  divisionTables,
+);
+const divMissing16 = missingTopic(
+  'division-missing-11-16',
+  'Division',
+  TITLE_11_16,
+  'Like 60 ÷ ? = 5 and ? ÷ 12 = 7.',
+  [bigDivision],
+);
+
+/** The missing-number twin of a plain math fact, and the topic it is in. Same Fact object. */
+export function missingTwin(plain: Fact, blank: Blank): { topic: Topic; fact: Fact } {
+  const twins = twinsOf.get(plain);
+  if (!twins) throw new Error(`Fact ${plain.id} is not a plain math fact`);
+  const fact = blank === 'middle' ? twins.middle : twins.first;
+  return { topic: topicOfTwin.get(fact) as Topic, fact };
+}
+
 export const MATH_TOPICS: Topic[] = [
   addition,
   bigAddition,
+  addMissing10,
+  addMissing16,
   subtraction,
   bigSubtraction,
+  subMissing10,
+  subMissing16,
   ...timesTables,
   bigMultiplication,
+  mulMissing10,
+  mulMissing16,
   ...divisionTables,
   bigDivision,
+  divMissing10,
+  divMissing16,
 ];

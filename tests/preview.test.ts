@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { showPreview, uniqueFacts } from '../src/shared/preview';
 import { TOPICS } from '../src/shared/topics';
-import { mathFact } from '../src/shared/topics/math';
+import { mathFact, missingFact } from '../src/shared/topics/math';
 
 const topic = TOPICS[0];
 
@@ -21,6 +21,18 @@ describe('showPreview', () => {
     expect(document.body.textContent).toContain('Coming up');
     expect(document.body.textContent).toContain(topic.description);
     expect(document.querySelector('.sg-btn-primary')?.textContent).toBe('Start game ▶');
+  });
+
+  it('greens the found number on the chip of a missing-number fact only', () => {
+    const missing = missingFact(mathFact('multiply', 7, 3), 'middle');
+    const plain = mathFact('add', 1, 2);
+    showPreview({ topic, facts: [missing, plain], onDone: () => {} });
+    const [first, second] = [...document.querySelectorAll('.sg-chip')];
+    expect(first.textContent).toBe('3 × 7 = 21');
+    const answers = first.querySelectorAll('.sg-chip-answer');
+    expect(answers).toHaveLength(1);
+    expect(answers[0].textContent).toBe('7');
+    expect(second.querySelector('.sg-chip-answer')).toBeNull();
   });
 
   it('calls onDone once and removes itself when Start is tapped', () => {

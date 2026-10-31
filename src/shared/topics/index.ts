@@ -73,6 +73,36 @@ export function answerOptions(
   return shuffle([fact.answer, ...[...wrong].slice(0, wanted)], random);
 }
 
+/**
+ * The statement around the number the player finds: the blank operand of a missing-number fact,
+ * else what follows the last '= '. Null when there is neither.
+ */
+export function statementParts(
+  fact: Pick<Fact, 'statement' | 'visual'>,
+): { before: string; answer: string; after: string } | null {
+  const blank = fact.visual?.blank;
+  if (blank) {
+    const tokens = fact.statement.split(' ');
+    const at = blank === 'a' ? 0 : 2;
+    const before = tokens
+      .slice(0, at)
+      .map((t) => `${t} `)
+      .join('');
+    const after = tokens
+      .slice(at + 1)
+      .map((t) => ` ${t}`)
+      .join('');
+    return { before, answer: tokens[at], after };
+  }
+  const at = fact.statement.lastIndexOf('= ');
+  if (at < 0) return null;
+  return {
+    before: fact.statement.slice(0, at + 2),
+    answer: fact.statement.slice(at + 2),
+    after: '',
+  };
+}
+
 export interface ListItem {
   prompt: string;
   answer: string;
