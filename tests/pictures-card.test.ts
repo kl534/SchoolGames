@@ -12,7 +12,7 @@ import { createMissPicture } from '../src/shared/pictures';
 import { readTurn, TURNS_KEY } from '../src/shared/pictures/ways';
 import { seededRandom } from '../src/shared/random';
 import { memoryStore } from '../src/shared/storage';
-import { mathFact } from '../src/shared/topics/math';
+import { mathFact, missingFact } from '../src/shared/topics/math';
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -85,6 +85,23 @@ describe('createMissPicture', () => {
     expect(card.querySelector('.sg-pic-count')!.textContent).toBe('8');
     picture.stop();
     expect(done).not.toHaveBeenCalled();
+  });
+
+  it('picks out the found number of a missing-number fact in the last line', () => {
+    const finalLine = (fact: ReturnType<typeof mathFact>) => {
+      const picture = createMissPicture(fact, options())!;
+      vi.mocked(speak).mockImplementation((_text, onEnd) => onEnd?.());
+      picture.start(() => {});
+      for (let i = 0; i < 200; i++) picture.update(0.05);
+      const eq = picture.card.element.querySelector('.sg-pic-eq')!;
+      return { text: eq.textContent, green: eq.querySelector('.sg-pic-answer')!.textContent };
+    };
+    const add = mathFact('add', 6, 6);
+    const middle = missingFact(mathFact('add', 8, 5), 'middle');
+    expect(finalLine(middle)).toEqual({ text: '8 + 5 = 13', green: '5' });
+    const first = missingFact(mathFact('add', 8, 5), 'first');
+    expect(finalLine(first)).toEqual({ text: '8 + 5 = 13', green: '8' });
+    expect(finalLine(add)).toEqual({ text: '6 + 6 = 12', green: '12' });
   });
 
   it('ends on the whole fact with the answer picked out', () => {

@@ -7,8 +7,11 @@ import {
   factWeight,
   isMastered,
   LEARN_SPACING_MS,
+  LEVELS_VERSION,
   migrateAboveTenTables,
+  migrateMissingNumberLevels,
   migrateRenamedGames,
+  OLD_LEVEL_SPOTS,
   recordAnswer,
   recordBest,
   recordHighScore,
@@ -171,7 +174,7 @@ describe('createProgressStore', () => {
     store.setCurrentPlayer(ava.id);
     expect(store.currentPlayer()).toEqual(ava);
 
-    const progress = emptyProgress();
+    const progress = { ...emptyProgress(), levelsVersion: LEVELS_VERSION };
     recordAnswer(progress, 't', 'f', true);
     store.save(ava.id, progress);
     expect(store.load(ava.id)).toEqual(progress);
@@ -179,7 +182,7 @@ describe('createProgressStore', () => {
     store.removePlayer(ava.id);
     expect(store.listPlayers()).toEqual([]);
     expect(store.currentPlayer()).toBeNull();
-    expect(store.load(ava.id)).toEqual(emptyProgress());
+    expect(store.load(ava.id)).toEqual({ ...emptyProgress(), levelsVersion: LEVELS_VERSION });
   });
 
   it('loads progress saved before high scores existed', () => {
@@ -217,7 +220,7 @@ describe('createProgressStore', () => {
     const progress = emptyProgress();
     recordAnswer(progress, 't', 'f', false);
     store.save(a.id, progress);
-    expect(store.load(b.id)).toEqual(emptyProgress());
+    expect(store.load(b.id)).toEqual({ ...emptyProgress(), levelsVersion: LEVELS_VERSION });
   });
 
   it('rejects blank names, trims long ones and falls back to a known avatar', () => {
@@ -359,7 +362,8 @@ describe('migrateAboveTenTables', () => {
     expect(loaded.facts['division-11-16']['130/13']).toEqual(stat());
     expect(loaded.best['multiplication-11-16']).toEqual({ g: 3 });
     expect(loaded.facts['times-12']['5x12']).toEqual(stat());
-    expect(loaded.levelsOpen).toBe(25);
+    // Old level 25 (x 11, 12) is level 73 now.
+    expect(loaded.levelsOpen).toBe(73);
   });
 
   describe('with the real levels', () => {
@@ -370,9 +374,11 @@ describe('migrateAboveTenTables', () => {
       if (visual.kind === 'divide') return `divide-by-${visual.b}`;
       return topic.id;
     };
+    /** The 30 levels there were before the missing-number ones. */
+    const plainLevels = OLD_LEVEL_SPOTS.map((spot) => LEVELS[spot - 1]);
     const oldProgress = (levels: number) => {
       const p = emptyProgress();
-      for (const lf of LEVELS.slice(0, levels).flatMap((l) => l.facts)) {
+      for (const lf of plainLevels.slice(0, levels).flatMap((l) => l.facts)) {
         for (let i = 0; i < 3; i++) {
           recordAnswer(p, oldTopicId(lf), lf.fact.id, true, i * LEARN_SPACING_MS);
         }
@@ -386,20 +392,23 @@ describe('migrateAboveTenTables', () => {
     };
 
     it('keeps every level open and every fact learned', () => {
-      const loaded = loadOld(oldProgress(LEVELS.length));
-      expect(levelsOpen(loaded)).toBe(30);
-      for (const lf of LEVELS.flatMap((l) => l.facts)) {
+      const old = oldProgress(30);
+      old.levelsOpen = 30;
+      const loaded = loadOld(old);
+      expect(loaded.levelsOpen).toBe(82);
+      expect(levelsOpen(loaded)).toBeGreaterThanOrEqual(82);
+      for (const lf of plainLevels.flatMap((l) => l.facts)) {
         expect(isMastered(loaded.facts[topicOfFact(lf.fact).id]?.[lf.fact.id])).toBe(true);
       }
     });
 
-    it('keeps the player at level 19 after answering the first 24 levels', () => {
+    it('keeps the player at old level 19 (now 55) after answering the first 24 old levels', () => {
       const old = oldProgress(24);
       old.levelsOpen = 19;
       const loaded = loadOld(old);
-      expect(loaded.levelsOpen).toBeGreaterThanOrEqual(19);
-      expect(levelPassed(LEVELS[18], loaded.facts)).toBe(true);
-      expect(levelsOpen(loaded)).toBeGreaterThanOrEqual(25);
+      expect(loaded.levelsOpen).toBeGreaterThanOrEqual(55);
+      expect(levelPassed(LEVELS[54], loaded.facts)).toBe(true);
+      expect(levelsOpen(loaded)).toBeGreaterThanOrEqual(55);
     });
   });
 });
@@ -416,5 +425,60 @@ describe('migrateRenamedGames', () => {
     expect(p.highScores['times-8'].fore).toBe(99);
     expect(p.highScores['times-7']['fairway-golf']).toBe(95);
     expect(migrateRenamedGames(p)).toBe(false);
+  });
+});
+
+describe('migrateMissingNumberLevels', () => {
+  const at = (levelsOpen?: number, levelsVersion?: number): PlayerProgress => ({
+    ...emptyProgress(),
+    levelsOpen,
+    levelsVersion,
+  });
+
+  it('maps the old level to the same plain level in the new order', () => {
+    for (const [from, to] of [
+      [9, 21],
+      [1, 1],
+      [30, 82],
+      [0, 1],
+      [99, 82],
+    ]) {
+      const p = at(from);
+      expect(migrateMissingNumberLevels(p)).toBe(true);
+      expect(p.levelsOpen).toBe(to);
+      expect(p.levelsVersion).toBe(LEVELS_VERSION);
+    }
+  });
+
+  it('leaves current progress alone and is idempotent', () => {
+    const current = at(15, LEVELS_VERSION);
+    expect(migrateMissingNumberLevels(current)).toBe(false);
+    expect(current.levelsOpen).toBe(15);
+    const p = at(9);
+    migrateMissingNumberLevels(p);
+    expect(migrateMissingNumberLevels(p)).toBe(false);
+    expect(p.levelsOpen).toBe(21);
+  });
+
+  it('stamps the version when levelsOpen is absent', () => {
+    const p = at(undefined);
+    expect(migrateMissingNumberLevels(p)).toBe(false);
+    expect(p.levelsOpen).toBeUndefined();
+    expect(p.levelsVersion).toBe(LEVELS_VERSION);
+  });
+
+  it('is applied by load, once', () => {
+    const raw = memoryStore();
+    const store = createProgressStore(raw);
+    raw.setItem('sg:progress:p1', JSON.stringify({ facts: {}, best: {}, levelsOpen: 12 }));
+    const loaded = store.load('p1');
+    expect(loaded.levelsOpen).toBe(26);
+    store.save('p1', loaded);
+    expect(store.load('p1').levelsOpen).toBe(26);
+    const fresh = store.load('new');
+    expect(fresh.levelsVersion).toBe(LEVELS_VERSION);
+    fresh.levelsOpen = 3;
+    store.save('new', fresh);
+    expect(store.load('new').levelsOpen).toBe(3);
   });
 });
