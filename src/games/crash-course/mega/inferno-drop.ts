@@ -28,7 +28,7 @@ import {
   type Pos,
   type Surface,
 } from '../stunts';
-import { bump, flipEase, heading, pchip, route } from './anim';
+import { bump, flipEase, heading, pchip, route, windowDef } from './anim';
 import type { MegaSpec } from './mega';
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -197,30 +197,6 @@ function infernoClear(T: number, f: Frame): void {
 
 export const OFFSETS = [0, 26, 35] as const;
 
-/** A cleared element: a window of the flight, shifted to the element's own coordinates. */
-function windowDef(
-  from: number,
-  to: number,
-  offset: number,
-  word: string,
-  beats: Record<string, number>,
-  slow: readonly number[],
-  events: Def['events'],
-): Def {
-  return {
-    duration: to - from,
-    word,
-    beats,
-    slow,
-    at(t, f) {
-      infernoClear(from + t, f);
-      f.bike.x -= offset;
-      if (f.rider.mode === 'free') f.rider.x -= offset;
-    },
-    events,
-  };
-}
-
 /** The effects when the bike passes through ring `i`, element-local. */
 function ringPass(i: 0 | 1 | 2, from: number, word: boolean): Ev[] {
   const r = RINGS[i];
@@ -239,7 +215,7 @@ function ringPass(i: 0 | 1 | 2, from: number, word: boolean): Ev[] {
 const clear1: Def = (() => {
   const t = T_RING[0];
   const r = RINGS[0];
-  return windowDef(0, T_B1, 0, 'RED HOT!', { lip: T_LIP, ring: t }, [t], () => [
+  return windowDef(infernoClear, 0, T_B1, 0, 'RED HOT!', { lip: T_LIP, ring: t }, [t], () => [
     [0.3, 'sfx:whoosh', 2, 0.5],
     [0.25, 'dust', RAMP_FROM, 0.1],
     [T_LIP, 'sfx:whoosh', RAMP_LIP, RAMP_TOP],
@@ -252,7 +228,7 @@ const clear1: Def = (() => {
 const clear2: Def = (() => {
   const t = T_RING[1] - T_B1;
   const r = RINGS[1];
-  return windowDef(T_B1, T_B2, OFFSETS[1], 'BLAZING!', { ring: t }, [t], () => [
+  return windowDef(infernoClear, T_B1, T_B2, OFFSETS[1], 'BLAZING!', { ring: t }, [t], () => [
     ...ringPass(1, T_B1, true),
     [t + 0.1, 'cheer', r.x - OFFSETS[1], r.y - 1],
   ]);
@@ -263,16 +239,25 @@ const clear3: Def = (() => {
   const flip = FLIP_FROM - T_B2;
   const land = T_TOUCH - T_B2;
   const duration = T_END - T_B2;
-  return windowDef(T_B2, T_END, OFFSETS[2], 'INFERNO!', { ring: t, flip, touch: land }, [t], () => [
-    ...ringPass(2, T_B2, false),
-    [flip, 'sfx:whoosh', RINGS[2].x - OFFSETS[2] + 2, RINGS[2].y],
-    [land, 'word', touch.x - OFFSETS[2], touch.y + 2],
-    [land, 'dust', touch.x - OFFSETS[2], touch.y],
-    [land, 'confetti', touch.x - OFFSETS[2], touch.y + 1.5],
-    [land + 0.08, 'confetti', touch.x - OFFSETS[2] + 1, touch.y + 2],
-    [land, 'sfx:chime', touch.x - OFFSETS[2], touch.y],
-    [duration * 0.96, 'cheer', X_END - OFFSETS[2] - 1, 2],
-  ]);
+  return windowDef(
+    infernoClear,
+    T_B2,
+    T_END,
+    OFFSETS[2],
+    'INFERNO!',
+    { ring: t, flip, touch: land },
+    [t],
+    () => [
+      ...ringPass(2, T_B2, false),
+      [flip, 'sfx:whoosh', RINGS[2].x - OFFSETS[2] + 2, RINGS[2].y],
+      [land, 'word', touch.x - OFFSETS[2], touch.y + 2],
+      [land, 'dust', touch.x - OFFSETS[2], touch.y],
+      [land, 'confetti', touch.x - OFFSETS[2], touch.y + 1.5],
+      [land + 0.08, 'confetti', touch.x - OFFSETS[2] + 1, touch.y + 2],
+      [land, 'sfx:chime', touch.x - OFFSETS[2], touch.y],
+      [duration * 0.96, 'cheer', X_END - OFFSETS[2] - 1, 2],
+    ],
+  );
 })();
 
 // ---------- Crash 1: hung up on ring 1 (DANGLE!) ----------
