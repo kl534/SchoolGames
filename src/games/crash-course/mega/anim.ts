@@ -3,7 +3,7 @@
  * ballistic arcs, the heading of a path and an easing for fast flips. Built on the helpers in
  * stunts.ts; no three.js and no DOM.
  */
-import { arc, EASE, lerp, smooth, type Ease, type Pos } from '../stunts';
+import { arc, EASE, lerp, smooth, type Def, type Ease, type Frame, type Pos } from '../stunts';
 
 /**
  * A waypoint: at time `t` the point is (x, y). `peak` makes the way there from the previous
@@ -107,5 +107,34 @@ export function pchip(xs: readonly number[], ys: readonly number[]): (x: number)
       (-2 * t3 + 3 * t2) * ys[i + 1] +
       (t3 - t2) * h[i] * m[i + 1]
     );
+  };
+}
+
+/**
+ * A cleared element that is a window onto one flight: `play` draws the whole course at course time
+ * `T` into course-local coordinates, and the element shows `from` to `to` of it shifted by
+ * `offset` into its own. `beats` and `slow` are element-local (seconds after `from`).
+ */
+export function windowDef(
+  play: (T: number, f: Frame) => void,
+  from: number,
+  to: number,
+  offset: number,
+  word: string,
+  beats: Record<string, number>,
+  slow: readonly number[],
+  events: Def['events'],
+): Def {
+  return {
+    duration: to - from,
+    word,
+    beats,
+    slow,
+    at(t, f) {
+      play(from + t, f);
+      f.bike.x -= offset;
+      if (f.rider.mode === 'free') f.rider.x -= offset;
+    },
+    events,
   };
 }
