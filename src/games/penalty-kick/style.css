@@ -121,6 +121,8 @@
   left: 0;
   top: 0;
   min-width: 88px;
+  /* Two buttons side by side on a narrow screen; a longer word shrinks (`fitText`). */
+  max-width: calc(50vw - 12px);
   height: 64px;
   padding: 0 16px;
   border: 4px solid #fff;
