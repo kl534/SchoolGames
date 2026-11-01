@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
-import { drawUsMap, stateIdByName } from '../src/shared/maps/draw';
+import { countryIdByName, drawUsMap, drawWorldMap, stateIdByName } from '../src/shared/maps/draw';
 import { factMapThumb, hideFactMap, showFactMap } from '../src/shared/maps';
 import {
   US_STATE_NEIGHBORS,
@@ -8,6 +8,9 @@ import {
   US_MAP_HEIGHT,
   US_MAP_WIDTH,
 } from '../src/shared/maps/us-states-data';
+import { CONTINENT_VIEWS, WORLD_NEIGHBORS, WORLD_SHAPES } from '../src/shared/maps/world-data';
+import { COUNTRIES, type Continent } from '../src/shared/topics/countries';
+import { countryLocations } from '../src/shared/topics/world';
 import { kebab, STATE_CAPITALS, stateCapitals } from '../src/shared/topics/capitals';
 import { stateLocations } from '../src/shared/topics/locations';
 
@@ -117,5 +120,94 @@ describe('factMapThumb', () => {
     const thumb = factMapThumb(ohio)!;
     expect(thumb.querySelector('svg')).not.toBeNull();
     expect(thumb.querySelector('.sg-mapthumb-name')!.textContent).toBe('Ohio');
+  });
+});
+
+describe('world map', () => {
+  const keys = COUNTRIES.map((c) => kebab(c.name));
+  const view = (c: Continent) => CONTINENT_VIEWS[c];
+
+  it('has 60 unique countries, each with a shape, none named like a state', () => {
+    expect(COUNTRIES.length).toBe(60);
+    expect(new Set(COUNTRIES.map((c) => c.name)).size).toBe(60);
+    expect(new Set(COUNTRIES.map((c) => c.iso)).size).toBe(60);
+    const states = new Set(STATE_CAPITALS.map((row) => row.state));
+    for (const c of COUNTRIES) {
+      expect(states.has(c.name)).toBe(false);
+      expect(WORLD_SHAPES[kebab(c.name)].d.startsWith('M')).toBe(true);
+    }
+  });
+
+  it('has symmetric borders between the 60', () => {
+    expect(Object.keys(WORLD_NEIGHBORS).sort()).toEqual([...keys].sort());
+    for (const [id, list] of Object.entries(WORLD_NEIGHBORS)) {
+      expect(list).not.toContain(id);
+      expect(list).toEqual([...list].sort());
+      for (const other of list) expect(WORLD_NEIGHBORS[other]).toContain(id);
+    }
+    expect(WORLD_NEIGHBORS.france).toEqual(
+      expect.arrayContaining(['germany', 'italy', 'spain', 'switzerland']),
+    );
+    expect(WORLD_NEIGHBORS.chile).toEqual(expect.arrayContaining(['argentina', 'bolivia', 'peru']));
+    for (const island of ['iceland', 'japan', 'australia', 'madagascar']) {
+      expect(WORLD_NEIGHBORS[island]).toEqual([]);
+    }
+  });
+
+  it('has continent views with the card aspect that hold every listed country', () => {
+    for (const [continent, [, , w, h]] of Object.entries(CONTINENT_VIEWS)) {
+      expect(Math.abs(w / h / (975 / 610) - 1)).toBeLessThan(0.01);
+      expect(continent).toBeTruthy();
+    }
+    for (const c of COUNTRIES) {
+      const [vx, vy, vw, vh] = view(c.continent);
+      const { cx, cy } = WORLD_SHAPES[kebab(c.name)];
+      expect(cx).toBeGreaterThanOrEqual(vx);
+      expect(cx).toBeLessThanOrEqual(vx + vw);
+      expect(cy).toBeGreaterThanOrEqual(vy);
+      expect(cy).toBeLessThanOrEqual(vy + vh);
+    }
+  });
+
+  it('rings small countries only', () => {
+    for (const id of ['jamaica', 'fiji', 'switzerland']) expect(WORLD_SHAPES[id].small).toBe(true);
+    for (const id of ['brazil', 'russia']) expect(WORLD_SHAPES[id].small).toBe(false);
+  });
+
+  it('draws Europe with Italy lit and no Brazil', () => {
+    const svg = drawWorldMap({ lit: 'italy' }, 'europe', 'x');
+    expect(svg.getAttribute('viewBox')).toBe(CONTINENT_VIEWS.europe.join(' '));
+    expect(svg.querySelector('[data-country="italy"]')!.getAttribute('class')).toContain('is-lit');
+    expect(svg.querySelector('[data-country="brazil"]')).toBeNull();
+    expect(svg.getAttribute('aria-label')).toBe('Map of Europe');
+  });
+
+  it('marks right and wrong with one ring, for Jamaica', () => {
+    const svg = drawWorldMap({ right: 'jamaica', wrong: 'cuba' }, 'north-america', 'x');
+    expect(svg.querySelector('[data-country="jamaica"]')!.getAttribute('class')).toContain(
+      'is-right',
+    );
+    expect(svg.querySelector('[data-country="cuba"]')!.getAttribute('class')).toContain('is-wrong');
+    expect(svg.querySelectorAll('.sg-map-ring').length).toBe(1);
+  });
+
+  it('finds a country id by shown name', () => {
+    expect(countryIdByName('United Kingdom')).toBe('united-kingdom');
+    expect(countryIdByName('Atlantis')).toBeUndefined();
+  });
+
+  it('shows the big map and the thumbnail for a country fact', () => {
+    const chile = countryLocations.facts.find((f) => f.id === 'world-chile')!;
+    expect(showFactMap(chile, { wrong: 'Peru' })).toBe(true);
+    const overlay = document.querySelector('.sg-factmap')!;
+    expect(overlay.querySelector('[data-country="chile"]')!.getAttribute('class')).toContain(
+      'is-right',
+    );
+    expect(overlay.querySelector('[data-country="peru"]')!.getAttribute('class')).toContain(
+      'is-wrong',
+    );
+    const thumb = factMapThumb(chile)!;
+    expect(thumb.querySelector('svg')).not.toBeNull();
+    expect(thumb.querySelector('.sg-mapthumb-name')!.textContent).toBe('Chile');
   });
 });

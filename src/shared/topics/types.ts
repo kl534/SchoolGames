@@ -1,4 +1,5 @@
 import type { Random } from '../random';
+import type { Continent } from './countries';
 
 /**
  * What kind of sum a math fact is, with its numbers. `blank` is set on missing-number facts: the
@@ -10,12 +11,19 @@ export type FactVisual =
   | { kind: 'multiply'; a: number; b: number; blank?: 'a' | 'b' }
   | { kind: 'divide'; a: number; b: number; blank?: 'a' | 'b' };
 
-/** A fact asked on a map: the state shown lit. */
-export interface FactMap {
-  kind: 'us-state';
-  /** Key of `US_STATE_SHAPES`, e.g. 'ohio'. */
-  state: string;
-}
+/** A fact asked on a map: a US state, or a country of the world shown on its continent, lit. */
+export type FactMap =
+  | {
+      kind: 'us-state';
+      /** Key of `US_STATE_SHAPES`, e.g. 'ohio'. */
+      state: string;
+    }
+  | {
+      kind: 'world';
+      /** Key of `WORLD_SHAPES`, e.g. 'italy'. */
+      country: string;
+      continent: Continent;
+    };
 
 /** One thing to learn: a prompt with a single correct answer. Answers are text, so words work too. */
 export interface Fact {

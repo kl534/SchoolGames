@@ -1,6 +1,8 @@
 import type { Level } from './levels';
 import { DIVISION_REGION, STATE_CAPITALS, stateCapitals } from './topics/capitals';
+import { COUNTRIES, type Continent } from './topics/countries';
 import { stateLocations } from './topics/locations';
+import { countryLocations } from './topics/world';
 import type { Topic } from './topics';
 
 type Region = (typeof DIVISION_REGION)[keyof typeof DIVISION_REGION];
@@ -12,6 +14,16 @@ function regionLevel(title: string, region: Region, topic: Topic): Level {
     facts: topic.facts
       .filter((_, i) => DIVISION_REGION[STATE_CAPITALS[i].division] === region)
       .map((fact) => ({ topic, fact })),
+  };
+}
+
+/** A level of the countries of one continent, in list order. */
+function continentLevel(title: string, continent: Continent): Level {
+  return {
+    title,
+    facts: countryLocations.facts
+      .filter((_, i) => COUNTRIES[i].continent === continent)
+      .map((fact) => ({ topic: countryLocations, fact })),
   };
 }
 
@@ -32,5 +44,15 @@ export const SOCIAL_STUDIES_LEVELS: Level[] = [
   {
     title: 'Find all 50 states',
     facts: stateLocations.facts.map((fact) => ({ topic: stateLocations, fact })),
+  },
+  continentLevel('Find North America', 'north-america'),
+  continentLevel('Find South America', 'south-america'),
+  continentLevel('Find Europe', 'europe'),
+  continentLevel('Find Africa', 'africa'),
+  continentLevel('Find Asia', 'asia'),
+  continentLevel('Find Oceania', 'oceania'),
+  {
+    title: 'Find all the countries',
+    facts: countryLocations.facts.map((fact) => ({ topic: countryLocations, fact })),
   },
 ];
