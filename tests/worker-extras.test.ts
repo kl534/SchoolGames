@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { FORGOT_LIMIT, RESEND_LIMIT, handle, type Env } from '../worker/src/app';
 import { ATTEMPT_LIMIT } from '../worker/src/auth';
 import { JWKS_CACHE_MS, verifyGoogleToken, type FetchJwks, type Jwk } from '../worker/src/google';
@@ -54,6 +54,14 @@ describe('config and mail switch', () => {
       subject: 'Hi',
       text: 'Body',
     });
+    // The local `log` key prints the mail and sends nothing.
+    const printed: string[] = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((m: string) => void printed.push(m));
+    seen = null;
+    await sendMail({ ...mailEnv(), RESEND_API_KEY: 'log' }, 'a@b.co', 'Hi', 'Body', fake);
+    spy.mockRestore();
+    expect(seen).toBeNull();
+    expect(printed[0]).toContain('Body');
     const refuse = (async () => new Response('no', { status: 500 })) as unknown as typeof fetch;
     await expect(sendMail(mailEnv(), 'a@b.co', 'Hi', 'Body', refuse)).rejects.toThrow();
   });

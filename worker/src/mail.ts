@@ -27,6 +27,11 @@ export async function sendMail(
   fetchFn: typeof fetch = fetch,
 ): Promise<void> {
   if (!emailEnabled(env)) return;
+  if (env.RESEND_API_KEY === 'log') {
+    // Local development only: print the mail instead of sending it, so the links can be opened.
+    console.log(`[mail] to ${to}: ${subject}\n${text}`);
+    return;
+  }
   const res = await fetchFn('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
