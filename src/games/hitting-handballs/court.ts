@@ -9,7 +9,6 @@ import {
   HemisphereLight,
   Mesh,
   MeshStandardMaterial,
-  NearestFilter,
   PlaneGeometry,
   RepeatWrapping,
   SphereGeometry,
@@ -25,7 +24,13 @@ import {
   type Person,
   type Pose,
 } from './person';
-import { WALL_X } from './shots';
+import { PLATE_HEIGHT, WALL_X } from './shots';
+
+/** The wall and its plate. */
+const WALL_BLUE = 0x2f6fc4;
+const PLATE_DEPTH = 0.06;
+/** The shadow seam along the plate's top edge. */
+const SEAM_BLUE = 0x1c4580;
 
 const flat = (color: number, roughness = 0.9) => new MeshStandardMaterial({ color, roughness });
 
@@ -64,24 +69,6 @@ function canvasTexture(
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
   texture.wrapS = texture.wrapT = RepeatWrapping;
-  return texture;
-}
-
-/** Blue painted blocks with pale mortar lines. */
-function wallTexture(): Texture {
-  const texture = canvasTexture(128, 128, (g) => {
-    g.fillStyle = '#c9d6e8';
-    g.fillRect(0, 0, 128, 128);
-    for (let row = 0; row < 8; row++) {
-      const shift = row % 2 ? 16 : 0;
-      for (let col = -1; col < 4; col++) {
-        const tint = ((row * 7 + col * 13) % 3) * 6;
-        g.fillStyle = `rgb(${0x2a + tint}, ${0x6a + ((col + row) % 2) * 6}, ${0xc8 + tint})`;
-        g.fillRect(col * 32 + shift + 1.5, row * 16 + 1.5, 29, 13);
-      }
-    }
-  });
-  texture.magFilter = NearestFilter;
   return texture;
 }
 
@@ -127,16 +114,19 @@ export function buildCourt(): Court {
   line(0.06, 3.06, -0.6, -0.1);
   line(0.06, 3.06, 3.2, -0.1);
 
-  // The blue wall, with its face at WALL_X.
-  const blocks = wallTexture();
-  blocks.repeat.set(3, 1.2);
-  const wallMaterial = new MeshStandardMaterial({ map: blocks, roughness: 0.95 });
-  const wall = new Mesh(new BoxGeometry(0.4, 3.4, 4.8), wallMaterial);
+  // The solid blue wall, with its face at WALL_X, and the plate along its foot: a good shot hits
+  // the wall above it. The plate is the same blue and stands a little proud of the wall, with a
+  // shadow seam along its top edge.
+  const wallBlue = flat(WALL_BLUE, 0.85);
+  const wall = new Mesh(new BoxGeometry(0.4, 3.4, 4.8), wallBlue);
   wall.position.set(WALL_X - 0.2, 1.7, -0.2);
   object.add(wall);
-  const stripe = new Mesh(new BoxGeometry(0.02, 0.08, 4.8), flat(0xffffff, 0.7));
-  stripe.position.set(WALL_X + 0.005, 0.3, -0.2);
-  object.add(stripe);
+  const plate = new Mesh(new BoxGeometry(PLATE_DEPTH, PLATE_HEIGHT, 4.8), wallBlue);
+  plate.position.set(WALL_X + PLATE_DEPTH / 2, PLATE_HEIGHT / 2, -0.2);
+  object.add(plate);
+  const seam = new Mesh(new BoxGeometry(PLATE_DEPTH + 0.005, 0.025, 4.8), flat(SEAM_BLUE, 0.9));
+  seam.position.set(WALL_X + PLATE_DEPTH / 2 + 0.002, PLATE_HEIGHT, -0.2);
+  object.add(seam);
   const cap = new Mesh(new BoxGeometry(0.5, 0.1, 4.9), flat(0xc9c2b6));
   cap.position.set(WALL_X - 0.2, 3.45, -0.2);
   object.add(cap);
