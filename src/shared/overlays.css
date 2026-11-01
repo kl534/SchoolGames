@@ -119,6 +119,8 @@
   width: 100%;
   min-height: 0;
   overflow-y: auto;
+  /* Rows keep the height of their chips (a mini map) and the grid scrolls instead. */
+  grid-auto-rows: max-content;
   /* Room for the focus ring of the chips at the edge. */
   padding: 3px;
 }
