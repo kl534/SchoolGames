@@ -4,6 +4,8 @@ export interface Player {
   id: string;
   name: string;
   avatar: string;
+  /** True when the player belongs to the signed-in sync account. */
+  account?: true;
 }
 
 export interface FactStat {
@@ -39,6 +41,8 @@ export interface PlayerProgress {
   pathLevelsOpen?: Record<string, number>;
   /** The home tab last used: a path id. */
   homePath?: string;
+  /** When (ms) this was last saved on a device; set only for account players, used by sync. */
+  savedAt?: number;
 }
 
 export const AVATARS = ['🦊', '🐼', '🐯', '🐸', '🐙', '🦄', '🐶', '🐱', '🐵', '🦁', '🐧', '🐢'];
@@ -265,9 +269,37 @@ export function migrateRenamedGames(progress: PlayerProgress): boolean {
   return changed;
 }
 
+/**
+ * Turns whatever was saved (or sent by another device) into a complete `PlayerProgress`: fills the
+ * fields older saves lack and runs the migrations. Pure; storage-free.
+ */
+export function normalizeProgress(data: Partial<PlayerProgress>): PlayerProgress {
+  // Progress saved before high scores existed has no `highScores`; before My Level, no `levelsOpen`.
+  const progress: PlayerProgress = {
+    facts: data.facts ?? {},
+    best: data.best ?? {},
+    highScores: data.highScores ?? {},
+  };
+  if (typeof data.levelsOpen === 'number') progress.levelsOpen = data.levelsOpen;
+  if (data.ladders && typeof data.ladders === 'object') progress.ladders = data.ladders;
+  if (data.pathLevelsOpen && typeof data.pathLevelsOpen === 'object') {
+    progress.pathLevelsOpen = data.pathLevelsOpen;
+  }
+  if (typeof data.homePath === 'string') progress.homePath = data.homePath;
+  if (typeof data.savedAt === 'number') progress.savedAt = data.savedAt;
+  migrateAboveTenTables(progress);
+  migrateRenamedGames(progress);
+  if (typeof data.levelsVersion === 'number') progress.levelsVersion = data.levelsVersion;
+  migrateMissingNumberLevels(progress);
+  return progress;
+}
+
 const PLAYERS_KEY = 'sg:players';
 const CURRENT_KEY = 'sg:current-player';
 const progressKey = (playerId: string) => `sg:progress:${playerId}`;
+const ACCOUNT_KEY = 'sg:sync:account';
+const DIRTY_KEY = 'sg:sync:dirty';
+const REMOVED_KEY = 'sg:sync:removed';
 
 export interface ProgressStore {
   listPlayers(): Player[];
@@ -277,11 +309,39 @@ export interface ProgressStore {
   setCurrentPlayer(id: string | null): void;
   load(playerId: string): PlayerProgress;
   save(playerId: string, progress: PlayerProgress): void;
+  /** Adds players from the account that are missing here (as account players); never touches `current`. */
+  upsertAccountPlayers(players: Player[]): void;
+  /** Flags players as belonging to the account and queues them to be pushed. */
+  markAccount(ids: string[] | 'all'): void;
+  /** Sign-out: keep the players as local-only, or remove every account player and their progress. */
+  releaseAccount(removeLocal: boolean): void;
+  /** Writes progress that came from the server: no `savedAt` stamp, not marked dirty. */
+  saveSynced(playerId: string, progress: PlayerProgress): void;
+  /** Player ids with changes not yet pushed. */
+  takeDirty(): string[];
+  /** Everything waiting to be pushed. */
+  pending(): { dirty: string[]; removed: string[] };
+  /** Drops ids that were pushed from the waiting lists. */
+  clearPending(dirty: string[], removed: string[]): void;
 }
 
 /** Players and their progress, kept on this device only. */
 export function createProgressStore(store: KeyValueStore = deviceStore()): ProgressStore {
   const listPlayers = () => readJson<Player[]>(store, PLAYERS_KEY, []);
+  const readIds = (key: string) => readJson<string[]>(store, key, []);
+  const addId = (key: string, id: string) => {
+    const ids = readIds(key);
+    if (!ids.includes(id)) writeJson(store, key, [...ids, id]);
+  };
+  const dropId = (key: string, id: string) => {
+    const ids = readIds(key);
+    if (ids.includes(id))
+      writeJson(
+        store,
+        key,
+        ids.filter((x) => x !== id),
+      );
+  };
 
   return {
     listPlayers,
@@ -293,10 +353,14 @@ export function createProgressStore(store: KeyValueStore = deviceStore()): Progr
         name: trimmed,
         avatar: AVATARS.includes(avatar) ? avatar : AVATARS[0],
       };
+      const signedIn = store.getItem(ACCOUNT_KEY) !== null;
+      if (signedIn) player.account = true;
       writeJson(store, PLAYERS_KEY, [...listPlayers(), player]);
+      if (signedIn) addId(DIRTY_KEY, player.id);
       return player;
     },
     removePlayer(id) {
+      const had = listPlayers().find((p) => p.id === id)?.account === true;
       writeJson(
         store,
         PLAYERS_KEY,
@@ -304,6 +368,10 @@ export function createProgressStore(store: KeyValueStore = deviceStore()): Progr
       );
       store.removeItem(progressKey(id));
       if (store.getItem(CURRENT_KEY) === id) store.removeItem(CURRENT_KEY);
+      if (had) {
+        addId(REMOVED_KEY, id);
+        dropId(DIRTY_KEY, id);
+      }
     },
     currentPlayer() {
       const id = store.getItem(CURRENT_KEY);
@@ -314,27 +382,67 @@ export function createProgressStore(store: KeyValueStore = deviceStore()): Progr
       else store.setItem(CURRENT_KEY, id);
     },
     load(playerId) {
-      const data = readJson<Partial<PlayerProgress>>(store, progressKey(playerId), {});
-      // Progress saved before high scores existed has no `highScores`; before My Level, no `levelsOpen`.
-      const progress: PlayerProgress = {
-        facts: data.facts ?? {},
-        best: data.best ?? {},
-        highScores: data.highScores ?? {},
-      };
-      if (typeof data.levelsOpen === 'number') progress.levelsOpen = data.levelsOpen;
-      if (data.ladders && typeof data.ladders === 'object') progress.ladders = data.ladders;
-      if (data.pathLevelsOpen && typeof data.pathLevelsOpen === 'object') {
-        progress.pathLevelsOpen = data.pathLevelsOpen;
-      }
-      if (typeof data.homePath === 'string') progress.homePath = data.homePath;
-      migrateAboveTenTables(progress);
-      migrateRenamedGames(progress);
-      if (typeof data.levelsVersion === 'number') progress.levelsVersion = data.levelsVersion;
-      migrateMissingNumberLevels(progress);
-      return progress;
+      return normalizeProgress(readJson<Partial<PlayerProgress>>(store, progressKey(playerId), {}));
     },
     save(playerId, progress) {
+      if (listPlayers().some((p) => p.id === playerId && p.account)) {
+        progress.savedAt = Date.now();
+        addId(DIRTY_KEY, playerId);
+      }
       writeJson(store, progressKey(playerId), progress);
+    },
+    upsertAccountPlayers(players) {
+      const have = listPlayers();
+      const added = players
+        .filter((p) => !have.some((h) => h.id === p.id))
+        .map((p): Player => ({ id: p.id, name: p.name, avatar: p.avatar, account: true }));
+      if (added.length > 0) writeJson(store, PLAYERS_KEY, [...have, ...added]);
+    },
+    markAccount(ids) {
+      const all = listPlayers();
+      const marked = all.filter((p) => ids === 'all' || ids.includes(p.id));
+      if (marked.length === 0) return;
+      writeJson(
+        store,
+        PLAYERS_KEY,
+        all.map((p) => (marked.includes(p) ? { ...p, account: true as const } : p)),
+      );
+      for (const p of marked) addId(DIRTY_KEY, p.id);
+    },
+    releaseAccount(removeLocal) {
+      const all = listPlayers();
+      if (removeLocal) {
+        for (const p of all) if (p.account) store.removeItem(progressKey(p.id));
+        const current = store.getItem(CURRENT_KEY);
+        if (all.some((p) => p.account && p.id === current)) store.removeItem(CURRENT_KEY);
+        writeJson(
+          store,
+          PLAYERS_KEY,
+          all.filter((p) => !p.account),
+        );
+      } else {
+        writeJson(
+          store,
+          PLAYERS_KEY,
+          all.map(({ account: _account, ...rest }) => rest),
+        );
+      }
+      store.removeItem(DIRTY_KEY);
+      store.removeItem(REMOVED_KEY);
+    },
+    saveSynced(playerId, progress) {
+      writeJson(store, progressKey(playerId), progress);
+    },
+    takeDirty: () => readIds(DIRTY_KEY),
+    pending: () => ({ dirty: readIds(DIRTY_KEY), removed: readIds(REMOVED_KEY) }),
+    clearPending(dirty, removed) {
+      const left = (key: string, gone: string[]) => {
+        const ids = readIds(key).filter((id) => !gone.includes(id));
+        if (ids.length > 0) writeJson(store, key, ids);
+        else store.removeItem(key);
+      };
+      left(DIRTY_KEY, dirty);
+      left(REMOVED_KEY, removed);
     },
   };
 }

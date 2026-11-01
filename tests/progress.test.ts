@@ -514,3 +514,138 @@ describe('migrateMissingNumberLevels', () => {
     expect(store.load('new').levelsOpen).toBe(3);
   });
 });
+
+describe('account players', () => {
+  const signedIn = () => {
+    const kv = memoryStore();
+    kv.setItem('sg:sync:account', JSON.stringify({ email: 'a@b.co', token: 't' }));
+    return { kv, store: createProgressStore(kv) };
+  };
+
+  it('stamps savedAt and queues account players on save, but not plain ones', () => {
+    const store = createProgressStore(memoryStore());
+    const plain = store.addPlayer('Plain', AVATARS[0]);
+    const joined = store.addPlayer('Joined', AVATARS[1]);
+    store.markAccount([joined.id]);
+    store.clearPending(store.takeDirty(), []);
+
+    const p = emptyProgress();
+    store.save(plain.id, p);
+    expect(store.load(plain.id).savedAt).toBeUndefined();
+    expect(store.pending().dirty).toEqual([]);
+
+    store.save(joined.id, p);
+    store.save(joined.id, p);
+    expect(typeof store.load(joined.id).savedAt).toBe('number');
+    expect(store.pending().dirty).toEqual([joined.id]);
+  });
+
+  it('saveSynced neither stamps nor queues', () => {
+    const { store } = signedIn();
+    const player = store.addPlayer('Ana', AVATARS[0]);
+    store.clearPending([player.id], []);
+    store.saveSynced(player.id, { ...emptyProgress(), savedAt: 5 });
+    expect(store.load(player.id).savedAt).toBe(5);
+    expect(store.pending().dirty).toEqual([]);
+  });
+
+  it('queues a tombstone only for an account player', () => {
+    const { kv, store } = signedIn();
+    const cloud = store.addPlayer('Cloud', AVATARS[0]);
+    expect(cloud.account).toBe(true);
+    store.releaseAccount(false);
+    kv.removeItem('sg:sync:account');
+    const local = store.addPlayer('Local', AVATARS[0]);
+    store.removePlayer(local.id);
+    expect(store.pending()).toEqual({ dirty: [], removed: [] });
+  });
+
+  it('removePlayer on an account player moves it from dirty to removed', () => {
+    const { store } = signedIn();
+    const p = store.addPlayer('Cloud', AVATARS[0]);
+    expect(store.pending().dirty).toEqual([p.id]);
+    store.removePlayer(p.id);
+    expect(store.pending()).toEqual({ dirty: [], removed: [p.id] });
+  });
+
+  it('a player added while signed in joins the account, one added signed out does not', () => {
+    const { store } = signedIn();
+    const p = store.addPlayer('New', AVATARS[2]);
+    expect(store.listPlayers()[0]).toEqual({ ...p, account: true });
+    expect(store.pending().dirty).toEqual([p.id]);
+    const plain = createProgressStore(memoryStore()).addPlayer('New', AVATARS[2]);
+    expect(plain.account).toBeUndefined();
+  });
+
+  it('markAccount flags everyone with all', () => {
+    const store = createProgressStore(memoryStore());
+    const a = store.addPlayer('A', AVATARS[0]);
+    const b = store.addPlayer('B', AVATARS[0]);
+    store.markAccount('all');
+    expect(store.listPlayers().every((p) => p.account)).toBe(true);
+    expect(store.pending().dirty).toEqual([a.id, b.id]);
+  });
+
+  it('upsertAccountPlayers adds missing players only and keeps current', () => {
+    const store = createProgressStore(memoryStore());
+    const mine = store.addPlayer('Mine', AVATARS[0]);
+    store.setCurrentPlayer(mine.id);
+    store.upsertAccountPlayers([
+      { id: mine.id, name: 'Other name', avatar: AVATARS[1] },
+      { id: 'zzzz1', name: 'Remote', avatar: AVATARS[3] },
+    ]);
+    const list = store.listPlayers();
+    expect(list.map((p) => p.name)).toEqual(['Mine', 'Remote']);
+    expect(list[1].account).toBe(true);
+    expect(store.currentPlayer()?.id).toBe(mine.id);
+  });
+
+  describe('releaseAccount', () => {
+    const setup = () => {
+      const store = createProgressStore(memoryStore());
+      const local = store.addPlayer('Local', AVATARS[0]);
+      const cloud = store.addPlayer('Cloud', AVATARS[1]);
+      store.markAccount([cloud.id]);
+      store.save(cloud.id, emptyProgress());
+      store.save(local.id, emptyProgress());
+      store.setCurrentPlayer(cloud.id);
+      return { store, local, cloud };
+    };
+
+    it('keeps the players as local-only', () => {
+      const { store, cloud } = setup();
+      store.releaseAccount(false);
+      expect(store.listPlayers().map((p) => p.name)).toEqual(['Local', 'Cloud']);
+      expect(store.listPlayers().some((p) => 'account' in p)).toBe(false);
+      expect(store.pending()).toEqual({ dirty: [], removed: [] });
+      expect(store.currentPlayer()?.id).toBe(cloud.id);
+    });
+
+    it('removes account players and their progress, and clears current', () => {
+      const { store, local } = setup();
+      store.releaseAccount(true);
+      expect(store.listPlayers().map((p) => p.id)).toEqual([local.id]);
+      expect(store.currentPlayer()).toBeNull();
+      expect(store.pending()).toEqual({ dirty: [], removed: [] });
+    });
+  });
+
+  it('loads old saves unchanged and keeps savedAt', () => {
+    const kv = memoryStore();
+    kv.setItem(
+      'sg:progress:x',
+      JSON.stringify({ facts: {}, best: {}, highScores: {}, savedAt: 9 }),
+    );
+    const store = createProgressStore(kv);
+    expect(store.load('x')).toMatchObject({ facts: {}, best: {}, highScores: {}, savedAt: 9 });
+    expect(store.load('missing').savedAt).toBeUndefined();
+  });
+
+  it('clearPending leaves ids it was not given', () => {
+    const { store } = signedIn();
+    const a = store.addPlayer('A', AVATARS[0]);
+    const b = store.addPlayer('B', AVATARS[0]);
+    store.clearPending([a.id], []);
+    expect(store.pending().dirty).toEqual([b.id]);
+  });
+});
