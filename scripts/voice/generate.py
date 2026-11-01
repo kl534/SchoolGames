@@ -15,7 +15,8 @@
 Run through `npm run voice` (which refreshes the line list first) or `uv run scripts/voice/generate.py`.
 Only missing clips are generated. Everything is regenerated when the settings below change
 (compared with scripts/voice/settings.json) or with --force; if only `countSpeed` differs (or
-the saved settings lack it), just the count lines are regenerated. Model weights go to the normal
+the saved settings lack it), just the count lines are regenerated, and if only `PRONUNCIATIONS`
+differs, just the lines containing a changed name. Model weights go to the normal
 Hugging Face cache, never into the repo.
 """
 
@@ -40,6 +41,20 @@ TAIL_MS = 80  # silence kept after the last sound, so timers that start on `end`
 SILENCE_RATIO = 0.02  # samples below this share of the peak count as silence
 PEAK_DBFS = -1.0
 BITRATE_KBPS = 48
+# Names Kokoro says wrong, as Kokoro (misaki) US phonemes: A=eɪ I=aɪ O=oʊ W=aʊ Y=ɔɪ T=flap.
+# Applied as whole words, case-sensitive. Check with:
+#   KPipeline(lang_code="a")("[Boise](/bˈYsi/)") and print each result's .phonemes
+PRONUNCIATIONS = {
+    "Baton Rouge": "bˈætᵊn ɹˈuʒ",
+    "Boise": "bˈYsi",
+    "Des Moines": "də mˈYn",
+    "Los Angeles": "lˈɔs ˈænʤələs",
+    "Milwaukee": "mɪlwˈɔki",
+    "New Orleans": "nˈu ˈɔɹlənz",
+    "Oregon": "ˈɔɹəɡən",
+    "Raleigh": "ɹˈɔli",
+    "Santa Fe": "sˈæntə fˈA",
+}
 
 ROOT = Path(__file__).resolve().parents[2]
 LINES = ROOT / "src/shared/voice-lines.json"
@@ -56,7 +71,23 @@ SETTINGS = {
     "silenceRatio": SILENCE_RATIO,
     "peakDbfs": PEAK_DBFS,
     "bitrateKbps": BITRATE_KBPS,
+    "pronunciations": PRONUNCIATIONS,
 }
+PARTIAL = ("countSpeed", "pronunciations")  # settings whose change redoes only some lines
+
+
+def names_pattern(names) -> re.Pattern[str]:
+    """Matches any of the names as whole words, longest first."""
+    alternatives = "|".join(re.escape(n) for n in sorted(names, key=len, reverse=True))
+    return re.compile(rf"\b(?:{alternatives})\b" if names else r"(?!)")
+
+
+PRONOUNCED = names_pattern(PRONUNCIATIONS)
+
+
+def with_pronunciations(text: str) -> str:
+    """Marks each listed name with its phonemes, Kokoro's `[word](/phonemes/)` syntax."""
+    return PRONOUNCED.sub(lambda m: f"[{m[0]}](/{PRONUNCIATIONS[m[0]]}/)", text)
 
 
 def trim_and_normalize(audio: np.ndarray) -> np.ndarray:
@@ -87,13 +118,17 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
 
     previous = json.loads(SETTINGS_FILE.read_text()) if SETTINGS_FILE.exists() else None
-    counts_only = False
-    if previous != SETTINGS:
-        rest = lambda settings: {k: v for k, v in settings.items() if k != "countSpeed"}
-        if previous is not None and rest(previous) == rest(SETTINGS):
-            counts_only = True  # only the count speed changed
-        else:
-            force = True
+    redo_counts = False
+    redo_names = names_pattern([])
+    rest = lambda settings: {k: v for k, v in settings.items() if k not in PARTIAL}
+    if previous is None or rest(previous) != rest(SETTINGS):
+        force = True
+    else:
+        redo_counts = previous.get("countSpeed") != COUNT_SPEED
+        old = previous.get("pronunciations", {})
+        redo_names = names_pattern(
+            [n for n in old.keys() | PRONUNCIATIONS.keys() if old.get(n) != PRONUNCIATIONS.get(n)]
+        )
 
     existing = {p.stem: p for p in OUT.glob("*.mp3")}
     deleted = [key for key in existing if key not in lines]
@@ -104,7 +139,8 @@ def main() -> None:
         for key in sorted(lines)
         if force
         or key not in existing
-        or (counts_only and COUNT_LINE.match(lines[key]))
+        or (redo_counts and COUNT_LINE.match(lines[key]))
+        or redo_names.search(lines[key])
     ]
     kept = len(lines) - len(todo)
 
@@ -116,7 +152,9 @@ def main() -> None:
             chunks = [
                 np.asarray(chunk, dtype=np.float32)
                 for _, _, chunk in pipeline(
-                    text, voice=VOICE, speed=COUNT_SPEED if COUNT_LINE.match(text) else SPEED
+                    with_pronunciations(text),
+                    voice=VOICE,
+                    speed=COUNT_SPEED if COUNT_LINE.match(text) else SPEED,
                 )
             ]
             if not chunks:
@@ -126,7 +164,9 @@ def main() -> None:
             if i % 25 == 0 or i == len(todo):
                 print(f"  {i}/{len(todo)} ({time.time() - started:.0f}s) {text}", flush=True)
 
-    SETTINGS_FILE.write_text(json.dumps(SETTINGS, indent=2) + "\n")
+    SETTINGS_FILE.write_text(
+        json.dumps(SETTINGS, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
     size = sum(p.stat().st_size for p in OUT.glob("*.mp3"))
     print(
         f"generated {len(todo)}, kept {kept}, deleted {len(deleted)}; "

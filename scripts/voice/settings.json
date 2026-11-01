@@ -8,5 +8,16 @@
   "tailMs": 80,
   "silenceRatio": 0.02,
   "peakDbfs": -1.0,
-  "bitrateKbps": 48
+  "bitrateKbps": 48,
+  "pronunciations": {
+    "Baton Rouge": "bˈætᵊn ɹˈuʒ",
+    "Boise": "bˈYsi",
+    "Des Moines": "də mˈYn",
+    "Los Angeles": "lˈɔs ˈænʤələs",
+    "Milwaukee": "mɪlwˈɔki",
+    "New Orleans": "nˈu ˈɔɹlənz",
+    "Oregon": "ˈɔɹəɡən",
+    "Raleigh": "ɹˈɔli",
+    "Santa Fe": "sˈæntə fˈA"
+  }
 }
