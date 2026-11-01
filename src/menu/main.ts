@@ -20,6 +20,10 @@ import {
 import { gameUrl } from '../shared/session';
 import { getTopic, groupBySubject, type Topic } from '../shared/topics';
 import { topicsUrl } from '../shared/ui';
+import { ApiError } from '../shared/sync/api';
+import { clearNotice, getAccount, getNotice } from '../shared/sync/account';
+import { devSyncState, syncEnabled, syncUrl } from '../shared/sync/config';
+import { signIn, signOut, signUp, syncFailed, syncNow } from '../shared/sync/engine';
 
 const store = createProgressStore();
 const base = import.meta.env.BASE_URL;
@@ -73,12 +77,290 @@ function masteryBar(mastered: number, total: number): HTMLElement {
   return wrap;
 }
 
+// ---------- Account (sync) ----------
+
+type SyncStatus = 'synced' | 'syncing' | 'offline';
+let syncStatus: SyncStatus = 'synced';
+
+const STATUS_TEXT: Record<SyncStatus, string> = {
+  synced: 'Synced',
+  syncing: 'Syncing…',
+  offline: 'Will sync when online',
+};
+
+const ERROR_TEXT: Record<string, string> = {
+  invalid: 'Check the email, and use at least 8 characters for the password.',
+  exists: 'That email already has an account. Try signing in.',
+  bad_credentials: 'The email or password is wrong.',
+  rate_limited: 'Too many tries. Wait a few minutes and try again.',
+};
+const NETWORK_TEXT = "Can't reach the sync service. Check your connection and try again.";
+const PRIVACY_NOTE =
+  'For a parent or teacher. Kids only need a first name and a buddy; we keep those and their progress, nothing else.';
+
+const DEMO_EMAIL = 'demo@example.com';
+
+function setSyncStatus(root: HTMLElement, status: SyncStatus): void {
+  syncStatus = status;
+  const node = root.querySelector('.account-status');
+  if (node) node.textContent = `☁ ${STATUS_TEXT[status]}`;
+}
+
+function textButton(label: string, onClick: () => void): HTMLButtonElement {
+  const b = el('button', 'text-button', label);
+  b.type = 'button';
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+/** The "Sign out of ...?" dialog. Focus stays on its buttons; Escape cancels. */
+function signOutDialog(
+  email: string,
+  names: string[],
+  unsynced: boolean,
+  choose: (removeLocal: boolean) => void,
+  cancel: () => void,
+): HTMLElement {
+  const backdrop = el('div', 'dialog-backdrop');
+  const dialog = el('div', 'dialog');
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  const title = el('h2', undefined, `Sign out of ${email}?`);
+  title.id = 'sign-out-title';
+  dialog.setAttribute('aria-labelledby', title.id);
+  dialog.append(
+    title,
+    el('p', undefined, `Players on this account: ${names.join(', ') || 'none'}`),
+  );
+  if (unsynced) {
+    dialog.appendChild(
+      el('p', 'error', 'Some progress has not synced yet. Removing the players now will lose it.'),
+    );
+  }
+  const buttons = [
+    textButton('Keep players on this device', () => choose(false)),
+    textButton('Remove them from this device', () => choose(true)),
+    textButton('Cancel', cancel),
+  ];
+  dialog.append(...buttons);
+  dialog.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      cancel();
+    } else if (e.key === 'Tab') {
+      const i = buttons.indexOf(document.activeElement as HTMLButtonElement);
+      const next = (i + (e.shiftKey ? -1 : 1) + buttons.length) % buttons.length;
+      e.preventDefault();
+      buttons[next].focus();
+    }
+  });
+  backdrop.appendChild(dialog);
+  queueMicrotask(() => buttons[0].focus());
+  return backdrop;
+}
+
+/** The account row under the player grid: sign in, the sign-in panel, or the signed-in row. */
+function accountSection(root: HTMLElement, dev: string | null, shownPlayers: () => Player[]) {
+  const wrap = el('div', 'account');
+  const account = dev
+    ? dev === 'in' || dev === 'signout'
+      ? { email: DEMO_EMAIL }
+      : null
+    : getAccount();
+  let panel: 'none' | 'signin' | 'signup' =
+    dev === 'signin' || dev === 'error' ? 'signin' : dev === 'signup' ? 'signup' : 'none';
+  let error: string | null = dev === 'error' ? 'bad_credentials' : null;
+  let dialog: HTMLElement | null = null;
+  let emailValue = '';
+  let devDialog = dev === 'signout';
+  let notice = false;
+  if (!dev && getNotice() === 'signed-out') {
+    notice = true;
+    clearNotice();
+  }
+
+  const draw = () => {
+    wrap.replaceChildren();
+    if (account) drawSignedIn();
+    else if (panel === 'none') drawSignedOut();
+    else drawPanel();
+  };
+
+  const drawSignedOut = () => {
+    if (notice) {
+      wrap.appendChild(
+        el('p', 'account-notice', 'You were signed out. Sign in again to keep syncing.'),
+      );
+    }
+    const open = textButton('☁ Sign in to sync across devices', () => {
+      panel = 'signin';
+      draw();
+      wrap.querySelector('input')?.focus();
+    });
+    open.classList.add('account-open');
+    wrap.appendChild(open);
+  };
+
+  const drawPanel = () => {
+    const creating = panel === 'signup';
+    const form = el('form', 'new-player account-form');
+    const tabs = el('div', 'account-tabs');
+    for (const [id, label] of [
+      ['signin', 'Sign in'],
+      ['signup', 'Create account'],
+    ] as const) {
+      const tab = el('button', 'account-tab', label);
+      tab.type = 'button';
+      tab.setAttribute('aria-pressed', String(panel === id));
+      tab.addEventListener('click', () => {
+        emailValue = (form.querySelector('input[type=email]') as HTMLInputElement).value;
+        panel = id;
+        error = null;
+        draw();
+      });
+      tabs.appendChild(tab);
+    }
+    const email = el('input');
+    email.type = 'email';
+    email.required = true;
+    email.autocomplete = 'username';
+    email.placeholder = 'Email';
+    email.value = emailValue;
+    email.setAttribute('aria-label', 'Email');
+    const password = el('input');
+    password.type = 'password';
+    password.required = true;
+    password.autocomplete = creating ? 'new-password' : 'current-password';
+    password.placeholder = 'Password';
+    if (creating) password.minLength = 8;
+    password.setAttribute('aria-label', 'Password');
+    for (const input of [email, password]) {
+      input.addEventListener('focus', () => input.scrollIntoView({ block: 'center' }));
+    }
+    const submit = el('button', 'primary', creating ? 'Create account' : 'Sign in');
+    submit.type = 'submit';
+    const cancel = textButton('Cancel', () => {
+      panel = 'none';
+      error = null;
+      draw();
+    });
+    form.append(tabs, email, password);
+    if (creating) form.appendChild(el('p', 'account-note', PRIVACY_NOTE));
+    if (error) {
+      const message = el('p', 'error', ERROR_TEXT[error] ?? NETWORK_TEXT);
+      message.setAttribute('role', 'alert');
+      form.appendChild(message);
+    }
+    form.append(submit, cancel);
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      submit.disabled = true;
+      submit.textContent = 'Please wait…';
+      emailValue = email.value;
+      (creating ? signUp : signIn)(email.value.trim(), password.value)
+        .then(() => {
+          location.href = `${base}?players`;
+        })
+        .catch((err: unknown) => {
+          error = err instanceof ApiError ? err.code : 'network';
+          draw();
+        });
+    });
+    wrap.appendChild(form);
+  };
+
+  const drawSignedIn = () => {
+    if (!account) return;
+    const row = el('div', 'account-row');
+    const info = el('div', 'account-info');
+    info.append(
+      el('span', 'account-status', `☁ ${STATUS_TEXT[dev ? 'synced' : syncStatus]}`),
+      el('span', 'account-sep', '·'),
+    );
+    const email = el('span', 'account-email', account.email);
+    email.title = account.email;
+    info.appendChild(email);
+    const sync = textButton('Sync now', () => {
+      if (dev) return;
+      setSyncStatus(root, 'syncing');
+      void syncNow().then(() => {
+        syncStatus = syncFailed() ? 'offline' : 'synced';
+        renderPlayers(root);
+      });
+    });
+    const out = textButton('Sign out', () => {
+      if (dev) {
+        showDialog(false);
+        return;
+      }
+      out.disabled = true;
+      void syncNow().then(() => {
+        if (!getAccount()) {
+          renderPlayers(root);
+          return;
+        }
+        showDialog(createProgressStore().pending().dirty.length > 0);
+      });
+    });
+    row.append(info, sync, out);
+    wrap.appendChild(row);
+    if (devDialog) {
+      devDialog = false;
+      showDialog(false);
+    }
+  };
+
+  const closeDialog = () => {
+    dialog?.remove();
+    dialog = null;
+    draw();
+  };
+
+  const showDialog = (unsynced: boolean) => {
+    const names = shownPlayers()
+      .filter((p) => p.account || dev)
+      .map((p) => p.name);
+    dialog = signOutDialog(
+      account?.email ?? '',
+      names,
+      unsynced,
+      (removeLocal) => {
+        if (dev) {
+          closeDialog();
+          return;
+        }
+        void signOut({ removeLocal }).then(() => {
+          location.href = `${base}?players`;
+        });
+      },
+      closeDialog,
+    );
+    wrap.appendChild(dialog);
+  };
+
+  draw();
+  return wrap;
+}
+
 // ---------- Player picker ----------
 
 function renderPlayers(root: HTMLElement): void {
   const players = store.listPlayers();
   const current = store.currentPlayer();
   let managing = false;
+  const sync = syncEnabled();
+  const dev = sync ? devSyncState() : null;
+  const signedInPreview = dev === 'in' || dev === 'signout';
+  /** The players to show; the dev preview of a signed-in picker adds two in-memory ones. */
+  const shown = (): Player[] => {
+    const list = store.listPlayers();
+    if (!signedInPreview) return list;
+    const extra: Player[] = [
+      { id: 'dev-ava', name: 'Ava', avatar: '🐼' },
+      { id: 'dev-ben', name: 'Ben', avatar: '🐯' },
+    ];
+    return list.length <= 1 ? [...list, ...extra] : list;
+  };
 
   const grid = el('main', 'grid players');
   const form = el('form', 'new-player');
@@ -86,17 +368,25 @@ function renderPlayers(root: HTMLElement): void {
 
   const draw = () => {
     grid.replaceChildren();
-    for (const player of store.listPlayers()) {
+    for (const player of shown()) {
       const card = el('button', 'player-card');
       card.type = 'button';
       if (player.id === current?.id) card.classList.add('current');
       card.append(el('span', 'avatar', player.avatar), el('span', 'name', player.name));
+      if (sync && (player.account || signedInPreview)) {
+        const cloud = el('span', 'cloud', '☁');
+        cloud.setAttribute('aria-hidden', 'true');
+        card.appendChild(cloud);
+      }
       if (managing) {
         card.classList.add('removing');
         card.append(el('span', 'remove', 'Remove'));
         card.setAttribute('aria-label', `Remove ${player.name}`);
         card.addEventListener('click', () => {
-          if (confirm(`Remove ${player.name} and all their progress?`)) {
+          const question = player.account
+            ? `Remove ${player.name} from every device and the account?`
+            : `Remove ${player.name} and all their progress?`;
+          if (confirm(question)) {
             store.removePlayer(player.id);
             draw();
           }
@@ -170,6 +460,7 @@ function renderPlayers(root: HTMLElement): void {
     form,
     grid,
     tools,
+    ...(sync ? [accountSection(root, dev, shown)] : []),
   );
   if (!form.hidden) name.focus();
 }
@@ -370,9 +661,25 @@ function render(root: HTMLElement): void {
   }
 }
 
+/** Pulls from the account when signed in, and redraws if something changed. Never blocks drawing. */
+function pullAccount(root: HTMLElement): void {
+  if (!syncUrl() || !getAccount()) return;
+  setSyncStatus(root, 'syncing');
+  void syncNow().then((changed) => {
+    syncStatus = syncFailed() ? 'offline' : 'synced';
+    if (changed) render(root);
+    else setSyncStatus(root, syncStatus);
+  });
+}
+
 const root = document.getElementById('app');
 if (root) {
   render(root);
+  pullAccount(root);
   // Coming back from a game via the browser's back button can restore a stale page.
-  window.addEventListener('pageshow', (e) => e.persisted && render(root));
+  window.addEventListener('pageshow', (e) => {
+    if (!e.persisted) return;
+    render(root);
+    pullAccount(root);
+  });
 }

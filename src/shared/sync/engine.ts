@@ -57,6 +57,13 @@ function canonical(value: unknown): string {
   );
 }
 
+let lastFailed = false;
+
+/** True when the last `syncNow` could not reach the service (or was refused). */
+export function syncFailed(): boolean {
+  return lastFailed;
+}
+
 /** One request at a time per device store. */
 const inFlight = new WeakMap<KeyValueStore, Promise<boolean>>();
 
@@ -95,6 +102,7 @@ async function runSync(r: Resolved): Promise<boolean> {
   try {
     response = await r.api.sync(account.token, sent.request);
   } catch (e) {
+    lastFailed = true;
     if (e instanceof ApiError && e.code === 'unauthorized') {
       // Keep the players and their `account` flags: signing in to the same account reuses the ids.
       clearAccount(r.store);
@@ -104,6 +112,7 @@ async function runSync(r: Resolved): Promise<boolean> {
     return false;
   }
 
+  lastFailed = false;
   let changed = false;
   const local = () => r.progress.listPlayers();
 
