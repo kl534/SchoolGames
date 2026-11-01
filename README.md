@@ -24,12 +24,15 @@ Set `BASE_PATH` to build for a sub-path, e.g. `BASE_PATH=/schoolgames/ npm run b
 ```
 index.html            Game menu page
 src/menu/             Menu UI; builds cards from game manifests; the player picker also holds the
-                      account row, sign-in panel and sign-out dialog (main.ts, style.css)
+                      account row, sign-in panel and sign-out dialog (main.ts, style.css); the
+                      Account sheet, mailed-link pages and Google button are in account-extras.ts,
+                      small DOM helpers in dom.ts
 src/shared/           scene, input, ui, assets, manifest helpers, plus the learning layer:
                       topics/ (fact sets), progress (players + per-fact stats), round,
                       session (URL params), levels (My Level), preview, results, audio (speech + sound effects)
 src/shared/sync/      optional accounts: config, protocol (wire types), merge (pure), api, account
-                      (stored sign-in), engine (sign in/out, pull, push)
+                      (stored sign-in), engine (sign in/out, pull, push, Google, mail, password,
+                      delete), messages (texts and small pure checks)
 worker/               Cloudflare Worker + D1 sync service (see worker/README.md)
 src/games/<id>/       One folder per game: index.html, main.ts, game.json
 tests/                Unit tests (including a check of every game folder)
@@ -38,7 +41,7 @@ tests/                Unit tests (including a check of every game folder)
 
 ## How it works
 
-1. **Who's playing?** Kids pick or add a profile (name and emoji). Profiles and progress stay in the browser's localStorage on that device. A parent or teacher can optionally tap "Sign in to sync across devices" under the picker and make an account (email and password); then every player and their progress follows the account to other devices. Kids never have accounts. The sync UI only exists when the build has `VITE_SYNC_URL` (the deploy sets it from the GitHub repo variable `SYNC_URL`; set up the service once with `worker/README.md`). In dev, `/?players&sync=out|signin|signup|error|in|signout` previews each state of that UI without a network.
+1. **Who's playing?** Kids pick or add a profile (name and emoji). Profiles and progress stay in the browser's localStorage on that device. A parent or teacher can optionally tap "Sign in to sync across devices" under the picker and make an account (email and password); then every player and their progress follows the account to other devices. Kids never have accounts. The sync UI only exists when the build has `VITE_SYNC_URL` (the deploy sets it from the GitHub repo variable `SYNC_URL`; set up the service once with `worker/README.md`). In dev, `/?players&sync=out|signin|signup|error|in|signout|account|delete|reset|verify` previews each state of that UI without a network (add `&mail=1&google=1` to preview "Forgot password?" and the Google button, and `&sheet=off` to `account` to see the row without its sheet).
 2. **My Level** is the home page. It mixes all the math facts (addition, subtraction, multiplication, division) in 90 ordered levels, from "Sums to 10" to "? ÷ 15 = 6". Each fact family also comes as missing-number problems (`6 + ? = 12`, then `? + 6 = 12`), and every subject has _Missing numbers_ cards. Questions come from every open level that still needs work. The next level opens once 80% of the newest open level's facts were answered right the last time they came up, and it stays open. A fact is learned after 3 right answers in a row, each at least 6 hours after the one before; a right answer just after a miss (when the game has shown the answer) doesn't count. Learned facts come back for review about 1 time in 10, and a miss un-learns one and puts it back in the practice pool. **Practice one topic** lists single topics instead, e.g. Addition 11–16, Multiplication 11–16 or one times table up to 10, each showing how many of its facts the player has learned. A **Social Studies** heading holds State capitals: name the capital of each of the 50 states.
 3. **Pick a game.** The My Level (or topic) page lists every game with the player's best stars. Every question has a clock: 15 seconds for a new or just-missed fact, 10 after one correct answer in a row, 5 after two or more. Games open with `?topic=<id>`; `?topic=my-level` is My Level.
 4. **Preview.** One page shows up to 10 of the coming facts with their answers, e.g. "7 + 8 = 15". Tapping a fact reads it aloud; Start begins the game.

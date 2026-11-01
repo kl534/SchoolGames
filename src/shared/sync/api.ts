@@ -1,4 +1,5 @@
 import type {
+  AccountInfo,
   ApiErrorCode,
   AuthResponse,
   ServerConfig,
@@ -70,6 +71,18 @@ export function createSyncApi(base: string, fetchFn: FetchFn = (url, init) => fe
     signIn: (email: string, password: string) =>
       request<AuthResponse>('POST', '/auth/login', { body: { email, password } }),
     signOut: (token: string) => request<null>('POST', '/auth/logout', { token }),
+    google: (credential: string) =>
+      request<AuthResponse>('POST', '/auth/google', { body: { credential } }),
+    verify: (token: string) => request<null>('POST', '/auth/verify', { body: { token } }),
+    resend: (token: string) => request<null>('POST', '/auth/resend', { token }),
+    forgot: (email: string) => request<null>('POST', '/auth/forgot', { body: { email } }),
+    reset: (token: string, password: string) =>
+      request<null>('POST', '/auth/reset', { body: { token, password } }),
+    account: (token: string) => request<AccountInfo>('GET', '/account', { token }),
+    changePassword: (token: string, current: string, next: string) =>
+      request<null>('POST', '/auth/password', { token, body: { current, next } }),
+    deleteAccount: (token: string, confirmEmail: string) =>
+      request<null>('DELETE', '/account', { token, body: { confirmEmail } }),
     sync: (token: string, req: SyncRequest, opts: { keepalive?: boolean } = {}) =>
       request<SyncResponse>('POST', '/sync', { body: req, token, keepalive: opts.keepalive }),
   };

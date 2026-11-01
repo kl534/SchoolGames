@@ -37,40 +37,117 @@ const toProgress = (r: ProgressDb): ProgressRow => ({
   updatedAt: r.updated_at,
 });
 
+const ACCOUNT_COLUMNS =
+  'id, email, password_hash, password_salt, google_sub, email_verified, created_at';
+
+async function accountWhere(
+  db: D1Like,
+  column: 'id' | 'email' | 'google_sub',
+  value: string,
+): Promise<AccountRow | null> {
+  const r = await db
+    .prepare(`SELECT ${ACCOUNT_COLUMNS} FROM accounts WHERE ${column} = ?`)
+    .bind(value)
+    .first<{
+      id: string;
+      email: string;
+      password_hash: string | null;
+      password_salt: string | null;
+      google_sub: string | null;
+      email_verified: number;
+      created_at: number;
+    }>();
+  if (!r) return null;
+  return {
+    id: r.id,
+    email: r.email,
+    passwordHash: r.password_hash,
+    passwordSalt: r.password_salt,
+    googleSub: r.google_sub,
+    emailVerified: r.email_verified === 1,
+    createdAt: r.created_at,
+  };
+}
+
 /** The `Repo` on a D1 database (or anything shaped like it). */
 export function createD1Repo(db: D1Like): Repo {
   return {
     async accountByEmail(email) {
-      const r = await db
-        .prepare(
-          'SELECT id, email, password_hash, password_salt, created_at FROM accounts WHERE email = ?',
-        )
-        .bind(email)
-        .first<{
-          id: string;
-          email: string;
-          password_hash: string | null;
-          password_salt: string | null;
-          created_at: number;
-        }>();
-      if (!r) return null;
-      const row: AccountRow = {
-        id: r.id,
-        email: r.email,
-        passwordHash: r.password_hash,
-        passwordSalt: r.password_salt,
-        createdAt: r.created_at,
-      };
-      return row;
+      return accountWhere(db, 'email', email);
+    },
+    async accountById(id) {
+      return accountWhere(db, 'id', id);
+    },
+    async accountByGoogleSub(sub) {
+      return accountWhere(db, 'google_sub', sub);
     },
     async createAccount(a) {
       const result = await db
         .prepare(
-          'INSERT INTO accounts (id, email, password_hash, password_salt, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(email) DO NOTHING',
+          'INSERT INTO accounts (id, email, password_hash, password_salt, google_sub, email_verified, created_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(email) DO NOTHING',
         )
-        .bind(a.id, a.email, a.passwordHash, a.passwordSalt, a.createdAt)
+        .bind(
+          a.id,
+          a.email,
+          a.passwordHash,
+          a.passwordSalt,
+          a.googleSub ?? null,
+          a.emailVerified ? 1 : 0,
+          a.createdAt,
+        )
         .run();
       return (result.meta?.changes ?? 1) > 0;
+    },
+    async setPassword(accountId, hash, salt) {
+      await db
+        .prepare('UPDATE accounts SET password_hash = ?, password_salt = ? WHERE id = ?')
+        .bind(hash, salt, accountId)
+        .run();
+    },
+    async setEmailVerified(accountId) {
+      await db.prepare('UPDATE accounts SET email_verified = 1 WHERE id = ?').bind(accountId).run();
+    },
+    async linkGoogle(accountId, sub, dropPassword) {
+      await db
+        .prepare(
+          dropPassword
+            ? 'UPDATE accounts SET google_sub = ?, email_verified = 1, password_hash = NULL, password_salt = NULL WHERE id = ?'
+            : 'UPDATE accounts SET google_sub = ?, email_verified = 1 WHERE id = ?',
+        )
+        .bind(sub, accountId)
+        .run();
+    },
+    async deleteAccount(accountId) {
+      await db.prepare('DELETE FROM accounts WHERE id = ?').bind(accountId).run();
+    },
+    async deleteSessions(accountId, keepTokenHash = '') {
+      await db
+        .prepare('DELETE FROM sessions WHERE account_id = ? AND token_hash != ?')
+        .bind(accountId, keepTokenHash)
+        .run();
+    },
+    async createEmailToken(tokenHash, accountId, kind, expiresAt) {
+      await db.batch([
+        db
+          .prepare('DELETE FROM email_tokens WHERE account_id = ? AND kind = ?')
+          .bind(accountId, kind),
+        db
+          .prepare(
+            'INSERT INTO email_tokens (token_hash, account_id, kind, expires_at) VALUES (?, ?, ?, ?)',
+          )
+          .bind(tokenHash, accountId, kind, expiresAt),
+      ]);
+    },
+    async takeEmailToken(tokenHash, kind) {
+      const r = await db
+        .prepare(
+          'SELECT account_id, expires_at FROM email_tokens WHERE token_hash = ? AND kind = ?',
+        )
+        .bind(tokenHash, kind)
+        .first<{ account_id: string; expires_at: number }>();
+      if (!r) return null;
+      await db.prepare('DELETE FROM email_tokens WHERE token_hash = ?').bind(tokenHash).run();
+      return { accountId: r.account_id, expiresAt: r.expires_at };
     },
     async createSession(tokenHash, accountId, expiresAt) {
       await db

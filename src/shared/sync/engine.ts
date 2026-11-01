@@ -12,7 +12,7 @@ import {
 } from './account';
 import { syncUrl } from './config';
 import { mergeProgress } from './merge';
-import type { SyncRequest, WirePlayer } from './protocol';
+import type { AccountInfo, ServerConfig, SyncRequest, WirePlayer } from './protocol';
 
 /** Wait this long after the last save before pushing. */
 export const SYNC_DEBOUNCE_MS = 5000;
@@ -257,6 +257,104 @@ export async function signOut(
     }
   }
   r.progress.releaseAccount(removeLocal);
+  clearAccount(r.store);
+  setCursor(0, r.store);
+  clearNotice(r.store);
+}
+
+// ---------- Google, mail, password, delete ----------
+
+/** What the service offers (mail, Google); null when it cannot be reached. */
+export async function fetchConfig(options: SyncOptions = {}): Promise<ServerConfig | null> {
+  const r = resolve(options);
+  if (!r.api) return null;
+  try {
+    return await r.api.config();
+  } catch {
+    return null;
+  }
+}
+
+/** Signs in with a Google ID token and joins every local player to the account. */
+export async function signInWithGoogle(
+  credential: string,
+  options: SyncOptions = {},
+): Promise<void> {
+  const r = resolve(options);
+  if (!r.api) throw new ApiError('network');
+  await joinAccount(r, await r.api.google(credential), options);
+}
+
+/** The signed-in account's email state; null when signed out or the service is unreachable. */
+export async function fetchAccountInfo(options: SyncOptions = {}): Promise<AccountInfo | null> {
+  const r = resolve(options);
+  const account = getAccount(r.store);
+  if (!account || !r.api) return null;
+  try {
+    return await r.api.account(account.token);
+  } catch {
+    return null;
+  }
+}
+
+/** Mails the confirmation link again. Throws `ApiError` (`rate_limited` after 3 an hour). */
+export async function resendVerification(options: SyncOptions = {}): Promise<void> {
+  const r = resolve(options);
+  const account = getAccount(r.store);
+  if (!account || !r.api) throw new ApiError('unauthorized');
+  await r.api.resend(account.token);
+}
+
+/** Uses the token from a mailed confirmation link. Throws `ApiError('invalid')` when it is stale. */
+export async function confirmEmail(token: string, options: SyncOptions = {}): Promise<void> {
+  const r = resolve(options);
+  if (!r.api) throw new ApiError('network');
+  await r.api.verify(token);
+}
+
+/** Asks for a reset link. The service answers the same for every email, so this says no more. */
+export async function requestReset(email: string, options: SyncOptions = {}): Promise<void> {
+  const r = resolve(options);
+  if (!r.api) throw new ApiError('network');
+  await r.api.forgot(email);
+}
+
+/** Sets a new password from a mailed link. Throws `ApiError('invalid')` when the link is stale. */
+export async function resetPassword(
+  token: string,
+  password: string,
+  options: SyncOptions = {},
+): Promise<void> {
+  const r = resolve(options);
+  if (!r.api) throw new ApiError('network');
+  await r.api.reset(token, password);
+}
+
+/** Changes the password; the service signs out every other device. */
+export async function changePassword(
+  current: string,
+  next: string,
+  options: SyncOptions = {},
+): Promise<void> {
+  const r = resolve(options);
+  const account = getAccount(r.store);
+  if (!account || !r.api) throw new ApiError('unauthorized');
+  await r.api.changePassword(account.token, current, next);
+}
+
+/**
+ * Deletes the account and its cloud data, then leaves the players on this device as local-only.
+ * Throws `ApiError` (and changes nothing here) when the service refuses or cannot be reached.
+ */
+export async function deleteAccount(
+  confirmEmail: string,
+  options: SyncOptions = {},
+): Promise<void> {
+  const r = resolve(options);
+  const account = getAccount(r.store);
+  if (!account || !r.api) throw new ApiError('unauthorized');
+  await r.api.deleteAccount(account.token, confirmEmail);
+  r.progress.releaseAccount(false);
   clearAccount(r.store);
   setCursor(0, r.store);
   clearNotice(r.store);

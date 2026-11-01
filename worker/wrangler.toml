@@ -5,6 +5,9 @@ compatibility_date = "2026-10-01"
 [vars]
 ALLOWED_ORIGINS = "https://kl534.github.io,http://localhost:5173"
 SITE_URL = "https://kl534.github.io/schoolgames/"
+# Optional, see README.md: the mail sender (with the secret RESEND_API_KEY) and Google sign-in.
+# MAIL_FROM = "School Games <onboarding@resend.dev>"
+# GOOGLE_CLIENT_ID = "<id>.apps.googleusercontent.com"
 
 [[d1_databases]]
 binding = "DB"

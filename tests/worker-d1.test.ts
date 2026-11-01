@@ -205,4 +205,60 @@ describe.skipIf(!hasNodeSqlite)('createD1Repo on SQLite', () => {
       expect(db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get()).toEqual({ n: 0 });
     }
   });
+
+  it('runs the account tools through the real SQL', async () => {
+    const { repo, db } = setup();
+    const account = {
+      id: 'acc1',
+      email: 'a@b.co',
+      passwordHash: 'h',
+      passwordSalt: 's',
+      createdAt: 1,
+    };
+    expect(await repo.createAccount(account)).toBe(true);
+    expect(await repo.createAccount({ ...account, id: 'acc2' })).toBe(false);
+    expect(await repo.accountById('acc1')).toMatchObject({
+      googleSub: null,
+      emailVerified: false,
+    });
+
+    // Tokens: single use, per kind, a newer one replaces the older.
+    await repo.createEmailToken('t1', 'acc1', 'reset', 99);
+    await repo.createEmailToken('t2', 'acc1', 'reset', 99);
+    expect(await repo.takeEmailToken('t1', 'reset')).toBeNull();
+    expect(await repo.takeEmailToken('t2', 'verify')).toBeNull();
+    expect(await repo.takeEmailToken('t2', 'reset')).toEqual({ accountId: 'acc1', expiresAt: 99 });
+    expect(await repo.takeEmailToken('t2', 'reset')).toBeNull();
+
+    await repo.setPassword('acc1', 'h2', 's2');
+    await repo.setEmailVerified('acc1');
+    expect(await repo.accountByEmail('a@b.co')).toMatchObject({
+      passwordHash: 'h2',
+      passwordSalt: 's2',
+      emailVerified: true,
+    });
+
+    await repo.linkGoogle('acc1', 'sub-1', true);
+    expect(await repo.accountByGoogleSub('sub-1')).toMatchObject({
+      id: 'acc1',
+      passwordHash: null,
+      passwordSalt: null,
+    });
+    expect(await repo.accountByGoogleSub('nope')).toBeNull();
+    await expect(
+      repo.createAccount({ ...account, id: 'acc3', email: 'c@d.co', googleSub: 'sub-1' }),
+    ).rejects.toThrow();
+
+    await repo.createSession('s1', 'acc1', 99);
+    await repo.createSession('s2', 'acc1', 99);
+    await repo.deleteSessions('acc1', 's1');
+    expect((db.prepare('SELECT token_hash FROM sessions').all() as unknown[]).length).toBe(1);
+    await repo.deleteSessions('acc1');
+    expect(db.prepare('SELECT COUNT(*) AS n FROM sessions').get()).toEqual({ n: 0 });
+
+    await repo.createEmailToken('t3', 'acc1', 'verify', 99);
+    await repo.deleteAccount('acc1');
+    expect(db.prepare('SELECT COUNT(*) AS n FROM email_tokens').get()).toEqual({ n: 0 });
+    expect(db.prepare('SELECT COUNT(*) AS n FROM accounts').get()).toEqual({ n: 0 });
+  });
 });

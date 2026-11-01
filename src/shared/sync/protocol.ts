@@ -28,6 +28,14 @@ export interface SyncResponse {
 
 export type AuthResponse = { token: string; email: string };
 
+/** `GET /account`: what the signed-in row and the account sheet need. */
+export interface AccountInfo {
+  email: string;
+  emailVerified: boolean;
+  /** False for a Google-only account, which has no current password to confirm. */
+  hasPassword: boolean;
+}
+
 export interface ServerConfig {
   emailEnabled: boolean;
   googleClientId: string | null;

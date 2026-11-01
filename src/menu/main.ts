@@ -23,21 +23,25 @@ import { topicsUrl } from '../shared/ui';
 import { ApiError } from '../shared/sync/api';
 import { clearNotice, getAccount, getNotice } from '../shared/sync/account';
 import { devSyncState, syncEnabled, syncUrl } from '../shared/sync/config';
-import { signIn, signOut, signUp, syncFailed, syncNow } from '../shared/sync/engine';
+import {
+  fetchAccountInfo,
+  fetchConfig,
+  requestReset,
+  resendVerification,
+  signIn,
+  signInWithGoogle,
+  signOut,
+  signUp,
+  syncFailed,
+  syncNow,
+} from '../shared/sync/engine';
+import { errorText, linkAction } from '../shared/sync/messages';
+import type { AccountInfo, ServerConfig } from '../shared/sync/protocol';
+import { accountDialog, googleButton, renderLinkPage } from './account-extras';
+import { el, errorLine, field, textButton } from './dom';
 
 const store = createProgressStore();
 const base = import.meta.env.BASE_URL;
-
-function el<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className?: string,
-  text?: string,
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
 
 function link(href: string, className: string, text?: string): HTMLAnchorElement {
   const a = el('a', className, text);
@@ -88,13 +92,6 @@ const STATUS_TEXT: Record<SyncStatus, string> = {
   offline: 'Will sync when online',
 };
 
-const ERROR_TEXT: Record<string, string> = {
-  invalid: 'Check the email, and use at least 8 characters for the password.',
-  exists: 'That email already has an account. Try signing in.',
-  bad_credentials: 'The email or password is wrong.',
-  rate_limited: 'Too many tries. Wait a few minutes and try again.',
-};
-const NETWORK_TEXT = "Can't reach the sync service. Check your connection and try again.";
 const PRIVACY_NOTE =
   'For a parent or teacher. Kids only need a first name and a buddy; we keep those and their progress, nothing else.';
 
@@ -104,13 +101,6 @@ function setSyncStatus(root: HTMLElement, status: SyncStatus): void {
   syncStatus = status;
   const node = root.querySelector('.account-status');
   if (node) node.textContent = `☁ ${STATUS_TEXT[status]}`;
-}
-
-function textButton(label: string, onClick: () => void): HTMLButtonElement {
-  const b = el('button', 'text-button', label);
-  b.type = 'button';
-  b.addEventListener('click', onClick);
-  return b;
 }
 
 /** The "Sign out of ...?" dialog. Focus stays on its buttons; Escape cancels. */
@@ -162,27 +152,51 @@ function signOutDialog(
 /** The account row under the player grid: sign in, the sign-in panel, or the signed-in row. */
 function accountSection(root: HTMLElement, dev: string | null, shownPlayers: () => Player[]) {
   const wrap = el('div', 'account');
+  const params = new URLSearchParams(location.search);
   const account = dev
-    ? dev === 'in' || dev === 'signout'
+    ? dev === 'in' || dev === 'signout' || dev === 'account' || dev === 'delete'
       ? { email: DEMO_EMAIL }
       : null
     : getAccount();
-  let panel: 'none' | 'signin' | 'signup' =
+  let panel: 'none' | 'signin' | 'signup' | 'forgot' =
     dev === 'signin' || dev === 'error' ? 'signin' : dev === 'signup' ? 'signup' : 'none';
   let error: string | null = dev === 'error' ? 'bad_credentials' : null;
   let dialog: HTMLElement | null = null;
   let emailValue = '';
   let devDialog = dev === 'signout';
+  let devSheet: 'menu' | 'delete' | null =
+    params.get('sheet') === 'off'
+      ? null
+      : dev === 'account'
+        ? 'menu'
+        : dev === 'delete'
+          ? 'delete'
+          : null;
   let notice = false;
+  let forgotSent = false;
+  let config: ServerConfig | null = null;
+  let info: AccountInfo | null = null;
+  let extrasHost: HTMLElement | null = null;
   if (!dev && getNotice() === 'signed-out') {
     notice = true;
     clearNotice();
+  }
+  if (dev) {
+    // `&mail=1` and `&google=1` preview the parts that depend on what the service offers.
+    config = {
+      emailEnabled: params.get('mail') === '1' || dev === 'account' || dev === 'delete',
+      googleClientId: params.get('google') === '1' ? 'dev-client-id' : null,
+    };
+    if (dev === 'account' || dev === 'delete') {
+      info = { email: DEMO_EMAIL, emailVerified: false, hasPassword: true };
+    }
   }
 
   const draw = () => {
     wrap.replaceChildren();
     if (account) drawSignedIn();
     else if (panel === 'none') drawSignedOut();
+    else if (panel === 'forgot') drawForgot();
     else drawPanel();
   };
 
@@ -199,6 +213,43 @@ function accountSection(root: HTMLElement, dev: string | null, shownPlayers: () 
     });
     open.classList.add('account-open');
     wrap.appendChild(open);
+  };
+
+  const finishSignIn = (work: Promise<void>, fail: (message: string) => void) => {
+    work
+      .then(() => {
+        location.href = `${base}?players`;
+      })
+      .catch((err: unknown) => fail(err instanceof ApiError ? err.code : 'network'));
+  };
+
+  /** Google's button and "Forgot password?", which exist only when the service offers them. */
+  const drawExtras = () => {
+    if (!extrasHost) return;
+    extrasHost.replaceChildren();
+    if (config?.googleClientId) {
+      const google = googleButton(
+        config.googleClientId,
+        (credential) =>
+          finishSignIn(signInWithGoogle(credential), (code) => {
+            error = code;
+            draw();
+          }),
+        Boolean(dev),
+      );
+      extrasHost.appendChild(google);
+    }
+    if (config?.emailEnabled && panel === 'signin') {
+      extrasHost.appendChild(
+        textButton('Forgot password?', () => {
+          emailValue = (wrap.querySelector('input[type=email]') as HTMLInputElement).value;
+          panel = 'forgot';
+          forgotSent = false;
+          error = null;
+          draw();
+        }),
+      );
+    }
   };
 
   const drawPanel = () => {
@@ -220,23 +271,10 @@ function accountSection(root: HTMLElement, dev: string | null, shownPlayers: () 
       });
       tabs.appendChild(tab);
     }
-    const email = el('input');
-    email.type = 'email';
-    email.required = true;
-    email.autocomplete = 'username';
-    email.placeholder = 'Email';
+    const email = field('email', 'Email', 'username');
     email.value = emailValue;
-    email.setAttribute('aria-label', 'Email');
-    const password = el('input');
-    password.type = 'password';
-    password.required = true;
-    password.autocomplete = creating ? 'new-password' : 'current-password';
-    password.placeholder = 'Password';
+    const password = field('password', 'Password', creating ? 'new-password' : 'current-password');
     if (creating) password.minLength = 8;
-    password.setAttribute('aria-label', 'Password');
-    for (const input of [email, password]) {
-      input.addEventListener('focus', () => input.scrollIntoView({ block: 'center' }));
-    }
     const submit = el('button', 'primary', creating ? 'Create account' : 'Sign in');
     submit.type = 'submit';
     const cancel = textButton('Cancel', () => {
@@ -244,22 +282,66 @@ function accountSection(root: HTMLElement, dev: string | null, shownPlayers: () 
       error = null;
       draw();
     });
+    extrasHost = el('div', 'account-extras');
     form.append(tabs, email, password);
     if (creating) form.appendChild(el('p', 'account-note', PRIVACY_NOTE));
-    if (error) {
-      const message = el('p', 'error', ERROR_TEXT[error] ?? NETWORK_TEXT);
-      message.setAttribute('role', 'alert');
-      form.appendChild(message);
-    }
-    form.append(submit, cancel);
+    if (error) form.appendChild(errorLine(errorText(error)));
+    form.append(submit, extrasHost, cancel);
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       submit.disabled = true;
       submit.textContent = 'Please wait…';
       emailValue = email.value;
-      (creating ? signUp : signIn)(email.value.trim(), password.value)
+      finishSignIn((creating ? signUp : signIn)(email.value.trim(), password.value), (code) => {
+        error = code;
+        draw();
+      });
+    });
+    wrap.appendChild(form);
+    drawExtras();
+  };
+
+  const drawForgot = () => {
+    const form = el('form', 'new-player account-form');
+    form.appendChild(el('h2', undefined, 'Forgot password?'));
+    const back = textButton('Back to sign in', () => {
+      panel = 'signin';
+      draw();
+    });
+    if (forgotSent) {
+      form.append(
+        el(
+          'p',
+          'account-note',
+          'If that email has an account, a link to choose a new password is on its way.',
+        ),
+        back,
+      );
+      wrap.appendChild(form);
+      return;
+    }
+    const email = field('email', 'Email', 'username');
+    email.value = emailValue;
+    const submit = el('button', 'primary', 'Send link');
+    submit.type = 'submit';
+    form.append(el('p', 'account-note', 'We will email a link to choose a new password.'), email);
+    if (error) form.appendChild(errorLine(errorText(error)));
+    form.append(submit, back);
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      emailValue = email.value;
+      if (dev) {
+        forgotSent = true;
+        draw();
+        return;
+      }
+      submit.disabled = true;
+      submit.textContent = 'Please wait…';
+      requestReset(email.value.trim())
         .then(() => {
-          location.href = `${base}?players`;
+          forgotSent = true;
+          error = null;
+          draw();
         })
         .catch((err: unknown) => {
           error = err instanceof ApiError ? err.code : 'network';
@@ -269,17 +351,41 @@ function accountSection(root: HTMLElement, dev: string | null, shownPlayers: () 
     wrap.appendChild(form);
   };
 
+  /** "Confirm your email" with a Resend button, while the service has mail and the email is not confirmed. */
+  const verifyLine = (): HTMLElement | null => {
+    if (!config?.emailEnabled || !info || info.emailVerified) return null;
+    const line = el('div', 'account-verify');
+    const text = el('span', undefined, 'Confirm your email — we sent a link');
+    const resend = textButton('Resend', () => {
+      if (dev) return;
+      resend.disabled = true;
+      resend.textContent = 'Sending…';
+      resendVerification()
+        .then(() => {
+          text.textContent = 'Sent again. Check your inbox.';
+          resend.remove();
+        })
+        .catch((err: unknown) => {
+          text.textContent = errorText(err instanceof ApiError ? err.code : 'network');
+          resend.disabled = false;
+          resend.textContent = 'Resend';
+        });
+    });
+    line.append(text, resend);
+    return line;
+  };
+
   const drawSignedIn = () => {
     if (!account) return;
     const row = el('div', 'account-row');
-    const info = el('div', 'account-info');
-    info.append(
+    const infoLine = el('div', 'account-info');
+    infoLine.append(
       el('span', 'account-status', `☁ ${STATUS_TEXT[dev ? 'synced' : syncStatus]}`),
       el('span', 'account-sep', '·'),
     );
     const email = el('span', 'account-email', account.email);
     email.title = account.email;
-    info.appendChild(email);
+    infoLine.appendChild(email);
     const sync = textButton('Sync now', () => {
       if (dev) return;
       setSyncStatus(root, 'syncing');
@@ -288,6 +394,7 @@ function accountSection(root: HTMLElement, dev: string | null, shownPlayers: () 
         renderPlayers(root);
       });
     });
+    const manage = textButton('Account', () => showSheet('menu'));
     const out = textButton('Sign out', () => {
       if (dev) {
         showDialog(false);
@@ -302,11 +409,19 @@ function accountSection(root: HTMLElement, dev: string | null, shownPlayers: () 
         showDialog(createProgressStore().pending().dirty.length > 0);
       });
     });
-    row.append(info, sync, out);
+    row.appendChild(infoLine);
+    const verify = verifyLine();
+    if (verify) row.appendChild(verify);
+    row.append(sync, manage, out);
     wrap.appendChild(row);
     if (devDialog) {
       devDialog = false;
       showDialog(false);
+    }
+    if (devSheet) {
+      const view = devSheet;
+      devSheet = null;
+      showSheet(view);
     }
   };
 
@@ -314,6 +429,21 @@ function accountSection(root: HTMLElement, dev: string | null, shownPlayers: () 
     dialog?.remove();
     dialog = null;
     draw();
+  };
+
+  const showSheet = (view: 'menu' | 'delete') => {
+    dialog?.remove();
+    dialog = accountDialog({
+      email: account?.email ?? '',
+      info,
+      dev: Boolean(dev),
+      view,
+      close: closeDialog,
+      deleted: () => {
+        location.href = `${base}?players`;
+      },
+    });
+    wrap.appendChild(dialog);
   };
 
   const showDialog = (unsynced: boolean) => {
@@ -339,6 +469,22 @@ function accountSection(root: HTMLElement, dev: string | null, shownPlayers: () 
   };
 
   draw();
+
+  if (!dev && syncUrl()) {
+    // What the service offers, and whether the email is confirmed. Redraw only when nothing is
+    // open, so a typed password or an open dialog is never lost.
+    void fetchConfig().then((c) => {
+      config = c;
+      if (!account && panel !== 'none') drawExtras();
+      else if (!dialog) draw();
+    });
+    if (account) {
+      void fetchAccountInfo().then((i) => {
+        info = i;
+        if (!dialog) draw();
+      });
+    }
+  }
   return wrap;
 }
 
@@ -350,7 +496,8 @@ function renderPlayers(root: HTMLElement): void {
   let managing = false;
   const sync = syncEnabled();
   const dev = sync ? devSyncState() : null;
-  const signedInPreview = dev === 'in' || dev === 'signout';
+  const signedInPreview =
+    dev === 'in' || dev === 'signout' || dev === 'account' || dev === 'delete';
   /** The players to show; the dev preview of a signed-in picker adds two in-memory ones. */
   const shown = (): Player[] => {
     const list = store.listPlayers();
@@ -642,6 +789,18 @@ function renderMyLevel(
 
 function render(root: HTMLElement): void {
   const params = new URLSearchParams(location.search);
+  const back = `${base}?players`;
+  // Links from mail: confirm the email, or choose a new password.
+  const mailed = syncEnabled() ? linkAction(location.search) : null;
+  if (mailed) {
+    renderLinkPage(root, mailed, back);
+    return;
+  }
+  const dev = syncEnabled() ? devSyncState() : null;
+  if (dev === 'verify' || dev === 'reset') {
+    renderLinkPage(root, { kind: dev, token: 'dev' }, back, true);
+    return;
+  }
   const player = store.currentPlayer();
   if (!player || params.has('players')) {
     renderPlayers(root);
