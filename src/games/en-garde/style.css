@@ -1,0 +1,694 @@
+.eg-hud,
+.eg-bars,
+.eg-answers,
+.eg-banner,
+.eg-pow,
+.eg-vs {
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  color: #fff;
+}
+
+.eg-hud[hidden],
+.eg-bars[hidden],
+.eg-answers[hidden],
+.eg-answer[hidden],
+.eg-banner[hidden] {
+  display: none;
+}
+
+/* ---------- Health bars ---------- */
+
+.eg-bars {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* Wide: on the top row between the corner buttons, each bar at most 360px, hugging the centre. */
+.eg-bar-box {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+}
+
+.eg-bar-box.us {
+  right: calc(50% + 28px);
+  width: min(360px, calc(50% - 28px - 132px));
+}
+
+.eg-bar-box.them {
+  left: calc(50% + 28px);
+  width: min(360px, calc(50% - 28px - 152px));
+}
+
+.eg-bar {
+  display: flex;
+  gap: 3px;
+  height: 22px;
+  padding: 2px;
+  box-sizing: border-box;
+  border-radius: 13px;
+  background: rgba(20, 14, 50, 0.85);
+  border: 2px solid rgba(255, 255, 255, 0.75);
+}
+
+.eg-slot {
+  flex: 1 1 0;
+  min-width: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.eg-fill {
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  background: linear-gradient(#7ff7c0, #2fc77c);
+}
+
+.eg-bar-box.them .eg-fill {
+  background: linear-gradient(#ffb066, #f0502f);
+}
+
+.eg-bar-box.us .eg-fill {
+  transform-origin: left;
+}
+
+.eg-bar-box.them .eg-fill {
+  transform-origin: right;
+}
+
+.eg-fill {
+  transition: transform 0.25s ease-in;
+}
+
+.eg-slot.flash .eg-fill {
+  background: #fff;
+}
+
+.eg-slot.gone .eg-fill {
+  transform: scaleX(0);
+}
+
+.eg-bar-name {
+  height: 16px;
+  margin-top: 3px;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
+}
+
+.eg-bar-box.us .eg-bar-name {
+  text-align: left;
+}
+
+.eg-bar-box.them .eg-bar-name {
+  text-align: right;
+}
+
+.eg-rung {
+  font-weight: 600;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.eg-vs-badge {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 26px;
+  box-sizing: border-box;
+  border-radius: 13px;
+  background: #ffd23f;
+  color: #7a1022;
+  font-size: 15px;
+  font-weight: 900;
+  transform: translateX(-50%);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+}
+
+.eg-bar-box.shake {
+  animation: eg-shake 0.3s linear;
+}
+
+@keyframes eg-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+/* Narrow: the bars sit below the corner buttons, 12px from the edges and 22px from the centre. */
+@media (max-width: 640px) {
+  .eg-bar-box,
+  .eg-vs-badge {
+    top: calc(max(12px, env(safe-area-inset-top)) + 56px);
+  }
+
+  .eg-bar-box.us {
+    left: 12px;
+    right: calc(50% + 22px);
+    width: auto;
+  }
+
+  .eg-bar-box.them {
+    left: calc(50% + 22px);
+    right: 12px;
+    width: auto;
+  }
+
+  .eg-vs-badge {
+    top: calc(max(12px, env(safe-area-inset-top)) + 54px);
+  }
+
+  .eg-bar-name {
+    font-size: 12px;
+  }
+
+  .eg-rung {
+    font-size: 10px;
+  }
+}
+
+/* ---------- Question and clock ---------- */
+
+.eg-hud {
+  position: fixed;
+  top: 60px;
+  left: 50%;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .eg-hud {
+    top: 116px;
+  }
+}
+
+.eg-problem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 4px 8px 4px 22px;
+  border-radius: 20px;
+  background: rgba(24, 28, 80, 0.9);
+  border: 2px solid rgba(160, 190, 255, 0.8);
+  pointer-events: auto;
+}
+
+.eg-problem-text {
+  font-size: clamp(26px, 6.5vmin, 48px);
+  font-weight: 800;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.eg-problem.wrong {
+  background: rgba(150, 24, 40, 0.92);
+  border-color: #ff8787;
+}
+
+.eg-hear {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: 22px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.eg-clock {
+  width: 100%;
+  min-width: 200px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(24, 28, 80, 0.7);
+  overflow: hidden;
+}
+
+.eg-clock-fill {
+  height: 100%;
+  width: 100%;
+  background: #5cf2b0;
+  transform-origin: left;
+}
+
+.eg-clock.urgent .eg-clock-fill {
+  background: #ff6b6b;
+}
+
+/* ---------- Answers ---------- */
+
+.eg-answers {
+  position: fixed;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 50%;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  width: min(760px, calc(100vw - 24px));
+  transform: translateX(-50%);
+}
+
+@media (max-width: 560px) {
+  .eg-answers {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.eg-answer {
+  position: relative;
+  min-width: 0;
+  height: 72px;
+  padding: 0 8px;
+  border: 3px solid #a8c4ff;
+  border-radius: 20px;
+  background: linear-gradient(#4a82ff, #2c55c8);
+  color: #fff;
+  font:
+    800 clamp(26px, 6.5vmin, 40px) system-ui,
+    sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 6px 18px rgba(20, 30, 90, 0.45);
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    opacity 0.3s;
+}
+
+@media (max-height: 450px) {
+  .eg-answer {
+    height: 60px;
+  }
+}
+
+.eg-answer:active:not([aria-disabled='true']) {
+  scale: 0.96;
+}
+
+.eg-answer:focus-visible {
+  outline: 4px solid #ffd43b;
+  outline-offset: 2px;
+}
+
+.eg-answer[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.eg-answer.right {
+  opacity: 1;
+  border-color: #1b6b2b;
+  background: #5cf2b0;
+  color: #0c3a1d;
+  box-shadow:
+    0 0 0 5px rgba(92, 242, 176, 0.5),
+    0 0 26px 8px rgba(92, 242, 176, 0.7);
+}
+
+.eg-answer.wrong {
+  opacity: 1;
+  border-color: #8c1d1d;
+  background: #ff8787;
+  color: #4a0c0c;
+}
+
+.eg-answer.wrong::after {
+  content: '✗';
+  position: absolute;
+  top: 2px;
+  right: 8px;
+  color: #8c1d1d;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+/* ---------- Comic words and banners ---------- */
+
+.eg-pow {
+  position: fixed;
+  z-index: 14;
+  font-size: clamp(28px, 8vmin, 56px);
+  font-weight: 900;
+  white-space: nowrap;
+  color: #ffe033;
+  -webkit-text-stroke: 7px #d61f2c;
+  paint-order: stroke fill;
+  text-shadow: 0 4px 0 rgba(90, 10, 20, 0.5);
+  pointer-events: none;
+  transform: translate(-50%, -50%) rotate(-8deg);
+  animation: eg-pow 0.9s ease-out forwards;
+}
+
+/* A frozen dev shot keeps its word on screen. */
+.eg-pow.hold {
+  animation: eg-pow-in 0.15s ease-out forwards;
+}
+
+@keyframes eg-pow {
+  0% {
+    transform: translate(-50%, -50%) rotate(-8deg) scale(0);
+    opacity: 1;
+  }
+  17% {
+    transform: translate(-50%, -50%) rotate(-8deg) scale(1.2);
+    opacity: 1;
+  }
+  28% {
+    transform: translate(-50%, -50%) rotate(-8deg) scale(1);
+    opacity: 1;
+  }
+  65% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(-8deg) scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes eg-pow-in {
+  0% {
+    transform: translate(-50%, -50%) rotate(-8deg) scale(0);
+  }
+  70% {
+    transform: translate(-50%, -50%) rotate(-8deg) scale(1.2);
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(-8deg) scale(1);
+  }
+}
+
+.eg-banner {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 12;
+  max-width: min(92vw, 680px);
+  padding: 8px 28px;
+  border-radius: 24px;
+  background: rgba(24, 28, 80, 0.9);
+  border: 2px solid rgba(160, 190, 255, 0.8);
+  font-size: clamp(32px, 9vmin, 68px);
+  font-weight: 900;
+  line-height: 1.1;
+  color: #ffe066;
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: eg-banner 0.35s ease-out;
+}
+
+.eg-banner.bad {
+  color: #ffb3b3;
+  background: rgba(120, 20, 40, 0.92);
+  border-color: #ff8787;
+}
+
+@keyframes eg-banner {
+  from {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+/* ---------- VS card ---------- */
+
+.eg-vs {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  display: flex;
+  align-items: safe center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: calc(max(12px, env(safe-area-inset-top)) + 56px) 16px
+    max(16px, env(safe-area-inset-bottom));
+  background: rgba(15, 18, 32, 0.55);
+  overflow-y: auto;
+}
+
+.eg-vs-card {
+  box-sizing: border-box;
+  width: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 18px 20px;
+  border-radius: 24px;
+  background: #1a1f45;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  text-align: center;
+}
+
+.eg-vs-heading {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 900;
+  color: #ffe066;
+}
+
+.eg-rungs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.eg-rung-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 4px 12px;
+  box-sizing: border-box;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.07);
+  font-size: 18px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.eg-rung-row.done {
+  color: #9be8bd;
+}
+
+.eg-rung-row.locked {
+  opacity: 0.55;
+}
+
+.eg-rung-row.current {
+  background: rgba(255, 210, 63, 0.22);
+  box-shadow:
+    0 0 0 2px #ffd23f,
+    0 0 16px 2px rgba(255, 210, 63, 0.6);
+  animation: eg-glow 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes eg-glow {
+  from {
+    box-shadow:
+      0 0 0 2px #ffd23f,
+      0 0 8px 0 rgba(255, 210, 63, 0.4);
+  }
+  to {
+    box-shadow:
+      0 0 0 2px #ffd23f,
+      0 0 18px 4px rgba(255, 210, 63, 0.75);
+  }
+}
+
+.eg-rung-icon {
+  flex: none;
+  width: 28px;
+  text-align: center;
+}
+
+.eg-rung-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.eg-rung-note {
+  flex: none;
+  font-size: 14px;
+  color: #ffe066;
+}
+
+.eg-vs-names {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.eg-vs-vs {
+  font-size: 16px;
+  color: #ffd23f;
+}
+
+.eg-vs-sub {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #d5dcff;
+}
+
+.eg-fight {
+  width: 100%;
+  min-height: 64px;
+  border: 0;
+  border-radius: 32px;
+  background: #4cc38a;
+  color: #0f1220;
+  font:
+    900 24px system-ui,
+    sans-serif;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.eg-fight:active {
+  transform: scale(0.97);
+}
+
+.eg-fight:focus-visible {
+  outline: 4px solid #ffd43b;
+  outline-offset: 2px;
+}
+
+.eg-vs-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+/* A short landscape screen: the ladder on the left, the names and Fight! on the right, no scrolling. */
+@media (max-height: 450px) {
+  .eg-vs {
+    padding: 10px 16px;
+  }
+
+  .eg-vs-card {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      'heading heading'
+      'rungs side';
+    align-items: center;
+    gap: 8px 18px;
+    width: min(640px, 100%);
+    padding: 12px 18px 14px;
+  }
+
+  .eg-vs-heading {
+    grid-area: heading;
+    font-size: 22px;
+  }
+
+  .eg-rungs {
+    grid-area: rungs;
+    gap: 4px;
+  }
+
+  .eg-rung-row {
+    min-height: 30px;
+    padding: 2px 10px;
+    font-size: 15px;
+  }
+
+  .eg-rung-note {
+    font-size: 12px;
+  }
+
+  .eg-vs-side {
+    grid-area: side;
+    gap: 8px;
+  }
+
+  .eg-vs-names {
+    margin-top: 0;
+    font-size: 20px;
+  }
+
+  .eg-vs-sub {
+    font-size: 14px;
+  }
+
+  .eg-fight {
+    min-height: 56px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eg-banner,
+  .eg-bar-box.shake,
+  .eg-rung-row.current {
+    animation: none;
+  }
+
+  .eg-pow {
+    animation: none;
+  }
+}

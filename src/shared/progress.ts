@@ -29,6 +29,8 @@ export interface PlayerProgress {
   best: Record<string, Record<string, number>>;
   /** topicId -> gameId -> high score, for games that score in points instead of stars. */
   highScores: Record<string, Record<string, number>>;
+  /** topicId -> gameId -> ladder rung; unlike `best` it can go down. */
+  ladders?: Record<string, Record<string, number>>;
   /** How many My Level levels the player has opened; it never goes down. */
   levelsOpen?: number;
   /** Which `LEVELS` layout `levelsOpen` counts in; see `migrateMissingNumberLevels`. */
@@ -116,6 +118,17 @@ export function recordBest(
   if (stars <= (topic[gameId] ?? -1)) return false;
   topic[gameId] = stars;
   return true;
+}
+
+/** Stores a ladder rung for the topic and game, replacing the old one (it can go down). */
+export function recordLadder(
+  progress: PlayerProgress,
+  topicId: string,
+  gameId: string,
+  rung: number,
+): void {
+  (progress.ladders ??= {})[topicId] ??= {};
+  progress.ladders[topicId][gameId] = rung;
 }
 
 /** Stores the score if it is above zero and beats the previous high score; true for a new one. */
@@ -305,6 +318,7 @@ export function createProgressStore(store: KeyValueStore = deviceStore()): Progr
         highScores: data.highScores ?? {},
       };
       if (typeof data.levelsOpen === 'number') progress.levelsOpen = data.levelsOpen;
+      if (data.ladders && typeof data.ladders === 'object') progress.ladders = data.ladders;
       migrateAboveTenTables(progress);
       migrateRenamedGames(progress);
       if (typeof data.levelsVersion === 'number') progress.levelsVersion = data.levelsVersion;

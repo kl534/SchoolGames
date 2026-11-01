@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" font-family="system-ui, sans-serif" font-weight="900">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7fd0ff"/>
+      <stop offset="1" stop-color="#cdeeff"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#86dcff"/>
+      <stop offset="1" stop-color="#1f8fe0"/>
+    </linearGradient>
+    <linearGradient id="red" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff9aa8"/>
+      <stop offset="1" stop-color="#e02b4d"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="640" height="360" fill="url(#sky)"/>
+  <rect y="262" width="640" height="98" fill="#6cc25c"/>
+  <rect y="262" width="640" height="10" fill="#58ad4a"/>
+
+  <!-- Fence -->
+  <g fill="#fff">
+    <rect x="0" y="206" width="640" height="10"/>
+    <rect x="0" y="238" width="640" height="10"/>
+    <g id="pk"><rect x="12" y="190" width="22" height="76" rx="4"/></g>
+    <use href="#pk" x="48"/><use href="#pk" x="96"/><use href="#pk" x="144"/><use href="#pk" x="192"/>
+    <use href="#pk" x="240"/><use href="#pk" x="288"/><use href="#pk" x="336"/><use href="#pk" x="384"/>
+    <use href="#pk" x="432"/><use href="#pk" x="480"/><use href="#pk" x="528"/><use href="#pk" x="576"/>
+  </g>
+
+  <!-- Bunting -->
+  <path d="M-10 28 Q320 110 650 28" fill="none" stroke="#444" stroke-width="3"/>
+  <g>
+    <path d="M40 46 l24 4 l-14 26z" fill="#ff4d6d"/><path d="M100 60 l24 6 l-12 26z" fill="#ffd23f"/>
+    <path d="M160 72 l24 7 l-12 26z" fill="#4cc9f0"/><path d="M222 82 l24 7 l-12 26z" fill="#7ae582"/>
+    <path d="M286 88 l24 4 l-12 26z" fill="#ff4d6d"/><path d="M350 88 l24 -3 l-10 26z" fill="#ffd23f"/>
+    <path d="M412 82 l24 -6 l-12 26z" fill="#4cc9f0"/><path d="M474 72 l24 -7 l-12 26z" fill="#7ae582"/>
+    <path d="M534 60 l24 -6 l-12 26z" fill="#ff4d6d"/><path d="M592 46 l22 -5 l-10 26z" fill="#ffd23f"/>
+  </g>
+
+  <!-- Balloons -->
+  <g>
+    <ellipse cx="60" cy="160" rx="26" ry="32" fill="#ff4d6d"/><ellipse cx="590" cy="150" rx="26" ry="32" fill="#b185ff"/>
+    <ellipse cx="110" cy="180" rx="22" ry="28" fill="#ffd23f"/><ellipse cx="540" cy="172" rx="22" ry="28" fill="#4cc9f0"/>
+  </g>
+
+  <!-- The two fighters -->
+  <g>
+    <ellipse cx="190" cy="326" rx="60" ry="10" fill="#000" opacity=".2"/>
+    <rect x="160" y="250" width="60" height="70" rx="22" fill="#2f6bff"/>
+    <circle cx="190" cy="212" r="42" fill="#f1b48a"/>
+    <path d="M160 190 L190 120 L220 190z" fill="#2f6bff"/><circle cx="190" cy="118" r="9" fill="#ffd23f"/>
+    <circle cx="204" cy="206" r="10" fill="#fff"/><circle cx="208" cy="208" r="5" fill="#1b1b24"/>
+    <path d="M178 232 q16 10 32 0" fill="none" stroke="#5b2a22" stroke-width="5" stroke-linecap="round"/>
+  </g>
+  <g>
+    <ellipse cx="450" cy="326" rx="60" ry="10" fill="#000" opacity=".2"/>
+    <rect x="420" y="250" width="60" height="70" rx="22" fill="#ffd23f"/>
+    <circle cx="450" cy="212" r="42" fill="#f1b48a"/>
+    <path d="M410 196 q-30 30 -6 56" fill="none" stroke="#7a4b2a" stroke-width="16" stroke-linecap="round"/>
+    <path d="M490 196 q30 30 6 56" fill="none" stroke="#7a4b2a" stroke-width="16" stroke-linecap="round"/>
+    <circle cx="436" cy="206" r="10" fill="#fff"/><circle cx="432" cy="208" r="5" fill="#1b1b24"/>
+    <path d="M434 232 q16 10 32 0" fill="none" stroke="#5b2a22" stroke-width="5" stroke-linecap="round"/>
+  </g>
+
+  <!-- Crossed balloon swords -->
+  <g stroke-linecap="round" fill="none">
+    <path d="M218 268 L400 190" stroke="url(#blue)" stroke-width="22"/>
+    <path d="M422 268 L240 190" stroke="url(#red)" stroke-width="22"/>
+    <g stroke="#fff" stroke-width="5" opacity=".6">
+      <path d="M240 258 L262 249"/><path d="M296 234 L318 225"/>
+      <path d="M400 258 L378 249"/><path d="M344 234 L322 225"/>
+    </g>
+  </g>
+  <text x="320" y="64" text-anchor="middle" font-size="46" fill="#ffe033" stroke="#d61f2c" stroke-width="8" paint-order="stroke" transform="rotate(-6 320 64)">POKE!</text>
+</svg>

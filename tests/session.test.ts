@@ -117,6 +117,44 @@ describe('high score', () => {
   });
 });
 
+describe('ladder rung', () => {
+  const topic = TOPICS[0];
+  const search = `?topic=${topic.id}`;
+
+  it('is 0 by default, saved, and read back by a new session', () => {
+    const store = createProgressStore();
+    store.setCurrentPlayer(store.addPlayer('Climber', AVATARS[0]).id);
+    const session = startGameSession('ladder-game', search);
+    if (!session) throw new Error('topic not found');
+    expect(session.ladderRung()).toBe(0);
+    session.recordLadderRung(3);
+    expect(session.ladderRung()).toBe(3);
+    session.recordLadderRung(2);
+    expect(startGameSession('ladder-game', search)?.ladderRung()).toBe(2);
+    // Another game and another topic keep their own rung.
+    expect(startGameSession('other-game', search)?.ladderRung()).toBe(0);
+    expect(startGameSession('ladder-game', `?topic=${TOPICS[1].id}`)?.ladderRung()).toBe(0);
+  });
+
+  it('is saved for My Level under my-level', () => {
+    const store = createProgressStore();
+    const player = store.addPlayer('Leveller', AVATARS[0]);
+    store.setCurrentPlayer(player.id);
+    startGameSession('ladder-game', `?topic=${MY_LEVEL_ID}`)?.recordLadderRung(4);
+    expect(store.load(player.id).ladders).toEqual({ [MY_LEVEL_ID]: { 'ladder-game': 4 } });
+  });
+
+  it('writes nothing without a player, but the climb still works in memory', () => {
+    const store = createProgressStore();
+    store.setCurrentPlayer(null);
+    const session = startGameSession('ladder-game', search);
+    if (!session) throw new Error('topic not found');
+    session.recordLadderRung(2);
+    expect(session.ladderRung()).toBe(2);
+    expect(startGameSession('ladder-game', search)?.ladderRung()).toBe(0);
+  });
+});
+
 describe('progress saved before the 11 to 16 cards', () => {
   it('carries the old stats over, so the timer follows the carried streak', () => {
     const store = createProgressStore();
