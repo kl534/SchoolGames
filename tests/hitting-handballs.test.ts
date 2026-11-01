@@ -66,6 +66,9 @@ import {
   ballAt,
   LANE,
   BALL_R,
+  PLATE_HEIGHT,
+  WALL_Y_RANGE,
+  WINNER_WALL_Y,
   contacts,
   contactSpot,
   GRAVITY,
@@ -331,6 +334,11 @@ describe('hitting handballs ladder', () => {
 });
 
 describe('hitting handballs shots', () => {
+  it('every shot hits the wall above the plate', () => {
+    expect(WINNER_WALL_Y - BALL_R).toBeGreaterThan(PLATE_HEIGHT);
+    expect(WALL_Y_RANGE[0] - BALL_R).toBeGreaterThan(PLATE_HEIGHT);
+  });
+
   const from: Vec = { x: 1, y: 1, z: 0.6 };
   const to: Vec = { x: 2, y: 1, z: -0.8 };
 

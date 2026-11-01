@@ -22,6 +22,8 @@ export interface Shot {
 
 /** The face of the wall. */
 export const WALL_X = -3.0;
+/** Height of the plate along the foot of the wall (8 inches): a good shot hits above it. */
+export const PLATE_HEIGHT = 0.2;
 export const BALL_R = 0.09;
 /** Hand height of a scale-1 kid; multiply by scale. */
 export const CONTACT_Y = 1.0;
