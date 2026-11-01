@@ -1086,6 +1086,7 @@ function run(session: GameSession): void {
     const startedAt = gameTime;
     stopSpeaking();
     hud.hideQuestion(true);
+    hideFactMap();
     hud.showBanner(title, detail, kind);
     let spoken = false;
     let shownLongEnough = false;
@@ -1172,6 +1173,7 @@ function run(session: GameSession): void {
     umpire.reset();
     camMode = batting ? 'home' : 'mound';
     hud.hideQuestion(true);
+    hideFactMap();
     hud.hideBanner();
     refresh();
   };
@@ -1229,6 +1231,7 @@ function run(session: GameSession): void {
     phase = 'done';
     hud.hideBanner();
     hud.hideQuestion(true);
+    hideFactMap();
     camMode = 'home';
     const { us, them } = totals(state);
     const stars = starsFor(feed.correct, feed.answered);

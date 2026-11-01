@@ -950,6 +950,7 @@ function run(session: GameSession): void {
     stopSpeaking();
     hud.hideBanner();
     hud.hideQuestion(true);
+    hideFactMap();
     hud.shotClock.hide();
     current = null;
     ballFromScript = false;
@@ -1102,6 +1103,7 @@ function run(session: GameSession): void {
     const startedAt = gameTime;
     stopSpeaking();
     hud.hideQuestion(true);
+    hideFactMap();
     hud.shotClock.hide();
     hud.showBanner(title, detail, kind);
     if (buzzer) sfx.alarm();
@@ -1149,6 +1151,7 @@ function run(session: GameSession): void {
     const won = state.winner === 'us';
     phase = 'announce';
     hud.hideQuestion(true);
+    hideFactMap();
     hud.shotClock.hide();
     sfx.alarm();
     after(0.9, () => (won ? sfx.bigCheer() : sfx.miss()));
@@ -1170,6 +1173,7 @@ function run(session: GameSession): void {
     phase = 'done';
     hud.hideBanner();
     hud.hideQuestion(true);
+    hideFactMap();
     const stars = starsFor(feed.correct, feed.answered);
     session.recordStars(stars);
     session.recordScore(state.us);
@@ -1228,6 +1232,7 @@ function run(session: GameSession): void {
     faceEachOther();
     goTo(state.ball === 'us' ? 'offense' : 'defense', angle, 0);
     hud.hideQuestion(true);
+    hideFactMap();
     hud.shotClock.hide();
     hud.hideBanner();
     refresh();

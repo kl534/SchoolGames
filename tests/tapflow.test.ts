@@ -11,6 +11,7 @@ vi.mock('../src/shared/audio', () => ({
 import { preloadSpeech, speak, stopSpeaking } from '../src/shared/audio';
 import { createTapFlow, type TapFlow } from '../src/shared/tapflow';
 import { stateCapitals } from '../src/shared/topics/capitals';
+import { showFactMap } from '../src/shared/maps';
 import { stateLocations } from '../src/shared/topics/locations';
 import { mathFact } from '../src/shared/topics/math';
 
@@ -393,9 +394,26 @@ describe('tapflow with a picture', () => {
       expect(map().classList.contains('is-shown')).toBe(false);
     });
 
-    it('lights the state when armed with the fact', () => {
+    it('shows the right state in green when armed with the fact', () => {
       flow.arm(buttons, 1, [], ohio);
-      expect(stateClass('ohio')).toContain('is-lit');
+      expect(map().classList.contains('is-shown')).toBe(true);
+      expect(stateClass('ohio')).toContain('is-right');
+      expect(map().querySelector('.is-lit')).toBeNull();
+    });
+
+    it('leaves a map the game showed alone when it disarms an idle flow', () => {
+      showFactMap(ohio);
+      flow.disarm();
+      expect(map().classList.contains('is-shown')).toBe(true);
+      expect(flow.tap(0)).toBe(false);
+      expect(map().classList.contains('is-shown')).toBe(true);
+    });
+
+    it('still hides its own map on disarm after a reveal', () => {
+      showFactMap(ohio);
+      flow.reveal(buttons, names, ohio, { chosen: 'Iowa' });
+      flow.disarm();
+      expect(map().classList.contains('is-shown')).toBe(false);
     });
 
     it('is never shown for a math fact', () => {
