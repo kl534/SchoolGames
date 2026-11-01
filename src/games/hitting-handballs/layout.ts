@@ -12,7 +12,7 @@ export const SUBJECT = { minX: -3.4, maxX: 3.0, bottom: 0, top: 2.6 };
 /** The subject box runs from just behind the rivals (back) to just in front of us (front). */
 export const SUBJECT_Z = [-1.0, 0.9] as const;
 /** Room left around the subject. */
-const MARGIN = 1.04;
+const MARGIN = 1.0;
 
 export interface PlayBand {
   /** Screen rows (px from the top) the scoreboard and question leave clear, and the answers leave clear. */
@@ -27,8 +27,8 @@ export interface PlayBand {
  */
 export function playBand(width: number, height: number): PlayBand {
   return {
-    top: width <= 640 ? 212 : 158,
-    bottom: height - (width <= 560 ? 170 : height <= 450 ? 80 : 96),
+    top: width <= 640 ? 253 : height <= 450 ? 180 : 195,
+    bottom: height - (width <= 560 ? 174 : height <= 450 ? 80 : 92),
   };
 }
 
@@ -88,7 +88,7 @@ function subjectRows(distance: number, width: number, height: number, fov: numbe
 }
 
 /**
- * Camera distance so SUBJECT fits the band and the width (with 4% margin), and the pixels to
+ * Camera distance so SUBJECT fits the band and the width , and the pixels to
  * slide the view down so the picture sits in the band.
  */
 export function fitCamera(
