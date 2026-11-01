@@ -87,50 +87,50 @@ function track(t: number, points: readonly (readonly [number, number])[]): numbe
   return points[points.length - 1][1];
 }
 
-/** A side-arm slap: wind back, whip through at 0.18 s, follow through, back to ready. */
+/** A downward slap: hand up at shoulder height, then sweeping down and forward at 0.18 s. */
 export const swing: Move = (t) => ({
   hit: limb(
     track(t, [
       [0, 0.5],
-      [0.08, -0.5],
-      [0.18, 1.5],
-      [0.26, 1.9],
+      [0.08, 1.7],
+      [0.18, 0.9],
+      [0.26, 0.4],
       [0.35, 0.5],
     ]),
     track(t, [
       [0, 0.15],
-      [0.08, 0.5],
-      [0.18, 0.1],
+      [0.08, 0.3],
       [0.35, 0.15],
     ]),
     track(t, [
       [0, 1.1],
-      [0.08, 1.0],
-      [0.18, 0.15],
+      [0.08, 1.2],
+      [0.18, 0.2],
       [0.35, 1.1],
     ]),
   ),
   twist: track(t, [
     [0, 0],
-    [0.08, -0.35],
-    [0.18, 0.4],
+    [0.08, -0.25],
+    [0.18, 0.3],
     [0.35, 0],
   ]),
   lean: track(t, [
     [0, 0.1],
-    [0.18, 0.3],
+    [0.08, 0.0],
+    [0.18, 0.45],
     [0.35, 0.1],
   ]),
 });
 
-/** An overhead smash: arm up and back, then down hard at 0.2 s with the body folding in. */
+/** A hard downward slap from overhead: arm up and back, then down at 0.2 s with the body folding in. */
 export const smash: Move = (t) => ({
   hit: limb(
     track(t, [
       [0, 0.5],
       [0.12, 2.9],
-      [0.2, 1.2],
-      [0.28, 0.9],
+      [0.2, 0.7],
+      [0.28, 0.3],
       [0.4, 0.5],
     ]),
     track(t, [
@@ -158,7 +158,7 @@ export const smash: Move = (t) => ({
   lean: track(t, [
     [0, 0.1],
     [0.12, -0.25],
-    [0.2, 0.55],
+    [0.2, 0.65],
     [0.4, 0.1],
   ]),
   headPitch: track(t, [
