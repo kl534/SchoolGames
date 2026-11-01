@@ -424,7 +424,7 @@ export function createProgressStore(store: KeyValueStore = deviceStore()): Progr
         writeJson(
           store,
           PLAYERS_KEY,
-          all.map(({ account: _account, ...rest }) => rest),
+          all.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar })),
         );
       }
       store.removeItem(DIRTY_KEY);
