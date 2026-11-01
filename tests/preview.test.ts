@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { showPreview, uniqueFacts } from '../src/shared/preview';
 import { TOPICS } from '../src/shared/topics';
+import { stateLocations } from '../src/shared/topics/locations';
 import { mathFact, missingFact } from '../src/shared/topics/math';
 
 const topic = TOPICS[0];
@@ -33,6 +34,15 @@ describe('showPreview', () => {
     expect(answers).toHaveLength(1);
     expect(answers[0].textContent).toBe('7');
     expect(second.querySelector('.sg-chip-answer')).toBeNull();
+  });
+
+  it('shows a map fact as a mini map with its name', () => {
+    const ohio = stateLocations.facts.find((f) => f.id === 'map-ohio')!;
+    showPreview({ topic: stateLocations, facts: [ohio], onDone: () => {} });
+    const chip = document.querySelector('.sg-chip')!;
+    expect(chip.querySelector('svg')).not.toBeNull();
+    expect(chip.textContent).toBe('Ohio');
+    expect(chip.getAttribute('aria-label')).toBe('Ohio');
   });
 
   it('calls onDone once and removes itself when Start is tapped', () => {

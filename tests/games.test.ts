@@ -28,6 +28,13 @@ describe('game folders', () => {
       if (manifest.thumbnail) expect(existsSync(resolve(dir, manifest.thumbnail))).toBe(true);
     });
 
+    it('shows and hides the state map', () => {
+      const main = readFileSync(resolve(dir, 'main.ts'), 'utf8');
+      expect(main).toMatch(/from '\.\.\/\.\.\/shared\/maps'/);
+      expect(main).toContain('showFactMap(');
+      expect(main).toContain('hideFactMap(');
+    });
+
     it('has a MAP.md that lists every .ts file in the folder', () => {
       const mapPath = resolve(dir, 'MAP.md');
       expect(existsSync(mapPath)).toBe(true);

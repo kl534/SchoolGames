@@ -16,15 +16,18 @@ function ensureOverlay(): HTMLDivElement {
   return overlay;
 }
 
-/** Shows the big map for a fact with `map`; returns false (and hides it) for any other fact. */
-export function showFactMap(fact: Fact, marks: { wrong?: string } = {}): boolean {
+/**
+ * Shows the big map for a fact with `map`; returns false (and hides it) for any other fact. With
+ * `marks` it is a miss: the right state green and `marks.wrong` (a state name, if any) red.
+ */
+export function showFactMap(fact: Fact, marks?: { wrong?: string }): boolean {
   if (!fact.map) {
     hideFactMap();
     return false;
   }
   const state = fact.map.state;
-  const wrong = marks.wrong ? stateIdByName(marks.wrong) : undefined;
-  const shown: MapMarks = wrong ? { right: state, wrong } : { lit: state };
+  const wrong = marks?.wrong ? stateIdByName(marks.wrong) : undefined;
+  const shown: MapMarks = marks ? { right: state, wrong } : { lit: state };
   const box = ensureOverlay();
   box.replaceChildren(drawUsMap(shown, 'sg-factmap-svg'));
   // Reflow so a map shown right after a hide still fades in.

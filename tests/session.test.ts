@@ -282,7 +282,7 @@ describe('Social Studies level session', () => {
   it('starts at level 1', () => {
     const session = start('Social starter');
     expect(session.topic.id).toBe(SOCIAL_STUDIES_LEVEL_ID);
-    expect(session.topic.description).toBe('Level 1 of 5: The Northeast');
+    expect(session.topic.description).toBe('Level 1 of 10: The Northeast');
   });
 
   it("saves answers under the fact's own topic and the social level count only", () => {
@@ -316,7 +316,7 @@ describe('Social Studies level session', () => {
       practice.recordAnswer(fact, true);
     }
     expect(startGameSession('level-game', search)?.topic.description).toBe(
-      'Level 2 of 5: The Midwest',
+      'Level 2 of 10: The Midwest',
     );
   });
 });
