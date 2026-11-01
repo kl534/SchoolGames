@@ -31,12 +31,12 @@ const flat = (color: number, roughness = 0.9) => new MeshStandardMaterial({ colo
 
 /** Where the watching kids stand along the fence, and what they wear. */
 const WATCHERS = [
-  { x: -1.5, shirt: 0xff7a59, pants: 0x3a4a6a },
-  { x: 0, shirt: 0xb185ff, pants: 0x4a5a3a },
-  { x: 1.5, shirt: 0x4cc9f0, pants: 0x6a4a3a },
-  { x: 2.8, shirt: 0xffd23f, pants: 0x3a4a6a },
+  { x: -1.5, shirt: 0x7a7a80, pants: 0x4a4a52 },
+  { x: 0, shirt: 0x8a6a4a, pants: 0x3a3a3a },
+  { x: 1.5, shirt: 0x4f7f80, pants: 0x4a4a52 },
+  { x: 2.8, shirt: 0x9a9088, pants: 0x3a3a3a },
 ] as const;
-const WATCHER_Z = -2.75;
+const WATCHER_Z = -4.1;
 
 export interface Watchers {
   /** The watching kids hop with arms up for `seconds`. */
@@ -89,8 +89,8 @@ function brickTexture(): Texture {
 function fenceTexture(): Texture {
   const texture = canvasTexture(64, 64, (g) => {
     g.clearRect(0, 0, 64, 64);
-    g.strokeStyle = '#8c929a';
-    g.lineWidth = 3;
+    g.strokeStyle = '#5c626a';
+    g.lineWidth = 4;
     g.beginPath();
     g.moveTo(0, 0);
     g.lineTo(64, 64);
@@ -147,7 +147,7 @@ export function buildCourt(): Court {
   grass.position.set(0, -0.002, -10);
   object.add(grass);
   const mesh = fenceTexture();
-  mesh.repeat.set(26, 4);
+  mesh.repeat.set(40, 6);
   const fence = new Mesh(
     new PlaneGeometry(13, 1.8),
     new MeshStandardMaterial({ map: mesh, transparent: true, side: DoubleSide, roughness: 0.6 }),
@@ -195,7 +195,7 @@ export function buildCourt(): Court {
   const watchers: { person: Person; animator: Animator; phase: number }[] = WATCHERS.map(
     (spot, i) => {
       const person = createPerson({ shirt: spot.shirt, pants: spot.pants, hat: 'none' });
-      person.setScale(0.95);
+      person.setScale(0.8);
       person.root.position.set(spot.x, 0, WATCHER_Z);
       person.root.rotation.y = -Math.sign(spot.x - 0.5) * 0.2;
       object.add(person.root);
