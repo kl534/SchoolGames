@@ -35,6 +35,10 @@ export interface PlayerProgress {
   levelsOpen?: number;
   /** Which `LEVELS` layout `levelsOpen` counts in; see `migrateMissingNumberLevels`. */
   levelsVersion?: number;
+  /** Open-level count of every path except math (math uses `levelsOpen`), by path id. */
+  pathLevelsOpen?: Record<string, number>;
+  /** The home tab last used: a path id. */
+  homePath?: string;
 }
 
 export const AVATARS = ['🦊', '🐼', '🐯', '🐸', '🐙', '🦄', '🐶', '🐱', '🐵', '🦁', '🐧', '🐢'];
@@ -319,6 +323,10 @@ export function createProgressStore(store: KeyValueStore = deviceStore()): Progr
       };
       if (typeof data.levelsOpen === 'number') progress.levelsOpen = data.levelsOpen;
       if (data.ladders && typeof data.ladders === 'object') progress.ladders = data.ladders;
+      if (data.pathLevelsOpen && typeof data.pathLevelsOpen === 'object') {
+        progress.pathLevelsOpen = data.pathLevelsOpen;
+      }
+      if (typeof data.homePath === 'string') progress.homePath = data.homePath;
       migrateAboveTenTables(progress);
       migrateRenamedGames(progress);
       if (typeof data.levelsVersion === 'number') progress.levelsVersion = data.levelsVersion;

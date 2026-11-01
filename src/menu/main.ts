@@ -8,10 +8,17 @@ import {
   type Player,
   type PlayerProgress,
 } from '../shared/progress';
-import { levelLabel, levelsOpen, MY_LEVEL_ID } from '../shared/levels';
+import {
+  getPath,
+  levelLabel,
+  levelsOpen,
+  MATH_PATH,
+  PATHS,
+  pathOfTopic,
+  type LevelPath,
+} from '../shared/levels';
 import { gameUrl } from '../shared/session';
 import { getTopic, groupBySubject, type Topic } from '../shared/topics';
-import { MATH_TOPICS } from '../shared/topics/math';
 import { topicsUrl } from '../shared/ui';
 
 const store = createProgressStore();
@@ -169,9 +176,14 @@ function renderPlayers(root: HTMLElement): void {
 
 // ---------- Topic list ----------
 
-function renderTopics(root: HTMLElement, player: Player, progress: PlayerProgress): void {
+function renderTopics(
+  root: HTMLElement,
+  player: Player,
+  progress: PlayerProgress,
+  path?: LevelPath,
+): void {
   const main = el('main', 'subjects');
-  for (const group of groupBySubject()) {
+  for (const group of groupBySubject(path?.topics)) {
     const section = el('section');
     section.appendChild(el('h2', 'subject', group.subject));
     const grid = el('div', 'grid');
@@ -189,7 +201,7 @@ function renderTopics(root: HTMLElement, player: Player, progress: PlayerProgres
   }
   root.replaceChildren(
     header(
-      'School Games',
+      path ? `${path.title} topics` : 'School Games',
       'What do you want to practice?',
       player,
       link(base, 'back-link', '← My Level'),
@@ -243,6 +255,8 @@ interface GamesPage {
   back?: HTMLElement;
   /** Shown between the mastery bar and the games. */
   extra?: HTMLElement;
+  /** Shown right after the header. */
+  tabs?: HTMLElement;
 }
 
 function renderGames(root: HTMLElement, player: Player, progress: PlayerProgress, page: GamesPage) {
@@ -266,6 +280,7 @@ function renderGames(root: HTMLElement, player: Player, progress: PlayerProgress
 
   root.replaceChildren(
     header(page.title, page.subtitle, player, page.back),
+    ...(page.tabs ? [page.tabs] : []),
     intro,
     ...(page.extra ? [page.extra] : []),
     el('h2', 'subject', 'Games'),
@@ -288,18 +303,37 @@ function renderTopic(
     subtitle: 'Pick a game',
     mastered: countMastered(progress, topic.id, ids),
     total: ids.length,
-    back: link(topicsUrl(), 'back-link', '← Topics'),
+    back: link(topicsUrl(pathOfTopic(topic.id)?.id), 'back-link', '← Topics'),
   });
 }
 
 // ---------- My Level (home) ----------
 
-function renderMyLevel(root: HTMLElement, player: Player, progress: PlayerProgress): void {
+function pathTabs(current: LevelPath): HTMLElement {
+  const nav = el('nav', 'path-tabs');
+  nav.setAttribute('aria-label', 'Path');
+  for (const path of PATHS) {
+    const tab = link(`${base}?${new URLSearchParams({ path: path.id })}`, 'path-tab', path.title);
+    if (path.id === current.id) {
+      tab.classList.add('active');
+      tab.setAttribute('aria-current', 'page');
+    }
+    nav.appendChild(tab);
+  }
+  return nav;
+}
+
+function renderMyLevel(
+  root: HTMLElement,
+  player: Player,
+  progress: PlayerProgress,
+  path: LevelPath,
+): void {
   renderGames(root, player, progress, {
-    topicId: MY_LEVEL_ID,
+    topicId: path.levelTopicId,
     title: 'My Level',
-    subtitle: levelLabel(levelsOpen(progress)),
-    mastered: MATH_TOPICS.reduce(
+    subtitle: levelLabel(levelsOpen(progress, path), path),
+    mastered: path.topics.reduce(
       (sum, t) =>
         sum +
         countMastered(
@@ -309,8 +343,9 @@ function renderMyLevel(root: HTMLElement, player: Player, progress: PlayerProgre
         ),
       0,
     ),
-    total: MATH_TOPICS.reduce((sum, t) => sum + t.facts.length, 0),
-    extra: link(topicsUrl(), 'text-button practice-link', 'Practice one topic →'),
+    total: path.topics.reduce((sum, t) => sum + t.facts.length, 0),
+    extra: link(topicsUrl(path.id), 'text-button practice-link', 'Practice one topic →'),
+    tabs: pathTabs(path),
   });
 }
 
@@ -323,9 +358,16 @@ function render(root: HTMLElement): void {
   }
   const progress = store.load(player.id);
   const topic = getTopic(params.get('topic'));
-  if (params.has('topics')) renderTopics(root, player, progress);
+  if (params.has('topics')) renderTopics(root, player, progress, getPath(params.get('topics')));
   else if (topic) renderTopic(root, topic, player, progress);
-  else renderMyLevel(root, player, progress);
+  else {
+    const chosen = getPath(params.get('path'));
+    if (chosen && progress.homePath !== chosen.id) {
+      progress.homePath = chosen.id;
+      store.save(player.id, progress);
+    }
+    renderMyLevel(root, player, progress, chosen ?? getPath(progress.homePath) ?? MATH_PATH);
+  }
 }
 
 const root = document.getElementById('app');
