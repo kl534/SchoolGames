@@ -60,6 +60,7 @@ import {
 } from '../src/games/hitting-handballs/rules';
 import {
   ballAt,
+  LANE,
   BALL_R,
   contacts,
   contactSpot,
@@ -555,5 +556,46 @@ describe('hitting handballs dev hooks', () => {
     expect(freezeAt('?at=')).toBeNull();
     expect(freezeAt('?at=soon')).toBeNull();
     expect(freezeAt('?at=-1')).toBeNull();
+  });
+});
+
+describe('a missed ball stays in bounds', () => {
+  const homes = [
+    { x: -0.4, z: 0.6 },
+    { x: 2.2, z: 0.6 },
+    { x: -1.4, z: -0.8 },
+    { x: 1.2, z: -0.8 },
+  ];
+  const inside = (shot: ReturnType<typeof planShot>) => {
+    for (let t = 0; t <= shot.duration; t += 0.02) {
+      const z = ballAt(shot, t).z;
+      expect(z).toBeGreaterThanOrEqual(LANE.min - 1e-6);
+      expect(z).toBeLessThanOrEqual(LANE.max + 1e-6);
+    }
+  };
+
+  it('a rival who whiffs: the ball runs on inside the side lines', () => {
+    for (let i = 0; i < runs(2000, 300); i++) {
+      const f = homes[i % 4];
+      const t = homes[(i + 1 + ((i >> 2) % 3)) % 4];
+      const to = { x: t.x + Math.random() * 0.6 - 0.3, y: 1, z: t.z };
+      inside(planShot(i % 2 ? 'smash' : 'normal', { x: f.x, y: 1, z: f.z }, to, 0.8, true));
+    }
+  });
+
+  it('our whiff: the ball gets past or bonks and stays inside the side lines', () => {
+    for (let i = 0; i < runs(1000, 200); i++) {
+      const h = {
+        x: -1 + Math.random() * 4,
+        y: 0.8 + Math.random() * 0.6,
+        z: -1 + Math.random() * 2,
+      };
+      const v = {
+        x: -8 + Math.random() * 16,
+        y: -3 + Math.random() * 6,
+        z: -4 + Math.random() * 8,
+      };
+      inside(pastShot(h, v));
+    }
   });
 });
