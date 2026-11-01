@@ -173,7 +173,11 @@ header p {
 .back-link:focus-visible,
 .player-chip:focus-visible,
 .text-button:focus-visible,
-.path-tab:focus-visible,
+.choice-card:focus-visible,
+.pick-row:focus-visible,
+.tile:focus-visible,
+.jump-chip:focus-visible,
+.recent-chip:focus-visible,
 .player-card:focus-visible,
 button.primary:focus-visible {
   outline: 3px solid var(--accent);
@@ -182,15 +186,6 @@ button.primary:focus-visible {
 
 /* ---------- Subjects and topics ---------- */
 
-.subjects {
-  max-width: 1100px;
-  margin: 0 auto;
-}
-
-.subjects section + section {
-  margin-top: 28px;
-}
-
 h2.subject {
   max-width: 1100px;
   margin: 0 auto 12px;
@@ -198,11 +193,6 @@ h2.subject {
   color: var(--muted);
 }
 
-.subjects .grid {
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-}
-
-.topic-card .body h3,
 .card .body h3 {
   margin: 0 0 6px;
   font-size: 20px;
@@ -241,28 +231,270 @@ h2.subject {
   font-weight: 700;
 }
 
-.topic-intro {
+/* ---------- Home: the Practicing card ---------- */
+
+.choice-card {
+  display: block;
+  max-width: 1100px;
+  margin: 0 auto 24px;
+  padding: 16px 20px;
+  border-radius: 20px;
+  background: var(--surface);
+  border: 2px solid #3a4166;
+  color: inherit;
+  text-decoration: none;
+  touch-action: manipulation;
+}
+
+.choice-card:active {
+  transform: scale(0.98);
+}
+
+.choice-label {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.choice-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.choice-top h1 {
+  flex: 1;
+  min-width: 0;
+  font-size: clamp(26px, 5vw, 40px);
+}
+
+.change-pill {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: 24px;
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.choice-sub {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+@media (max-height: 500px) {
+  .choice-card {
+    padding: 12px 16px;
+    margin-bottom: 16px;
+  }
+
+  .choice-top h1 {
+    font-size: 26px;
+  }
+}
+
+/* ---------- Picker ---------- */
+
+.picker {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.picker section + section {
+  margin-top: 20px;
+}
+
+.picker h2.subject {
+  margin-bottom: 4px;
+}
+
+.hint {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.jump-chips {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 8px 0;
+  overflow-x: auto;
+  background: var(--bg);
+}
+
+.jump-chip,
+.recent-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.recent-chip {
+  background: var(--surface);
+}
+
+.recent-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 16px 32px;
-  max-width: 1100px;
-  margin: 0 auto 24px;
+  gap: 8px;
 }
 
-.topic-intro .mastery {
-  flex: 1 1 220px;
+.pick-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.pick-grid.paths {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 600px) {
+  .pick-grid.paths {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.pick-row {
+  display: block;
+  min-height: 64px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+  touch-action: manipulation;
+}
+
+.pick-row:active,
+.tile:active {
+  transform: scale(0.98);
+}
+
+.pick-row h3 {
   margin: 0;
+  font-size: 18px;
 }
 
-/* My Level's way into the topic list, under the mastery bar. */
-.practice-link {
+.pick-row p {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pick-row .mastery {
+  margin-top: 8px;
+}
+
+.path-row .path-emoji {
+  float: right;
+  font-size: 28px;
+}
+
+.pick-row.current,
+.tile.current {
+  outline: 3px solid var(--accent);
+}
+
+.pick-section {
+  scroll-margin-top: 72px;
+}
+
+h3.pick-subject {
+  margin: 8px 0 8px;
+  font-size: 20px;
+}
+
+.tile-label {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.tiles {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(5, 1fr);
+  max-width: 720px;
+  margin-bottom: 12px;
+}
+
+@media (min-width: 560px) {
+  .tiles {
+    grid-template-columns: repeat(10, 1fr);
+  }
+}
+
+.tile {
+  position: relative;
   display: flex;
+  align-items: center;
   justify-content: center;
-  max-width: 1100px;
-  margin: 0 auto 24px;
-  border: 2px solid #3a4166;
-  background: transparent;
+  min-width: 56px;
+  min-height: 56px;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+  touch-action: manipulation;
+}
+
+.tile-n {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.tile-done {
+  position: absolute;
+  top: 3px;
+  right: 6px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tile-bar {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.tile-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
 }
 
 /* ---------- Players ---------- */
@@ -415,37 +647,6 @@ button.primary {
   font-weight: 700;
   cursor: pointer;
   touch-action: manipulation;
-}
-
-/* ---------- Path tabs (Math / Social Studies) ---------- */
-
-.path-tabs {
-  display: flex;
-  gap: 12px;
-  max-width: 1100px;
-  margin: 0 auto 16px;
-}
-
-.path-tab {
-  flex: 1 1 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 56px;
-  padding: 0 12px;
-  border-radius: 16px;
-  border: 2px solid #3a4166;
-  color: inherit;
-  text-decoration: none;
-  font-weight: 700;
-  font-size: 18px;
-  touch-action: manipulation;
-}
-
-.path-tab.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--bg);
 }
 
 /* ---------- Account (sync) ---------- */

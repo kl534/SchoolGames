@@ -67,10 +67,17 @@ describe('mergeProgress', () => {
     expect(m.pathLevelsOpen).toEqual({ social: 9, other: 1 });
   });
 
-  it('takes ladders and homePath from the side saved last', () => {
-    const a = prog({ ladders: { t: { g: 5 } }, homePath: 'math', savedAt: 10 });
-    const b = prog({ ladders: { t: { g: 2 } }, homePath: 'social', savedAt: 20 });
+  it('takes ladders, homePath and recent from the side saved last', () => {
+    const a = prog({ ladders: { t: { g: 5 } }, homePath: 'math', recent: ['a'], savedAt: 10 });
+    const b = prog({
+      ladders: { t: { g: 2 } },
+      homePath: 'social',
+      recent: ['b', 'a'],
+      savedAt: 20,
+    });
     const m = mergeProgress(a, b);
+    expect(m.recent).toEqual(['b', 'a']);
+    expect(mergeProgress(b, a).recent).toEqual(['b', 'a']);
     expect(m.ladders).toEqual({ t: { g: 2 } });
     expect(m.homePath).toBe('social');
     expect(m.savedAt).toBe(20);
@@ -78,9 +85,10 @@ describe('mergeProgress', () => {
   });
 
   it('falls back to the other side when the newer one lacks the field', () => {
-    const a = prog({ ladders: { t: { g: 5 } }, homePath: 'math', savedAt: 10 });
+    const a = prog({ ladders: { t: { g: 5 } }, homePath: 'math', recent: ['x'], savedAt: 10 });
     const b = prog({ savedAt: 20 });
     const m = mergeProgress(a, b);
+    expect(m.recent).toEqual(['x']);
     expect(m.ladders).toEqual({ t: { g: 5 } });
     expect(m.homePath).toBe('math');
   });
