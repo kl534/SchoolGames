@@ -342,7 +342,8 @@ h2.subject {
 }
 
 .new-player input[type='text'],
-.account-form input {
+.account-form input,
+.dialog-form input {
   min-height: 56px;
   padding: 0 16px;
   border: 2px solid #3a4166;
@@ -508,7 +509,8 @@ button.primary {
   margin-bottom: 0;
 }
 
-.account-form input {
+.account-form input,
+.dialog-form input {
   width: 100%;
   font-size: 18px;
 }
@@ -594,7 +596,104 @@ button.primary {
   text-align: center;
 }
 
+.dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dialog-form .text-button,
+.dialog-form button.primary,
+.dialog-form button.danger {
+  justify-content: center;
+  min-height: 48px;
+}
+
+button.danger {
+  padding: 0 20px;
+  border: 0;
+  border-radius: 24px;
+  background: #ff8a8a;
+  color: #2a0d0d;
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+button.danger:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.account-extras {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.account-extras:empty {
+  display: none;
+}
+
+.google-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+}
+
+.google-stand-in {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  width: 100%;
+  max-width: 280px;
+  border: 2px solid #3a4166;
+  border-radius: 24px;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.account-verify {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  color: var(--text);
+  font-size: 16px;
+}
+
+.account-sheet-email {
+  overflow-wrap: anywhere;
+}
+
+.link-page {
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.link-result {
+  margin: 0 0 24px;
+  padding: 20px;
+  border-radius: 20px;
+  background: var(--surface);
+  font-size: 22px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.link-result.ok {
+  color: var(--accent);
+}
+
 .account-tab:focus-visible,
+.dialog-form input:focus-visible,
 .account-form input:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
