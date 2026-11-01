@@ -439,8 +439,8 @@ function run(session: GameSession): void {
       pin(f, lead / 2, () => sfx.bump());
       pin(f, lead, () => sfx.slap(0.8));
     }
-    pin(f, lead + shot.segments[0].duration, () => sfx.thud());
-    pin(f, lead + shot.segments[0].duration + shot.segments[1].duration, () => sfx.bump());
+    pin(f, lead + shot.segments[0].duration, () => sfx.bump());
+    pin(f, lead + shot.segments[0].duration + shot.segments[1].duration, () => sfx.thud());
 
     if (!rival) {
       f.holdAt = lead + holdTime(shot);
