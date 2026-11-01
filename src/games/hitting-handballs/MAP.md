@@ -6,7 +6,7 @@
 
 - `main.ts`: the flow (VS card, preview, "Play ball!", serves, questions, hits, whiffs, points, ending, results), the ball's flights, the question clock, camera and wiring
 - `rules.ts`: pure match and ladder rules (`judgeHit`, `step`, `matchWinner`, `isMatchPoint`, `scoreCall`, `allScoreCalls`, `pickTarget`, `nextRung`, `pairFor`, `matchStars`), the five `PAIRS`, `outcomeText`, the fixed spoken lines
-- `shots.ts`: the ball's flight as pure geometry (`planShot`, `ballAt`, `pastShot`, `bonkShot`, `holdTime`, `timeAtX`, `contactSpot`) and the court numbers (`WALL_X`, `HOLD_U`, `PAST`)
+- `shots.ts`: the ball's flight as pure physics: every shot is real projectile segments under one `GRAVITY`, with bounces off the court (`FLOOR_BOUNCE`, `FLOOR_KEEP`) and the wall (`WALL_BOUNCE`); `planShot` fits the launch speed (`SHOT_SPEEDS`) so the ball bounces, hits the wall and meets the receiver's hand. Also `ballAt`, `velocityAt`, `contacts`, `pastShot`, `bonkShot`, `serveBounce`, `holdTime`, `timeAtX`, `contactSpot` and the court numbers (`WALL_X`, `HOLD_U`, `PAST`)
 - `moves.ts`: every kid move as pure keyframes (`swing`, `smash`, `whiffSpin`, `bonk`, `dive`, `cheer`, `dance`, `slump`, `runFrame`) and their timings
 - `layout.ts`: camera fit for the court (side-on, centred on `LOOK_X`), using a subject box (`fitCamera`, `playBand`)
 - `person.ts`: the jointed kid rig, copied from En Garde and extended with sunglasses
@@ -37,7 +37,7 @@ The ladder rung is saved per topic and game with `session.ladderRung()` and `ses
 ## Where changes go
 
 - Rules, pairs, ladder, the words on screen: `rules.ts` (then `voice.ts` and `npm run voice` for spoken lines).
-- How the ball flies and its timing: `shots.ts`; how a kid swings, spins or dives: `moves.ts`, then `kids.ts` for how a frame becomes a pose.
+- How the ball flies and its timing: `shots.ts` (bounciness and speeds are the constants at the top); how a kid swings, spins or dives: `moves.ts`, then `kids.ts` for how a frame becomes a pose.
 - A pair's costume: `PAIR_LOOKS` in `kids.ts`; a new hat or accessory: `person.ts`.
 - The wall, court and the watching kids: `court.ts`.
 - The scoreboard and the question pill: `hud.ts` and `style.css`; the VS card: `vs.ts`.
