@@ -3,23 +3,13 @@ import { discoverGames, type GameEntry } from './games';
 import {
   AVATARS,
   MAX_NAME_LENGTH,
-  countMastered,
   createProgressStore,
   type Player,
   type PlayerProgress,
 } from '../shared/progress';
-import {
-  getPath,
-  levelLabel,
-  levelsOpen,
-  MATH_PATH,
-  PATHS,
-  pathOfTopic,
-  type LevelPath,
-} from '../shared/levels';
+import { getPath, PATHS, pathForLevelTopic, type LevelPath } from '../shared/levels';
 import { gameUrl } from '../shared/session';
-import { getTopic, groupBySubject, type Topic } from '../shared/topics';
-import { topicsUrl } from '../shared/ui';
+import { topicMenuUrl, topicsUrl } from '../shared/ui';
 import { ApiError } from '../shared/sync/api';
 import { clearNotice, getAccount, getNotice } from '../shared/sync/account';
 import { devSyncState, syncEnabled, syncUrl } from '../shared/sync/config';
@@ -38,6 +28,16 @@ import {
 import { errorText, linkAction } from '../shared/sync/messages';
 import type { AccountInfo, ServerConfig } from '../shared/sync/protocol';
 import { accountDialog, googleButton, renderLinkPage } from './account-extras';
+import {
+  PATH_EMOJI,
+  choiceInfo,
+  currentChoice,
+  isChoice,
+  pathChoiceInfo,
+  pickerSections,
+  recentChoices,
+  rememberChoice,
+} from './choices';
 import { el, errorLine, field, textButton } from './dom';
 
 const store = createProgressStore();
@@ -61,13 +61,20 @@ function playerChip(player: Player): HTMLElement {
   return chip;
 }
 
-function header(title: string, subtitle: string, player: Player | null, back?: HTMLElement) {
+function header(
+  title: string | null,
+  subtitle: string | null,
+  player: Player | null,
+  back?: HTMLElement,
+) {
   const h = el('header');
   const top = el('div', 'header-top');
   if (back) top.appendChild(back);
   top.appendChild(el('span', 'spacer'));
   if (player) top.appendChild(playerChip(player));
-  h.append(top, el('h1', undefined, title), el('p', undefined, subtitle));
+  h.appendChild(top);
+  if (title) h.appendChild(el('h1', undefined, title));
+  if (subtitle) h.appendChild(el('p', undefined, subtitle));
   return h;
 }
 
@@ -601,7 +608,7 @@ function renderPlayers(root: HTMLElement): void {
   }
 
   draw();
-  const back = current ? link(base, 'back-link', '← My Level') : undefined;
+  const back = current ? link(base, 'back-link', '← Back') : undefined;
   root.replaceChildren(
     header("Who's playing?", 'Tap your name to start', null, back),
     form,
@@ -612,40 +619,149 @@ function renderPlayers(root: HTMLElement): void {
   if (!form.hidden) name.focus();
 }
 
-// ---------- Topic list ----------
+// ---------- Picker ----------
 
-function renderTopics(
+/** Saves the choice, then goes back home; the picker's history entry is replaced. */
+function pickChoice(player: Player, id: string): void {
+  const progress = store.load(player.id);
+  rememberChoice(progress, id);
+  store.save(player.id, progress);
+  location.replace(base);
+}
+
+/** An `<a>` to the choice's menu URL that also saves it and goes home when tapped. */
+function choiceLink(player: Player, id: string, className: string, current: string) {
+  const a = link(topicMenuUrl(id), className);
+  if (id === current) {
+    a.classList.add('current');
+    a.setAttribute('aria-current', 'true');
+  }
+  a.addEventListener('click', (e) => {
+    e.preventDefault();
+    pickChoice(player, id);
+  });
+  return a;
+}
+
+function renderPicker(
   root: HTMLElement,
   player: Player,
   progress: PlayerProgress,
   path?: LevelPath,
 ): void {
-  const main = el('main', 'subjects');
-  for (const group of groupBySubject(path?.topics)) {
+  const current = currentChoice(progress);
+  const sections = pickerSections();
+
+  const chips = el('nav', 'jump-chips');
+  chips.setAttribute('aria-label', 'Jump to');
+  for (const section of sections) {
+    const chip = el('button', 'jump-chip', section.subject);
+    chip.type = 'button';
+    chip.addEventListener('click', () =>
+      document
+        .getElementById(`pick-${section.anchor}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+    );
+    chips.appendChild(chip);
+  }
+
+  const main = el('main', 'picker');
+
+  const recent = recentChoices(progress);
+  if (recent.length > 0) {
     const section = el('section');
-    section.appendChild(el('h2', 'subject', group.subject));
-    const grid = el('div', 'grid');
-    for (const topic of group.topics) {
-      const card = link(`${base}?${new URLSearchParams({ topic: topic.id })}`, 'card topic-card');
-      const body = el('div', 'body');
-      body.append(el('h3', undefined, topic.title), el('p', undefined, topic.description));
-      const ids = topic.facts.map((f) => f.id);
-      body.appendChild(masteryBar(countMastered(progress, topic.id, ids), ids.length));
-      card.appendChild(body);
-      grid.appendChild(card);
+    section.appendChild(el('h2', 'subject', 'Recently played'));
+    const row = el('div', 'recent-row');
+    for (const id of recent) {
+      const info = choiceInfo(progress, id);
+      const chip = choiceLink(player, id, 'recent-chip', current);
+      const emoji = info.kind === 'path' ? PATH_EMOJI[pathForLevelTopic(id)!.id] : '';
+      chip.textContent = emoji ? `${emoji} ${info.short}` : info.short;
+      row.appendChild(chip);
     }
-    section.appendChild(grid);
+    section.appendChild(row);
     main.appendChild(section);
   }
+
+  const levels = el('section');
+  levels.append(
+    el('h2', 'subject', 'My Level'),
+    el('p', 'hint', 'Games mix facts from your level. New facts open as you learn.'),
+  );
+  const pathGrid = el('div', 'pick-grid paths');
+  for (const p of PATHS) {
+    const info = pathChoiceInfo(progress, p);
+    const row = choiceLink(player, p.levelTopicId, 'pick-row path-row', current);
+    row.append(
+      el('span', 'path-emoji', PATH_EMOJI[p.id]),
+      el('h3', undefined, p.title),
+      el('p', undefined, info.subtitle),
+      masteryBar(info.mastered, info.total),
+    );
+    pathGrid.appendChild(row);
+  }
+  levels.appendChild(pathGrid);
+  main.appendChild(levels);
+
+  const topics = el('section');
+  topics.append(el('h2', 'subject', 'One topic'), el('p', 'hint', 'Practice just this one.'));
+  for (const section of sections) {
+    const sec = el('section', 'pick-section');
+    sec.id = `pick-${section.anchor}`;
+    sec.appendChild(el('h3', 'pick-subject', section.subject));
+    if (section.tiles) {
+      sec.appendChild(el('p', 'tile-label', section.tiles.label));
+      const tiles = el('div', 'tiles');
+      for (const { n, topic } of section.tiles.tiles) {
+        const info = choiceInfo(progress, topic.id);
+        const tile = choiceLink(player, topic.id, 'tile', current);
+        tile.setAttribute(
+          'aria-label',
+          `${topic.title}, ${info.mastered} of ${info.total} learned`,
+        );
+        const done = info.total > 0 && info.mastered >= info.total;
+        tile.append(el('span', 'tile-n', String(n)));
+        if (done) tile.appendChild(el('span', 'tile-done', '✓'));
+        const bar = el('span', 'tile-bar');
+        const fill = el('span', 'tile-fill');
+        fill.style.width = `${info.total ? (info.mastered / info.total) * 100 : 0}%`;
+        bar.appendChild(fill);
+        tile.appendChild(bar);
+        tiles.appendChild(tile);
+      }
+      sec.appendChild(tiles);
+    }
+    if (section.rows.length > 0) {
+      const grid = el('div', 'pick-grid');
+      for (const topic of section.rows) {
+        const info = choiceInfo(progress, topic.id);
+        const row = choiceLink(player, topic.id, 'pick-row', current);
+        row.append(
+          el('h3', undefined, topic.title),
+          el('p', undefined, topic.description),
+          masteryBar(info.mastered, info.total),
+        );
+        grid.appendChild(row);
+      }
+      sec.appendChild(grid);
+    }
+    topics.appendChild(sec);
+  }
+  main.appendChild(topics);
+
   root.replaceChildren(
-    header(
-      path ? `${path.title} topics` : 'School Games',
-      'What do you want to practice?',
-      player,
-      link(base, 'back-link', '← My Level'),
-    ),
+    header('What do you want to practice?', null, player, link(base, 'back-link', '← Back')),
+    chips,
     main,
   );
+
+  // Open on the chosen path's first subject, or else on the current choice.
+  if (path) {
+    const first = pickerSections(path.topics)[0];
+    document.getElementById(`pick-${first?.anchor}`)?.scrollIntoView({ block: 'start' });
+  } else if (!pathForLevelTopic(current)) {
+    root.querySelector('.pick-row.current, .tile.current')?.scrollIntoView({ block: 'center' });
+  }
 }
 
 // ---------- Games ----------
@@ -683,108 +799,41 @@ function gameCard(
   return card;
 }
 
-interface GamesPage {
-  /** The topic id games are opened with and progress is read under. */
-  topicId: string;
-  title: string;
-  subtitle: string;
-  mastered: number;
-  total: number;
-  back?: HTMLElement;
-  /** Shown between the mastery bar and the games. */
-  extra?: HTMLElement;
-  /** Shown right after the header. */
-  tabs?: HTMLElement;
-}
+// ---------- Home ----------
 
-function renderGames(root: HTMLElement, player: Player, progress: PlayerProgress, page: GamesPage) {
+function renderHome(
+  root: HTMLElement,
+  player: Player,
+  progress: PlayerProgress,
+  choiceId: string,
+): void {
+  const info = choiceInfo(progress, choiceId);
   const games = discoverGames();
 
   const grid = el('main', 'grid');
-  const cards = games.map((game) => {
+  for (const game of games) {
     const card = gameCard(
       game,
-      progress.best[page.topicId]?.[game.id],
-      progress.highScores[page.topicId]?.[game.id],
+      progress.best[choiceId]?.[game.id],
+      progress.highScores[choiceId]?.[game.id],
     );
+    card.href = gameUrl(game.href, choiceId);
     grid.appendChild(card);
-    return { game, card };
-  });
-  for (const { game, card } of cards) card.href = gameUrl(game.href, page.topicId);
+  }
   if (games.length === 0) grid.appendChild(el('p', undefined, 'No games yet.'));
 
-  const intro = el('div', 'topic-intro');
-  intro.append(masteryBar(page.mastered, page.total));
-
-  root.replaceChildren(
-    header(page.title, page.subtitle, player, page.back),
-    ...(page.tabs ? [page.tabs] : []),
-    intro,
-    ...(page.extra ? [page.extra] : []),
-    el('h2', 'subject', 'Games'),
-    grid,
+  const card = link(topicsUrl(), 'choice-card');
+  card.setAttribute('aria-label', `Practicing ${info.title}. Change`);
+  const top = el('div', 'choice-top');
+  top.append(el('h1', undefined, info.title), el('span', 'change-pill', 'Change ▸'));
+  card.append(
+    el('span', 'choice-label', 'PRACTICING'),
+    top,
+    el('p', 'choice-sub', info.subtitle),
+    masteryBar(info.mastered, info.total),
   );
-}
 
-// ---------- Games for one topic ----------
-
-function renderTopic(
-  root: HTMLElement,
-  topic: Topic,
-  player: Player,
-  progress: PlayerProgress,
-): void {
-  const ids = topic.facts.map((f) => f.id);
-  renderGames(root, player, progress, {
-    topicId: topic.id,
-    title: topic.title,
-    subtitle: 'Pick a game',
-    mastered: countMastered(progress, topic.id, ids),
-    total: ids.length,
-    back: link(topicsUrl(pathOfTopic(topic.id)?.id), 'back-link', '← Topics'),
-  });
-}
-
-// ---------- My Level (home) ----------
-
-function pathTabs(current: LevelPath): HTMLElement {
-  const nav = el('nav', 'path-tabs');
-  nav.setAttribute('aria-label', 'Path');
-  for (const path of PATHS) {
-    const tab = link(`${base}?${new URLSearchParams({ path: path.id })}`, 'path-tab', path.title);
-    if (path.id === current.id) {
-      tab.classList.add('active');
-      tab.setAttribute('aria-current', 'page');
-    }
-    nav.appendChild(tab);
-  }
-  return nav;
-}
-
-function renderMyLevel(
-  root: HTMLElement,
-  player: Player,
-  progress: PlayerProgress,
-  path: LevelPath,
-): void {
-  renderGames(root, player, progress, {
-    topicId: path.levelTopicId,
-    title: 'My Level',
-    subtitle: levelLabel(levelsOpen(progress, path), path),
-    mastered: path.topics.reduce(
-      (sum, t) =>
-        sum +
-        countMastered(
-          progress,
-          t.id,
-          t.facts.map((f) => f.id),
-        ),
-      0,
-    ),
-    total: path.topics.reduce((sum, t) => sum + t.facts.length, 0),
-    extra: link(topicsUrl(path.id), 'text-button practice-link', 'Practice one topic →'),
-    tabs: pathTabs(path),
-  });
+  root.replaceChildren(header(null, null, player), card, el('h2', 'subject', 'Pick a game'), grid);
 }
 
 function render(root: HTMLElement): void {
@@ -807,16 +856,17 @@ function render(root: HTMLElement): void {
     return;
   }
   const progress = store.load(player.id);
-  const topic = getTopic(params.get('topic'));
-  if (params.has('topics')) renderTopics(root, player, progress, getPath(params.get('topics')));
-  else if (topic) renderTopic(root, topic, player, progress);
-  else {
-    const chosen = getPath(params.get('path'));
-    if (chosen && progress.homePath !== chosen.id) {
-      progress.homePath = chosen.id;
-      store.save(player.id, progress);
-    }
-    renderMyLevel(root, player, progress, chosen ?? getPath(progress.homePath) ?? MATH_PATH);
+  // `?path=` is an old link to a path; `?topic=` is where "Other games" and the picker land.
+  const wanted = getPath(params.get('path'))?.levelTopicId ?? params.get('topic');
+  if (isChoice(wanted)) {
+    rememberChoice(progress, wanted);
+    store.save(player.id, progress);
+    history.replaceState(null, '', base);
+    renderHome(root, player, progress, wanted);
+  } else if (params.has('topics')) {
+    renderPicker(root, player, progress, getPath(params.get('topics')));
+  } else {
+    renderHome(root, player, progress, currentChoice(progress));
   }
 }
 
