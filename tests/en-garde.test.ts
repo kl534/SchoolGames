@@ -296,7 +296,7 @@ describe('en garde voice lines', () => {
     }
     for (const call of POKE_CALLS) expect(VOICE_LINES).toContain(call);
     for (const line of [
-      'En garde!',
+      'Ahn gard!',
       'Victory!',
       'So close! Try again!',
       'You are the Party Champion!',
