@@ -33,7 +33,8 @@ export const RIVALS: readonly Rival[] = [
     name: 'Sir Sprinkles',
     pokesToWin: 9,
     intro: 'I am Sir Sprinkles! Have at thee!',
-    taunts: ['Ha! A royal poke!', 'Touché!'],
+    // "Too-shay!" is spelled for the voice: Kokoro reads "Touché" as "tuh-shay".
+    taunts: ['Ha! A royal poke!', 'Too-shay!'],
   },
   {
     id: 'cupcake',
@@ -132,7 +133,8 @@ export function pickCall(random: number, last?: string): string {
   return pickOther<string>(POKE_CALLS, random, last);
 }
 
-export const EN_GARDE_SPEECH = 'En garde!';
+// Spelled for the voice: Kokoro reads "En garde" as "en gard" (the banner stays "EN GARDE!").
+export const EN_GARDE_SPEECH = 'Ahn gard!';
 export const VICTORY_SPEECH = 'Victory!';
 export const SO_CLOSE_SPEECH = 'So close! Try again!';
 export const CHAMPION_SPEECH = 'You are the Party Champion!';
