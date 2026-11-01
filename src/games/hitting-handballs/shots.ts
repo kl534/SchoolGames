@@ -49,6 +49,8 @@ const SLOWEST = 3.5;
 const FASTEST = 18;
 /** Where a missed ball goes: past everyone and off the right side. */
 export const PAST = { x: 4.8 };
+/** The side lines of the court: a missed ball never lands outside them. */
+export const LANE = { min: -1.5, max: 1.3 };
 /** Seconds a missed ball rolls on after the shot ends. */
 export const ROLL_OFF = 0.6;
 /** Lowest and highest wall hit of an ordinary shot. */
@@ -288,6 +290,9 @@ function runOff(start: Ball): Segment[] {
   for (let i = 0; i < 12 && ball.p.x < PAST.x; i++) {
     if (ball.p.y <= BALL_R + EPS && ball.v.y < ROLL_BELOW) break;
     const next = flyToNext(ball, null);
+    // Keep it inside the side lines: a ball that would cross one runs straight on instead.
+    const z = Math.min(Math.max(next.ball.p.z, LANE.min), LANE.max);
+    if (z !== next.ball.p.z) next.ball = { p: { ...next.ball.p, z }, v: { ...next.ball.v, z: 0 } };
     segments.push(segment(ball.p, next.ball.p, next.t));
     ball = next.ball;
   }
