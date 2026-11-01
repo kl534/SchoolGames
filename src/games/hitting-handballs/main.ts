@@ -20,6 +20,7 @@ import {
   devRung,
   devScore,
   devServe,
+  devRun,
   devStreak,
   forcedWhiff,
   freezeAt,
@@ -46,11 +47,15 @@ import {
 import {
   CHAMPION_RUNG,
   CHAMPION_SPEECH,
+  COOKING_BANNER,
+  COOKING_SPEECH,
   coinToss,
+  isCooking,
   isMatchPoint,
   matchStars,
   MATCH_POINT_SPEECH,
   newMatch,
+  nextRun,
   nextRung,
   outcomeText,
   PAIRS,
@@ -198,6 +203,8 @@ function run(session: GameSession): void {
   let fact: Fact | undefined;
   let options: string[] = [];
   let match: Match = newMatch(0, 'us');
+  /** Points in a row we have won. */
+  let usRun = 0;
   /** The ladder place this match began at. */
   let rung = 0;
   let lastPair: number | undefined;
@@ -514,6 +521,7 @@ function run(session: GameSession): void {
     const index = devPair() ?? pairFor(rung, Math.random(), lastPair);
     const pair = PAIRS[index];
     match = newMatch(index, devServe() ?? coinToss(Math.random()));
+    usRun = devRun() ?? 0;
     const score = devScore();
     if (score) match = { ...match, us: score.us, them: score.them };
     const streak = auto === 'winner' ? pair.streakToWin - 1 : devStreak(pair.streakToWin);
@@ -666,6 +674,7 @@ function run(session: GameSession): void {
     session.recordAnswer(current, right);
     const out = step(match, right, seconds);
     match = out.match;
+    usRun = nextRun(usRun, out.point);
     const freeze = freezeAt();
     if (freeze !== null && !freezeUsed) {
       freezeUsed = true;
@@ -813,8 +822,16 @@ function run(session: GameSession): void {
       showBanner('MATCH POINT!', false, true);
       sayThen(MATCH_POINT_SPEECH, next);
     };
-    if (call) sayThen(call, matchPoint);
-    else matchPoint();
+    const cooking = () => {
+      if (!isCooking(usRun)) {
+        matchPoint();
+        return;
+      }
+      showBanner(COOKING_BANNER, false, true);
+      sayThen(COOKING_SPEECH, matchPoint);
+    };
+    if (call) sayThen(call, cooking);
+    else cooking();
   };
 
   /** The bell, then the win or the loss. */

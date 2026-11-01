@@ -210,6 +210,22 @@ export const MATCH_POINT_SPEECH = 'Match point!';
 export const WE_WIN_SPEECH = 'We win!';
 export const SO_CLOSE_SPEECH = 'So close! Try again!';
 export const CHAMPION_SPEECH = 'You are the Recess Champions!';
+export const COOKING_SPEECH = "You're cooking!";
+export const COOKING_BANNER = "YOU'RE COOKING!";
+/** Points in a row we must win before the cooking call (and again at every multiple). */
+export const COOKING_RUN = 3;
+
+/** Our run of points in a row after a point to `point`. */
+export function nextRun(run: number, point: Side | null): number {
+  if (point === 'us') return run + 1;
+  if (point === 'them') return 0;
+  return run;
+}
+
+/** This run of our points earns the cooking call. */
+export function isCooking(run: number): boolean {
+  return run > 0 && run % COOKING_RUN === 0;
+}
 
 /** Comic words on screen (written, not spoken). */
 export const WORDS = {
