@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { AVATARS, createProgressStore, recordAnswer } from '../src/shared/progress';
-import { LEVELS, MY_LEVEL_ID } from '../src/shared/levels';
+import { LEVELS, MY_LEVEL_ID, SOCIAL_STUDIES_LEVEL_ID } from '../src/shared/levels';
 import { devFacts } from '../src/shared/devfacts';
 import { gameUrl, parseGameParams, startGameSession } from '../src/shared/session';
 import { answerOptions, getTopic, TOPICS } from '../src/shared/topics';
+import { SOCIAL_STUDIES_LEVELS } from '../src/shared/levels-social';
 
 describe('parseGameParams', () => {
   it('reads the topic', () => {
@@ -260,6 +261,63 @@ describe('My Level session', () => {
     session.recordAnswer(fact, true);
     expect(session.timerSecondsFor(fact)).toBe(15);
     expect(session.chooseFacts(10)).toHaveLength(10);
+  });
+});
+
+describe('Social Studies level session', () => {
+  const search = `?topic=${SOCIAL_STUDIES_LEVEL_ID}`;
+
+  const start = (name: string) => {
+    const store = createProgressStore();
+    store.setCurrentPlayer(store.addPlayer(name, AVATARS[0]).id);
+    const session = startGameSession('level-game', search);
+    if (!session) throw new Error('Social Studies level not found');
+    return session;
+  };
+  const saved = () => {
+    const store = createProgressStore();
+    return store.load(store.currentPlayer()!.id);
+  };
+
+  it('starts at level 1', () => {
+    const session = start('Social starter');
+    expect(session.topic.id).toBe(SOCIAL_STUDIES_LEVEL_ID);
+    expect(session.topic.description).toBe('Level 1 of 5: The Northeast');
+  });
+
+  it("saves answers under the fact's own topic and the social level count only", () => {
+    const session = start('Social answerer');
+    const [fact] = session.chooseFacts();
+    session.recordAnswer(fact, true);
+    const data = saved();
+    expect(data.facts['state-capitals'][fact.id].correct).toBe(1);
+    expect(data.facts[SOCIAL_STUDIES_LEVEL_ID]).toBeUndefined();
+    expect(data.pathLevelsOpen).toEqual({ 'social-studies': 1 });
+    expect(data.levelsOpen).toBeUndefined();
+  });
+
+  it('keeps stars and high scores under social-studies-level', () => {
+    const session = start('Social scorer');
+    expect(session.recordStars(3)).toBe(true);
+    expect(session.recordScore(500)).toBe(true);
+    const data = saved();
+    expect(data.best[SOCIAL_STUDIES_LEVEL_ID]).toEqual({ 'level-game': 3 });
+    expect(data.highScores[SOCIAL_STUDIES_LEVEL_ID]).toEqual({ 'level-game': 500 });
+    expect(data.best[MY_LEVEL_ID]).toBeUndefined();
+    expect(data.highScores[MY_LEVEL_ID]).toBeUndefined();
+  });
+
+  it('counts capitals learned through topic practice', () => {
+    const store = createProgressStore();
+    store.setCurrentPlayer(store.addPlayer('Capital learner', AVATARS[0]).id);
+    const practice = startGameSession('level-game', '?topic=state-capitals');
+    if (!practice) throw new Error('State capitals not found');
+    for (const { fact } of SOCIAL_STUDIES_LEVELS[0].facts.slice(0, 8)) {
+      practice.recordAnswer(fact, true);
+    }
+    expect(startGameSession('level-game', search)?.topic.description).toBe(
+      'Level 2 of 5: The Midwest',
+    );
   });
 });
 

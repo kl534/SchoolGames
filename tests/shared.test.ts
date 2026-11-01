@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { toProgress } from '../src/shared/assets';
 import { clampPixelRatio } from '../src/shared/scene';
 import { bestVoice } from '../src/shared/audio';
+import { topicsUrl } from '../src/shared/ui';
 import { resultsSummary, type ResultsOptions } from '../src/shared/results';
 
 describe('toProgress', () => {
@@ -133,5 +134,12 @@ describe('resultsSummary', () => {
     expect(s.score).toBe('0');
     expect(s.highScore).toBeNull();
     expect(s.playAgainLabel).toBe('Fly again 🚀');
+  });
+});
+
+describe('topicsUrl', () => {
+  it('lists every topic, or those of one path', () => {
+    expect(topicsUrl().endsWith('?topics')).toBe(true);
+    expect(topicsUrl('math').endsWith('?topics=math')).toBe(true);
   });
 });

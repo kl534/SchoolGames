@@ -1,7 +1,9 @@
 import { factWeight, isMastered, type FactStat, type PlayerProgress } from './progress';
 import { shuffle, weightedSample, type Random } from './random';
 import { answerOptions, type Fact, type Topic } from './topics';
+import { SOCIAL_STUDIES_LEVELS } from './levels-social';
 import { MATH_TOPICS, missingTwin, type Blank } from './topics/math';
+import { SOCIAL_STUDIES_TOPICS } from './topics/social-studies';
 
 /** Pseudo topic id: My Level stars and high scores are saved under it. It is not in `TOPICS`. */
 export const MY_LEVEL_ID = 'my-level';
@@ -253,15 +255,87 @@ export const LEVELS: Level[] = [
   twins(bigLevels[2].divide, 'first', '? ÷ 15 = 6'),
 ];
 
+export type PathId = 'math' | 'social-studies';
+
+export interface LevelPath {
+  /** Used in menu URLs (`?path=`, `?topics=`) and as the key of `pathLevelsOpen`. */
+  id: PathId;
+  /** Tab label: 'Math', 'Social Studies'. */
+  title: string;
+  /** Pseudo topic id games get as `?topic=`; stars and high scores are saved under it. Not in `TOPICS`. */
+  levelTopicId: string;
+  /** The topics the path's facts come from; the mastery bar and "Practice one topic" use these. */
+  topics: Topic[];
+  levels: Level[];
+}
+
+/** Pseudo topic id: Social Studies stars and high scores are saved under it. Not in `TOPICS`. */
+export const SOCIAL_STUDIES_LEVEL_ID = 'social-studies-level';
+
+export const MATH_PATH: LevelPath = {
+  id: 'math',
+  title: 'Math',
+  levelTopicId: MY_LEVEL_ID,
+  topics: MATH_TOPICS,
+  levels: LEVELS,
+};
+export const SOCIAL_STUDIES_PATH: LevelPath = {
+  id: 'social-studies',
+  title: 'Social Studies',
+  levelTopicId: SOCIAL_STUDIES_LEVEL_ID,
+  topics: SOCIAL_STUDIES_TOPICS,
+  levels: SOCIAL_STUDIES_LEVELS,
+};
+/** Tab order. */
+export const PATHS: LevelPath[] = [MATH_PATH, SOCIAL_STUDIES_PATH];
+
+export function getPath(id: string | null | undefined): LevelPath | undefined {
+  return PATHS.find((p) => p.id === id);
+}
+
+export function pathForLevelTopic(topicId: string | null | undefined): LevelPath | undefined {
+  return PATHS.find((p) => p.levelTopicId === topicId);
+}
+
+export function pathOfTopic(topicId: string): LevelPath | undefined {
+  return PATHS.find((p) => p.topics.some((t) => t.id === topicId));
+}
+
+/** Every fact of the path's levels once, in first-seen level order. */
+export function pathFacts(path: LevelPath): LevelFact[] {
+  const seen = new Set<Fact>();
+  const out: LevelFact[] = [];
+  for (const level of path.levels) {
+    for (const lf of level.facts) {
+      if (seen.has(lf.fact)) continue;
+      seen.add(lf.fact);
+      out.push(lf);
+    }
+  }
+  return out;
+}
+
 const topicByFact = new Map<Fact, Topic>(
-  LEVELS.flatMap((level) => level.facts.map(({ topic, fact }) => [fact, topic] as const)),
+  PATHS.flatMap((path) =>
+    path.levels.flatMap((level) => level.facts.map(({ topic, fact }) => [fact, topic] as const)),
+  ),
 );
 
-/** The real topic a My Level fact belongs to; its stats are saved under that topic's id. */
+/** The real topic a level fact belongs to; its stats are saved under that topic's id. */
 export function topicOfFact(fact: Fact): Topic {
   const topic = topicByFact.get(fact);
   if (!topic) throw new Error(`Fact ${fact.id} is not in any level`);
   return topic;
+}
+
+/** The saved open-level count of a path: `levelsOpen` for math, `pathLevelsOpen[path.id]` for the others. */
+export function savedLevelsOpen(progress: PlayerProgress, path: LevelPath): number | undefined {
+  return path.id === 'math' ? progress.levelsOpen : progress.pathLevelsOpen?.[path.id];
+}
+
+export function setLevelsOpen(progress: PlayerProgress, path: LevelPath, open: number): void {
+  if (path.id === 'math') progress.levelsOpen = open;
+  else progress.pathLevelsOpen = { ...progress.pathLevelsOpen, [path.id]: open };
 }
 
 /** True once enough of the level's facts were answered right the last time they came up. */
@@ -273,10 +347,11 @@ export function levelPassed(level: Level, stats: PlayerProgress['facts']): boole
   return right / level.facts.length >= UNLOCK_SHARE;
 }
 
-/** How many levels are open (1 to `LEVELS.length`). Opening is sticky: it never goes back down. */
-export function levelsOpen(progress: PlayerProgress): number {
-  let open = Math.min(Math.max(1, Math.floor(progress.levelsOpen ?? 1)), LEVELS.length);
-  while (open < LEVELS.length && levelPassed(LEVELS[open - 1], progress.facts)) open++;
+/** How many levels are open (1 to the path's level count). Opening is sticky: it never goes back down. */
+export function levelsOpen(progress: PlayerProgress, path: LevelPath = MATH_PATH): number {
+  const { levels } = path;
+  let open = Math.min(Math.max(1, Math.floor(savedLevelsOpen(progress, path) ?? 1)), levels.length);
+  while (open < levels.length && levelPassed(levels[open - 1], progress.facts)) open++;
   return open;
 }
 
@@ -294,9 +369,13 @@ export function chooseLevelFacts(
   progress: PlayerProgress,
   count: number,
   random: Random = Math.random,
+  path: LevelPath = MATH_PATH,
 ): Fact[] {
   const stat = ({ topic, fact }: LevelFact) => progress.facts[topic.id]?.[fact.id];
-  const open = LEVELS.slice(0, levelsOpen(progress)).flatMap((level) => level.facts);
+  const openLevels = new Set(
+    path.levels.slice(0, levelsOpen(progress, path)).flatMap((l) => l.facts),
+  );
+  const open = pathFacts(path).filter((lf) => openLevels.has(lf));
   const work = open.filter((lf) => needsWork(stat(lf)));
   const review = open.filter((lf) => !needsWork(stat(lf)));
 
@@ -319,23 +398,23 @@ export function chooseLevelFacts(
 }
 
 /** 'Level 5 of 90: Sums to 20' */
-export function levelLabel(open: number): string {
-  return `Level ${open} of ${LEVELS.length}: ${LEVELS[open - 1].title}`;
+export function levelLabel(open: number, path: LevelPath = MATH_PATH): string {
+  return `Level ${open} of ${path.levels.length}: ${path.levels[open - 1].title}`;
 }
 
 /**
  * A topic standing in for My Level: all the level facts, a description that follows the player's
  * current level, and wrong answers taken from each fact's own topic.
  */
-export function myLevelTopic(getLabel: () => string): Topic {
+export function myLevelTopic(getLabel: () => string, path: LevelPath = MATH_PATH): Topic {
   return {
-    id: MY_LEVEL_ID,
+    id: path.levelTopicId,
     title: 'My Level',
     subject: 'My Level',
     get description() {
       return getLabel();
     },
-    facts: LEVELS.flatMap((level) => level.facts.map(({ fact }) => fact)),
+    facts: pathFacts(path).map((lf) => lf.fact),
     distractors: (fact, count, random) =>
       answerOptions(topicOfFact(fact), fact, count + 1, random).filter((a) => a !== fact.answer),
   };

@@ -13,8 +13,9 @@ import {
   chooseLevelFacts,
   levelLabel,
   levelsOpen,
-  MY_LEVEL_ID,
   myLevelTopic,
+  pathForLevelTopic,
+  setLevelsOpen,
   topicOfFact,
 } from './levels';
 import { devFacts } from './devfacts';
@@ -63,25 +64,28 @@ export interface GameSession {
 
 /**
  * Sets up a game page from its URL. Returns null when the topic is missing or unknown.
- * `?topic=my-level` is mixed practice: facts come from every open level, answers are saved under
- * each fact's own topic, and stars and high scores under `my-level`.
+ * `?topic=my-level` (Math) and `?topic=social-studies-level` are mixed practice: facts come from
+ * every open level of the path, answers are saved under each fact's own topic, and stars and high
+ * scores under the path's level id.
  */
 export function startGameSession(
   gameId: string,
   search: string = location.search,
 ): GameSession | null {
   const params = parseGameParams(search);
-  const isMyLevel = params.topicId === MY_LEVEL_ID;
-  const realTopic = isMyLevel ? undefined : getTopic(params.topicId);
-  if (!isMyLevel && !realTopic) return null;
+  const path = pathForLevelTopic(params.topicId);
+  const realTopic = path ? undefined : getTopic(params.topicId);
 
   const store = createProgressStore();
   const player = store.currentPlayer();
   const progress = player ? store.load(player.id) : emptyProgress();
   const save = () => player && store.save(player.id, progress);
-  const topic = realTopic ?? myLevelTopic(() => levelLabel(levelsOpen(progress)));
+  const topic = path
+    ? myLevelTopic(() => levelLabel(levelsOpen(progress, path), path), path)
+    : realTopic;
+  if (!topic) return null;
   /** Where a fact's answers are saved: its own topic, which for My Level is not `topic`. */
-  const statTopicId = (fact: Fact) => (isMyLevel ? topicOfFact(fact).id : topic.id);
+  const statTopicId = (fact: Fact) => (path ? topicOfFact(fact).id : topic.id);
   /** Facts missed on this page whose answer was shown and not yet asked again. */
   const awaitingRetry = new Set<string>();
 
@@ -91,8 +95,8 @@ export function startGameSession(
     player,
     // My Level reads the live progress, so a refill picks up levels opened since the last one.
     chooseFacts(count = KICKS_PER_ROUND) {
-      let facts = isMyLevel
-        ? chooseLevelFacts(progress, count)
+      let facts = path
+        ? chooseLevelFacts(progress, count, Math.random, path)
         : chooseRoundFacts(topic.facts, progress.facts[topic.id], count);
       const forced = devFacts(topic, search);
       if (forced.length > 0) {
@@ -116,7 +120,7 @@ export function startGameSession(
       if (correct) awaitingRetry.delete(key);
       else awaitingRetry.add(key);
       recordAnswer(progress, statTopicId(fact), fact.id, correct, Date.now(), retry);
-      if (isMyLevel) progress.levelsOpen = levelsOpen(progress);
+      if (path) setLevelsOpen(progress, path, levelsOpen(progress, path));
       save();
     },
     recordStars(stars) {

@@ -229,6 +229,22 @@ describe('createProgressStore', () => {
     expect(store.load('p1').levelsOpen).toBe(3);
   });
 
+  it('keeps pathLevelsOpen and homePath, and drops values of the wrong type', () => {
+    const raw = memoryStore();
+    const store = createProgressStore(raw);
+    raw.setItem(
+      'sg:progress:p1',
+      JSON.stringify({ pathLevelsOpen: { 'social-studies': 3 }, homePath: 'social-studies' }),
+    );
+    const loaded = store.load('p1');
+    expect(loaded.pathLevelsOpen).toEqual({ 'social-studies': 3 });
+    expect(loaded.homePath).toBe('social-studies');
+    raw.setItem('sg:progress:p2', JSON.stringify({ pathLevelsOpen: 5, homePath: 7 }));
+    const bad = store.load('p2');
+    expect(bad.pathLevelsOpen).toBeUndefined();
+    expect(bad.homePath).toBeUndefined();
+  });
+
   it('keeps players separate', () => {
     const store = createProgressStore(memoryStore());
     const a = store.addPlayer('A', AVATARS[0]);

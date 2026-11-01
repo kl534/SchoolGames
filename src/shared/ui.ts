@@ -5,9 +5,9 @@ export function menuUrl(): string {
   return import.meta.env.BASE_URL;
 }
 
-/** Menu page listing every topic, for practicing just one. */
-export function topicsUrl(): string {
-  return `${menuUrl()}?topics`;
+/** Menu page listing every topic, or just those of one path, for practicing just one. */
+export function topicsUrl(pathId?: string): string {
+  return pathId ? `${menuUrl()}?topics=${encodeURIComponent(pathId)}` : `${menuUrl()}?topics`;
 }
 
 /** Menu page listing the games for one topic. */
