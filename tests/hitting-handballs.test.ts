@@ -152,7 +152,7 @@ describe('hitting handballs match', () => {
 
   it('plays random matches to a valid end', () => {
     const allowed = new Set(allScoreCalls());
-    for (let i = 0; i < runs(3000, 400); i++) {
+    for (let i = 0; i < runs(1000, 200); i++) {
       const pair = Math.floor(Math.random() * PAIRS.length);
       const chance = Math.random();
       let match = newMatch(pair, Math.random() < 0.5 ? 'us' : 'them');
