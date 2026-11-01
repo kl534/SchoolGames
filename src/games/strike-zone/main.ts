@@ -13,6 +13,7 @@ import { createTapFlow } from '../../shared/tapflow';
 import { createTimers } from '../../shared/timers';
 import { answerOptions, missSpeech, promptSpeech, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
+import { hideFactMap, showFactMap } from '../../shared/maps';
 import {
   arrowTipX,
   DEFAULT_AIM,
@@ -352,6 +353,7 @@ function run(session: GameSession): void {
     phase = 'ask';
     hud.setOptions(options);
     hud.setQuestion(fact.prompt);
+    showFactMap(fact);
     hud.setClock(1, false);
     hud.showQuestion(true);
     // A long question may be taller: the view fits the band that is left.
@@ -410,9 +412,11 @@ function run(session: GameSession): void {
     const thisTurn = turn;
     if (right) {
       feed.recordHit(f);
+      hideFactMap();
       session.recordAnswer(f, true);
     } else {
       feed.recordMiss(f);
+      hideFactMap();
       session.recordAnswer(f, false);
     }
     isGutter = !right;
@@ -670,6 +674,7 @@ function run(session: GameSession): void {
 
   // ---------- The end ----------
   const finishGame = () => {
+    hideFactMap();
     phase = 'over';
     overAt = gameTime;
     const thisTurn = ++turn;
@@ -695,6 +700,7 @@ function run(session: GameSession): void {
   };
 
   const finishRun = () => {
+    hideFactMap();
     if (phase !== 'over') return;
     phase = 'done';
     timers.clear();

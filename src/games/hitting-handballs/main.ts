@@ -11,6 +11,7 @@ import { createTapFlow } from '../../shared/tapflow';
 import { createTimers } from '../../shared/timers';
 import { answerOptions, promptSpeech, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
+import { hideFactMap, showFactMap } from '../../shared/maps';
 import { createBall } from './ball';
 import { buildCourt } from './court';
 import {
@@ -605,6 +606,7 @@ function run(session: GameSession): void {
     options = answerOptions(session.topic, next, buttons.length);
     fillAnswers(buttons, options, 'hb-answer');
     problemText.textContent = next.prompt;
+    showFactMap(next);
     phase = 'asking';
     clockRunning = false;
     setClock(1);
@@ -647,6 +649,7 @@ function run(session: GameSession): void {
     else if (index >= 0) buttons[index].classList.add('wrong');
     if (right) feed.recordHit(current);
     else feed.recordMiss(current);
+    hideFactMap();
     session.recordAnswer(current, right);
     const out = step(match, right, seconds);
     match = out.match;
@@ -841,6 +844,7 @@ function run(session: GameSession): void {
     const stars = matchStars(won, match.us, match.them);
     const newBest = session.recordStars(stars);
     lastPair = match.pair;
+    hideFactMap();
     showResults({
       topicId: session.topic.id,
       correct: feed.correct,

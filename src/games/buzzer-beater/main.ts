@@ -19,6 +19,7 @@ import {
   type Fact,
 } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
+import { hideFactMap, showFactMap } from '../../shared/maps';
 import { createBall } from './ball';
 import { buildCourt } from './court';
 import { devGame, forcedPlay } from './dev';
@@ -489,6 +490,7 @@ function run(session: GameSession): void {
     chosen = -1;
     hud.setOptions(options);
     hud.setQuestion(fact.prompt);
+    showFactMap(fact);
     // A long prompt may need to drop below the scorebug; then the view fits the new band.
     if (hud.settleQuestion()) layout(true);
     return fact;
@@ -602,9 +604,11 @@ function run(session: GameSession): void {
     const thisTurn = turn;
     if (right) {
       feed.recordHit(f);
+      hideFactMap();
       session.recordAnswer(f, true);
     } else {
       feed.recordMiss(f);
+      hideFactMap();
       session.recordAnswer(f, false);
     }
     const chosenText = options[chosen];
@@ -1136,6 +1140,7 @@ function run(session: GameSession): void {
 
   /** The game is won or lost: the buzzer, the banner, then the results. */
   const finishGame = () => {
+    hideFactMap();
     timers.clear();
     turn++;
     tapFlow.disarm();
@@ -1161,6 +1166,7 @@ function run(session: GameSession): void {
   };
 
   const finishRun = () => {
+    hideFactMap();
     phase = 'done';
     hud.hideBanner();
     hud.hideQuestion(true);

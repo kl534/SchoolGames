@@ -13,6 +13,7 @@ import { createTapFlow } from '../../shared/tapflow';
 import { createTimers } from '../../shared/timers';
 import { answerOptions, promptSpeech, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
+import { hideFactMap, showFactMap } from '../../shared/maps';
 import { BOMB_RADIUS, createBomb } from './bomb';
 import { createEffects } from './effects';
 import { buildField, HORIZON_COLOR } from './field';
@@ -468,6 +469,7 @@ function run(session: GameSession): void {
     paceSeconds = q.seconds;
     fillAnswers(buttons, q.options, 'zb-answer', locked);
     problemText.textContent = fact.prompt;
+    showFactMap(fact);
     setHud(true, true);
     speak(promptSpeech(fact), () => {
       if (question === q && q.speechEndAt === null) q.speechEndAt = gameTime;
@@ -492,6 +494,7 @@ function run(session: GameSession): void {
     let points = 0;
     if (right) {
       feed.recordHit(q.fact);
+      hideFactMap();
       session.recordAnswer(q.fact, true);
       streak = nextStreak(streak, true);
       const answerSeconds = q.speechEndAt === null ? 0 : Math.max(0, gameTime - q.speechEndAt);
@@ -505,6 +508,7 @@ function run(session: GameSession): void {
       buttons.forEach((button, i) => button.classList.add(i === index ? 'right' : 'gone'));
     } else {
       feed.recordMiss(q.fact);
+      hideFactMap();
       session.recordAnswer(q.fact, false);
       streak = nextStreak(streak, false);
       renderScore();
@@ -746,6 +750,7 @@ function run(session: GameSession): void {
   };
 
   const finishRun = () => {
+    hideFactMap();
     phase = 'done';
     setHud(false, false);
     count.hidden = true;

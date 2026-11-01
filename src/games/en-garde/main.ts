@@ -11,6 +11,7 @@ import { createTapFlow } from '../../shared/tapflow';
 import { createTimers } from '../../shared/timers';
 import { answerOptions, promptSpeech, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
+import { hideFactMap, showFactMap } from '../../shared/maps';
 import { autoAnswer, devPokes, devRival, devRung, forcedPoke, freezeAt, skipVs } from './dev';
 import { createEffects, createWords } from './effects';
 import { createFighter, RIVAL_LOOKS, US_LOOK, type Fighter } from './fighters';
@@ -437,6 +438,7 @@ function run(session: GameSession): void {
     options = answerOptions(session.topic, next, buttons.length);
     fillAnswers(buttons, options, 'eg-answer');
     problemText.textContent = next.prompt;
+    showFactMap(next);
     problem.classList.remove('wrong');
     phase = 'asking';
     clockRunning = false;
@@ -476,6 +478,7 @@ function run(session: GameSession): void {
     lockAnswers(buttons);
     markAnswers(buttons, index, index, true);
     feed.recordHit(fact);
+    hideFactMap();
     session.recordAnswer(fact, true);
     bout = step(bout, true);
     if (bout.winner === 'us') {
@@ -515,6 +518,7 @@ function run(session: GameSession): void {
     lockAnswers(buttons);
     if (index >= 0) buttons[index].classList.add('wrong');
     feed.recordMiss(current);
+    hideFactMap();
     session.recordAnswer(current, false);
     bout = step(bout, false);
     const lost = bout.winner === 'them';
@@ -672,6 +676,7 @@ function run(session: GameSession): void {
     const stars = boutStars(won, bout.taken, bout.landed);
     const newBest = session.recordStars(stars);
     lastRival = bout.rival;
+    hideFactMap();
     showResults({
       topicId: session.topic.id,
       correct: feed.correct,

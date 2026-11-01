@@ -13,6 +13,7 @@ import { createTapFlow } from '../../shared/tapflow';
 import { createTimers } from '../../shared/timers';
 import { answerOptions, promptSpeech, statementSpeech, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
+import { hideFactMap, showFactMap } from '../../shared/maps';
 import {
   createBall,
   createBatter,
@@ -464,6 +465,7 @@ function run(session: GameSession): void {
     chosen = -1;
     hud.setOptions(options);
     hud.setQuestion(fact.prompt);
+    showFactMap(fact);
     // A long prompt may need to drop below the scorebug; then the view fits the new band.
     if (hud.settleQuestion()) layout(true);
     return { fact, options, seconds: session.timerSecondsFor(fact) };
@@ -572,11 +574,13 @@ function run(session: GameSession): void {
     sfx.whoosh();
     if (correct) {
       feed.recordHit(fact);
+      hideFactMap();
       session.recordAnswer(fact, true);
       const hit = hitFor(used);
       startDash([{ to: CONTACT, dur: ZIP_TIME, onEnd: () => contact(hit) }]);
     } else {
       feed.recordMiss(fact);
+      hideFactMap();
       session.recordAnswer(fact, false);
       startDash([
         { to: MISS_POINT, dur: ZIP_TIME },
@@ -593,6 +597,7 @@ function run(session: GameSession): void {
     hud.lock();
     hud.setClock(0);
     feed.recordMiss(fact);
+    hideFactMap();
     session.recordAnswer(fact, false);
     startDash([{ to: GLOVE, dur: GLOVE_TIME, onEnd: () => strike(true) }], CONTACT);
   };
@@ -1016,6 +1021,7 @@ function run(session: GameSession): void {
     answered: (answered, correct) => {
       if (correct) feed.recordHit(answered);
       else feed.recordMiss(answered);
+      hideFactMap();
       session.recordAnswer(answered, correct);
     },
     startPlay: (next, batted, moves, retiredFrom, extra, onEnd) => {
@@ -1199,6 +1205,7 @@ function run(session: GameSession): void {
 
   /** The game is won or lost: the banner, then the results. */
   const finishGame = () => {
+    hideFactMap();
     timers.clear();
     turn++;
     const { us, them } = totals(state);
@@ -1218,6 +1225,7 @@ function run(session: GameSession): void {
   };
 
   const finishRun = () => {
+    hideFactMap();
     phase = 'done';
     hud.hideBanner();
     hud.hideQuestion(true);
