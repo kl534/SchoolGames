@@ -72,12 +72,14 @@ import {
   ballAt,
   BALL_R,
   bonkShot,
+  contacts,
   contactSpot,
   holdTime,
   pastShot,
   planShot,
   ROLL_OFF,
   SERVE_WINDUP,
+  serveBounce,
   timeAtX,
   WALL_Y_RANGE,
   WINNER_WALL_Y,
@@ -335,6 +337,16 @@ function run(session: GameSession): void {
     events: [],
   });
 
+  /** How fast the ball is moving at the flight's current time (looking just behind it). */
+  const velocityOf = (f: Flight): Vec => {
+    const t = Math.min(f.t, f.duration);
+    const dt = 0.02;
+    const a = f.pos(Math.max(t - dt, 0));
+    const b = f.pos(t);
+    const span = Math.max(t - Math.max(t - dt, 0), 1e-6);
+    return { x: (b.x - a.x) / span, y: (b.y - a.y) / span, z: (b.z - a.z) / span };
+  };
+
   const pin = (f: Flight, at: number, fn: () => void) => {
     f.events.push({ at, fn, fired: false });
   };
@@ -430,9 +442,8 @@ function run(session: GameSession): void {
     const lead = o.server ? SERVE_WINDUP : 0;
     const f = newFlight(lead + shot.duration, (t) => {
       if (t >= lead) return ballAt(shot, t - lead);
-      // The serve: the ball drops to the floor and comes back up to the hand.
-      const u = t / lead;
-      return { x: o.from.x, y: o.from.y + (BALL_R - o.from.y) * 4 * u * (1 - u), z: o.from.z };
+      // The serve: the ball is bounced off the court and comes back up to the hand.
+      return serveBounce(o.from, t, lead);
     });
     const server = o.server;
     if (server) {
@@ -440,8 +451,10 @@ function run(session: GameSession): void {
       pin(f, lead / 2, () => sfx.bump());
       pin(f, lead, () => sfx.slap(0.8));
     }
-    pin(f, lead + shot.segments[0].duration, () => sfx.bump());
-    pin(f, lead + shot.segments[0].duration + shot.segments[1].duration, () => sfx.thud());
+    // The sounds of the first few contacts; the little hops of a ball running off are quiet.
+    for (const c of contacts(shot).slice(0, 4)) {
+      pin(f, lead + c.t, () => (c.what === 'wall' ? sfx.thud() : sfx.bump()));
+    }
 
     if (!rival) {
       f.holdAt = lead + holdTime(shot);
@@ -743,7 +756,7 @@ function run(session: GameSession): void {
       };
       fly(g);
     } else {
-      const shot = pastShot(held);
+      const shot = pastShot(held, velocityOf(f));
       const g = newFlight(shot.duration, (t) => ballAt(shot, t));
       pin(g, 0.4, () => {
         sfx.aww();

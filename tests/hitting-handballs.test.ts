@@ -61,14 +61,19 @@ import {
 import {
   ballAt,
   BALL_R,
+  contacts,
   contactSpot,
+  GRAVITY,
   holdTime,
   PAST,
   pastShot,
   planShot,
   bonkShot,
+  serveBounce,
   timeAtX,
+  velocityAt,
   WALL_X,
+  type Shot,
   type Vec,
 } from '../src/games/hitting-handballs/shots';
 import { VOICE_LINES } from '../src/games/hitting-handballs/voice';
@@ -318,40 +323,124 @@ describe('hitting handballs shots', () => {
     expect(bounce.x).toBeLessThan(from.x);
     const wall = ballAt(shot, first.duration + second.duration);
     expect(wall.x).toBeCloseTo(WALL_X + BALL_R, 9);
-    expect(wall.y).toBeCloseTo(1.2, 9);
+    expect(contacts(shot).map((c) => c.what)).toEqual(
+      ['floor', 'wall', 'floor'].slice(0, shot.segments.length - 1),
+    );
     expect(ballAt(shot, shot.duration)).toEqual(to);
     expect(ballAt(shot, -1)).toEqual(from);
     expect(ballAt(shot, 99)).toEqual(to);
   });
 
-  it('is quicker for a smash, and a miss ends past the court', () => {
+  /** The velocity just before and just after time `t`. */
+  const around = (shot: Shot, t: number) => [
+    velocityAt(shot, t - 1e-6),
+    velocityAt(shot, t + 1e-6),
+  ];
+
+  it('flies like a real ball: one gravity, bounces that lose speed, a mirror off the wall', () => {
+    const xs = [-2.2, -1.4, -0.4, 1.2, 2.2, 2.8];
+    for (const kind of ['normal', 'smash'] as const) {
+      for (const fx of xs) {
+        for (const tx of xs) {
+          for (const [fz, tz] of [
+            [0.6, -0.8],
+            [-0.8, 0.6],
+          ]) {
+            const a: Vec = { x: fx, y: 0.85, z: fz };
+            const b: Vec = { x: tx, y: 1.1, z: tz };
+            const shot = planShot(kind, a, b, 0.9, false);
+            for (const s of shot.segments) {
+              expect(s.arc).toBeCloseTo((GRAVITY * s.duration * s.duration) / 8, 9);
+            }
+            // Never under the court, and it comes back to the hand from the wall's side.
+            for (let i = 0; i <= 100; i++) {
+              expect(ballAt(shot, (shot.duration * i) / 100).y).toBeGreaterThan(BALL_R - 1e-6);
+            }
+            const cs = contacts(shot);
+            expect(cs[0].what).toBe('floor');
+            expect(cs[1].what).toBe('wall');
+            expect(cs.length).toBeLessThanOrEqual(3);
+            for (const c of cs) {
+              const [vin, vout] = around(shot, c.t);
+              if (c.what === 'floor') {
+                // Comes down, goes up slower, and keeps going the same way.
+                expect(vin.y).toBeLessThan(0);
+                expect(vout.y).toBeGreaterThan(0);
+                expect(vout.y).toBeLessThan(-vin.y);
+                expect(Math.sign(vout.x)).toBe(Math.sign(vin.x));
+              } else {
+                expect(vin.x).toBeLessThan(0);
+                expect(vout.x).toBeGreaterThan(0);
+                expect(vout.x).toBeLessThan(-vin.x);
+                expect(vout.y).toBeCloseTo(vin.y, 1);
+                expect(vout.z).toBeCloseTo(vin.z, 1);
+              }
+            }
+            // The fitted flight meets the hand: the last segment carries on from the one before.
+            const end = velocityAt(shot, shot.duration);
+            expect(end.x).toBeGreaterThan(0);
+            // No ball faster than a hard-hit handball, none slower than a soft one.
+            const top = Math.max(
+              ...shot.segments.map(
+                (s) => Math.hypot(s.to.x - s.from.x, s.to.z - s.from.z) / s.duration,
+              ),
+            );
+            expect(top).toBeLessThanOrEqual(18.01);
+          }
+        }
+      }
+    }
+  });
+
+  it('takes longer to go further, and a smash is quicker', () => {
+    const near = planShot('normal', from, { ...to, x: -1 }, 0.9, false);
+    const far = planShot('normal', from, { ...to, x: 2.6 }, 0.9, false);
+    expect(far.duration).toBeGreaterThan(near.duration);
     const normal = planShot('normal', from, to, 1.2, false);
     const fast = planShot('smash', from, to, 1.2, false);
     expect(fast.duration).toBeLessThan(normal.duration);
+  });
+
+  it('runs a missed ball on past the court, bouncing, to the ground', () => {
     const missed = planShot('normal', from, to, 1.2, true);
     const end = ballAt(missed, missed.duration);
-    expect(end.x).toBe(PAST.x);
-    expect(end.y).toBe(PAST.y);
-    expect(end.z).toBe(to.z);
+    expect(end.x).toBeGreaterThanOrEqual(PAST.x);
+    expect(end.y).toBeCloseTo(BALL_R, 9);
     const crossing = timeAtX(missed, to.x);
     expect(crossing).not.toBeNull();
     expect(ballAt(missed, crossing ?? 0).x).toBeGreaterThanOrEqual(to.x);
-    expect(timeAtX(missed, PAST.x + 1)).toBeNull();
+    expect(timeAtX(missed, end.x + 1)).toBeNull();
   });
 
   it('holds 60 percent along the last segment', () => {
     const shot = planShot('normal', from, to, 1.2, false);
+    const last = shot.segments[shot.segments.length - 1];
     const t = holdTime(shot);
-    expect(t).toBeCloseTo(0.7 + 0.36, 9);
+    expect(t).toBeCloseTo(shot.duration - 0.4 * last.duration, 9);
     expect(t).toBeLessThan(shot.duration);
   });
 
   it('has a ball that runs on past and one that drops after a bonk', () => {
     const held: Vec = { x: 1.5, y: 0.7, z: 0.6 };
-    const past = pastShot(held);
-    expect(ballAt(past, past.duration).x).toBe(PAST.x);
+    const past = pastShot(held, { x: 5, y: -1, z: 0 });
+    const gone = ballAt(past, past.duration);
+    expect(gone.x).toBeGreaterThanOrEqual(PAST.x);
+    expect(gone.y).toBeCloseTo(BALL_R, 9);
     const bonked = bonkShot(held, { x: 1.4, y: 1.5, z: 0.6 }, 1.8);
     expect(ballAt(bonked, bonked.duration).y).toBeCloseTo(BALL_R, 9);
+    for (let i = 0; i <= 100; i++) {
+      expect(ballAt(bonked, (bonked.duration * i) / 100).y).toBeGreaterThan(BALL_R - 1e-6);
+    }
+  });
+
+  it('bounces the serve off the court and back to the hand', () => {
+    const hand: Vec = { x: 1, y: 0.9, z: 0.6 };
+    expect(serveBounce(hand, 0, 0.35).y).toBeCloseTo(0.9, 9);
+    expect(serveBounce(hand, 0.175, 0.35).y).toBeCloseTo(BALL_R, 9);
+    expect(serveBounce(hand, 0.35, 0.35).y).toBeCloseTo(0.9, 9);
+    // Speeds up on the way down: more drop in the second half of the fall.
+    const y = (t: number) => serveBounce(hand, t, 0.35).y;
+    expect(y(0.0875) - y(0.175)).toBeGreaterThan(y(0) - y(0.0875));
   });
 
   it('picks a contact spot within a metre of home, on the court', () => {
