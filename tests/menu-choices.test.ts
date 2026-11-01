@@ -136,9 +136,8 @@ describe('remembering random choices', () => {
     const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
     for (let run = 0; run < runs(200, 30); run++) {
       const p = emptyProgress();
-      let last = '';
       for (let i = 0, n = 1 + Math.floor(rnd() * 12); i < n; i++) {
-        last = all[Math.floor(rnd() * all.length)];
+        const last = all[Math.floor(rnd() * all.length)];
         rememberChoice(p, last);
         expect(new Set(p.recent).size).toBe(p.recent!.length);
         expect(p.recent!.length).toBeLessThanOrEqual(RECENT_MAX);
