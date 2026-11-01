@@ -1,4 +1,5 @@
 import { preloadSpeech, speak, stopSpeaking } from './audio';
+import { hideFactMap, showFactMap } from './maps';
 import { createMissPicture, type MissPicture } from './pictures';
 import { createTapGate, TAP_SPEECH } from './tapgate';
 import { createTapMarks } from './tapmarks';
@@ -112,6 +113,7 @@ export function createTapFlow(container?: HTMLElement): TapFlow {
   const arm: TapFlow['arm'] = (buttons, correctIndex, avoid, problem) => {
     const fact = typeof problem === 'object' ? problem : undefined;
     const next = fact ? createMissPicture(fact) : null;
+    if (fact?.map) showFactMap(fact);
     armWith(
       buttons,
       correctIndex,
@@ -146,6 +148,7 @@ export function createTapFlow(container?: HTMLElement): TapFlow {
         problem,
         show ? createMissPicture(fact) : null,
       );
+      if (fact.map) showFactMap(fact, { wrong: chosen });
       const id = armId;
       const parts: ((next: () => void) => void)[] = [];
       const lines = missSpeech(fact, chosen);
@@ -206,11 +209,13 @@ export function createTapFlow(container?: HTMLElement): TapFlow {
       stop();
       stopSpeaking();
       marks.clear();
+      hideFactMap();
       return true;
     },
     disarm() {
       stop();
       marks.clear();
+      hideFactMap();
     },
     dispose() {
       stop();

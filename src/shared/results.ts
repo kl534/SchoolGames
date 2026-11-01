@@ -1,4 +1,5 @@
 import './overlays.css';
+import { factMapThumb } from './maps';
 import { button } from './preview';
 import type { Fact } from './topics';
 import { topicMenuUrl } from './ui';
@@ -153,7 +154,9 @@ export function showResults(options: ResultsOptions): { dispose(): void } {
     list.className = 'sg-missed';
     for (const fact of options.missed) {
       const li = document.createElement('li');
-      li.textContent = fact.statement;
+      const thumb = factMapThumb(fact);
+      if (thumb) li.appendChild(thumb);
+      else li.textContent = fact.statement;
       list.appendChild(li);
     }
     card.append(label, list);
