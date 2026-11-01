@@ -29,16 +29,16 @@ export const CONTACT_Y = 1.0;
 export const HOLD_U = 0.6;
 /** Seconds of bouncing the ball once before a serve is hit. */
 export const SERVE_WINDUP = 0.35;
-export const SHOT_TIMES = { normal: [0.45, 0.45, 0.5], smash: [0.22, 0.25, 0.35] };
-export const SHOT_ARCS = { normal: [0.3, 0.7, 0.8], smash: [0.05, 0.15, 0.3] };
+export const SHOT_TIMES = { normal: [0.3, 0.4, 0.6], smash: [0.15, 0.2, 0.4] };
+export const SHOT_ARCS = { normal: [0.05, 0.35, 0.7], smash: [0, 0.1, 0.3] };
 /** Where a missed ball goes: past everyone and off the right side. */
 export const PAST = { x: 4.8, y: BALL_R, duration: 0.7, arc: 0.5 };
 /** Seconds a missed ball rolls on after the shot ends. */
 export const ROLL_OFF = 0.6;
 /** Lowest and highest wall hit of an ordinary shot. */
-export const WALL_Y_RANGE = [0.7, 1.8] as const;
+export const WALL_Y_RANGE = [0.5, 1.2] as const;
 /** Wall height of a winner. */
-export const WINNER_WALL_Y = 0.45;
+export const WINNER_WALL_Y = 0.3;
 
 const lerp = (a: number, b: number, u: number) => a + (b - a) * u;
 
@@ -51,8 +51,9 @@ function shotOf(segments: Segment[]): Shot {
 }
 
 /**
- * A shot from `from` to the wall at height `wallY`, bouncing once on the court on the way to `to`.
- * With `miss` the last segment ends at the `PAST` spot (in the receiver's lane) instead.
+ * A shot: from `from` down to a bounce on the court, up to the wall at height `wallY`, then to
+ * `to`. With `miss` the ball touches down at the receiver's x and runs on to the `PAST` spot (in
+ * the receiver's lane) instead of stopping at `to`.
  */
 export function planShot(
   kind: 'normal' | 'smash',
@@ -63,20 +64,25 @@ export function planShot(
 ): Shot {
   const times = SHOT_TIMES[kind];
   const arcs = SHOT_ARCS[kind];
-  const wall: Vec = { x: WALL_X + BALL_R, y: wallY, z: (from.z + to.z) / 2 };
+  const wallZ = (from.z + to.z) / 2;
   const bounce: Vec = {
-    x: lerp(wall.x, to.x, 0.6),
+    x: lerp(from.x, WALL_X, 0.55),
     y: BALL_R,
-    z: lerp(wall.z, to.z, 0.6),
+    z: lerp(from.z, wallZ, 0.55),
   };
-  const last = miss
-    ? segment(bounce, { x: PAST.x, y: PAST.y, z: to.z }, PAST.duration, PAST.arc)
-    : segment(bounce, to, times[2], arcs[2]);
-  return shotOf([
-    segment(from, wall, times[0], arcs[0]),
-    segment(wall, bounce, times[1], arcs[1]),
-    last,
-  ]);
+  const wall: Vec = { x: WALL_X + BALL_R, y: wallY, z: wallZ };
+  const segments = [
+    segment(from, bounce, times[0], arcs[0]),
+    segment(bounce, wall, times[1], arcs[1]),
+  ];
+  if (miss) {
+    const down: Vec = { x: to.x, y: BALL_R, z: to.z };
+    segments.push(segment(wall, down, times[2], arcs[2]));
+    segments.push(segment(down, { x: PAST.x, y: PAST.y, z: to.z }, PAST.duration, PAST.arc));
+  } else {
+    segments.push(segment(wall, to, times[2], arcs[2]));
+  }
+  return shotOf(segments);
 }
 
 /** A ball let go from `from` that runs on past a kid who missed it, off the right side. */
@@ -116,7 +122,7 @@ export function holdTime(shot: Shot): number {
   return shot.duration - last.duration + HOLD_U * last.duration;
 }
 
-/** The first time the ball is at or past `x` on its way right after the bounce, or null. */
+/** The first time the ball is at or past `x` on its way right after the wall, or null. */
 export function timeAtX(shot: Shot, x: number): number | null {
   const start = shot.segments[0].duration + (shot.segments[1]?.duration ?? 0);
   for (let t = start; t <= shot.duration + 1e-9; t += 0.01) {

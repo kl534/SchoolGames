@@ -309,14 +309,16 @@ describe('hitting handballs shots', () => {
     }
   });
 
-  it('touches the wall at the end of segment 1 and bounces on the floor at the end of 2', () => {
+  it('bounces on the court first, then touches the wall, then goes to the receiver', () => {
     const shot = planShot('normal', from, to, 1.2, false);
-    const wall = ballAt(shot, shot.segments[0].duration);
+    const [first, second] = shot.segments;
+    const bounce = ballAt(shot, first.duration);
+    expect(bounce.y).toBeCloseTo(BALL_R, 9);
+    expect(bounce.x).toBeGreaterThan(WALL_X);
+    expect(bounce.x).toBeLessThan(from.x);
+    const wall = ballAt(shot, first.duration + second.duration);
     expect(wall.x).toBeCloseTo(WALL_X + BALL_R, 9);
     expect(wall.y).toBeCloseTo(1.2, 9);
-    const bounce = ballAt(shot, shot.segments[0].duration + shot.segments[1].duration);
-    expect(bounce.y).toBeCloseTo(BALL_R, 9);
-    expect(bounce.x).toBeCloseTo(shot.segments[1].to.x, 9);
     expect(ballAt(shot, shot.duration)).toEqual(to);
     expect(ballAt(shot, -1)).toEqual(from);
     expect(ballAt(shot, 99)).toEqual(to);
@@ -340,7 +342,7 @@ describe('hitting handballs shots', () => {
   it('holds 60 percent along the last segment', () => {
     const shot = planShot('normal', from, to, 1.2, false);
     const t = holdTime(shot);
-    expect(t).toBeCloseTo(0.9 + 0.3, 9);
+    expect(t).toBeCloseTo(0.7 + 0.36, 9);
     expect(t).toBeLessThan(shot.duration);
   });
 
@@ -379,8 +381,8 @@ describe('hitting handballs moves', () => {
       expect(end.lean ?? 0).toBeCloseTo(start.lean ?? 0, 6);
     }
     // The hand is forward at contact.
-    expect(swing(SWING_CONTACT).hit?.raise).toBeGreaterThan(1.2);
-    expect(smash(SMASH_CONTACT).hit?.raise).toBeGreaterThan(0.8);
+    expect(swing(SWING_CONTACT).hit?.raise).toBeLessThan(swing(0.08).hit?.raise ?? 0);
+    expect(smash(SMASH_CONTACT).hit?.raise).toBeLessThan(smash(0.12).hit?.raise ?? 0);
   });
 
   it('spins a full turn on a whiff and dives sideways', () => {
