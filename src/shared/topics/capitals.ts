@@ -115,7 +115,7 @@ export const DIVISION_REGION: Record<Division, 'northeast' | 'midwest' | 'south'
   pacific: 'west',
 };
 
-const kebab = (text: string): string => text.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+export const kebab = (text: string): string => text.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
 /** The fact for one state: the state name asked, its capital answered. */
 export function capitalFact(row: StateCapital): Fact {

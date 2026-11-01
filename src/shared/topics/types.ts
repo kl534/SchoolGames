@@ -10,6 +10,13 @@ export type FactVisual =
   | { kind: 'multiply'; a: number; b: number; blank?: 'a' | 'b' }
   | { kind: 'divide'; a: number; b: number; blank?: 'a' | 'b' };
 
+/** A fact asked on a map: the state shown lit. */
+export interface FactMap {
+  kind: 'us-state';
+  /** Key of `US_STATE_SHAPES`, e.g. 'ohio'. */
+  state: string;
+}
+
 /** One thing to learn: a prompt with a single correct answer. Answers are text, so words work too. */
 export interface Fact {
   /** Unique within its topic and stable across releases; progress is stored under it. */
@@ -27,6 +34,8 @@ export interface Fact {
   /** Said after a miss when the player picked this wrong answer, before the statement. */
   wrongLines?: Readonly<Record<string, string>>;
   visual?: FactVisual;
+  /** Shown as a big map while the fact is asked (see `src/shared/maps/`). */
+  map?: FactMap;
 }
 
 /** Returns up to `count` plausible wrong answers for a fact. */
