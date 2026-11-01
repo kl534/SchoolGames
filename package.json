@@ -19,7 +19,9 @@
     "test:all": "FULL_TESTS=1 vitest run",
     "check": "tsx scripts/check.ts",
     "shots": "tsx scripts/shots/main.ts",
-    "maps": "tsx scripts/maps/us-states.ts && tsx scripts/maps/world.ts"
+    "maps": "tsx scripts/maps/us-states.ts && tsx scripts/maps/world.ts",
+    "worker:dev": "wrangler dev --config worker/wrangler.toml",
+    "worker:deploy": "wrangler deploy --config worker/wrangler.toml"
   },
   "dependencies": {
     "cannon-es": "^0.20.0",
@@ -46,6 +48,7 @@
     "us-atlas": "^3.0.1",
     "vite": "^8.0.0",
     "vitest": "^4.0.0",
-    "world-atlas": "^2.0.2"
+    "world-atlas": "^2.0.2",
+    "wrangler": "^4.156.0"
   }
 }
