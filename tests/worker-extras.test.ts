@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FORGOT_LIMIT, RESEND_LIMIT, handle } from '../worker/src/app';
+import { FORGOT_LIMIT, RESEND_LIMIT, handle, type Env } from '../worker/src/app';
 import { ATTEMPT_LIMIT } from '../worker/src/auth';
 import { JWKS_CACHE_MS, verifyGoogleToken, type FetchJwks, type Jwk } from '../worker/src/google';
 import { RESET_SUBJECT, VERIFY_SUBJECT, emailEnabled, sendMail } from '../worker/src/mail';
@@ -460,7 +460,7 @@ describe('Google ID token check', () => {
 });
 
 describe('POST /auth/google', () => {
-  const setup = async (env = { ...testEnv(), GOOGLE_CLIENT_ID: CLIENT }) => {
+  const setup = async (env: Env = { ...testEnv(), GOOGLE_CLIENT_ID: CLIENT }) => {
     const key = await makeKey();
     const w = createTestWorker({ env, fetchJwks: jwks(key.jwk) });
     w.clock.now = NOW;
