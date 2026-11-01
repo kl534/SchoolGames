@@ -43,7 +43,7 @@ function maxOptional(a: number | undefined, b: number | undefined): number | und
 /**
  * Merges two devices' progress for one player. Both inputs are already normalized and are not
  * changed. Facts: the newer stat wins whole. Scores, stars and open levels: the larger value.
- * Fields that can go down (`ladders`, `homePath`): from the side saved last.
+ * Fields that can go down (`ladders`, `homePath`, `recent`): from the side saved last.
  */
 export function mergeProgress(a: PlayerProgress, b: PlayerProgress): PlayerProgress {
   const facts: PlayerProgress['facts'] = {};
@@ -79,6 +79,8 @@ export function mergeProgress(a: PlayerProgress, b: PlayerProgress): PlayerProgr
   if (ladders) out.ladders = structuredClone(ladders);
   const homePath = first.homePath ?? second.homePath;
   if (homePath !== undefined) out.homePath = homePath;
+  const recent = first.recent ?? second.recent;
+  if (recent) out.recent = [...recent];
 
   const savedAt = maxOptional(a.savedAt, b.savedAt);
   if (savedAt !== undefined) out.savedAt = savedAt;

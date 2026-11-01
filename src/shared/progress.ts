@@ -41,6 +41,8 @@ export interface PlayerProgress {
   pathLevelsOpen?: Record<string, number>;
   /** The home tab last used: a path id. */
   homePath?: string;
+  /** Choice ids the menu was last set to, newest first; `recent[0]` is the home page's choice. See `src/menu/choices.ts`. */
+  recent?: string[];
   /** When (ms) this was last saved on a device; set only for account players, used by sync. */
   savedAt?: number;
 }
@@ -286,6 +288,10 @@ export function normalizeProgress(data: Partial<PlayerProgress>): PlayerProgress
     progress.pathLevelsOpen = data.pathLevelsOpen;
   }
   if (typeof data.homePath === 'string') progress.homePath = data.homePath;
+  if (Array.isArray(data.recent)) {
+    // 4 is RECENT_MAX in src/menu/choices.ts (shared code does not import the menu).
+    progress.recent = data.recent.filter((id): id is string => typeof id === 'string').slice(0, 4);
+  }
   if (typeof data.savedAt === 'number') progress.savedAt = data.savedAt;
   migrateAboveTenTables(progress);
   migrateRenamedGames(progress);

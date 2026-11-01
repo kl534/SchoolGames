@@ -245,6 +245,21 @@ describe('createProgressStore', () => {
     expect(bad.homePath).toBeUndefined();
   });
 
+  it('keeps recent, drops a non-array, non-string entries and anything past 4', () => {
+    const raw = memoryStore();
+    const store = createProgressStore(raw);
+    raw.setItem('sg:progress:p1', JSON.stringify({ recent: ['times-7', 3, null, 'my-level'] }));
+    expect(store.load('p1').recent).toEqual(['times-7', 'my-level']);
+    raw.setItem('sg:progress:p2', JSON.stringify({ recent: 'times-7' }));
+    expect(store.load('p2').recent).toBeUndefined();
+    raw.setItem('sg:progress:p3', JSON.stringify({ recent: ['a', 'b', 'c', 'd', 'e', 'f'] }));
+    expect(store.load('p3').recent).toEqual(['a', 'b', 'c', 'd']);
+    const p = store.load('p4');
+    p.recent = ['times-7', 'my-level'];
+    store.save('p4', p);
+    expect(store.load('p4').recent).toEqual(['times-7', 'my-level']);
+  });
+
   it('keeps players separate', () => {
     const store = createProgressStore(memoryStore());
     const a = store.addPlayer('A', AVATARS[0]);
