@@ -567,11 +567,16 @@ describe('a missed ball stays in bounds', () => {
     { x: 1.2, z: -0.8 },
   ];
   const inside = (shot: ReturnType<typeof planShot>) => {
+    // Track the extremes and assert once per shot: an `expect` per sample made the sweep slow.
+    let low = Infinity;
+    let high = -Infinity;
     for (let t = 0; t <= shot.duration; t += 0.02) {
       const z = ballAt(shot, t).z;
-      expect(z).toBeGreaterThanOrEqual(LANE.min - 1e-6);
-      expect(z).toBeLessThanOrEqual(LANE.max + 1e-6);
+      low = Math.min(low, z);
+      high = Math.max(high, z);
     }
+    expect(low).toBeGreaterThanOrEqual(LANE.min - 1e-6);
+    expect(high).toBeLessThanOrEqual(LANE.max + 1e-6);
   };
 
   it('a rival who whiffs: the ball runs on inside the side lines', () => {
