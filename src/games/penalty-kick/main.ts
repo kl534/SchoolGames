@@ -22,6 +22,7 @@ import { createTapFlow } from '../../shared/tapflow';
 import { createTimers } from '../../shared/timers';
 import { answerOptions, promptSpeech, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
+import { hideFactMap, showFactMap } from '../../shared/maps';
 import { buildField, buildGoalBodies, GOAL_HEIGHT, GOAL_WIDTH } from './field';
 import { createGoalie } from './goalie';
 
@@ -321,6 +322,7 @@ function run(session: GameSession): void {
     chosen = -1;
     fillAnswers(answers, options, 'pk-answer');
     problemText.textContent = current.prompt;
+    showFactMap(current);
     banner.hidden = true;
     phase = 'aiming';
     renderKicks();
@@ -419,6 +421,7 @@ function run(session: GameSession): void {
     const current = fact;
     phase = 'result';
     round.record(goal);
+    hideFactMap();
     session.recordAnswer(current, goal);
     renderKicks();
     const correctIndex = options.indexOf(current.answer);
@@ -445,6 +448,7 @@ function run(session: GameSession): void {
   };
 
   const finishRound = () => {
+    hideFactMap();
     tapFlow.disarm();
     phase = 'done';
     setPlayVisible(false);

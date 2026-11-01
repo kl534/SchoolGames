@@ -1,4 +1,5 @@
 import { preloadSpeech, speak, stopSpeaking } from './audio';
+import { hideFactMap, showFactMap } from './maps';
 import { createMissPicture, type MissPicture } from './pictures';
 import { createTapGate, TAP_SPEECH } from './tapgate';
 import { createTapMarks } from './tapmarks';
@@ -87,6 +88,8 @@ export function createTapFlow(container?: HTMLElement): TapFlow {
   /** The picture of the current miss, and whether its counting has started. */
   let picture: MissPicture | null = null;
   let counting = false;
+  /** Whether this flow put a map up, so it takes down only that one. */
+  let mapShown = false;
 
   const dropPicture = () => {
     picture?.stop();
@@ -104,6 +107,9 @@ export function createTapFlow(container?: HTMLElement): TapFlow {
     armId++;
     reading = null;
     dropPicture();
+    // A map of an earlier miss goes; the new one, if any, is shown by the caller.
+    if (mapShown) hideFactMap();
+    mapShown = false;
     picture = next;
     gate.arm(correctIndex);
     marks.show(buttons, correctIndex, avoid, problem, next?.card);
@@ -119,6 +125,8 @@ export function createTapFlow(container?: HTMLElement): TapFlow {
       typeof problem === 'object' ? problem.prompt : problem,
       next,
     );
+    // Arming with a fact is a miss: the right state in green.
+    if (fact?.map) mapShown = showFactMap(fact, {});
   };
 
   const stop = () => {
@@ -126,6 +134,8 @@ export function createTapFlow(container?: HTMLElement): TapFlow {
     reading = null;
     dropPicture();
     gate.disarm();
+    if (mapShown) hideFactMap();
+    mapShown = false;
   };
 
   return {
@@ -146,6 +156,7 @@ export function createTapFlow(container?: HTMLElement): TapFlow {
         problem,
         show ? createMissPicture(fact) : null,
       );
+      if (fact.map) mapShown = showFactMap(fact, { wrong: chosen });
       const id = armId;
       const parts: ((next: () => void) => void)[] = [];
       const lines = missSpeech(fact, chosen);

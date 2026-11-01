@@ -1,0 +1,107 @@
+/* The US map: the big one shown while a fact is asked, and the mini ones in the preview. */
+
+.sg-map-state {
+  fill: #4a5378;
+  stroke: #1b2040;
+  stroke-width: 0.8;
+  vector-effect: non-scaling-stroke;
+}
+.sg-map-state.is-lit {
+  fill: #ffd23f;
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+.sg-map-state.is-right {
+  fill: #5cf2b0;
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+.sg-map-state.is-wrong {
+  fill: #ff5c6c;
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+.sg-map-ring {
+  fill: none;
+  stroke-width: 3px;
+  vector-effect: non-scaling-stroke;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sg-map-pulse 1.2s ease-in-out infinite;
+}
+.sg-map-ring.is-lit {
+  stroke: #ffd23f;
+}
+.sg-map-ring.is-right {
+  stroke: #5cf2b0;
+}
+.sg-map-ring.is-wrong {
+  stroke: #ff5c6c;
+}
+@keyframes sg-map-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.3);
+  }
+}
+
+.sg-factmap {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  pointer-events: none;
+  box-sizing: border-box;
+  padding: 10px;
+  border-radius: 20px;
+  background: rgba(10, 14, 35, 0.78);
+  width: min(94vw, 760px, calc(62vh * 1.6));
+  aspect-ratio: 975 / 610;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.25s,
+    visibility 0s linear 0.25s;
+}
+.sg-factmap.is-shown {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.2s;
+}
+.sg-factmap-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.sg-mapthumb {
+  /* A definite width, so the chip's row is as tall as the map from the start. */
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.sg-mapthumb-svg {
+  display: block;
+  width: 100%;
+  max-width: 132px;
+  height: auto;
+}
+.sg-mapthumb .sg-map-ring {
+  animation: none;
+}
+.sg-mapthumb-name {
+  font-weight: 700;
+}
+
+/* Short landscape screens: smaller mini maps, so more chips fit before the grid scrolls. */
+@media (max-height: 460px) {
+  .sg-mapthumb-svg {
+    max-width: 96px;
+  }
+}

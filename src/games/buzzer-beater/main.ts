@@ -19,6 +19,7 @@ import {
   type Fact,
 } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
+import { hideFactMap, showFactMap } from '../../shared/maps';
 import { createBall } from './ball';
 import { buildCourt } from './court';
 import { devGame, forcedPlay } from './dev';
@@ -489,6 +490,7 @@ function run(session: GameSession): void {
     chosen = -1;
     hud.setOptions(options);
     hud.setQuestion(fact.prompt);
+    showFactMap(fact);
     // A long prompt may need to drop below the scorebug; then the view fits the new band.
     if (hud.settleQuestion()) layout(true);
     return fact;
@@ -602,9 +604,11 @@ function run(session: GameSession): void {
     const thisTurn = turn;
     if (right) {
       feed.recordHit(f);
+      hideFactMap();
       session.recordAnswer(f, true);
     } else {
       feed.recordMiss(f);
+      hideFactMap();
       session.recordAnswer(f, false);
     }
     const chosenText = options[chosen];
@@ -946,6 +950,7 @@ function run(session: GameSession): void {
     stopSpeaking();
     hud.hideBanner();
     hud.hideQuestion(true);
+    hideFactMap();
     hud.shotClock.hide();
     current = null;
     ballFromScript = false;
@@ -1098,6 +1103,7 @@ function run(session: GameSession): void {
     const startedAt = gameTime;
     stopSpeaking();
     hud.hideQuestion(true);
+    hideFactMap();
     hud.shotClock.hide();
     hud.showBanner(title, detail, kind);
     if (buzzer) sfx.alarm();
@@ -1136,6 +1142,7 @@ function run(session: GameSession): void {
 
   /** The game is won or lost: the buzzer, the banner, then the results. */
   const finishGame = () => {
+    hideFactMap();
     timers.clear();
     turn++;
     tapFlow.disarm();
@@ -1144,6 +1151,7 @@ function run(session: GameSession): void {
     const won = state.winner === 'us';
     phase = 'announce';
     hud.hideQuestion(true);
+    hideFactMap();
     hud.shotClock.hide();
     sfx.alarm();
     after(0.9, () => (won ? sfx.bigCheer() : sfx.miss()));
@@ -1161,9 +1169,11 @@ function run(session: GameSession): void {
   };
 
   const finishRun = () => {
+    hideFactMap();
     phase = 'done';
     hud.hideBanner();
     hud.hideQuestion(true);
+    hideFactMap();
     const stars = starsFor(feed.correct, feed.answered);
     session.recordStars(stars);
     session.recordScore(state.us);
@@ -1222,6 +1232,7 @@ function run(session: GameSession): void {
     faceEachOther();
     goTo(state.ball === 'us' ? 'offense' : 'defense', angle, 0);
     hud.hideQuestion(true);
+    hideFactMap();
     hud.shotClock.hide();
     hud.hideBanner();
     refresh();

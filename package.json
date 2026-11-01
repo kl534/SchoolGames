@@ -18,7 +18,8 @@
     "voice": "npm run voice:lines && uv run scripts/voice/generate.py",
     "test:all": "FULL_TESTS=1 vitest run",
     "check": "tsx scripts/check.ts",
-    "shots": "tsx scripts/shots/main.ts"
+    "shots": "tsx scripts/shots/main.ts",
+    "maps": "tsx scripts/maps/us-states.ts"
   },
   "dependencies": {
     "cannon-es": "^0.20.0",
@@ -28,14 +29,19 @@
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.0.0",
     "@types/three": "^0.186.0",
+    "@types/topojson-client": "^3.1.5",
+    "@types/topojson-simplify": "^3.0.3",
     "eslint": "^10.0.0",
     "globals": "^17.0.0",
     "jsdom": "^30.0.0",
     "playwright-core": "1.64.1",
     "prettier": "^3.9.0",
+    "topojson-client": "^3.1.0",
+    "topojson-simplify": "^3.0.3",
     "tsx": "^4.23.15",
     "typescript": "^6.0.0",
     "typescript-eslint": "^8.71.0",
+    "us-atlas": "^3.0.1",
     "vite": "^8.0.0",
     "vitest": "^4.0.0"
   }

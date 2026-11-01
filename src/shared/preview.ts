@@ -2,6 +2,7 @@ import './overlays.css';
 import { speak, stopSpeaking, unlockAudio } from './audio';
 import { statementParts, statementSpeech, type Fact, type Topic } from './topics';
 import { fitText } from './answers';
+import { factMapThumb } from './maps';
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -56,6 +57,13 @@ export function showPreview(options: PreviewOptions): Preview {
   const list = el('div', 'sg-preview');
   for (const fact of facts) {
     const chip = button(fact.statement, 'sg-chip');
+    const thumb = factMapThumb(fact);
+    if (thumb) {
+      // A map fact: the state lit on a mini map, its name under it.
+      chip.textContent = '';
+      chip.setAttribute('aria-label', fact.statement);
+      chip.appendChild(thumb);
+    }
     const parts = fact.visual?.blank ? statementParts(fact) : null;
     if (parts) {
       // A missing-number fact: the number the player finds is green.
@@ -79,7 +87,10 @@ export function showPreview(options: PreviewOptions): Preview {
   overlay.appendChild(card);
   container.appendChild(overlay);
   // A long word (Massachusetts:) shrinks to its chip instead of being clipped.
-  list.querySelectorAll<HTMLElement>('.sg-chip').forEach((chip) => fitText(chip, undefined, true));
+  list.querySelectorAll<HTMLElement>('.sg-chip').forEach((chip) => {
+    const name = chip.querySelector<HTMLElement>('.sg-mapthumb-name');
+    fitText(name ?? chip, undefined, true);
+  });
 
   let disposed = false;
   const dispose = () => {

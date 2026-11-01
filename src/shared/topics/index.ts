@@ -3,7 +3,7 @@ import { MATH_TOPICS } from './math';
 import { SOCIAL_STUDIES_TOPICS } from './social-studies';
 import type { Fact, Topic } from './types';
 
-export type { DistractorFn, Fact, FactVisual, Topic } from './types';
+export type { DistractorFn, Fact, FactMap, FactVisual, Topic } from './types';
 
 /** Every topic, in menu order. Add new topic lists here. */
 export const TOPICS: Topic[] = [...MATH_TOPICS, ...SOCIAL_STUDIES_TOPICS];

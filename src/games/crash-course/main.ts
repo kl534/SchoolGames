@@ -13,6 +13,7 @@ import { createTapFlow } from '../../shared/tapflow';
 import { createTimers } from '../../shared/timers';
 import { answerOptions, promptSpeech, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
+import { hideFactMap, showFactMap } from '../../shared/maps';
 import { createBike, createParachute, type Bike } from './bike';
 import { devOptions, type DevOptions, type LabMega, type LabStunt } from './dev';
 import { createEffects, type EffectKind } from './effects';
@@ -580,6 +581,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     pendingPoints = 0;
     hud.setAnswers(options);
     hud.problemText.textContent = current.prompt;
+    showFactMap(current);
     hud.setGoal(mega ? 'gate' : kind);
     hud.setMega(mega ? MEGA_PIECES : 0, mega?.passed ?? 0);
     // The banner of a cleared Mega Stunt stays up for its own time.
@@ -632,12 +634,14 @@ function run(session: GameSession, dev: DevOptions | null): void {
     buttons[index].classList.add('chosen');
     if (correct) {
       feed.recordHit(current);
+      hideFactMap();
       session.recordAnswer(current, true);
       streak = nextStreak(streak, true);
       pendingPoints = hitPoints(clockLeft, clockTotal, streak);
       buttons.forEach((b, i) => b.classList.add(i === index ? 'right' : 'gone'));
     } else {
       feed.recordMiss(current);
+      hideFactMap();
       session.recordAnswer(current, false);
       streak = nextStreak(streak, false);
       buttons[index].classList.add('wrong');
@@ -660,6 +664,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     timedOut = true;
     hud.lockAnswers();
     feed.recordMiss(current);
+    hideFactMap();
     session.recordAnswer(current, false);
     streak = nextStreak(streak, false);
     buttons[options.indexOf(current.answer)]?.classList.add('right');
@@ -964,6 +969,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
   };
 
   const finishRun = () => {
+    hideFactMap();
     phase = 'done';
     tapFlow.disarm();
     hud.hideBanner();

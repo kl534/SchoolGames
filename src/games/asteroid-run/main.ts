@@ -16,6 +16,7 @@ import { createAsteroid, type Asteroid } from './asteroid';
 import { buildBackdrop, FOG_COLOR } from './backdrop';
 import { createEffects } from './effects';
 import { createFactFeed, type FactFeed } from '../../shared/feed';
+import { hideFactMap, showFactMap } from '../../shared/maps';
 import {
   BOSS_LOCK_Z,
   cameraGoal,
@@ -474,6 +475,7 @@ function run(session: GameSession): void {
     chosen = -1;
     fillAnswers(buttons, options, 'ar-answer');
     problemText.textContent = next.prompt;
+    showFactMap(next);
     clockRunning = false;
     speechDone = false;
     phase = 'aiming';
@@ -532,6 +534,7 @@ function run(session: GameSession): void {
     if (!fact) return;
     const current = fact;
     feed.recordHit(current);
+    hideFactMap();
     session.recordAnswer(current, true);
     buttons.forEach((button, i) => button.classList.add(i === chosen ? 'right' : 'gone'));
     award();
@@ -663,6 +666,7 @@ function run(session: GameSession): void {
       }
       feed.recordMiss(current);
     }
+    hideFactMap();
     session.recordAnswer(current, false);
     streak = nextStreak(streak, false);
     renderScore();
@@ -727,6 +731,7 @@ function run(session: GameSession): void {
   };
 
   const finishRun = () => {
+    hideFactMap();
     phase = 'done';
     flightActive = false;
     setHudVisible(false);

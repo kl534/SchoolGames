@@ -12,6 +12,7 @@ import { createTapFlow } from '../../shared/tapflow';
 import { createTimers } from '../../shared/timers';
 import { answerOptions, promptSpeech, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
+import { hideFactMap, showFactMap } from '../../shared/maps';
 import { devFrame, devRoundSeconds, forcedGag } from './dev';
 import { createEffects } from './effects';
 import { gagFrame, HEAD_REST, type Cue } from './gags';
@@ -346,6 +347,7 @@ function run(session: GameSession): void {
     options = answerOptions(session.topic, next, buttons.length);
     fillAnswers(buttons, options, 'gg-answer');
     problemText.textContent = next.prompt;
+    showFactMap(next);
     problem.classList.remove('statement', 'wrong');
     answers.classList.remove('shake');
     phase = 'asking';
@@ -376,6 +378,7 @@ function run(session: GameSession): void {
   const right = (index: number) => {
     if (!fact) return;
     feed.recordHit(fact);
+    hideFactMap();
     session.recordAnswer(fact, true);
     grapes++;
     bunch = bunchAfterTake(bunch);
@@ -427,6 +430,7 @@ function run(session: GameSession): void {
     if (!fact) return;
     const current = fact;
     feed.recordMiss(current);
+    hideFactMap();
     session.recordAnswer(current, false);
     const gag = forcedGag() ?? pickGag(lastGag, Math.random());
     lastGag = gag;
@@ -476,6 +480,7 @@ function run(session: GameSession): void {
   };
 
   const finishRun = () => {
+    hideFactMap();
     phase = 'done';
     setHudVisible(false);
     count.hidden = true;

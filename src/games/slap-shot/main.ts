@@ -72,6 +72,7 @@ import {
   US,
   type Team,
 } from '../../shared/hockey/teams';
+import { hideFactMap, showFactMap } from '../../shared/maps';
 
 const GAME_ID = 'slap-shot';
 
@@ -310,6 +311,7 @@ function run(session: GameSession): void {
     chosen = -1;
     hud.setOptions(options);
     hud.setQuestion(fact.prompt);
+    showFactMap(fact);
     clockTotal = session.timerSecondsFor(fact);
     answerTime = 0;
     speechDone = false;
@@ -399,9 +401,11 @@ function run(session: GameSession): void {
     const thisTurn = turn;
     if (right) {
       feed.recordHit(f);
+      hideFactMap();
       session.recordAnswer(f, true);
     } else {
       feed.recordMiss(f);
+      hideFactMap();
       session.recordAnswer(f, false);
     }
     const before = state.puck;
@@ -702,6 +706,7 @@ function run(session: GameSession): void {
 
   /** The game is won or lost: the banner and the line, then the results. */
   const finishGame = () => {
+    hideFactMap();
     timers.clear();
     turn++;
     tapFlow.disarm();
@@ -721,6 +726,7 @@ function run(session: GameSession): void {
   };
 
   const finishRun = () => {
+    hideFactMap();
     phase = 'done';
     hud.hideBanner();
     hud.hideQuestion(true);

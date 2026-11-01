@@ -14,9 +14,17 @@ import {
 import {
   capitalDistractors,
   DIVISION_REGION,
+  kebab,
   STATE_CAPITALS,
   stateCapitals,
 } from '../src/shared/topics/capitals';
+import { US_STATE_NEIGHBORS, US_STATE_SHAPES } from '../src/shared/maps/us-states-data';
+import {
+  LOCATION_PROMPT,
+  LOCATION_SPOKEN_PROMPT,
+  stateLocations,
+} from '../src/shared/topics/locations';
+import { SOCIAL_STUDIES_TOPICS } from '../src/shared/topics/social-studies';
 import { runs } from './helpers/full';
 import {
   mathFact,
@@ -432,7 +440,10 @@ describe('state capitals', () => {
   });
 
   it('is the last menu group, Social Studies', () => {
-    expect(groupBySubject().at(-1)).toEqual({ subject: 'Social Studies', topics: [stateCapitals] });
+    expect(groupBySubject().at(-1)).toEqual({
+      subject: 'Social Studies',
+      topics: [stateCapitals, stateLocations],
+    });
   });
 });
 
@@ -696,6 +707,72 @@ describe('statementParts', () => {
     for (const fact of [...plainFacts.slice(0, 50), ...missingFacts.map((m) => m.fact)]) {
       const parts = statementParts(fact)!;
       expect(parts.before + parts.answer + parts.after).toBe(fact.statement);
+    }
+  });
+});
+
+describe('Find the state', () => {
+  const names = new Set(STATE_CAPITALS.map((row) => row.state));
+
+  it('has 50 facts with map-<state> ids that never clash with another topic', () => {
+    expect(stateLocations.facts.length).toBe(50);
+    stateLocations.facts.forEach((fact, i) => {
+      expect(fact.id).toBe(`map-${kebab(STATE_CAPITALS[i].state)}`);
+      expect(US_STATE_SHAPES[fact.map!.state]).toBeDefined();
+      expect(fact.map).toEqual({ kind: 'us-state', state: kebab(STATE_CAPITALS[i].state) });
+    });
+    const ids = SOCIAL_STUDIES_TOPICS.flatMap((t) => t.facts.map((f) => f.id));
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(validateTopic(stateLocations)).toEqual([]);
+  });
+
+  it('asks and tells as the design says', () => {
+    const ohio = stateLocations.facts.find((f) => f.id === 'map-ohio')!;
+    expect(ohio.prompt).toBe(LOCATION_PROMPT);
+    expect(ohio.prompt).toBe('Which state?');
+    expect(ohio.spokenPrompt).toBe(LOCATION_SPOKEN_PROMPT);
+    expect(ohio.spokenPrompt).toBe('Which state is this?');
+    expect(ohio.answer).toBe('Ohio');
+    expect(ohio.statement).toBe('Ohio');
+    expect(ohio.spokenStatement).toBe('This is Ohio.');
+    expect(ohio.wrongLines!['Iowa']).toBe("That's Iowa.");
+    expect(missSpeech(ohio, 'Iowa')).toEqual(["That's Iowa.", 'This is Ohio.']);
+    expect(missSpeech(ohio)).toEqual(['This is Ohio.']);
+    const washington = stateLocations.facts.find((f) => f.id === 'map-washington')!;
+    expect(washington.spokenStatement).toBe('This is Washington State.');
+    expect(ohio.wrongLines!['Washington']).toBe("That's Washington State.");
+  });
+
+  it('has a wrong line for each of the 49 other states', () => {
+    for (const fact of stateLocations.facts) {
+      const keys = Object.keys(fact.wrongLines!);
+      expect(keys.length).toBe(49);
+      expect(keys).not.toContain(fact.answer);
+      for (const key of keys) expect(names.has(key)).toBe(true);
+    }
+  });
+
+  it('gives four distinct state names, neighbours first, for every state', () => {
+    for (let seed = 1; seed <= runs(300, 30); seed++) {
+      const random = seededRandom(seed);
+      for (const fact of stateLocations.facts) {
+        const options = answerOptions(stateLocations, fact, 4, random);
+        expect(options.length).toBe(4);
+        expect(new Set(options).size).toBe(4);
+        expect(options).toContain(fact.answer);
+        const wrong = options.filter((o) => o !== fact.answer);
+        for (const o of wrong) expect(names.has(o)).toBe(true);
+        const neighbours = US_STATE_NEIGHBORS[fact.map!.state];
+        if (neighbours.length >= 3) {
+          for (const o of wrong) expect(neighbours).toContain(kebab(o));
+        }
+        if (fact.id === 'map-hawaii') {
+          for (const o of wrong) {
+            const row = STATE_CAPITALS.find((r) => r.state === o)!;
+            expect(row.division).toBe('pacific');
+          }
+        }
+      }
     }
   });
 });

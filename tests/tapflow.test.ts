@@ -11,6 +11,8 @@ vi.mock('../src/shared/audio', () => ({
 import { preloadSpeech, speak, stopSpeaking } from '../src/shared/audio';
 import { createTapFlow, type TapFlow } from '../src/shared/tapflow';
 import { stateCapitals } from '../src/shared/topics/capitals';
+import { showFactMap } from '../src/shared/maps';
+import { stateLocations } from '../src/shared/topics/locations';
 import { mathFact } from '../src/shared/topics/math';
 
 function makeButtons(): HTMLButtonElement[] {
@@ -365,5 +367,58 @@ describe('tapflow with a picture', () => {
     flow.reveal(buttons, ['13', '12', '14', '15'], sum);
     for (let i = 0; i < 100; i++) flow.update(0);
     expect(spoken()).toEqual([]);
+  });
+
+  describe('the state map', () => {
+    const ohio = stateLocations.facts.find((f) => f.id === 'map-ohio')!;
+    const names = ['Iowa', 'Ohio', 'Indiana', 'Kentucky'];
+    const map = () => document.querySelector('.sg-factmap')!;
+    const stateClass = (id: string) =>
+      map().querySelector(`[data-state="${id}"]`)!.getAttribute('class')!;
+
+    it('comes back on a miss with ohio right and the picked state wrong, and the green tap hides it', () => {
+      flow.reveal(buttons, names, ohio, { chosen: 'Iowa' });
+      expect(map().classList.contains('is-shown')).toBe(true);
+      expect(stateClass('ohio')).toContain('is-right');
+      expect(stateClass('iowa')).toContain('is-wrong');
+      flow.update(TAP_GUARD + 0.1);
+      expect(flow.tap(1)).toBe(true);
+      expect(map().classList.contains('is-shown')).toBe(false);
+    });
+
+    it('shows only the green state on a time-out, and disarm hides it', () => {
+      flow.reveal(buttons, names, ohio);
+      expect(stateClass('ohio')).toContain('is-right');
+      expect(map().querySelector('.is-wrong')).toBeNull();
+      flow.disarm();
+      expect(map().classList.contains('is-shown')).toBe(false);
+    });
+
+    it('shows the right state in green when armed with the fact', () => {
+      flow.arm(buttons, 1, [], ohio);
+      expect(map().classList.contains('is-shown')).toBe(true);
+      expect(stateClass('ohio')).toContain('is-right');
+      expect(map().querySelector('.is-lit')).toBeNull();
+    });
+
+    it('leaves a map the game showed alone when it disarms an idle flow', () => {
+      showFactMap(ohio);
+      flow.disarm();
+      expect(map().classList.contains('is-shown')).toBe(true);
+      expect(flow.tap(0)).toBe(false);
+      expect(map().classList.contains('is-shown')).toBe(true);
+    });
+
+    it('still hides its own map on disarm after a reveal', () => {
+      showFactMap(ohio);
+      flow.reveal(buttons, names, ohio, { chosen: 'Iowa' });
+      flow.disarm();
+      expect(map().classList.contains('is-shown')).toBe(false);
+    });
+
+    it('is never shown for a math fact', () => {
+      flow.reveal(buttons, ['13', '12', '14', '15'], sum);
+      expect(document.querySelector('.sg-factmap.is-shown')).toBeNull();
+    });
   });
 });
