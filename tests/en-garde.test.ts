@@ -29,6 +29,15 @@ import {
   type Bout,
   type PokeKind,
 } from '../src/games/en-garde/rules';
+import {
+  autoAnswer,
+  devPokes,
+  devRival,
+  devRung,
+  forcedPoke,
+  freezeAt,
+  skipVs,
+} from '../src/games/en-garde/dev';
 import { VOICE_LINES } from '../src/games/en-garde/voice';
 import { runs } from './helpers/full';
 
@@ -294,5 +303,42 @@ describe('en garde voice lines', () => {
     ]) {
       expect(VOICE_LINES).toContain(line);
     }
+  });
+});
+
+describe('en garde dev hooks', () => {
+  it('reads ?pokes= for a rival and rejects counts that would end the bout', () => {
+    expect(devPokes(8, '?pokes=7-2')).toEqual({ landed: 7, taken: 2 });
+    expect(devPokes(8, '?pokes=0-0')).toEqual({ landed: 0, taken: 0 });
+    expect(devPokes(8, '?pokes=8-0')).toBeNull();
+    expect(devPokes(8, '?pokes=0-3')).toBeNull();
+    expect(devPokes(12, '?pokes=11-2')).toEqual({ landed: 11, taken: 2 });
+    for (const bad of ['', '?pokes=', '?pokes=7', '?pokes=a-b', '?pokes=-1-0', '?pokes=1-2-3']) {
+      expect(devPokes(8, bad)).toBeNull();
+    }
+  });
+
+  it('reads the other hooks and gives null for bad values', () => {
+    expect(devRung('?rung=0')).toBe(0);
+    expect(devRung('?rung=5')).toBe(5);
+    expect(devRung('?rung=6')).toBeNull();
+    expect(devRung('?rung=x')).toBeNull();
+    expect(devRung('')).toBeNull();
+    expect(devRival('?rival=1')).toBe(0);
+    expect(devRival('?rival=5')).toBe(4);
+    expect(devRival('?rival=0')).toBeNull();
+    expect(devRival('?rival=6')).toBeNull();
+    expect(forcedPoke('?poke=nose')).toBe('nose');
+    expect(forcedPoke('?poke=kick')).toBeNull();
+    expect(autoAnswer('?auto=right')).toBe('right');
+    expect(autoAnswer('?auto=wrong')).toBe('wrong');
+    expect(autoAnswer('?auto=maybe')).toBeNull();
+    expect(freezeAt('?at=0.5')).toBe(0.5);
+    expect(freezeAt('?at=')).toBeNull();
+    expect(freezeAt('?at=soon')).toBeNull();
+    expect(freezeAt('?at=-1')).toBeNull();
+    expect(skipVs('?vs=skip')).toBe(true);
+    expect(skipVs('?auto=right')).toBe(true);
+    expect(skipVs('?vs=show')).toBeNull();
   });
 });
