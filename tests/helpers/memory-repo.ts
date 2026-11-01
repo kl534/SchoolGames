@@ -1,6 +1,7 @@
 import type {
   AccountRow,
   AttemptRow,
+  EmailTokenKind,
   PlayerRow,
   ProgressRow,
   Repo,
@@ -11,6 +12,10 @@ import type {
 export function createMemoryRepo() {
   const accounts = new Map<string, AccountRow>();
   const sessions = new Map<string, { accountId: string; expiresAt: number }>();
+  const emailTokens = new Map<
+    string,
+    { accountId: string; kind: EmailTokenKind; expiresAt: number }
+  >();
   const attempts = new Map<string, AttemptRow>();
   const players = new Map<string, PlayerRow & { accountId: string }>();
   const progress = new Map<string, ProgressRow & { accountId: string }>();
@@ -20,10 +25,59 @@ export function createMemoryRepo() {
     async accountByEmail(email) {
       return [...accounts.values()].find((a) => a.email === email) ?? null;
     },
+    async accountById(id) {
+      return accounts.get(id) ?? null;
+    },
+    async accountByGoogleSub(sub) {
+      return [...accounts.values()].find((a) => a.googleSub === sub) ?? null;
+    },
     async createAccount(account) {
       if ([...accounts.values()].some((a) => a.email === account.email)) return false;
-      accounts.set(account.id, account);
+      accounts.set(account.id, {
+        ...account,
+        googleSub: account.googleSub ?? null,
+        emailVerified: account.emailVerified ?? false,
+      });
       return true;
+    },
+    async setPassword(accountId, hash, salt) {
+      const a = accounts.get(accountId);
+      if (a) Object.assign(a, { passwordHash: hash, passwordSalt: salt });
+    },
+    async setEmailVerified(accountId) {
+      const a = accounts.get(accountId);
+      if (a) a.emailVerified = true;
+    },
+    async linkGoogle(accountId, sub, dropPassword) {
+      const a = accounts.get(accountId);
+      if (!a) return;
+      a.googleSub = sub;
+      a.emailVerified = true;
+      if (dropPassword) Object.assign(a, { passwordHash: null, passwordSalt: null });
+    },
+    async deleteAccount(accountId) {
+      accounts.delete(accountId);
+      for (const [k, s] of sessions) if (s.accountId === accountId) sessions.delete(k);
+      for (const [k, t] of emailTokens) if (t.accountId === accountId) emailTokens.delete(k);
+      for (const [k, p] of players) if (p.accountId === accountId) players.delete(k);
+      for (const [k, p] of progress) if (p.accountId === accountId) progress.delete(k);
+    },
+    async deleteSessions(accountId, keepTokenHash = '') {
+      for (const [k, s] of sessions) {
+        if (s.accountId === accountId && k !== keepTokenHash) sessions.delete(k);
+      }
+    },
+    async createEmailToken(tokenHash, accountId, kind, expiresAt) {
+      for (const [k, t] of emailTokens) {
+        if (t.accountId === accountId && t.kind === kind) emailTokens.delete(k);
+      }
+      emailTokens.set(tokenHash, { accountId, kind, expiresAt });
+    },
+    async takeEmailToken(tokenHash, kind) {
+      const t = emailTokens.get(tokenHash);
+      if (!t || t.kind !== kind) return null;
+      emailTokens.delete(tokenHash);
+      return { accountId: t.accountId, expiresAt: t.expiresAt };
     },
     async createSession(tokenHash, accountId, expiresAt) {
       sessions.set(tokenHash, { accountId, expiresAt });
@@ -93,7 +147,7 @@ export function createMemoryRepo() {
         progress.set(rowKey(accountId, p.playerId), { ...p, accountId });
     },
   };
-  return { repo, accounts, sessions, attempts, players, progress };
+  return { repo, accounts, sessions, emailTokens, attempts, players, progress };
 }
 
 export type MemoryRepo = ReturnType<typeof createMemoryRepo>;

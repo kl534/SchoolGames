@@ -6,7 +6,15 @@ export interface AccountRow {
   passwordHash: string | null;
   passwordSalt: string | null;
   createdAt: number;
+  googleSub: string | null;
+  emailVerified: boolean;
 }
+
+/** What `createAccount` takes: Google sign-ins also set `googleSub` and `emailVerified`. */
+export type NewAccount = Omit<AccountRow, 'googleSub' | 'emailVerified'> &
+  Partial<Pick<AccountRow, 'googleSub' | 'emailVerified'>>;
+
+export type EmailTokenKind = 'verify' | 'reset';
 
 export interface SessionRow {
   accountId: string;
@@ -45,8 +53,30 @@ export interface SyncWrites {
 
 export interface Repo {
   accountByEmail(email: string): Promise<AccountRow | null>;
+  accountById(id: string): Promise<AccountRow | null>;
+  accountByGoogleSub(sub: string): Promise<AccountRow | null>;
   /** False when the email is already taken. */
-  createAccount(account: AccountRow): Promise<boolean>;
+  createAccount(account: NewAccount): Promise<boolean>;
+  setPassword(accountId: string, hash: string, salt: string): Promise<void>;
+  setEmailVerified(accountId: string): Promise<void>;
+  /** Links a Google id, marks the email verified and, when `dropPassword`, clears the password. */
+  linkGoogle(accountId: string, sub: string, dropPassword: boolean): Promise<void>;
+  /** Deletes the account and, by cascade, its sessions, tokens, players and progress. */
+  deleteAccount(accountId: string): Promise<void>;
+  /** Deletes every session of the account except `keepTokenHash`. */
+  deleteSessions(accountId: string, keepTokenHash?: string): Promise<void>;
+  /** Replaces any older token of this kind for the account. */
+  createEmailToken(
+    tokenHash: string,
+    accountId: string,
+    kind: EmailTokenKind,
+    expiresAt: number,
+  ): Promise<void>;
+  /** Returns the token's account and deletes it (single use); null when unknown or another kind. */
+  takeEmailToken(
+    tokenHash: string,
+    kind: EmailTokenKind,
+  ): Promise<{ accountId: string; expiresAt: number } | null>;
   createSession(tokenHash: string, accountId: string, expiresAt: number): Promise<void>;
   session(tokenHash: string): Promise<SessionRow | null>;
   extendSession(tokenHash: string, expiresAt: number): Promise<void>;

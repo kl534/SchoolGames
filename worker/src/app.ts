@@ -2,6 +2,7 @@ import { AVATARS, MAX_NAME_LENGTH, normalizeProgress } from '../../src/shared/pr
 import type { PlayerProgress } from '../../src/shared/progress';
 import { mergeProgress } from '../../src/shared/sync/merge';
 import type {
+  AccountInfo,
   ApiErrorCode,
   AuthResponse,
   ServerConfig,
@@ -25,16 +26,35 @@ import {
   validPassword,
   verifyPassword,
 } from './auth';
-import type { D1Like, PlayerRow, ProgressRow, Repo } from './repo';
+import { fetchGoogleJwks, verifyGoogleToken, type FetchJwks } from './google';
+import {
+  RESET_SUBJECT,
+  VERIFY_SUBJECT,
+  emailEnabled,
+  resetBody,
+  sendMail,
+  verifyBody,
+  type MailEnv,
+  type Mailer,
+} from './mail';
+import type { D1Like, EmailTokenKind, PlayerRow, ProgressRow, Repo } from './repo';
 
-export interface Env {
+export interface Env extends MailEnv {
   DB: D1Like;
+  /** The Google OAuth client id; Google sign-in is off without it. */
+  GOOGLE_CLIENT_ID?: string;
   /** Comma-separated origins that may call the API from a browser. */
   ALLOWED_ORIGINS: string;
   SITE_URL: string;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60_000;
+const VERIFY_DAYS = 3;
+const RESET_HOURS = 1;
+/** Resend mails per account per hour, and forgot-password mails per email per hour. */
+export const RESEND_LIMIT = 3;
+export const FORGOT_LIMIT = 3;
 const PLAYER_ID = /^[a-z0-9]{4,40}$/;
 
 class HttpError extends Error {
@@ -86,17 +106,41 @@ async function readJson(req: Request): Promise<unknown> {
   }
 }
 
-/** Builds the handler for every request. `now` is injected so tests can move the clock. */
+/** Things the Worker reaches outside itself for; tests pass fakes. */
+export interface Deps {
+  mailer?: Mailer;
+  fetchJwks?: FetchJwks;
+}
+
+interface Ctx {
+  req: Request;
+  env: Env;
+  repo: Repo;
+  now: () => number;
+  mailer: Mailer;
+  fetchJwks: FetchJwks;
+}
+
+/** Builds the handler for every request. `now` and `deps` are injected so tests can fake them. */
 export async function handle(
   req: Request,
   env: Env,
   repo: Repo,
   now: () => number = Date.now,
+  deps: Deps = {},
 ): Promise<Response> {
   const cors = corsHeaders(req, env);
   if (req.method === 'OPTIONS') return reply(null, 204, cors);
   try {
-    return await route(req, repo, now, cors);
+    const ctx: Ctx = {
+      req,
+      env,
+      repo,
+      now,
+      mailer: deps.mailer ?? ((to, subject, text) => sendMail(env, to, subject, text)),
+      fetchJwks: deps.fetchJwks ?? fetchGoogleJwks,
+    };
+    return await route(ctx, cors);
   } catch (e) {
     if (e instanceof HttpError) return reply({ error: e.code }, e.status, cors);
     // Never log bodies, emails or tokens: say nothing about the cause.
@@ -104,23 +148,43 @@ export async function handle(
   }
 }
 
-async function route(
-  req: Request,
-  repo: Repo,
-  now: () => number,
-  cors: Record<string, string>,
-): Promise<Response> {
+async function route(ctx: Ctx, cors: Record<string, string>): Promise<Response> {
+  const { req, env, repo, now } = ctx;
   const path = new URL(req.url).pathname;
   const key = `${req.method} ${path}`;
 
   if (key === 'GET /config') {
-    const config: ServerConfig = { emailEnabled: false, googleClientId: null };
+    const config: ServerConfig = {
+      emailEnabled: emailEnabled(env),
+      googleClientId: env.GOOGLE_CLIENT_ID || null,
+    };
     return reply(config, 200, cors);
   }
-  if (key === 'POST /auth/signup') return reply(await signUp(req, repo, now), 200, cors);
-  if (key === 'POST /auth/login') return reply(await logIn(req, repo, now), 200, cors);
+  if (key === 'POST /auth/signup') return reply(await signUp(ctx), 200, cors);
+  if (key === 'POST /auth/login') return reply(await logIn(ctx), 200, cors);
+  if (key === 'POST /auth/google') return reply(await googleSignIn(ctx), 200, cors);
+  if (key === 'POST /auth/verify') {
+    await verifyEmail(ctx);
+    return reply(null, 204, cors);
+  }
+  if (key === 'POST /auth/forgot') {
+    await forgotPassword(ctx);
+    return reply(null, 204, cors);
+  }
+  if (key === 'POST /auth/reset') {
+    await resetPassword(ctx);
+    return reply(null, 204, cors);
+  }
 
-  const authed = ['POST /auth/logout', 'GET /me', 'POST /sync'];
+  const authed = [
+    'POST /auth/logout',
+    'GET /me',
+    'POST /sync',
+    'GET /account',
+    'POST /auth/resend',
+    'POST /auth/password',
+    'DELETE /account',
+  ];
   if (!authed.includes(key)) return reply({ error: 'invalid' }, 404, cors);
 
   const token = /^Bearer (.+)$/.exec(req.headers.get('Authorization') ?? '')?.[1];
@@ -137,6 +201,19 @@ async function route(
     return reply(null, 204, cors);
   }
   if (key === 'GET /me') return reply({ email: session.email }, 200, cors);
+  if (key === 'GET /account') return reply(await accountInfo(repo, session.accountId), 200, cors);
+  if (key === 'POST /auth/resend') {
+    await resendVerification(ctx, session.accountId);
+    return reply(null, 204, cors);
+  }
+  if (key === 'POST /auth/password') {
+    await changePassword(ctx, session.accountId, tokenHash);
+    return reply(null, 204, cors);
+  }
+  if (key === 'DELETE /account') {
+    await deleteAccount(ctx, session.accountId, session.email);
+    return reply(null, 204, cors);
+  }
   return reply(await sync(req, repo, now, session.accountId), 200, cors);
 }
 
@@ -157,7 +234,8 @@ async function startSession(repo: Repo, now: () => number, accountId: string, em
   return auth;
 }
 
-async function signUp(req: Request, repo: Repo, now: () => number): Promise<AuthResponse> {
+async function signUp(ctx: Ctx): Promise<AuthResponse> {
+  const { req, env, repo, now } = ctx;
   const { email, password } = await credentials(req);
   if (!validEmail(email) || !validPassword(password)) throw new HttpError(400, 'invalid');
   const normal = normalizeEmail(email);
@@ -172,6 +250,7 @@ async function signUp(req: Request, repo: Repo, now: () => number): Promise<Auth
     createdAt: now(),
   });
   if (!created) throw new HttpError(409, 'exists');
+  if (emailEnabled(env)) await mailVerification(ctx, id, normal);
   return startSession(repo, now, id, normal);
 }
 
@@ -190,7 +269,7 @@ async function countFailure(repo: Repo, key: string, now: number): Promise<void>
   }
 }
 
-async function logIn(req: Request, repo: Repo, now: () => number): Promise<AuthResponse> {
+async function logIn({ req, repo, now }: Ctx): Promise<AuthResponse> {
   const { email, password } = await credentials(req);
   const normal = normalizeEmail(email);
   const emailKey = `login:${normal}`;
@@ -218,6 +297,182 @@ async function logIn(req: Request, repo: Repo, now: () => number): Promise<AuthR
   }
   await repo.clearAttempt(emailKey);
   return startSession(repo, now, account.id, account.email);
+}
+
+// ---------- Mail, Google, password and account tools ----------
+
+async function body(req: Request): Promise<Json> {
+  const data = await readJson(req);
+  if (!isObject(data)) throw new HttpError(400, 'invalid');
+  return data;
+}
+
+const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+
+/** Counts one use of a limited action; false when the key has used up its `limit` in the window. */
+async function allow(
+  repo: Repo,
+  key: string,
+  limit: number,
+  windowMs: number,
+  t: number,
+): Promise<boolean> {
+  const row = await repo.attempt(key);
+  if (!row || t - row.windowStart >= windowMs) {
+    await repo.setAttempt(key, { count: 1, windowStart: t });
+    return true;
+  }
+  if (row.count >= limit) return false;
+  await repo.setAttempt(key, { count: row.count + 1, windowStart: row.windowStart });
+  return true;
+}
+
+/** Makes a single-use token for the account (replacing an older one) and returns it. */
+async function issueToken(
+  repo: Repo,
+  accountId: string,
+  kind: EmailTokenKind,
+  expiresAt: number,
+): Promise<string> {
+  const token = newToken();
+  await repo.createEmailToken(await sha256Hex(token), accountId, kind, expiresAt);
+  return token;
+}
+
+const linkTo = (env: Env, param: string, token: string) =>
+  `${env.SITE_URL}?${param}=${encodeURIComponent(token)}`;
+
+/** Mails fail quietly: a mail outage must not break sign-up, and an error could leak an address. */
+async function safeMail(mailer: Mailer, to: string, subject: string, text: string) {
+  try {
+    await mailer(to, subject, text);
+  } catch {
+    // Nothing to say.
+  }
+}
+
+async function mailVerification(ctx: Ctx, accountId: string, email: string): Promise<void> {
+  const { env, repo, now, mailer } = ctx;
+  const token = await issueToken(repo, accountId, 'verify', now() + VERIFY_DAYS * DAY_MS);
+  await safeMail(mailer, email, VERIFY_SUBJECT, verifyBody(linkTo(env, 'verify', token)));
+}
+
+async function verifyEmail({ req, repo, now }: Ctx): Promise<void> {
+  const token = str((await body(req)).token);
+  const found = token ? await repo.takeEmailToken(await sha256Hex(token), 'verify') : null;
+  if (!found || found.expiresAt <= now()) throw new HttpError(400, 'invalid');
+  await repo.setEmailVerified(found.accountId);
+}
+
+async function resendVerification(ctx: Ctx, accountId: string): Promise<void> {
+  const { env, repo, now } = ctx;
+  if (!emailEnabled(env)) throw new HttpError(400, 'invalid');
+  const account = await repo.accountById(accountId);
+  if (!account || account.emailVerified) return;
+  if (!(await allow(repo, `resend:${accountId}`, RESEND_LIMIT, HOUR_MS, now()))) {
+    throw new HttpError(429, 'rate_limited');
+  }
+  await mailVerification(ctx, accountId, account.email);
+}
+
+async function forgotPassword({ req, env, repo, now, mailer }: Ctx): Promise<void> {
+  const email = normalizeEmail(str((await body(req)).email));
+  // The answer is the same whether or not the account exists, so this reveals nothing.
+  if (!emailEnabled(env) || !validEmail(email)) return;
+  const account = await repo.accountByEmail(email);
+  if (!account?.passwordHash) return;
+  if (!(await allow(repo, `forgot:${email}`, FORGOT_LIMIT, HOUR_MS, now()))) return;
+  const token = await issueToken(repo, account.id, 'reset', now() + RESET_HOURS * HOUR_MS);
+  await safeMail(mailer, email, RESET_SUBJECT, resetBody(linkTo(env, 'reset', token)));
+}
+
+async function resetPassword({ req, repo, now }: Ctx): Promise<void> {
+  const data = await body(req);
+  const token = str(data.token);
+  const password = str(data.password);
+  if (!validPassword(password)) throw new HttpError(400, 'invalid');
+  const found = token ? await repo.takeEmailToken(await sha256Hex(token), 'reset') : null;
+  if (!found || found.expiresAt <= now()) throw new HttpError(400, 'invalid');
+  const { hash, salt } = await hashPassword(password);
+  await repo.setPassword(found.accountId, hash, salt);
+  // They own the mailbox, and every device signed in with the old password is signed out.
+  await repo.setEmailVerified(found.accountId);
+  await repo.deleteSessions(found.accountId);
+}
+
+async function accountInfo(repo: Repo, accountId: string): Promise<AccountInfo> {
+  const account = await repo.accountById(accountId);
+  if (!account) throw new HttpError(401, 'unauthorized');
+  return {
+    email: account.email,
+    emailVerified: account.emailVerified,
+    hasPassword: account.passwordHash !== null,
+  };
+}
+
+async function changePassword(ctx: Ctx, accountId: string, tokenHash: string): Promise<void> {
+  const { req, repo, now } = ctx;
+  const data = await body(req);
+  const current = str(data.current);
+  const next = str(data.next);
+  const key = `password:${accountId}`;
+  const t = now();
+  if (await limited(repo, key, ATTEMPT_LIMIT, t)) throw new HttpError(429, 'rate_limited');
+  if (!validPassword(next)) throw new HttpError(400, 'invalid');
+  const account = await repo.accountById(accountId);
+  if (!account) throw new HttpError(401, 'unauthorized');
+  // A Google-only account has no password to confirm.
+  if (account.passwordHash && account.passwordSalt) {
+    if (!(await verifyPassword(current, account.passwordHash, account.passwordSalt))) {
+      await countFailure(repo, key, t);
+      throw new HttpError(401, 'bad_credentials');
+    }
+  }
+  await repo.clearAttempt(key);
+  const { hash, salt } = await hashPassword(next);
+  await repo.setPassword(accountId, hash, salt);
+  await repo.deleteSessions(accountId, tokenHash);
+}
+
+async function deleteAccount(ctx: Ctx, accountId: string, email: string): Promise<void> {
+  const confirm = normalizeEmail(str((await body(ctx.req)).confirmEmail));
+  if (confirm !== email) throw new HttpError(400, 'invalid');
+  await ctx.repo.deleteAccount(accountId);
+}
+
+async function googleSignIn({ req, env, repo, now, fetchJwks }: Ctx): Promise<AuthResponse> {
+  const credential = str((await body(req)).credential);
+  if (!env.GOOGLE_CLIENT_ID || !credential) throw new HttpError(400, 'invalid');
+  const identity = await verifyGoogleToken(credential, env.GOOGLE_CLIENT_ID, fetchJwks, now());
+  if (!identity) throw new HttpError(401, 'bad_credentials');
+  const email = normalizeEmail(identity.email);
+
+  const known = await repo.accountByGoogleSub(identity.sub);
+  if (known) return startSession(repo, now, known.id, known.email);
+
+  const sameEmail = await repo.accountByEmail(email);
+  if (sameEmail) {
+    if (sameEmail.googleSub) throw new HttpError(401, 'bad_credentials');
+    // Google vouches for this mailbox. A password account nobody confirmed may belong to a
+    // squatter, so its password stops working and its sessions end.
+    const squatter = !sameEmail.emailVerified;
+    await repo.linkGoogle(sameEmail.id, identity.sub, squatter);
+    if (squatter) await repo.deleteSessions(sameEmail.id);
+    return startSession(repo, now, sameEmail.id, sameEmail.email);
+  }
+
+  const id = crypto.randomUUID();
+  const created = await repo.createAccount({
+    id,
+    email,
+    passwordHash: null,
+    passwordSalt: null,
+    googleSub: identity.sub,
+    emailVerified: true,
+    createdAt: now(),
+  });
+  if (!created) throw new HttpError(409, 'exists');
+  return startSession(repo, now, id, email);
 }
 
 // ---------- Sync ----------
