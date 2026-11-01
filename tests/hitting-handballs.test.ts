@@ -5,6 +5,7 @@ import {
   devPair,
   devRung,
   devScore,
+  devRun,
   devServe,
   devStreak,
   forcedWhiff,
@@ -42,11 +43,14 @@ import {
   allScoreCalls,
   CHAMPION_RUNG,
   coinToss,
+  COOKING_RUN,
+  isCooking,
   isMatchPoint,
   judgeHit,
   matchStars,
   matchWinner,
   newMatch,
+  nextRun,
   nextRung,
   outcomeText,
   PAIRS,
@@ -209,7 +213,7 @@ describe('hitting handballs calls', () => {
 
   it('records every line once', () => {
     expect(new Set(VOICE_LINES).size).toBe(VOICE_LINES.length);
-    expect(VOICE_LINES).toHaveLength(126 + 5 + 5);
+    expect(VOICE_LINES).toHaveLength(126 + 5 + 6);
     for (const pair of PAIRS) expect(VOICE_LINES).toContain(pair.intro);
     for (const line of [
       'Play ball!',
@@ -217,9 +221,39 @@ describe('hitting handballs calls', () => {
       'We win!',
       'So close! Try again!',
       'You are the Recess Champions!',
+      "You're cooking!",
     ]) {
       expect(VOICE_LINES).toContain(line);
     }
+  });
+});
+
+describe('hitting handballs cooking', () => {
+  it('counts our points in a row and resets on theirs', () => {
+    expect(nextRun(0, 'us')).toBe(1);
+    expect(nextRun(2, 'us')).toBe(3);
+    expect(nextRun(4, 'them')).toBe(0);
+    expect(nextRun(2, null)).toBe(2);
+  });
+
+  it('calls it at every third point in a row', () => {
+    expect([0, 1, 2, 3, 4, 5, 6, 9].map(isCooking)).toEqual([
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+    ]);
+    expect(COOKING_RUN).toBe(3);
+  });
+
+  it('reads devRun', () => {
+    expect(devRun('?run=2')).toBe(2);
+    expect(devRun('?run=x')).toBeNull();
+    expect(devRun('')).toBeNull();
   });
 });
 

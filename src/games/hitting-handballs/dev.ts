@@ -7,6 +7,7 @@
  * - `?score=<us>-<them>`: the starting score, ignored if the match would already be over.
  * - `?serve=us|them`: who serves first.
  * - `?streak=<n>`: the starting rally streak (below the pair's `streakToWin`).
+ * - `?run=<n>`: points in a row we have already won (for the "You're cooking!" call).
  * - `?vs=skip`: skip the VS card.
  * - `?auto=smash|return|winner|wrong`: answer the first question 0.3 s after its reading ends,
  *   skip the VS card, the preview and "Play ball!". `smash` judges at 0.3 s, `return` judges at
@@ -60,6 +61,12 @@ export function devServe(search: string = location.search): Side | null {
 export function devStreak(streakToWin: number, search: string = location.search): number | null {
   if (!import.meta.env.DEV) return null;
   return whole(query(search).get('streak'), 0, streakToWin - 1);
+}
+
+/** `?run=<n>` in a dev build: points in a row we have already won (0 to 20). */
+export function devRun(search: string = location.search): number | null {
+  if (!import.meta.env.DEV) return null;
+  return whole(query(search).get('run'), 0, 20);
 }
 
 /** True for `?vs=skip` or `?auto=` in a dev build. */

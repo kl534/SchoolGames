@@ -67,16 +67,16 @@ function canvasTexture(
   return texture;
 }
 
-/** Red-brown bricks with light mortar lines. */
-function brickTexture(): Texture {
+/** Blue painted blocks with pale mortar lines. */
+function wallTexture(): Texture {
   const texture = canvasTexture(128, 128, (g) => {
-    g.fillStyle = '#d9cfc2';
+    g.fillStyle = '#c9d6e8';
     g.fillRect(0, 0, 128, 128);
     for (let row = 0; row < 8; row++) {
       const shift = row % 2 ? 16 : 0;
       for (let col = -1; col < 4; col++) {
-        const tint = 0xb5 + ((row * 7 + col * 13) % 3) * 6;
-        g.fillStyle = `rgb(${tint}, ${0x54 + ((col + row) % 2) * 6}, ${0x3c})`;
+        const tint = ((row * 7 + col * 13) % 3) * 6;
+        g.fillStyle = `rgb(${0x2a + tint}, ${0x6a + ((col + row) % 2) * 6}, ${0xc8 + tint})`;
         g.fillRect(col * 32 + shift + 1.5, row * 16 + 1.5, 29, 13);
       }
     }
@@ -127,11 +127,11 @@ export function buildCourt(): Court {
   line(0.06, 3.06, -0.6, -0.1);
   line(0.06, 3.06, 3.2, -0.1);
 
-  // The brick wall, with its face at WALL_X.
-  const bricks = brickTexture();
-  bricks.repeat.set(3, 1.2);
-  const brickMaterial = new MeshStandardMaterial({ map: bricks, roughness: 0.95 });
-  const wall = new Mesh(new BoxGeometry(0.4, 3.4, 4.8), brickMaterial);
+  // The blue wall, with its face at WALL_X.
+  const blocks = wallTexture();
+  blocks.repeat.set(3, 1.2);
+  const wallMaterial = new MeshStandardMaterial({ map: blocks, roughness: 0.95 });
+  const wall = new Mesh(new BoxGeometry(0.4, 3.4, 4.8), wallMaterial);
   wall.position.set(WALL_X - 0.2, 1.7, -0.2);
   object.add(wall);
   const stripe = new Mesh(new BoxGeometry(0.02, 0.08, 4.8), flat(0xffffff, 0.7));
