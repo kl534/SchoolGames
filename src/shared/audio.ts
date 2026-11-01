@@ -564,4 +564,12 @@ export const sfx = {
       tone(ctx, 'square', 330, 330, t, 0.18, 0.18);
       tone(ctx, 'square', 247, 247, t + 0.18, 0.18, 0.18);
     }),
+  /** A school bell ringing for 1.6 s. */
+  bell: () =>
+    play((ctx, t) => {
+      for (let i = 0; i < 20; i++) {
+        tone(ctx, 'triangle', 2100, 2100, t + i * 0.08, 0.12, 0.18);
+        tone(ctx, 'sine', 2650, 2650, t + i * 0.08, 0.1, 0.1);
+      }
+    }),
 };
