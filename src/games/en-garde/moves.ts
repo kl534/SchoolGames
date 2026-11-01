@@ -56,10 +56,10 @@ const FLIPS = 1.5;
  * (negative = low): the head bonk is an overhead swing, the nose boop a high jab.
  */
 export const POKE_AIM: Record<PokeKind, number> = {
-  belly: 0,
-  head: 1.0,
-  nose: 0.45,
-  bottom: -0.55,
+  belly: -0.1,
+  head: 0.5,
+  nose: 0.22,
+  bottom: -0.4,
 };
 /** The finisher is a high, wide thrust. */
 export const FINISH_AIM = 0.25;
