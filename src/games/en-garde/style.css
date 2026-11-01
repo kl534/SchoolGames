@@ -616,6 +616,71 @@
   outline-offset: 2px;
 }
 
+.eg-vs-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+/* A short landscape screen: the ladder on the left, the names and Fight! on the right, no scrolling. */
+@media (max-height: 450px) {
+  .eg-vs {
+    padding: 10px 16px;
+  }
+
+  .eg-vs-card {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      'heading heading'
+      'rungs side';
+    align-items: center;
+    gap: 8px 18px;
+    width: min(640px, 100%);
+    padding: 12px 18px 14px;
+  }
+
+  .eg-vs-heading {
+    grid-area: heading;
+    font-size: 22px;
+  }
+
+  .eg-rungs {
+    grid-area: rungs;
+    gap: 4px;
+  }
+
+  .eg-rung-row {
+    min-height: 30px;
+    padding: 2px 10px;
+    font-size: 15px;
+  }
+
+  .eg-rung-note {
+    font-size: 12px;
+  }
+
+  .eg-vs-side {
+    grid-area: side;
+    gap: 8px;
+  }
+
+  .eg-vs-names {
+    margin-top: 0;
+    font-size: 20px;
+  }
+
+  .eg-vs-sub {
+    font-size: 14px;
+  }
+
+  .eg-fight {
+    min-height: 56px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .eg-banner,
   .eg-bar-box.shake,

@@ -168,6 +168,7 @@ function run(session: GameSession): void {
   /** Dev: the first move is held at `?at=` and time stands still. */
   let frozen = false;
   let freezeUsed = false;
+  let frozenAt = 0;
   let autoUsed = false;
   let clockRunning = false;
   let clockTotal = 1;
@@ -241,13 +242,15 @@ function run(session: GameSession): void {
     refit = true;
   };
 
-  const showBanner = (text: string, bad = false) => {
+  /** `top` puts the banner under the bars instead of the middle, so the cake stays clear. */
+  const showBanner = (text: string, bad = false, top = false) => {
     banner.textContent = text;
     banner.className = bad ? 'eg-banner bad' : 'eg-banner';
     banner.hidden = false;
     const band = measureBand();
     const half = banner.offsetHeight / 2;
-    banner.style.top = `${Math.min(Math.max((band.top + band.bottom) / 2, band.top + half), band.bottom - half)}px`;
+    const middle = (band.top + band.bottom) / 2;
+    banner.style.top = `${top ? band.top + half + 4 : Math.min(Math.max(middle, band.top + half), band.bottom - half)}px`;
   };
 
   const setClock = (fraction: number) => {
@@ -259,7 +262,9 @@ function run(session: GameSession): void {
   /** A comic word at the point of a poke on a fighter. */
   const popWord = (text: string, victim: Fighter, kind: PokeKind | null) => {
     const spot = victim.bodyPoint(kind ? POKE_HEIGHT[kind] : 0.6);
-    words.pop(text, toScreen({ x: spot.x, y: spot.y + 0.15, z: 0.6 }), frozen);
+    // A frozen dev shot keeps the word, unless the move has gone on to where it would be gone.
+    const hold = frozen && (kind !== null || frozenAt < 1.2);
+    words.pop(text, toScreen({ x: spot.x, y: spot.y + 0.15, z: 0.6 }), hold);
   };
 
   // ---------- Moves ----------
@@ -276,9 +281,11 @@ function run(session: GameSession): void {
       freezeUsed = true;
       if (m.kind === 'finish') {
         frozen = true;
+        frozenAt = at;
         move.t = at;
       } else if (at < POKE_TOTAL) {
         frozen = true;
+        frozenAt = at;
         move.t = at;
       } else {
         move.t = POKE_TOTAL;
@@ -519,6 +526,7 @@ function run(session: GameSession): void {
     const ready = () => {
       if (!moveDone || !tauntDone || turn !== thisTurn) return;
       phase = 'tap';
+      showHud(true, true);
       buttons[options.indexOf(current.answer)]?.classList.add('right');
       tapFlow.reveal(buttons, options, current, {
         chosen: index >= 0 ? options[index] : undefined,
@@ -540,6 +548,8 @@ function run(session: GameSession): void {
         attacker: rival,
         victim: you,
         onContact: () => {
+          // The finisher has the screen to itself until the tap flow needs the answers.
+          showHud(true, false);
           bars.lose('us');
           rival.hit();
           sfx.squeak();
@@ -601,7 +611,7 @@ function run(session: GameSession): void {
     const thisTurn = ++turn;
     phase = 'ending';
     showHud(true, false);
-    showBanner('SO CLOSE!', true);
+    showBanner('SO CLOSE!', true, true);
     sfx.aww();
     rival.setMode('dance');
     speak(SO_CLOSE_SPEECH);
@@ -620,6 +630,7 @@ function run(session: GameSession): void {
       attacker: you,
       victim: rival,
       onContact: () => {
+        showHud(true, false);
         bars.lose('them');
         you.hit();
         sfx.squeak();
@@ -633,7 +644,7 @@ function run(session: GameSession): void {
         sfx.bigCheer();
         party.kids.cheer(2.5);
         you.setMode('victory');
-        showBanner('VICTORY!');
+        showBanner('VICTORY!', false, true);
         const toResults = () => after(WIN_RESULTS_AFTER, () => turn === thisTurn && results(true));
         speak(VICTORY_SPEECH, () => {
           if (turn !== thisTurn) return;

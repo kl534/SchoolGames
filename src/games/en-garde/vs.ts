@@ -52,12 +52,14 @@ export function showVs(options: VsOptions): VsCard {
     el('span', 'eg-rung-note', row, note);
   }
 
-  const names = el('div', 'eg-vs-names', card);
+  // On a short landscape screen the ladder sits on the left and these on the right.
+  const side = el('div', 'eg-vs-side', card);
+  const names = el('div', 'eg-vs-names', side);
   el('span', 'eg-vs-you', names, 'YOU');
   el('span', 'eg-vs-vs', names, 'vs');
   el('span', 'eg-vs-rival', names, rival.name);
-  el('p', 'eg-vs-sub', card, vsSubtitle(rival));
-  const fight = el('button', 'eg-fight', card, 'Fight! 🎈');
+  el('p', 'eg-vs-sub', side, vsSubtitle(rival));
+  const fight = el('button', 'eg-fight', side, 'Fight! 🎈');
   fight.type = 'button';
   fight.addEventListener('click', () => {
     overlay.remove();
