@@ -3,6 +3,7 @@ import { MATH_TOPICS } from './math';
 import { SOCIAL_STUDIES_TOPICS } from './social-studies';
 import type { Fact, Topic } from './types';
 
+export type { Continent } from './countries';
 export type { DistractorFn, Fact, FactMap, FactVisual, Topic } from './types';
 
 /** Every topic, in menu order. Add new topic lists here. */

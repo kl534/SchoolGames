@@ -24,6 +24,9 @@ import {
   LOCATION_SPOKEN_PROMPT,
   stateLocations,
 } from '../src/shared/topics/locations';
+import { COUNTRIES } from '../src/shared/topics/countries';
+import { WORLD_NEIGHBORS } from '../src/shared/maps/world-data';
+import { countryLocations } from '../src/shared/topics/world';
 import { SOCIAL_STUDIES_TOPICS } from '../src/shared/topics/social-studies';
 import { runs } from './helpers/full';
 import {
@@ -442,7 +445,7 @@ describe('state capitals', () => {
   it('is the last menu group, Social Studies', () => {
     expect(groupBySubject().at(-1)).toEqual({
       subject: 'Social Studies',
-      topics: [stateCapitals, stateLocations],
+      topics: [stateCapitals, stateLocations, countryLocations],
     });
   });
 });
@@ -718,7 +721,7 @@ describe('Find the state', () => {
     expect(stateLocations.facts.length).toBe(50);
     stateLocations.facts.forEach((fact, i) => {
       expect(fact.id).toBe(`map-${kebab(STATE_CAPITALS[i].state)}`);
-      expect(US_STATE_SHAPES[fact.map!.state]).toBeDefined();
+      expect(US_STATE_SHAPES[kebab(STATE_CAPITALS[i].state)]).toBeDefined();
       expect(fact.map).toEqual({ kind: 'us-state', state: kebab(STATE_CAPITALS[i].state) });
     });
     const ids = SOCIAL_STUDIES_TOPICS.flatMap((t) => t.facts.map((f) => f.id));
@@ -762,7 +765,7 @@ describe('Find the state', () => {
         expect(options).toContain(fact.answer);
         const wrong = options.filter((o) => o !== fact.answer);
         for (const o of wrong) expect(names.has(o)).toBe(true);
-        const neighbours = US_STATE_NEIGHBORS[fact.map!.state];
+        const neighbours = US_STATE_NEIGHBORS[kebab(fact.answer)];
         if (neighbours.length >= 3) {
           for (const o of wrong) expect(neighbours).toContain(kebab(o));
         }
@@ -771,6 +774,71 @@ describe('Find the state', () => {
             const row = STATE_CAPITALS.find((r) => r.state === o)!;
             expect(row.division).toBe('pacific');
           }
+        }
+      }
+    }
+  });
+});
+
+describe('Find the country', () => {
+  const names = new Set(COUNTRIES.map((c) => c.name));
+  const key = (name: string) => kebab(name);
+
+  it('has 60 facts with world-<country> ids that never clash with another topic', () => {
+    expect(countryLocations.facts.length).toBe(60);
+    countryLocations.facts.forEach((fact, i) => {
+      expect(fact.id).toBe(`world-${kebab(COUNTRIES[i].name)}`);
+      expect(fact.map).toEqual({
+        kind: 'world',
+        country: kebab(COUNTRIES[i].name),
+        continent: COUNTRIES[i].continent,
+      });
+    });
+    const ids = SOCIAL_STUDIES_TOPICS.flatMap((t) => t.facts.map((f) => f.id));
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(validateTopic(countryLocations)).toEqual([]);
+  });
+
+  it('asks and tells as the design says', () => {
+    const uk = countryLocations.facts.find((f) => f.id === 'world-united-kingdom')!;
+    expect(uk.prompt).toBe('Which country?');
+    expect(uk.spokenPrompt).toBe('Which country is this?');
+    expect(uk.answer).toBe('United Kingdom');
+    expect(uk.spokenStatement).toBe('This is the United Kingdom.');
+    const chile = countryLocations.facts.find((f) => f.id === 'world-chile')!;
+    expect(chile.spokenStatement).toBe('This is Chile.');
+    expect(chile.wrongLines!['Peru']).toBe("That's Peru.");
+    expect(chile.wrongLines!['Philippines']).toBe("That's the Philippines.");
+    expect(missSpeech(chile, 'Peru')).toEqual(["That's Peru.", 'This is Chile.']);
+  });
+
+  it('has a wrong line for each of the 59 other countries', () => {
+    for (const fact of countryLocations.facts) {
+      const keys = Object.keys(fact.wrongLines!);
+      expect(keys.length).toBe(59);
+      expect(keys).not.toContain(fact.answer);
+      for (const k of keys) expect(names.has(k)).toBe(true);
+    }
+  });
+
+  it('gives four distinct country names, neighbours first, for every country', () => {
+    for (let seed = 1; seed <= runs(300, 30); seed++) {
+      const random = seededRandom(seed);
+      for (const fact of countryLocations.facts) {
+        const options = answerOptions(countryLocations, fact, 4, random);
+        expect(options.length).toBe(4);
+        expect(new Set(options).size).toBe(4);
+        expect(options).toContain(fact.answer);
+        const wrong = options.filter((o) => o !== fact.answer);
+        for (const o of wrong) expect(names.has(o)).toBe(true);
+        const neighbours = WORLD_NEIGHBORS[key(fact.answer)];
+        if (neighbours.length >= 3) {
+          for (const o of wrong) expect(neighbours).toContain(key(o));
+        } else {
+          const continent = COUNTRIES.find((c) => c.name === fact.answer)!.continent;
+          expect(
+            wrong.some((o) => COUNTRIES.find((c) => c.name === o)!.continent === continent),
+          ).toBe(true);
         }
       }
     }

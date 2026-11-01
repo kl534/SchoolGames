@@ -1,8 +1,15 @@
 import './maps.css';
 import type { Fact } from '../topics';
-import { drawUsMap, stateIdByName, type MapMarks } from './draw';
+import { countryIdByName, drawUsMap, drawWorldMap, stateIdByName, type MapMarks } from './draw';
 
-export { drawUsMap, RINGED, stateIdByName, type MapMarks } from './draw';
+export {
+  countryIdByName,
+  drawUsMap,
+  drawWorldMap,
+  RINGED,
+  stateIdByName,
+  type MapMarks,
+} from './draw';
 
 let overlay: HTMLDivElement | null = null;
 
@@ -16,6 +23,15 @@ function ensureOverlay(): HTMLDivElement {
   return overlay;
 }
 
+/** The svg for a fact with `map`: the US map, or the continent of its country. */
+function drawFactMap(fact: Fact, marks: MapMarks, className: string): SVGSVGElement | null {
+  const map = fact.map;
+  if (!map) return null;
+  return map.kind === 'world'
+    ? drawWorldMap(marks, map.continent, className)
+    : drawUsMap(marks, className);
+}
+
 /**
  * Shows the big map for a fact with `map`; returns false (and hides it) for any other fact. With
  * `marks` it is a miss: the right state green and `marks.wrong` (a state name, if any) red.
@@ -25,11 +41,16 @@ export function showFactMap(fact: Fact, marks?: { wrong?: string }): boolean {
     hideFactMap();
     return false;
   }
-  const state = fact.map.state;
-  const wrong = marks?.wrong ? stateIdByName(marks.wrong) : undefined;
-  const shown: MapMarks = marks ? { right: state, wrong } : { lit: state };
+  const map = fact.map;
+  const target = map.kind === 'world' ? map.country : map.state;
+  const wrong = marks?.wrong
+    ? map.kind === 'world'
+      ? countryIdByName(marks.wrong)
+      : stateIdByName(marks.wrong)
+    : undefined;
+  const shown: MapMarks = marks ? { right: target, wrong } : { lit: target };
   const box = ensureOverlay();
-  box.replaceChildren(drawUsMap(shown, 'sg-factmap-svg'));
+  box.replaceChildren(drawFactMap(fact, shown, 'sg-factmap-svg')!);
   // Reflow so a map shown right after a hide still fades in.
   void box.offsetWidth;
   box.classList.add('is-shown');
@@ -49,6 +70,7 @@ export function factMapThumb(fact: Fact): HTMLElement | null {
   const name = document.createElement('span');
   name.className = 'sg-mapthumb-name';
   name.textContent = fact.answer;
-  thumb.append(drawUsMap({ lit: fact.map.state }, 'sg-mapthumb-svg'), name);
+  const target = fact.map.kind === 'world' ? fact.map.country : fact.map.state;
+  thumb.append(drawFactMap(fact, { lit: target }, 'sg-mapthumb-svg')!, name);
   return thumb;
 }

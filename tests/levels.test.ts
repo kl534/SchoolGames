@@ -33,7 +33,9 @@ import { SOCIAL_STUDIES_LEVELS } from '../src/shared/levels-social';
 import { seededRandom } from '../src/shared/random';
 import { answerOptions, TOPICS, validateTopic } from '../src/shared/topics';
 import { DIVISION_REGION, STATE_CAPITALS, stateCapitals } from '../src/shared/topics/capitals';
+import { COUNTRIES } from '../src/shared/topics/countries';
 import { stateLocations } from '../src/shared/topics/locations';
+import { countryLocations } from '../src/shared/topics/world';
 import { MATH_TOPICS, missingTwin } from '../src/shared/topics/math';
 
 /** A fake clock: every answer comes 6 hours after the one before, so each right one counts. */
@@ -496,7 +498,7 @@ describe('Social Studies path', () => {
     recordAnswer(progress, stateCapitals.id, fact.id, true, clock);
   };
 
-  it('has 10 levels: 5 of capitals, then 5 of finding the state', () => {
+  it('has 17 levels: 5 of capitals, 5 of finding the state, then 7 of finding the country', () => {
     expect(SOCIAL_STUDIES_LEVELS.map((l) => l.title)).toEqual([
       'The Northeast',
       'The Midwest',
@@ -508,9 +510,16 @@ describe('Social Studies path', () => {
       'Find the South',
       'Find the West',
       'Find all 50 states',
+      'Find North America',
+      'Find South America',
+      'Find Europe',
+      'Find Africa',
+      'Find Asia',
+      'Find Oceania',
+      'Find all the countries',
     ]);
     expect(SOCIAL_STUDIES_LEVELS.map((l) => l.facts.length)).toEqual([
-      9, 12, 16, 13, 50, 9, 12, 16, 13, 50,
+      9, 12, 16, 13, 50, 9, 12, 16, 13, 50, 10, 10, 14, 10, 12, 4, 60,
     ]);
   });
 
@@ -529,6 +538,23 @@ describe('Social Studies path', () => {
     SOCIAL_STUDIES_LEVELS[9].facts.forEach((lf, i) => {
       expect(lf.topic).toBe(stateLocations);
       expect(lf.fact).toBe(stateLocations.facts[i]);
+    });
+  });
+
+  it('puts every country in exactly one continent level, then all 60 in order', () => {
+    const continents = ['north-america', 'south-america', 'europe', 'africa', 'asia', 'oceania'];
+    const all = SOCIAL_STUDIES_LEVELS.slice(10, 16).flatMap((l) => l.facts.map((f) => f.fact));
+    expect(new Set(all)).toEqual(new Set(countryLocations.facts));
+    expect(all.length).toBe(60);
+    SOCIAL_STUDIES_LEVELS.slice(10, 16).forEach((level, i) => {
+      for (const { fact, topic } of level.facts) {
+        expect(topic).toBe(countryLocations);
+        expect(COUNTRIES[countryLocations.facts.indexOf(fact)].continent).toBe(continents[i]);
+      }
+    });
+    SOCIAL_STUDIES_LEVELS[16].facts.forEach((lf, i) => {
+      expect(lf.topic).toBe(countryLocations);
+      expect(lf.fact).toBe(countryLocations.facts[i]);
     });
   });
 
@@ -583,13 +609,13 @@ describe('Social Studies path', () => {
 
   it('lists each path fact once', () => {
     const facts = pathFacts(path).map((lf) => lf.fact);
-    expect(facts.length).toBe(100);
-    expect(new Set(facts).size).toBe(100);
+    expect(facts.length).toBe(160);
+    expect(new Set(facts).size).toBe(160);
     expect(pathFacts(MATH_PATH).length).toBe(LEVELS.reduce((n, l) => n + l.facts.length, 0));
   });
 
   it('labels a level', () => {
-    expect(levelLabel(2, path)).toBe('Level 2 of 10: The Midwest');
+    expect(levelLabel(2, path)).toBe('Level 2 of 17: The Midwest');
   });
 
   it('opens level 2 at 80% of the Northeast', () => {
@@ -602,7 +628,7 @@ describe('Social Studies path', () => {
     expect(levelsOpen(p, path)).toBe(2);
   });
 
-  it('never goes above 10, is sticky, and is separate from math', () => {
+  it('never goes above 17, is sticky, and is separate from math', () => {
     const p = emptyProgress();
     for (const { fact } of SOCIAL_STUDIES_LEVELS[4].facts) answerSocial(p, fact);
     expect(levelsOpen(p, path)).toBe(6);
@@ -610,7 +636,12 @@ describe('Social Studies path', () => {
       clock += LEARN_SPACING_MS;
       recordAnswer(p, stateLocations.id, fact.id, true, clock);
     }
-    expect(levelsOpen(p, path)).toBe(10);
+    expect(levelsOpen(p, path)).toBe(11);
+    for (const { fact } of SOCIAL_STUDIES_LEVELS[16].facts) {
+      clock += LEARN_SPACING_MS;
+      recordAnswer(p, countryLocations.id, fact.id, true, clock);
+    }
+    expect(levelsOpen(p, path)).toBe(17);
     expect(levelsOpen(p)).toBe(1);
 
     const q = emptyProgress();
@@ -618,7 +649,7 @@ describe('Social Studies path', () => {
     expect(levelsOpen(q, path)).toBe(3);
     expect(levelsOpen(q)).toBe(1);
     q.pathLevelsOpen = { [key]: 99 };
-    expect(levelsOpen(q, path)).toBe(10);
+    expect(levelsOpen(q, path)).toBe(17);
 
     const m = emptyProgress();
     m.levelsOpen = 7;
@@ -637,23 +668,23 @@ describe('Social Studies path', () => {
 
   it('draws every state with all levels open, none far too often', () => {
     const p = emptyProgress();
-    p.pathLevelsOpen = { [key]: 10 };
+    p.pathLevelsOpen = { [key]: 17 };
     const counts = new Map<unknown, number>();
     const rng = seededRandom(7);
     const draws = runs(600, 200);
     for (let i = 0; i < draws; i++) {
       for (const f of chooseLevelFacts(p, 10, rng, path)) counts.set(f, (counts.get(f) ?? 0) + 1);
     }
-    expect(counts.size).toBe(100);
-    const average = (draws * 10) / 100;
+    expect(counts.size).toBe(160);
+    const average = (draws * 10) / 160;
     for (const n of counts.values()) expect(n).toBeLessThan(average * 3);
   });
 
   it('makes a topic with distinct capital options', () => {
     const topic = myLevelTopic(() => 'x', path);
     expect(topic.id).toBe(SOCIAL_STUDIES_LEVEL_ID);
-    expect(topic.facts.length).toBe(100);
-    expect(new Set(topic.facts).size).toBe(100);
+    expect(topic.facts.length).toBe(160);
+    expect(new Set(topic.facts).size).toBe(160);
     expect(validateTopic(topic)).toEqual([]);
     for (const fact of topic.facts) {
       const options = answerOptions(topic, fact, 4, seededRandom(3));
