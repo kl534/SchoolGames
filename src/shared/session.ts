@@ -5,6 +5,7 @@ import {
   recordAnswer,
   recordBest,
   recordHighScore,
+  recordLadder,
   timerSecondsFor,
   type Player,
 } from './progress';
@@ -54,6 +55,10 @@ export interface GameSession {
   highScore(): number;
   /** Saves a run's score; true when it beats the high score (and is above zero). */
   recordScore(score: number): boolean;
+  /** The player's ladder rung for this topic and game; 0 when there is none yet. */
+  ladderRung(): number;
+  /** Saves the ladder rung (it can go down). Without a player it changes memory only. */
+  recordLadderRung(rung: number): void;
 }
 
 /**
@@ -124,6 +129,11 @@ export function startGameSession(
       const isBest = recordHighScore(progress, topic.id, gameId, score);
       save();
       return isBest;
+    },
+    ladderRung: () => progress.ladders?.[topic.id]?.[gameId] ?? 0,
+    recordLadderRung(rung) {
+      recordLadder(progress, topic.id, gameId, rung);
+      save();
     },
   };
 }

@@ -552,6 +552,12 @@ export const sfx = {
     }),
   /** A cartoon fall: a whistle sliding from high to low. */
   slideWhistle: () => play((ctx, t) => tone(ctx, 'sine', 1500, 250, t, 0.9, 0.2)),
+  /** A rubbery balloon squeak: two quick chirps, the first sliding up and the second down. */
+  squeak: () =>
+    play((ctx, t) => {
+      tone(ctx, 'sawtooth', 900, 1400, t, 0.08, 0.12);
+      tone(ctx, 'sawtooth', 1300, 800, t + 0.09, 0.08, 0.12);
+    }),
   /** A clown horn: two short square-wave honks, the second a fourth lower. */
   honk: () =>
     play((ctx, t) => {

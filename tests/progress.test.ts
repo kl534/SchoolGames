@@ -14,6 +14,7 @@ import {
   OLD_LEVEL_SPOTS,
   recordAnswer,
   recordBest,
+  recordLadder,
   recordHighScore,
   timerSecondsFor,
   type FactStat,
@@ -200,6 +201,21 @@ describe('createProgressStore', () => {
     recordHighScore(loaded, 't', 'g', 90);
     store.save('p1', loaded);
     expect(store.load('p1').highScores).toEqual({ t: { g: 90 } });
+  });
+
+  it('keeps ladders when they are saved, and loads progress that has none', () => {
+    const raw = memoryStore();
+    const store = createProgressStore(raw);
+    raw.setItem('sg:progress:p1', JSON.stringify({ facts: {}, best: {}, highScores: {} }));
+    const loaded = store.load('p1');
+    expect(loaded.ladders).toBeUndefined();
+    recordLadder(loaded, 't', 'g', 3);
+    recordLadder(loaded, 't', 'g', 2);
+    expect(loaded.ladders).toEqual({ t: { g: 2 } });
+    store.save('p1', loaded);
+    expect(store.load('p1').ladders).toEqual({ t: { g: 2 } });
+    raw.setItem('sg:progress:p2', JSON.stringify({ ladders: 7 }));
+    expect(store.load('p2').ladders).toBeUndefined();
   });
 
   it('loads progress saved before My Level, and keeps levelsOpen once it is saved', () => {
