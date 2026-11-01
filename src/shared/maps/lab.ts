@@ -1,7 +1,9 @@
 /**
  * Dev-only lab for the maps (not part of the build). Query: `state=<id>` (default `ohio`) or
  * `country=<id>` (e.g. `italy`: its continent), `wrong=<name>` (the miss look: right one green,
- * this one red), `view=big|thumbs|countries` (thumbs: all 50 states, countries: all 60 countries).
+ * this one red), `view=big|thumbs|countries` (thumbs: all 50 states, countries: all 60 countries),
+ * `zoom=<0..1>` (a country question held that far into its zoom from the whole world; without it
+ * the zoom plays).
  */
 import { factMapThumb, showFactMap } from '.';
 import { kebab, STATE_CAPITALS } from '../topics/capitals';
@@ -20,7 +22,10 @@ if (view === 'thumbs' || view === 'countries') {
   for (const fact of facts) grid.appendChild(factMapThumb(fact)!);
 } else if (country) {
   const row = COUNTRIES.find((c) => kebab(c.name) === country) ?? COUNTRIES[0];
-  showFactMap(countryFact(row), wrong ? { wrong } : undefined);
+  const zoom = params.get('zoom');
+  showFactMap(countryFact(row), wrong ? { wrong } : undefined, {
+    zoomAt: zoom === null ? undefined : Number(zoom),
+  });
 } else {
   const id = params.get('state') ?? 'ohio';
   const row = STATE_CAPITALS.find((r) => kebab(r.state) === id) ?? STATE_CAPITALS[0];

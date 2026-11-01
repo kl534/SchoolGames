@@ -77,6 +77,65 @@
   width: 100%;
   height: 100%;
 }
+/* A country's card: the small whole world in a corner (WORLD_INSETS), shown once zoomed in. */
+.sg-factmap-inset {
+  position: absolute;
+  /* 30 % of the card (INSET_WIDTH in scripts/maps/world.ts), at the world's aspect. */
+  width: 30%;
+  aspect-ratio: 1000 / 520;
+  box-sizing: border-box;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  border-radius: 10px;
+  background: #0a0e23;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.sg-factmap-inset.is-shown {
+  opacity: 1;
+}
+.sg-factmap-inset.is-top-left {
+  top: 12px;
+  left: 12px;
+}
+.sg-factmap-inset.is-top-right {
+  top: 12px;
+  right: 12px;
+}
+.sg-factmap-inset.is-bottom-left {
+  bottom: 12px;
+  left: 12px;
+}
+.sg-factmap-inset.is-bottom-right {
+  bottom: 12px;
+  right: 12px;
+}
+.sg-map-inset-land {
+  fill: #4a5378;
+}
+.sg-map-inset-frame {
+  fill: none;
+  stroke: #ffd23f;
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+}
+.sg-map-inset-dot {
+  stroke: #fff;
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+}
+.sg-map-inset-dot.is-lit {
+  fill: #ffd23f;
+}
+.sg-map-inset-dot.is-right {
+  fill: #5cf2b0;
+}
+.sg-map-inset-dot.is-wrong {
+  fill: #ff5c6c;
+}
+.sg-map-ring.is-gone {
+  opacity: 0;
+  transition: opacity 0.4s;
+}
 
 .sg-mapthumb {
   /* A definite width, so the chip's row is as tall as the map from the start. */
