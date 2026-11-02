@@ -2,6 +2,8 @@ import './style.css';
 import { MathUtils, Vector3, type Object3D } from 'three';
 import { pressAnswers } from '../../shared/answers';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
+import { DANCE_SECONDS, writeDance } from '../../shared/dances';
+import { chooseDance } from '../../shared/dances/dev';
 import { createFactFeed, type FactFeed } from '../../shared/feed';
 import { createPointerInput } from '../../shared/input';
 import { showPreview } from '../../shared/preview';
@@ -32,7 +34,8 @@ import { planBatted, type BattedBall } from './batted';
 import { planPlay, type PlayEvent, type PlayScript } from './choreo';
 import { fieldingSpots, leadSpot, POSITIONS } from './defense';
 import { createPlayRunner } from './play';
-import { devStart, forcedPlay } from './dev';
+import { devStart, devWinDance, forcedPlay } from './dev';
+import type { Mover } from './mover';
 import { createEffects, fireworkColour } from './effects';
 import { buildField } from './field';
 import {
@@ -234,6 +237,10 @@ function run(session: GameSession): void {
   let script: PlayScript | null = null;
   /** The people in the play: the batter, and the runners from first, second and third. */
   let playFigures: (Batter | null)[] = [null, null, null, null];
+  /** True while our team is in the field (set with the sides), so we know who is ours at the end. */
+  let weFielded = false;
+  /** The game clock of the last frame, in the units the movers pose by. */
+  let clockTime = 0;
   let fireworksFrom = Infinity;
   /** The batter at the plate was just struck out. */
   let struckOut = false;
@@ -1159,6 +1166,7 @@ function run(session: GameSession): void {
     ball.setGlow(false);
     // Whoever is in the field wears the colours of the side that is not at bat.
     const batting = isBatting(state);
+    weFielded = !batting;
     const wear = batting ? coloursOf(rival) : OUR_COLOURS;
     for (const p of POSITIONS) {
       const a = actors[p];
@@ -1216,14 +1224,39 @@ function run(session: GameSession): void {
     const won = state.winner === 'us';
     const title = won ? 'You win!' : state.walkOff ? 'Walk-off!' : `${rival.nickname} win!`;
     const line = won ? YOU_WIN : state.walkOff ? walkOffSpeech(rival) : loseSpeech(rival);
+    if (won) startDance();
+    // Dev `?win=dance`: the dance holds for ever and the results never open.
     announce(
       title,
       scoreLine(rival, us, them),
       won ? 'good' : 'miss',
       [line],
-      finishRun,
-      HALF_END_FOR,
+      holdDance ? () => {} : finishRun,
+      holdDance ? 1e9 : won ? DANCE_SECONDS : HALF_END_FOR,
     );
+  };
+
+  /** Dev `?win=dance`: the win ending holds the dance for ever and never opens the results. */
+  const holdDance = devWinDance() !== null;
+
+  /** Everyone of ours on the field stops and does the same victory dance, facing the camera. */
+  const startDance = () => {
+    const dance = chooseDance();
+    const start = clockTime;
+    camMode = 'home';
+    const ours: Mover[] = weFielded
+      ? POSITIONS.map((p) => actors[p].mover)
+      : [batter, ...onBase, ...playFigures]
+          .filter((fig): fig is Batter => fig !== null)
+          .map((fig) => fig.mover);
+    for (const mover of new Set(ours)) {
+      mover.halt();
+      mover.override = (pose, at) => {
+        writeDance(pose, dance, at - start);
+        return true;
+      };
+      mover.face({ x: camera.position.x, y: 0, z: camera.position.z });
+    }
   };
 
   const finishRun = () => {
@@ -1272,12 +1305,29 @@ function run(session: GameSession): void {
     pitching.reset();
     feed = createFactFeed(() => session.chooseFacts());
     state = newGame();
+    for (const p of POSITIONS) actors[p].mover.override = undefined;
     rival = pickRival(Math.random());
     usAbbr = ourAbbr(session.player?.name, rival);
     bestAtStart = session.highScore();
     fact = undefined;
     options = [];
     devSetup();
+    if (holdDance) {
+      // Dev `?win=dance`: the game is over and won, in the field (or at bat with `start=top`).
+      state = {
+        ...state,
+        inning: 9,
+        half: devStart().half ?? 'bottom',
+        us: [5],
+        them: [2],
+        over: true,
+        winner: 'us',
+      };
+      setSide();
+      devRunners();
+      finishGame();
+      return;
+    }
     setSide();
     if (!withPreview) {
       startIntro();
@@ -1384,6 +1434,7 @@ function run(session: GameSession): void {
   ctx.onUpdate((delta, time) => {
     layout();
     gameTime += delta;
+    clockTime = time;
     tapFlow.update(delta);
     timers.update(delta);
     scenery.update(delta);
