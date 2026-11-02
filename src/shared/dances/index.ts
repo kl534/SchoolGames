@@ -117,8 +117,8 @@ function floss(p: DancePose, t: number) {
   const w = (TAU / DANCE_PERIOD.floss) * t;
   const x = Math.sin(w);
   const d = Math.cos(w);
-  set(p.armL, 0.55 * d, 0.15 + 0.6 * x, 0.1);
-  set(p.armR, 0.55 * d, 0.15 - 0.6 * x, 0.1);
+  set(p.armL, 0.8 * d, 0.15 + 0.6 * x, 0.1);
+  set(p.armR, 0.8 * d, 0.15 - 0.6 * x, 0.1);
   p.roll = -0.12 * x;
   p.legL.out = 0.08 - 0.1 * x;
   p.legR.out = 0.08 + 0.1 * x;
