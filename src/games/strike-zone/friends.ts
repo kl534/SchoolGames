@@ -1,4 +1,5 @@
 import { Group } from 'three';
+import { DANCE_EASE, writeDance, type DanceId } from '../../shared/dances';
 import {
   clamp01,
   createAnimator,
@@ -9,7 +10,7 @@ import {
   type Pose,
 } from './person';
 
-export type FriendMove = 'sit' | 'cheer' | 'groan';
+export type FriendMove = 'sit' | 'cheer' | 'groan' | 'dance';
 
 /** Where the friends sit on the bench, and how big they are next to the bowler. */
 export const FRIEND_XS = [-3.2, -2.6, -2.0];
@@ -28,7 +29,7 @@ const smooth = (x: number) => {
 };
 
 /** The sit, cheer and groan poses, as for the kids on the benches in Buzzer Beater. */
-function friendPose(move: FriendMove, t: number, p: Pose): void {
+export function friendPose(move: FriendMove, t: number, p: Pose, dance: DanceId = 'floss'): void {
   switch (move) {
     case 'sit': {
       p.lift = SIT_LIFT;
@@ -65,6 +66,9 @@ function friendPose(move: FriendMove, t: number, p: Pose): void {
       p.armR.out = 0.35;
       break;
     }
+    case 'dance':
+      writeDance(p, dance, t);
+      break;
     case 'groan': {
       const e = Math.sin(clamp01(t / 1.2) * Math.PI);
       p.lift = SIT_LIFT;
@@ -94,12 +98,16 @@ export interface Friend {
   phase: number;
   /** The move being drawn now, so a change eases in. */
   shown: FriendMove | null;
+  /** The dance to play while `move` is `'dance'`. */
+  dance: DanceId;
 }
 
 export interface Friends {
   object: Group;
   /** Starts a move for everyone, each a random 0 - 0.25 s late. */
   set(move: FriendMove, now: number): void;
+  /** All three stand and dance the same dance, in step, until the page leaves. */
+  dance(id: DanceId, now: number): void;
   /** Poses everybody. A cheer or a groan goes back to sitting after 1.2 s. */
   update(now: number, delta: number): void;
 }
@@ -126,6 +134,7 @@ export function createFriends(): Friends {
       since: 0,
       phase: Math.random() * 20,
       shown: null,
+      dance: 'floss',
     };
   });
   return {
@@ -136,21 +145,30 @@ export function createFriends(): Friends {
         friend.since = now + Math.random() * 0.25;
       }
     },
+    dance(id, now) {
+      for (const friend of friends) {
+        friend.move = 'dance';
+        friend.dance = id;
+        friend.since = now;
+      }
+    },
     update(now, delta) {
       for (const friend of friends) {
         let t = now - friend.since;
         let move = friend.move;
-        if (move !== 'sit' && t >= 1.2) {
+        if (move !== 'sit' && move !== 'dance' && t >= 1.2) {
           friend.move = 'sit';
           move = 'sit';
         }
         if (t < 0) move = 'sit';
         t = move === 'sit' ? now + friend.phase : t;
         if (move !== friend.shown) {
-          friend.animator.transition(friend.shown === null ? 0.001 : 0.1);
+          friend.animator.transition(
+            friend.shown === null ? 0.001 : move === 'dance' ? DANCE_EASE : 0.1,
+          );
           friend.shown = move;
         }
-        friend.animator.step(delta, (pose) => friendPose(move, Math.max(t, 0), pose));
+        friend.animator.step(delta, (pose) => friendPose(move, Math.max(t, 0), pose, friend.dance));
       }
     },
   };

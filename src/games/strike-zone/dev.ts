@@ -8,6 +8,8 @@
  * - `?drift=max` makes every right answer drift MAX_DRIFT (the side is still random); `?drift=0`
  *   makes none drift.
  * - `?friends=1` plays the friends' reaction shot after every ball.
+ * - `?win=dance` ends the game at once as a 3-star finish: the friends dance for ever, with no
+ *   results and nothing saved.
  */
 import { MAX_DRIFT } from './aim';
 import { PIN_IDS, type PinId } from './geometry';
@@ -66,4 +68,10 @@ export function devDrift(): number | null {
 /** Whether the friends' shot plays after every ball. */
 export function devFriends(): boolean {
   return import.meta.env.DEV && params().get('friends') === '1';
+}
+
+/** True for `?win=dance` in a dev build. */
+export function devWinDance(search: string = location.search): true | null {
+  if (!import.meta.env.DEV) return null;
+  return new URLSearchParams(search).get('win') === 'dance' ? true : null;
 }

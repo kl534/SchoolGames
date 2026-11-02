@@ -3,6 +3,8 @@ import { MathUtils, Vector3 } from 'three';
 import { pressAnswers } from '../../shared/answers';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
 import { createFactFeed, type FactFeed } from '../../shared/feed';
+import { DANCE_SECONDS } from '../../shared/dances';
+import { chooseDance } from '../../shared/dances/dev';
 import { createPointerInput, onPress } from '../../shared/input';
 import { showPreview } from '../../shared/preview';
 import { showResults } from '../../shared/results';
@@ -39,7 +41,7 @@ import {
   THROW_SECONDS,
   type BowlerMove,
 } from './bowler';
-import { devDrift, devFriends, devStart } from './dev';
+import { devDrift, devFriends, devStart, devWinDance } from './dev';
 import { createFriends, type FriendMove } from './friends';
 import {
   ARROW_Z,
@@ -673,6 +675,8 @@ function run(session: GameSession): void {
   };
 
   // ---------- The end ----------
+  const holdDance = devWinDance() !== null;
+
   const finishGame = () => {
     hideFactMap();
     phase = 'over';
@@ -694,7 +698,15 @@ function run(session: GameSession): void {
       speak(GAME_OVER_SPEECH);
       sfx.cheer();
     }
-    after(FINAL_FOR, () => {
+    // A 3-star finish: the friends stand up and dance, then the results.
+    const dances = starsFor(feed.correct, feed.answered) === 3;
+    if (dances) {
+      goTo('friends', 0);
+      friends.dance(chooseDance(), gameTime);
+    }
+    // Dev `?win=dance`: the dance holds for ever and the results never open.
+    if (holdDance) return;
+    after(dances ? DANCE_SECONDS : FINAL_FOR, () => {
       if (turn === thisTurn && phase === 'over') finishRun();
     });
   };
@@ -735,6 +747,16 @@ function run(session: GameSession): void {
     tapFlow.disarm();
     stopSpeaking();
     feed = createFactFeed(() => session.chooseFacts());
+    if (holdDance) {
+      // Dev `?win=dance`: a perfect game and every answer right, over at once.
+      feed.recordHit(feed.take());
+      rolls = Array(12).fill(10);
+      standing = [];
+      splitBefore = false;
+      hud.hideBanner();
+      finishGame();
+      return;
+    }
     const start = devStart();
     rolls = start.rolls;
     standing = start.rack;
@@ -796,7 +818,7 @@ function run(session: GameSession): void {
       switchedToPins = true;
     } else if (canSkip()) {
       reset();
-    } else if (phase === 'over' && gameTime - overAt >= SKIP_RESULT_AFTER) {
+    } else if (phase === 'over' && !holdDance && gameTime - overAt >= SKIP_RESULT_AFTER) {
       finishRun();
     }
   };

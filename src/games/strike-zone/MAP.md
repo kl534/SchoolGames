@@ -15,9 +15,9 @@ Ten-pin bowling: answer a question, aim, and throw a physics ball (cannon-es) at
 - `ball.ts`: the ball mesh (`createBall`)
 - `bowler.ts`: the bowler figure and his throw, follow-through and slip (`Bowler`, `THROW_SECONDS`, `SLIP_SECONDS`)
 - `person.ts`: the jointed person rig the bowler and friends use (`createPerson`, `Pose`, `neutralPose`)
-- `friends.ts`: the three friends on the bench who cheer or groan (`createFriends`, `FriendMove`)
+- `friends.ts`: the three friends on the bench who cheer or groan (`createFriends`, `FriendMove`, `friendPose`); on a 3-star finish they stand and do the victory dance
 - `hud.ts`: scorecard, banners, big call screens and pin count (`createHud`, `BannerKind`, `ScreenKind`)
-- `dev.ts`: dev query hooks (`devStart`, `devDrift`, `devFriends`)
+- `dev.ts`: dev query hooks (`devStart`, `devDrift`, `devFriends`, `devWinDance`)
 - `voice.ts`: every spoken line that is not a fact (`VOICE_LINES`)
 
 ## Dev hooks
@@ -26,6 +26,7 @@ Ten-pin bowling: answer a question, aim, and throw a physics ball (cannon-es) at
 - `?leave=7,10`: start at frame 1, ball 2 with only those pins standing (spares and splits).
 - `?drift=max` or `?drift=0`: every right answer drifts the most, or not at all.
 - `?friends=1`: play the friends' reaction shot after every ball.
+- `?win=dance`: end the game at once as a 3-star win; the friends dance for ever (`&dance=<id>` picks the dance), no results, nothing saved.
 - Example: `npm run shots -- "strike-zone?leave=7,10" --start`
 
 ## Where changes go
