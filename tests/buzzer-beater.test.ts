@@ -1,5 +1,6 @@
 import { PerspectiveCamera, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
+import { devWinDance } from '../src/games/buzzer-beater/dev';
 import { FULL, runs } from './helpers/full';
 import {
   ballAt,
@@ -713,5 +714,13 @@ describe('layout', () => {
         expect(x, view.name).toBeLessThanOrEqual(width);
       }
     }
+  });
+});
+
+describe('buzzer-beater win dance hook', () => {
+  it('reads ?win=dance', () => {
+    expect(devWinDance('?win=dance')).toBe(true);
+    expect(devWinDance('?win=x')).toBeNull();
+    expect(devWinDance('')).toBeNull();
   });
 });

@@ -16,7 +16,7 @@ One-on-one basketball against a rival: answers become shots, dunks, blocks and s
 - `players.ts`: the two ballers and the kids on the bench with their moves (`createBaller`, `KidMove`)
 - `hud.ts`: scoreboard, banners and the question panel (`createHud`, `BannerKind`)
 - `effects.ts`: sparkles, flames and other particles (`createEffects`)
-- `dev.ts`: dev query hooks (`forcedPlay`, `devGame`)
+- `dev.ts`: dev query hooks (`forcedPlay`, `devGame`, `devWinDance`)
 - `voice.ts`: every spoken line that is not a fact (`VOICE_LINES`)
 
 ## Dev hooks
@@ -25,6 +25,7 @@ One-on-one basketball against a rival: answers become shots, dunks, blocks and s
 - `?start=half2` or `?start=ot`: start in that period.
 - `?score=12-10`: starting points (us-them).
 - `?fire=1`: start with the streak at 3 (on fire).
+- `?win=dance`: skip the intro and start the win ending at once; our baller dances for ever and the results never open. `?dance=<id>` (shared) picks the dance.
 - Example: `npm run shots -- "buzzer-beater?play=dunk&start=half2" --start`
 
 ## Where changes go
