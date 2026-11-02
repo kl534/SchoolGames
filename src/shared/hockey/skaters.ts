@@ -1,4 +1,5 @@
 import { BoxGeometry, Group, Mesh, MeshStandardMaterial, SphereGeometry } from 'three';
+import { DANCE_EASE, writeDance, type DanceId } from '../dances';
 import type { Vec } from './geometry';
 import { createAnimator, createPerson, type Person, type Pose } from './person';
 import {
@@ -32,6 +33,8 @@ export interface Skater {
   place(pos: Vec, face: Vec, delta: number): void;
   /** Poses the player for `move`, `t` seconds into it. */
   update(move: Move, t: number, delta: number, holding: boolean): void;
+  /** Poses the player in a victory dance, `t` seconds into it (the stick stays in hand). */
+  dance(id: DanceId, t: number, delta: number): void;
   /** Stops the turn easing, as after a cut to a new formation. */
   snap(): void;
   readonly size: number;
@@ -291,7 +294,7 @@ function build(team: Team, number: number, goalie: boolean): Skater {
   }
   const animator = createAnimator(person);
   const size = person.root.scale.x;
-  let last: Move | null = null;
+  let last: Move | 'dance' | null = null;
   let phase = Math.random() * 6;
   let speed = 0;
   let yaw = 0;
@@ -332,6 +335,17 @@ function build(team: Team, number: number, goalie: boolean): Skater {
         }
       }
       person.root.rotation.y = yaw + spin;
+    },
+    dance(id, t, delta) {
+      clock += delta;
+      if (last !== 'dance') {
+        animator.transition(DANCE_EASE);
+        last = 'dance';
+      }
+      spin = 0;
+      person.root.rotation.y = yaw;
+      animator.step(delta, (pose) => writeDance(pose, id, Math.max(t, 0)));
+      person.body.position.x = 0;
     },
     update(move, t, delta, holding) {
       clock += delta;
