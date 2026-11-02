@@ -270,17 +270,6 @@ export const cheer: Move = (t) => ({
   off: limb(2.8, 0.3, 0.2),
 });
 
-/** A wiggling victory dance, a loop. */
-export const dance: Move = (t) => ({
-  twist: Math.sin(t * 9) * 0.5,
-  roll: Math.sin(t * 9) * 0.1,
-  lift: Math.abs(Math.sin(t * 4.5)) * 0.07,
-  hit: limb(1.5 + Math.sin(t * 7) * 0.7, 0.3, 0.4),
-  off: limb(1.0 + Math.sin(t * 7 + 2) * 0.5, 0.6, 0.6),
-  legA: limb(Math.sin(t * 9) * 0.5, 0.1, 0.35),
-  legB: limb(-Math.sin(t * 9) * 0.5, 0.1, 0.35),
-});
-
 /** The watching kids slump. */
 export const slump: Move = () => ({
   lean: 0.3,

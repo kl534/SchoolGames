@@ -2,6 +2,7 @@ import { PerspectiveCamera, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import {
   autoAnswer,
+  devWinDance,
   devPair,
   devRung,
   devScore,
@@ -26,7 +27,6 @@ import {
   BONK_TOTAL,
   bonk,
   cheer,
-  dance,
   DIVE_TOTAL,
   dive,
   runFrame,
@@ -257,6 +257,8 @@ describe('hitting handballs cooking', () => {
     expect(devRun('?run=2')).toBe(2);
     expect(devRun('?run=x')).toBeNull();
     expect(devRun('')).toBeNull();
+    expect(devWinDance('?win=dance')).toBe(true);
+    expect(devWinDance('?win=x')).toBeNull();
   });
 });
 
@@ -523,7 +525,6 @@ describe('hitting handballs moves', () => {
     expect(dive(DIVE_TOTAL / 2).roll).toBeGreaterThan(1);
     expect(bonk(0.4).dizzy).toBe(true);
     expect(cheer(0.1).hit?.raise).toBeGreaterThan(2);
-    expect(dance(0.3).twist).toBeDefined();
     expect(runFrame(1, 0).legA?.raise).toBe(0);
   });
 });

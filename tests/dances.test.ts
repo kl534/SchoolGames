@@ -109,7 +109,10 @@ describe('dances', () => {
         for (let s = 0; s < 20; s++) {
           const a = numbers(at(DANCES[i], s * 0.1));
           const b = numbers(at(DANCES[j], s * 0.1));
-          best = Math.max(best, a.reduce((sum, v, k) => sum + Math.abs(v - b[k]), 0));
+          best = Math.max(
+            best,
+            a.reduce((sum, v, k) => sum + Math.abs(v - b[k]), 0),
+          );
         }
         expect(best, `${DANCES[i]} vs ${DANCES[j]}`).toBeGreaterThan(0.5);
       }
@@ -132,7 +135,8 @@ describe('dances', () => {
     for (let i = 0; i < 100; i++) {
       const t = (i / 100) * period;
       const p = at('floss', t);
-      if (Math.sin((2 * Math.PI * t) / period) > 0.5) expect(p.armL.out).toBeGreaterThan(p.armR.out);
+      if (Math.sin((2 * Math.PI * t) / period) > 0.5)
+        expect(p.armL.out).toBeGreaterThan(p.armR.out);
       expect(Math.sign(p.armL.raise) * Math.sign(p.armR.raise)).toBeGreaterThanOrEqual(0);
       if (p.armL.raise > 0.1) front = true;
       if (p.armL.raise < -0.1) behind = true;

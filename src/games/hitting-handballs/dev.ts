@@ -13,6 +13,8 @@
  *   skip the VS card, the preview and "Play ball!". `smash` judges at 0.3 s, `return` judges at
  *   99 s and `winner` sets the streak to `streakToWin - 1` and judges at 99 s.
  * - `?whiff=spin|bonk`: every whiff is that kind.
+ * - `?win=dance`: skip the intro and start the win ending at once, holding the dance for ever
+ *   (no results, nothing saved).
  * - `?at=<s>`: freeze the scene `s` seconds after that first answer; the HUD stays.
  */
 import { matchWinner, PAIRS, type Side } from './rules';
@@ -99,4 +101,10 @@ export function freezeAt(search: string = location.search): number | null {
   const at = query(search).get('at');
   if (at === null || at === '' || Number.isNaN(Number(at)) || Number(at) < 0) return null;
   return Number(at);
+}
+
+/** True for `?win=dance` in a dev build. */
+export function devWinDance(search: string = location.search): true | null {
+  if (!import.meta.env.DEV) return null;
+  return query(search).get('win') === 'dance' ? true : null;
 }

@@ -32,7 +32,12 @@ const ROWS = Math.ceil(ids.length / COLS);
 const ROW_GAP = 2.3;
 const SPACING = 1.6;
 const dancers = ids.map((id, i) => {
-  const person = createPerson({ shirt: 0x2f6fe0, pants: 0x2a2f45, hatColor: 0x2f6fe0, stick: false });
+  const person = createPerson({
+    shirt: 0x2f6fe0,
+    pants: 0x2a2f45,
+    hatColor: 0x2f6fe0,
+    stick: false,
+  });
   const col = i % COLS;
   const row = Math.floor(i / COLS);
   person.root.scale.setScalar(PERSON_SCALE);
