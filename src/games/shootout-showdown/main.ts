@@ -12,7 +12,17 @@ import { createTapFlow } from '../../shared/tapflow';
 import { createTimers } from '../../shared/timers';
 import { answerOptions, promptSpeech, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
-import { autoAnswer, devShootout, forcedBand, forcedFirst, freezeAt, hasDevShots } from './dev';
+import {
+  autoAnswer,
+  devShootout,
+  devWinDance,
+  forcedBand,
+  forcedFirst,
+  freezeAt,
+  hasDevShots,
+} from './dev';
+import { DANCE_SECONDS, type DanceId } from '../../shared/dances';
+import { chooseDance } from '../../shared/dances/dev';
 import { createEffects } from '../../shared/hockey/effects';
 import { vec, type Vec } from '../../shared/hockey/geometry';
 import { createHud } from '../../shared/hockey/hud';
@@ -33,6 +43,7 @@ import {
   puckSegAt,
   type ActorId,
   type Formation,
+  type Move,
   type PlayEvent,
   type PlayScript,
 } from '../../shared/hockey/script';
@@ -90,6 +101,8 @@ const FADE_HALF = 0.15;
 /** Seconds each announcement stays up at least, and the end of the shootout's. */
 const ANNOUNCE_FOR = 1.2;
 const FINAL_FOR = 2.2;
+/** The skaters who dance when we win (our goalie keeps his move). */
+const DANCERS: readonly ActorId[] = ['uC', 'uW', 'uD'];
 /** The lamp blinks for this long after our goal. */
 const LAMP_FOR = 2;
 /** A finished shootout always saves its stars; a quit one only with this many answers. */
@@ -180,6 +193,8 @@ function run(session: GameSession): void {
   let skipAnnounce: (() => void) | null = null;
   let announceToken = 0;
   let gameTime = 0;
+  /** The victory dance, from the moment we win. */
+  let dancing: { id: DanceId; start: number } | null = null;
   const timers = createTimers();
   const after = timers.after;
   const rnd = Math.random;
@@ -658,6 +673,9 @@ function run(session: GameSession): void {
   };
 
   /** The game is won or lost: the banner and the line, then the results. */
+  /** Dev `?win=dance`: the win ending holds the dance for ever and never opens the results. */
+  const holdDance = devWinDance() !== null;
+
   const finishGame = () => {
     hideFactMap();
     timers.clear();
@@ -670,10 +688,13 @@ function run(session: GameSession): void {
     hud.setClock(null);
     sfx.alarm();
     after(0.9, () => (won ? sfx.bigCheer() : sfx.aww()));
+    if (won) dancing = { id: chooseDance(), start: gameTime };
     hud.showBanner(won ? 'YOU WIN!' : `${rival.abbr} WIN`, won ? 'good' : 'miss', bandMiddle());
     speak(won ? YOU_WIN_SPEECH : rivalWinsSpeech(rival));
     const token = ++announceToken;
-    after(FINAL_FOR, () => {
+    // Dev `?win=dance`: the dance holds for ever and the results never open.
+    if (holdDance) return;
+    after(won ? DANCE_SECONDS : FINAL_FOR, () => {
       if (token === announceToken) finishRun();
     });
   };
@@ -743,6 +764,12 @@ function run(session: GameSession): void {
         shooterSpeech(rival, role),
       ]),
     ]);
+    dancing = null;
+    if (holdDance) {
+      state = { ...state, us: 3, them: 1, over: true, winner: 'us' };
+      finishGame();
+      return;
+    }
     if (!withPreview) {
       startIntro();
       return;
@@ -816,15 +843,24 @@ function run(session: GameSession): void {
 
   // ---------- Drawing ----------
   const focus = vec();
+  /** Our three skaters dance (where they stand, facing the camera) after we win. */
+  const cameraGround = { x: 0, y: 0, z: 0 };
+  const poseActor = (id: ActorId, move: Move, t: number, delta: number, holding: boolean) => {
+    if (dancing && DANCERS.includes(id))
+      skaters[id].dance(dancing.id, gameTime - dancing.start, delta);
+    else skaters[id].update(move, t, delta, holding);
+  };
   const updateActors = (delta: number) => {
     const current = play;
+    cameraGround.x = camPos.x;
+    cameraGround.z = camPos.z;
     if (current && (phase === 'play' || phase === 'announce' || current.ended)) {
       const script = current.script;
       const seg = puckSegAt(script, playClock);
       for (const id of ACTORS) {
         const a = actorAt(script.actors[id], playClock);
-        skaters[id].place(a.pos, a.face, delta);
-        skaters[id].update(a.move, a.moveT, delta, seg.kind === 'held' && seg.who === id);
+        skaters[id].place(a.pos, dancing && DANCERS.includes(id) ? cameraGround : a.face, delta);
+        poseActor(id, a.move, a.moveT, delta, seg.kind === 'held' && seg.who === id);
       }
       puck.setVisible(true);
       puckAt(script, playClock, focus);
@@ -836,8 +872,13 @@ function run(session: GameSession): void {
     for (const id of ACTORS) {
       const spot = formationNow.spots[id];
       const carrying = formationNow.carrier === id;
-      skaters[id].place(spot.pos, spot.face, delta);
-      skaters[id].update(
+      skaters[id].place(
+        spot.pos,
+        dancing && DANCERS.includes(id) ? cameraGround : spot.face,
+        delta,
+      );
+      poseActor(
+        id,
         isGoalie(id) ? 'ready' : carrying ? 'carry' : 'glide',
         idleClock,
         delta,
