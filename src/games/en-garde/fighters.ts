@@ -12,6 +12,9 @@ import { FINISH_AIM, STANCE_X, type FighterFrame, restFrame } from './moves';
 import {
   createPerson,
   HIP_Y,
+  copyPose,
+  easeInOut,
+  mixPose,
   neutralPose,
   resetPose,
   PERSON_SCALE,
@@ -22,6 +25,7 @@ import {
 } from './person';
 import type { RivalId, Side } from './rules';
 import { createSword, type Sword } from './sword';
+import { DANCE_EASE, writeDance, yawToward, type DanceId } from '../../shared/dances';
 
 export interface FighterLook {
   shirt: number;
@@ -117,7 +121,7 @@ export interface Fighter {
   /** The crown on our head; `drop` lets it fall onto the head over 0.6 s. */
   setCrowned(crowned: boolean, drop?: boolean): void;
   /** What the fighter does between moves. */
-  setMode(mode: FighterMode): void;
+  setMode(mode: FighterMode, dance?: DanceId): void;
   /**
    * Puts a keyframe on the fighter. `aim` is how high the sword arm lunges (rad above straight
    * ahead). `pos` is the world position of the hip while flying (it replaces the stance).
@@ -129,7 +133,8 @@ export interface Fighter {
   hipHeight(): number;
   /** World position of a point on the body, `height` as a fraction of a standing fighter. */
   bodyPoint(height: number): { x: number; y: number; z: number };
-  update(delta: number, elapsed: number): void;
+  /** `camera` is where the camera is on the ground; a dancing fighter faces it. */
+  update(delta: number, elapsed: number, camera?: { x: number; z: number }): void;
 }
 
 /** A texture of red and white bars for the pirate's shirt. */
@@ -187,6 +192,10 @@ export function createFighter(side: Side, look: FighterLook = US_LOOK): Fighter 
   let pos: { x: number; y: number; z: number } | undefined;
   let mode: FighterMode = 'idle';
   let modeStart = 0;
+  let danceId: DanceId = 'floss';
+  /** The pose before the dance began, eased from over `DANCE_EASE`. */
+  const before = neutralPose();
+  const dancePose = neutralPose();
   let now = 0;
   let crowned = false;
   /** Seconds the crown has been falling, or -1 when it is not. */
@@ -240,14 +249,11 @@ export function createFighter(side: Side, look: FighterLook = US_LOOK): Fighter 
     pose.lean = 0.08;
 
     if (mode === 'dance') {
+      // A victory dance: the sword stays in the hand, and no lunge or flinch is added.
       const k = t - modeStart;
-      pose.twist = Math.sin(k * 9) * 0.5;
-      pose.roll = Math.sin(k * 9) * 0.1;
-      pose.lift = Math.abs(Math.sin(k * 4.5)) * 0.07;
-      limb(a.sword, 1.5 + Math.sin(k * 7) * 0.7, 0.3, 0.4);
-      limb(a.other, 1.0 + Math.sin(k * 7 + 2) * 0.5, 0.6, 0.6);
-      limb(pose.legL, Math.sin(k * 9) * 0.5, 0.1, 0.35);
-      limb(pose.legR, -Math.sin(k * 9) * 0.5, 0.1, 0.35);
+      writeDance(dancePose, danceId, k);
+      mixPose(before, dancePose, easeInOut(Math.min(1, k / DANCE_EASE)), pose);
+      return;
     } else if (mode === 'victory') {
       const k = t - modeStart;
       pose.lift = Math.abs(Math.sin(k * 5)) * 0.14;
@@ -340,10 +346,12 @@ export function createFighter(side: Side, look: FighterLook = US_LOOK): Fighter 
       drop = on && dropIt ? 0 : -1;
       if (drop < 0) person.hatSlot.position.y = 0;
     },
-    setMode(next) {
-      if (mode === next) return;
+    setMode(next, dance) {
+      if (mode === next && (next !== 'dance' || dance === danceId)) return;
       mode = next;
+      if (dance) danceId = dance;
       modeStart = now;
+      if (next === 'dance') copyPose(pose, before);
     },
     setFrame(next, nextAim = FINISH_AIM, nextPos) {
       frame = next;
@@ -360,7 +368,7 @@ export function createFighter(side: Side, look: FighterLook = US_LOOK): Fighter 
         z: object.position.z,
       };
     },
-    update(delta, elapsed) {
+    update(delta, elapsed, camera) {
       now = elapsed;
       build(elapsed);
       person.apply(pose);
@@ -368,7 +376,10 @@ export function createFighter(side: Side, look: FighterLook = US_LOOK): Fighter 
       sword.update(delta, swordArm.raise + swordArm.bend);
       place();
       // Facing, and the dodge that turns the back to the rival.
-      yaw.rotation.y = facing * (Math.PI / 2) - facing * frame.turn;
+      yaw.rotation.y =
+        mode === 'dance' && camera
+          ? yawToward({ x: object.position.x, z: object.position.z }, camera)
+          : facing * (Math.PI / 2) - facing * frame.turn;
       object.rotation.z = -frame.spin * facing;
       const sq = Math.max(frame.squash, 0.2);
       const s = PERSON_SCALE * current.scale;

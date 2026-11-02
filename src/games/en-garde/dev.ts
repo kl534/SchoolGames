@@ -9,6 +9,8 @@
  * - `?vs=skip`: skip the VS card.
  * - `?auto=right|wrong`: answer the first question 0.3 s after its reading ends, skip the VS card
  *   and the preview, and start without waiting for "En garde!".
+ * - `?win=dance`: skip the intro and start the win ending at once, holding the dance for ever
+ *   (no results, nothing saved).
  * - `?at=<s>`: freeze the first poke or finisher at that time; the HUD stays.
  */
 import { HITS_TO_LOSE, POKE_KINDS, RIVALS, type PokeKind } from './rules';
@@ -78,4 +80,10 @@ export function freezeAt(search: string = location.search): number | null {
   const at = query(search).get('at');
   if (at === null || at === '' || Number.isNaN(Number(at)) || Number(at) < 0) return null;
   return Number(at);
+}
+
+/** True for `?win=dance` in a dev build. */
+export function devWinDance(search: string = location.search): true | null {
+  if (!import.meta.env.DEV) return null;
+  return query(search).get('win') === 'dance' ? true : null;
 }
