@@ -33,6 +33,7 @@ import {
   devClubPlan,
   devHoleState,
   devHolesOk,
+  devWinDance,
   devIntroAt,
   devQuality,
   devShadows,
@@ -43,6 +44,8 @@ import {
   type DevCam,
 } from './dev';
 import { createCaddie } from './caddie';
+import { DANCE_SECONDS, yawToward } from '../../shared/dances';
+import { chooseDance } from '../../shared/dances/dev';
 import { createGolfer, type GolfMove } from './golfer';
 import { createGuide } from './guide';
 import { buildHole, CUP_AID_RANGE, SKY, type HoleScene } from './hole';
@@ -86,6 +89,7 @@ import { timingFor } from './swing';
 import {
   aimView,
   centreShift,
+  danceView,
   centreShiftX,
   followView,
   introView,
@@ -132,7 +136,7 @@ type Phase =
   | 'over'
   | 'done';
 
-type ViewKind = 'intro' | 'aim' | 'ask' | 'follow' | 'land';
+type ViewKind = 'intro' | 'aim' | 'ask' | 'follow' | 'land' | 'dance';
 
 const lerpVec = (a: Vec, b: Vec, t: number): Vec => ({
   x: MathUtils.lerp(a.x, b.x, t),
@@ -327,6 +331,20 @@ function run(session: GameSession): void {
         return aimView(plan, hole, golferAt(), viewW, viewH, bands.ask);
       case 'follow':
         return followView(ballPos, plan.dir, isPutt(plan), viewW, viewH, bands.play);
+      case 'dance':
+        return danceView(
+          golferAt(),
+          { x: caddie.root.position.x, y: 0, z: caddie.root.position.z },
+          plan.dir,
+          viewW,
+          viewH,
+          // Between the top buttons and the banner, with the scorecard hidden.
+          {
+            ...bands.aim,
+            top: 64,
+            bottom: Math.max((hud.bannerTop() || viewH) - 8, 64 + 120),
+          },
+        );
       case 'land':
         return landView(
           { x: afterHole.at.x, y: 0, z: afterHole.at.z },
@@ -841,6 +859,16 @@ function run(session: GameSession): void {
     return { rel, strokes };
   };
 
+  /** Set at a 3-star finish: the golfer and the caddie turn to the camera and dance. */
+  let dancing = false;
+  const holdDance = devWinDance() !== null;
+
+  /** Turns a person about y towards `yaw` by the short way, easing. */
+  const turnTo = (root: { rotation: { y: number } }, yaw: number, delta: number) => {
+    const diff = MathUtils.euclideanModulo(yaw - root.rotation.y + Math.PI, Math.PI * 2) - Math.PI;
+    root.rotation.y += diff * (holdDance ? 1 : Math.min(1, delta * 6));
+  };
+
   const finishGame = () => {
     hideFactMap();
     phase = 'over';
@@ -857,7 +885,20 @@ function run(session: GameSession): void {
     const best = storedFor(rel) > bestAtStart;
     speak(best ? NEW_BEST_SPEECH : ROUND_OVER_SPEECH);
     sfx.cheer();
-    after(FINAL_FOR, () => {
+    // A 3-star round: the golfer and the caddie dance for the camera, then the results.
+    dancing = starsFor(feed.correct, feed.answered) === 3;
+    if (dancing) {
+      const id = chooseDance();
+      golfer.setDance(id);
+      caddie.dance(id);
+      setGolf('dance');
+      ball.setVisible(false);
+      hud.showCard(false);
+      goTo('dance', holdDance ? 0 : 0.8);
+    }
+    // Dev `?win=dance`: the dance holds for ever and the results never open.
+    if (holdDance) return;
+    after(dancing ? DANCE_SECONDS : FINAL_FOR, () => {
       if (turn === thisTurn && phase === 'over') finishRun();
     });
   };
@@ -910,6 +951,18 @@ function run(session: GameSession): void {
     missed = false;
     splashAt = -1;
     forcedQuality = devQuality();
+    dancing = false;
+    if (holdDance) {
+      // Dev `?win=dance`: a par round with every answer right, over at once on the last hole.
+      feed.recordHit(feed.take());
+      scores = HOLES.map((h) => h.par);
+      hud.setCardBig(false);
+      hud.showCard(true);
+      startHoleAt(HOLES.length - 1);
+      stopSpeaking();
+      finishGame();
+      return;
+    }
     const start = withPreview || devPending ? devStart() : { hole: 0, scores: [] };
     scores = start.scores;
     hud.setCardBig(false);
@@ -1074,6 +1127,11 @@ function run(session: GameSession): void {
     const frozen = devSwing();
     if (frozen !== null) golfer.play('swing', frozen, delta);
     else golfer.play(golfMove, gameTime - golfSince, delta);
+    if (dancing) {
+      const cam = target.pos;
+      turnTo(golfer.root, yawToward(golfer.root.position, cam), delta);
+      turnTo(caddie.root, yawToward(caddie.root.position, cam), delta);
+    }
     caddie.update(delta);
     holeScene?.update(gameTime);
     sky.update(gameTime, camera.position, hole.length / 2);

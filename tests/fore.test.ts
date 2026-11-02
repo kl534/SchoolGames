@@ -51,6 +51,7 @@ import {
   vsPar,
   type HoleState,
 } from '../src/games/fore/rules';
+import { devWinDance } from '../src/games/fore/dev';
 import { VOICE_LINES } from '../src/games/fore/voice';
 
 const dir = resolve(import.meta.dirname, '../src/games/fore');
@@ -688,5 +689,13 @@ describe('reactionFor', () => {
     expect(reactionFor(rest('fairway'), null)).toBe('idle');
     expect(reactionFor(rest('rough'), null)).toBe('idle');
     expect(reactionFor(rest('sand'), null)).toBe('idle');
+  });
+});
+
+describe('fore win dance hook', () => {
+  it('reads ?win=dance', () => {
+    expect(devWinDance('?win=dance')).toBe(true);
+    expect(devWinDance('?win=x')).toBeNull();
+    expect(devWinDance('')).toBeNull();
   });
 });

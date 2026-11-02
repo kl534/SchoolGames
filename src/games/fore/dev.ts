@@ -19,6 +19,8 @@
  * - `?club=driver|iron3|iron5|iron7|wedge|sand|putter` forces the club (on the green only `putter`
  *   is valid; anywhere else `putter` is ignored). `?carry=N` also sets its carry in yards, to reach
  *   the half swing of a chip (a wedge or sand wedge at 40 yd or less).
+ * - `?win=dance` ends the round at once as a 3-star finish on the last hole: the golfer and the
+ *   caddie dance for ever (`&dance=<id>` picks the dance), no results, nothing saved.
  * - `?cam=face|dtl|front` puts the camera 5 yd from the golfer at chest height (1.2 yd): `face`
  *   across the line looking at his front, `dtl` 5 yd behind the ball looking along the line,
  *   `front` from the target side looking back at him.
@@ -214,4 +216,10 @@ export function devIntroAt(): number | null {
 /** False when the real shadow map is switched off. */
 export function devShadows(): boolean {
   return !(import.meta.env.DEV && params().get('shadows') === 'off');
+}
+
+/** True for `?win=dance` in a dev build. */
+export function devWinDance(search: string = location.search): true | null {
+  if (!import.meta.env.DEV) return null;
+  return new URLSearchParams(search).get('win') === 'dance' ? true : null;
 }

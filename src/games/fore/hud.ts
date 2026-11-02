@@ -107,6 +107,8 @@ export interface Hud {
   showPill(text: string): void;
   hidePill(): void;
   measureBands(): Bands;
+  /** Top edge of the banner on screen, px (0 when it is hidden). */
+  bannerTop(): number;
   dispose(): void;
 }
 
@@ -367,6 +369,7 @@ export function createHud(): Hud {
       pill.classList.remove('on');
     },
 
+    bannerTop: () => (banner.hidden ? 0 : banner.getBoundingClientRect().top),
     measureBands() {
       place();
       const keep = { q: q.hidden, a: answers.hidden, c: controls.hidden, m: map.hidden };

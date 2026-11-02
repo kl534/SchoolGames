@@ -248,3 +248,36 @@ export function introView(
     shiftX: centreShiftX(width, band),
   };
 }
+
+/** How far from the two dancers the end camera stands, yards. */
+export const DANCE_DISTANCE = 7;
+
+/**
+ * The end shot of a 3-star round: the camera stands behind the ball line, side-on to the golfer
+ * and the caddie (who stand one behind the other along the chest line), and frames both of them
+ * head to toe with their arms up. Returns the camera and the view.
+ */
+export function danceView(
+  golfer: Vec,
+  caddie: Vec,
+  dir: number,
+  width: number,
+  height: number,
+  band: PlayBand,
+): CamView {
+  const f = forward(dir);
+  const mid = { x: (golfer.x + caddie.x) / 2, z: (golfer.z + caddie.z) / 2 };
+  // A narrow upright screen needs the camera further back to fit the two side by side.
+  const far = width / Math.max(height, 1) < 0.8 ? DANCE_DISTANCE * 1.7 : DANCE_DISTANCE;
+  const cam = { x: mid.x - f.x * far, y: 1.5, z: mid.z - f.z * far };
+  const keys: Vec[] = [];
+  // Each stands side to side with arms out: 0.9 yd either way.
+  const side = { x: Math.cos(dir), z: -Math.sin(dir) };
+  for (const p of [golfer, caddie]) {
+    for (const k of [-0.9, 0.9]) {
+      keys.push({ x: p.x + side.x * k, y: 0, z: p.z + side.z * k });
+    }
+    keys.push({ x: p.x, y: 2.8, z: p.z });
+  }
+  return fitView(cam, keys, width, height, band);
+}

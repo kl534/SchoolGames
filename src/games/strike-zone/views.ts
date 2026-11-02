@@ -11,7 +11,7 @@ import {
   pinSpot,
   type Vec,
 } from './geometry';
-import { BENCH_Z } from './friends';
+import { BENCH_TOP, BENCH_Z } from './friends';
 import { BOWLER_HAND_X } from './bowler';
 
 /**
@@ -195,6 +195,16 @@ export function friendsKeys(): Vec[] {
     { x: -1.6, y: 0, z: BENCH_Z },
     { x: -3.6, y: 1.5, z: BENCH_Z },
     { x: -1.6, y: 1.5, z: BENCH_Z },
+  ];
+}
+
+/** What the end shot holds: the three friends standing on the bench, feet to raised hands. */
+export function danceKeys(): Vec[] {
+  return [
+    { x: -3.5, y: BENCH_TOP, z: BENCH_Z },
+    { x: -1.7, y: BENCH_TOP, z: BENCH_Z },
+    { x: -3.5, y: 2.75, z: BENCH_Z },
+    { x: -1.7, y: 2.75, z: BENCH_Z },
   ];
 }
 

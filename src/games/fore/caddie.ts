@@ -1,4 +1,5 @@
 import { CylinderGeometry, Group, Mesh, MeshStandardMaterial } from 'three';
+import { DANCE_EASE, writeDance, type DanceId } from '../../shared/dances';
 import { createAnimator, createPerson, type Person } from './person';
 import type { Reaction } from './rules';
 
@@ -10,6 +11,8 @@ export interface Caddie {
   person: Person;
   /** Starts a reaction now; `idle` does nothing. It ends by itself after REACTION_SECONDS. */
   react(reaction: Reaction): void;
+  /** Dances until the page leaves (a reaction ends by itself, this does not). */
+  dance(id: DanceId): void;
   /** Poses the caddie; call every frame with the frame time. */
   update(delta: number): void;
   /**
@@ -57,10 +60,11 @@ export function createCaddie(): Caddie {
   bag.position.set(-0.45, 0, 0.05);
   root.add(bag);
 
-  let move: Reaction = 'idle';
+  let move: Reaction | 'dance' = 'idle';
+  let danceId: DanceId = 'floss';
   let since = 0;
   let now = 0;
-  let last: Reaction | null = null;
+  let last: Reaction | 'dance' | null = null;
 
   return {
     root,
@@ -70,11 +74,16 @@ export function createCaddie(): Caddie {
       move = reaction;
       since = now;
     },
+    dance(id) {
+      danceId = id;
+      move = 'dance';
+      since = now;
+    },
     update(delta) {
       now += delta;
-      if (move !== 'idle' && now - since >= REACTION_SECONDS) move = 'idle';
+      if (move !== 'idle' && move !== 'dance' && now - since >= REACTION_SECONDS) move = 'idle';
       if (move !== last) {
-        animator.transition(0.12);
+        animator.transition(move === 'dance' ? DANCE_EASE : 0.12);
         last = move;
       }
       const t = now - since;
@@ -94,6 +103,9 @@ export function createCaddie(): Caddie {
             p.lift = Math.abs(Math.sin(t * 9)) * 0.08;
             p.headPitch = 0.2;
             break;
+          case 'dance':
+            writeDance(p, danceId, t);
+            break;
           case 'groan':
             p.lean = 0.35;
             p.headPitch = -0.6;
@@ -106,6 +118,8 @@ export function createCaddie(): Caddie {
       });
     },
     stand(golfer, dir) {
+      // A new hole (or game) ends the dance.
+      if (move === 'dance') move = 'idle';
       // The golfer faces (-cos dir, sin dir); his back is the other way.
       const back = { x: Math.cos(dir), z: -Math.sin(dir) };
       const along = { x: Math.sin(dir), z: Math.cos(dir) };

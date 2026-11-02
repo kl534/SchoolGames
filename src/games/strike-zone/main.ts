@@ -3,6 +3,8 @@ import { MathUtils, Vector3 } from 'three';
 import { pressAnswers } from '../../shared/answers';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
 import { createFactFeed, type FactFeed } from '../../shared/feed';
+import { DANCE_SECONDS } from '../../shared/dances';
+import { chooseDance } from '../../shared/dances/dev';
 import { createPointerInput, onPress } from '../../shared/input';
 import { showPreview } from '../../shared/preview';
 import { showResults } from '../../shared/results';
@@ -39,7 +41,7 @@ import {
   THROW_SECONDS,
   type BowlerMove,
 } from './bowler';
-import { devDrift, devFriends, devStart } from './dev';
+import { devDrift, devFriends, devStart, devWinDance } from './dev';
 import { createFriends, type FriendMove } from './friends';
 import {
   ARROW_Z,
@@ -74,6 +76,7 @@ import {
   fitView,
   followView,
   FRIENDS_CAM,
+  danceKeys,
   friendsKeys,
   PINS_CAM,
   pinsKeys,
@@ -110,7 +113,7 @@ const PINS_SWITCH_Z = HEAD_Z + 6;
 type Phase =
   'preview' | 'aim' | 'ask' | 'throw' | 'roll' | 'gutter' | 'result' | 'reset' | 'over' | 'done';
 
-type ViewKind = 'aim' | 'ask' | 'follow' | 'pins' | 'friends';
+type ViewKind = 'aim' | 'ask' | 'follow' | 'pins' | 'friends' | 'dance';
 
 const lerpVec = (a: Vec, b: Vec, t: number): Vec => ({
   x: MathUtils.lerp(a.x, b.x, t),
@@ -239,6 +242,13 @@ function run(session: GameSession): void {
 
   const viewFor = (kind: ViewKind): CamView => {
     if (kind === 'follow') return followView(ballPos, bands.play, viewH);
+    if (kind === 'dance') {
+      // Between the top buttons and the game-over banner, which sits low on the screen.
+      const top = 64;
+      const bottom = Math.max((hud.bannerTop() || viewH) - 8, top + 120);
+      const fit = fitView(FRIENDS_CAM, danceKeys(), viewW, viewH, { top, bottom });
+      return { pos: FRIENDS_CAM, look: fit.look, fov: fit.fov, shift: fit.shift };
+    }
     const hit = viewCache.get(kind);
     if (hit) return hit;
     const cam = kind === 'pins' ? PINS_CAM : kind === 'friends' ? FRIENDS_CAM : AIM_CAM;
@@ -673,6 +683,8 @@ function run(session: GameSession): void {
   };
 
   // ---------- The end ----------
+  const holdDance = devWinDance() !== null;
+
   const finishGame = () => {
     hideFactMap();
     phase = 'over';
@@ -694,7 +706,16 @@ function run(session: GameSession): void {
       speak(GAME_OVER_SPEECH);
       sfx.cheer();
     }
-    after(FINAL_FOR, () => {
+    // A 3-star finish: the friends stand up and dance, then the results.
+    const dances = starsFor(feed.correct, feed.answered) === 3;
+    if (dances) {
+      hud.showCard(false);
+      goTo('dance', 0);
+      friends.dance(chooseDance(), gameTime);
+    }
+    // Dev `?win=dance`: the dance holds for ever and the results never open.
+    if (holdDance) return;
+    after(dances ? DANCE_SECONDS : FINAL_FOR, () => {
       if (turn === thisTurn && phase === 'over') finishRun();
     });
   };
@@ -735,6 +756,16 @@ function run(session: GameSession): void {
     tapFlow.disarm();
     stopSpeaking();
     feed = createFactFeed(() => session.chooseFacts());
+    if (holdDance) {
+      // Dev `?win=dance`: a perfect game and every answer right, over at once.
+      feed.recordHit(feed.take());
+      rolls = Array(12).fill(10);
+      standing = [];
+      splitBefore = false;
+      hud.hideBanner();
+      finishGame();
+      return;
+    }
     const start = devStart();
     rolls = start.rolls;
     standing = start.rack;
@@ -796,7 +827,7 @@ function run(session: GameSession): void {
       switchedToPins = true;
     } else if (canSkip()) {
       reset();
-    } else if (phase === 'over' && gameTime - overAt >= SKIP_RESULT_AFTER) {
+    } else if (phase === 'over' && !holdDance && gameTime - overAt >= SKIP_RESULT_AFTER) {
       finishRun();
     }
   };

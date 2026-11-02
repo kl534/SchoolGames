@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { runs } from './helpers/full';
+import { devWinDance } from '../src/games/strike-zone/dev';
+import { friendPose } from '../src/games/strike-zone/friends';
+import { neutralPose } from '../src/games/strike-zone/person';
 import {
   aimThrough,
   arrowTipX,
@@ -611,5 +614,26 @@ describe('voice lines', () => {
     expect(VOICE_LINES).toContain(NEW_HIGH_SCORE_SPEECH);
     expect(VOICE_LINES).toHaveLength(29);
     expect(new Set(VOICE_LINES).size).toBe(29);
+  });
+});
+
+describe('strike-zone win dance', () => {
+  it('reads ?win=dance', () => {
+    expect(devWinDance('?win=dance')).toBe(true);
+    expect(devWinDance('?win=x')).toBeNull();
+    expect(devWinDance('')).toBeNull();
+  });
+
+  it('a dancing friend keeps dancing past the 1.2 s a cheer lasts', () => {
+    const early = neutralPose();
+    const late = neutralPose();
+    friendPose('dance', 0.2, early, 'floss');
+    friendPose('dance', 4.2, late, 'floss');
+    expect(late.armL.out).toBeCloseTo(early.armL.out, 6);
+    // Standing, not sitting: the legs are not folded.
+    expect(late.legL.bend).toBeLessThan(1);
+    const sitting = neutralPose();
+    friendPose('sit', 5.2, sitting);
+    expect(sitting.legL.bend).toBeGreaterThan(1);
   });
 });
