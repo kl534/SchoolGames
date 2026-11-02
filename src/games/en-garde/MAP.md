@@ -28,6 +28,7 @@ The ladder rung is saved per topic and game with `session.ladderRung()` and `ses
 - `?poke=belly|head|nose|bottom`: every poke is that kind.
 - `?vs=skip`: skip the VS card.
 - `?auto=right|wrong`: answer the first question 0.3 s after its reading ends; skips the VS card, the preview and the "En garde!" wait.
+- `?win=dance`: skip the intro and start the win ending at once; we dance for ever and the results never open. `?dance=<id>` (shared) picks the dance.
 - `?at=<s>`: freeze the first poke or finisher at that time; the HUD stays. A poke that has already ended by then just carries on.
 - Examples: `npm run shots -- "en-garde?rung=5&rival=4"` (the crowned VS card), `"en-garde?auto=right&poke=head&at=0.6"`, `"en-garde?pokes=7-0&auto=right&at=2.2"` (rival in the cake), `"en-garde?pokes=3-2&auto=wrong&at=2.2"` (you in the cake).
 

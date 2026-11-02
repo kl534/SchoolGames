@@ -3,6 +3,8 @@ import { MathUtils, Vector3 } from 'three';
 import { fillAnswers, lockAnswers, markAnswers, pressAnswers } from '../../shared/answers';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
 import { createFactFeed, type FactFeed } from '../../shared/feed';
+import { DANCE_SECONDS } from '../../shared/dances';
+import { chooseDance } from '../../shared/dances/dev';
 import { showPreview } from '../../shared/preview';
 import { showResults } from '../../shared/results';
 import { createScene } from '../../shared/scene';
@@ -16,6 +18,7 @@ import { createBall } from './ball';
 import { buildCourt } from './court';
 import {
   autoAnswer,
+  devWinDance,
   devPair,
   devRung,
   devScore,
@@ -541,6 +544,21 @@ function run(session: GameSession): void {
     scoreboard.setPips(match.streak);
     showHud(false, false);
 
+    if (holdDance) {
+      match = { ...match, us: 11, them: 6 };
+      scoreboard.setup({
+        ourName: `YOU & ${TEAMMATE_NAME.toUpperCase()}`,
+        pairName: pair.name,
+        rungText: rungLabel(rung, index),
+        streakToWin: pair.streakToWin,
+        us: match.us,
+        them: match.them,
+        server: match.server,
+      });
+      ending(true);
+      return;
+    }
+
     const toPreview = () => {
       phase = 'preview';
       showHud(false, false);
@@ -834,6 +852,9 @@ function run(session: GameSession): void {
     else cooking();
   };
 
+  /** Dev `?win=dance`: the win ending holds the dance for ever and never opens the results. */
+  const holdDance = devWinDance() !== null;
+
   /** The bell, then the win or the loss. */
   const ending = (won: boolean) => {
     const thisTurn = ++turn;
@@ -844,8 +865,23 @@ function run(session: GameSession): void {
       showBanner('WE WIN!', false, true);
       sfx.bigCheer();
       court.kids.cheer(3);
-      usKids.forEach((k) => k.setMode('cheer'));
-      const toResults = () => after(WIN_RESULTS_AFTER, () => turn === thisTurn && results(true));
+      const dance = chooseDance();
+      usKids.forEach((k) => k.setMode('dance', dance));
+      // The results come after the last line and after the dance, whichever is later.
+      let spoken = false;
+      let danced = false;
+      const maybeResults = () => {
+        if (spoken && danced && turn === thisTurn && !holdDance) results(true);
+      };
+      after(DANCE_SECONDS, () => {
+        danced = true;
+        maybeResults();
+      });
+      const toResults = () =>
+        after(WIN_RESULTS_AFTER, () => {
+          spoken = true;
+          maybeResults();
+        });
       sayThen(WE_WIN_SPEECH, () => {
         if (rung === CHAMPION_RUNG - 1) {
           // Beating the Legends: crowns drop onto both our heads.
@@ -857,7 +893,7 @@ function run(session: GameSession): void {
       });
     } else {
       showBanner('SO CLOSE!', true, true);
-      themKids.forEach((k) => k.setMode('dance'));
+      themKids.forEach((k) => k.setMode('cheer'));
       speak(SO_CLOSE_SPEECH);
       after(LOSS_RESULTS_AFTER, () => turn === thisTurn && results(false));
     }
@@ -945,7 +981,8 @@ function run(session: GameSession): void {
     );
 
     stepFlight(dt);
-    for (const k of [...usKids, ...themKids]) k.update(dt, elapsed);
+    const cameraSpot = { x: LOOK_X, z: camDistance };
+    for (const k of [...usKids, ...themKids]) k.update(dt, elapsed, cameraSpot);
     court.update(delta, elapsed);
     ball.update(dt);
 

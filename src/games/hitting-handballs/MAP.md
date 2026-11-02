@@ -7,7 +7,7 @@
 - `main.ts`: the flow (VS card, preview, "Play ball!", serves, questions, hits, whiffs, points, ending, results), the ball's flights, the question clock, camera and wiring
 - `rules.ts`: pure match and ladder rules (`judgeHit`, `step`, `matchWinner`, `isMatchPoint`, `nextRun`, `isCooking`, `scoreCall`, `allScoreCalls`, `pickTarget`, `nextRung`, `pairFor`, `matchStars`), the five `PAIRS`, `outcomeText`, the fixed spoken lines
 - `shots.ts`: the ball's flight as pure physics: every shot is real projectile segments under one `GRAVITY`, with bounces off the court (`FLOOR_BOUNCE`, `FLOOR_KEEP`) and the wall (`WALL_BOUNCE`); `planShot` fits the launch speed (`SHOT_SPEEDS`) so the ball bounces, hits the wall and meets the receiver's hand. Also `ballAt`, `velocityAt`, `contacts`, `pastShot`, `bonkShot`, `serveBounce`, `holdTime`, `timeAtX`, `contactSpot` and the court numbers (`WALL_X`, `PLATE_HEIGHT`, `HOLD_U`, `PAST`)
-- `moves.ts`: every kid move as pure keyframes (`swing`, `smash`, `whiffSpin`, `bonk`, `dive`, `cheer`, `dance`, `slump`, `runFrame`) and their timings
+- `moves.ts`: every kid move as pure keyframes (`swing`, `smash`, `whiffSpin`, `bonk`, `dive`, `cheer`, `slump`, `runFrame`) and their timings
 - `layout.ts`: camera fit for the court (side-on, centred on `LOOK_X`), using a subject box (`fitCamera`, `playBand`)
 - `person.ts`: the jointed kid rig, copied from En Garde and extended with sunglasses
 - `kids.ts`: a kid from the rig (`createKid`), the looks of ours and of each pair (`US_LOOKS`, `PAIR_LOOKS`), the home spots (`HOME`)
@@ -32,6 +32,7 @@ The ladder rung is saved per topic and game with `session.ladderRung()` and `ses
 - `?vs=skip`: skip the VS card.
 - `?auto=smash|return|winner|wrong`: answer the first question 0.3 s after its reading ends; skips the VS card, the preview and "Play ball!". `smash` judges at 0.3 s, `return` judges at 99 s, `winner` sets the streak to `streakToWin - 1` and judges at 99 s.
 - `?whiff=spin|bonk`: every whiff is that kind.
+- `?win=dance`: skip the intro and start the win ending at once; the team dances for ever and the results never open. `?dance=<id>` (shared) picks the dance.
 - `?at=<s>`: freeze the scene `s` seconds after the first answer; the HUD stays and comic words stay up.
 - Examples: `npm run shots -- "hitting-handballs?rung=5&pair=5"` (the crowned VS card), `"hitting-handballs?auto=smash&at=0.35"`, `"hitting-handballs?auto=wrong&whiff=bonk&at=0.7"`, `"hitting-handballs?score=10-9&auto=smash&at=3"` (WE WIN), `"hitting-handballs?score=11-11&serve=them&vs=skip" --start`.
 

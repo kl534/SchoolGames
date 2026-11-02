@@ -1,16 +1,17 @@
 import { Group, type Mesh } from 'three';
 import { createDizzyStars } from './effects';
+import { cheer, readyFrame, runFrame, slump, type KidFrame, type Limb, type Move } from './moves';
+import { DANCE_EASE, writeDance, yawToward, type DanceId } from '../../shared/dances';
 import {
-  cheer,
-  dance,
-  readyFrame,
-  runFrame,
-  slump,
-  type KidFrame,
-  type Limb,
-  type Move,
-} from './moves';
-import { createPerson, neutralPose, type Person, type PersonStyle, type Pose } from './person';
+  copyPose,
+  createPerson,
+  easeInOut,
+  mixPose,
+  neutralPose,
+  type Person,
+  type PersonStyle,
+  type Pose,
+} from './person';
 import type { PairId } from './rules';
 import { CONTACT_Y, type Vec } from './shots';
 
@@ -74,7 +75,8 @@ export interface Kid {
   dispose(): void;
   /** The crown on the head; `drop` lets it fall onto the head over 0.6 s. */
   setCrowned(crowned: boolean, drop?: boolean): void;
-  setMode(mode: KidMode): void;
+  /** `dance` is the victory dance to do in `'dance'` mode (the kid turns to face the camera). */
+  setMode(mode: KidMode, dance?: DanceId): void;
   /** Starts walking to `x` (at most `WALK_SPEED`). */
   walkTo(x: number): void;
   /** Stands at `x` straight away. */
@@ -85,10 +87,11 @@ export interface Kid {
   contactPoint(spotX: number): Vec;
   /** World position of a point on the body, `height` as a fraction of a standing kid. */
   bodyPoint(height: number): Vec;
-  update(delta: number, elapsed: number): void;
+  /** `camera` is where the camera is on the ground; dancing kids face it. */
+  update(delta: number, elapsed: number, camera?: { x: number; z: number }): void;
 }
 
-const MODES: Record<Exclude<KidMode, 'ready'>, Move> = { cheer, dance, slump };
+const MODES: Record<Exclude<KidMode, 'ready' | 'dance'>, Move> = { cheer, slump };
 
 function mergeLimb(into: Limb, from: Limb | undefined): void {
   if (from) {
@@ -128,6 +131,10 @@ export function createKid(home: { x: number; z: number }, style: PersonStyle): K
   let phase = 0;
   let mode: KidMode = 'ready';
   let modeStart = 0;
+  let danceId: DanceId = 'floss';
+  /** The pose before the dance began, eased from over `DANCE_EASE`. */
+  const before = neutralPose();
+  const mixed = neutralPose();
   let now = 0;
   let action: { move: Move; total: number; t: number; onEnd?: () => void } | null = null;
   const current = style;
@@ -162,10 +169,12 @@ export function createKid(home: { x: number; z: number }, style: PersonStyle): K
       drop = on && dropIt ? 0 : -1;
       if (drop < 0) person.hatSlot.position.y = 0;
     },
-    setMode(next) {
-      if (mode === next) return;
+    setMode(next, dance) {
+      if (mode === next && (next !== 'dance' || dance === danceId)) return;
       mode = next;
+      if (dance) danceId = dance;
       modeStart = now;
+      if (next === 'dance') copyPose(pose, before);
     },
     walkTo(target) {
       goal = target;
@@ -183,7 +192,7 @@ export function createKid(home: { x: number; z: number }, style: PersonStyle): K
     bodyPoint(height) {
       return { x, y: height * 1.45 * scale, z: home.z };
     },
-    update(delta, elapsed) {
+    update(delta, elapsed, camera) {
       now = elapsed;
       // Walk toward the goal, turning to face the way we go, and back to the wall on arrival.
       const gap = goal - x;
@@ -194,14 +203,20 @@ export function createKid(home: { x: number; z: number }, style: PersonStyle): K
         phase += step * 6;
         place();
       }
-      const wantYaw = moving ? Math.sign(gap) * (Math.PI / 2) : -Math.PI / 2;
+      const dancing = mode === 'dance';
+      const wantYaw =
+        dancing && camera
+          ? yawToward({ x, z: home.z }, camera)
+          : moving
+            ? Math.sign(gap) * (Math.PI / 2)
+            : -Math.PI / 2;
       faceYaw += (wantYaw - faceYaw) * Math.min(1, delta * 14);
 
       Object.assign(frame, readyFrame());
       const bob = (Math.sin(elapsed * 3.4 + home.x) * 0.5 + 0.5) * 0.02;
       frame.lift = bob;
       if (moving) mergeFrame(frame, runFrame(phase, Math.min(1, step / (WALK_SPEED * delta || 1))));
-      if (mode !== 'ready') mergeFrame(frame, MODES[mode](now - modeStart));
+      if (mode !== 'ready' && mode !== 'dance') mergeFrame(frame, MODES[mode](now - modeStart));
       if (action) {
         action.t += delta;
         mergeFrame(frame, action.move(Math.min(action.t, action.total)));
@@ -227,6 +242,11 @@ export function createKid(home: { x: number; z: number }, style: PersonStyle): K
       copy(pose.armR, frame.off);
       copy(pose.legL, frame.legA);
       copy(pose.legR, frame.legB);
+      if (dancing) {
+        const k = easeInOut(Math.min(1, (now - modeStart) / DANCE_EASE));
+        writeDance(mixed, danceId, now - modeStart);
+        mixPose(before, mixed, k, pose);
+      }
       person.apply(pose);
       object.rotation.y = faceYaw + frame.yaw;
       dizzy.setVisible(frame.dizzy);
