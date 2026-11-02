@@ -48,41 +48,53 @@ describe('dances', () => {
     for (const id of DANCES) expect(DANCE_PERIOD[id]).toBeGreaterThan(0);
   });
 
-  it('stays finite and inside the rig limits for 12 seconds', () => {
-    const step = runs(0.01, 0.05);
+  it('stays finite and inside the rig limits over a loop', () => {
+    const step = runs(0.002, 0.01);
+    const bad: string[] = [];
+    const check = (ok: boolean, what: () => string) => {
+      if (!ok && bad.length < 20) bad.push(what());
+    };
     for (const id of DANCES) {
-      for (let t = 0; t <= 12; t += step) {
+      for (let t = 0; t <= DANCE_PERIOD[id]; t += step) {
         const p = at(id, t);
-        for (const v of numbers(p)) expect(Number.isFinite(v)).toBe(true);
+        check(numbers(p).every(Number.isFinite), () => `${id} ${t} not finite`);
         for (const a of [p.armL, p.armR]) {
-          expect(inRange(a.raise, -1.2, 3.2), `${id} arm raise ${a.raise}`).toBe(true);
-          expect(inRange(a.out, -1, 1.6), `${id} arm out ${a.out}`).toBe(true);
-          expect(inRange(a.bend, 0, 2.6), `${id} arm bend ${a.bend}`).toBe(true);
+          check(
+            inRange(a.raise, -1.2, 3.2) && inRange(a.out, -1, 1.6) && inRange(a.bend, 0, 2.6),
+            () => `${id} ${t} arm ${JSON.stringify(a)}`,
+          );
         }
         for (const l of [p.legL, p.legR]) {
-          expect(inRange(l.raise, -0.6, 1.6), `${id} leg raise ${l.raise}`).toBe(true);
-          expect(inRange(l.out, -0.4, 0.6), `${id} leg out ${l.out}`).toBe(true);
-          expect(inRange(l.bend, 0, 2.4), `${id} leg bend ${l.bend}`).toBe(true);
+          check(
+            inRange(l.raise, -0.6, 1.6) && inRange(l.out, -0.4, 0.6) && inRange(l.bend, 0, 2.4),
+            () => `${id} ${t} leg ${JSON.stringify(l)}`,
+          );
         }
-        expect(Math.abs(p.lift)).toBeLessThanOrEqual(0.15);
-        expect(Math.abs(p.twist)).toBeLessThanOrEqual(0.8);
-        expect(Math.abs(p.roll)).toBeLessThanOrEqual(0.3);
-        expect(Math.abs(p.lean)).toBeLessThanOrEqual(0.4);
-        expect(Math.abs(p.headPitch)).toBeLessThanOrEqual(0.6);
-        expect(Math.abs(p.headYaw)).toBeLessThanOrEqual(0.7);
+        check(
+          Math.abs(p.lift) <= 0.15 &&
+            Math.abs(p.twist) <= 0.8 &&
+            Math.abs(p.roll) <= 0.3 &&
+            Math.abs(p.lean) <= 0.4 &&
+            Math.abs(p.headPitch) <= 0.6 &&
+            Math.abs(p.headYaw) <= 0.7,
+          () => `${id} ${t} body ${JSON.stringify(p)}`,
+        );
       }
     }
+    expect(bad).toEqual([]);
   });
 
   it('loops every period', () => {
+    const bad: string[] = [];
     for (const id of DANCES) {
       for (let i = 0; i < 50; i++) {
         const t = Math.random() * 6;
         const a = numbers(at(id, t));
         const b = numbers(at(id, t + DANCE_PERIOD[id]));
-        a.forEach((v, k) => expect(v).toBeCloseTo(b[k], 6));
+        if (a.some((v, k) => Math.abs(v - b[k]) > 1e-6)) bad.push(`${id} at ${t}`);
       }
     }
+    expect(bad).toEqual([]);
   });
 
   it('moves: some limb changes by more than 0.3 over a period', () => {
