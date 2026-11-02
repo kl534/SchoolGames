@@ -168,6 +168,7 @@ export function createFriends(): Friends {
           );
           friend.shown = move;
         }
+        friend.person.root.position.y = move === 'dance' ? BENCH_TOP : 0;
         friend.animator.step(delta, (pose) => friendPose(move, Math.max(t, 0), pose, friend.dance));
       }
     },

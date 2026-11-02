@@ -106,6 +106,8 @@ export interface Hud {
   confetti(): void;
   // Measuring.
   measureBands(): Bands;
+  /** Top edge of the banner on screen, px (0 when it is hidden). */
+  bannerTop(): number;
   cardBottom(): number;
   dispose(): void;
 }
@@ -493,6 +495,7 @@ export function createHud(): Hud {
       side.hidden = keep.s;
       return measured;
     },
+    bannerTop: () => (banner.hidden ? 0 : banner.getBoundingClientRect().top),
     cardBottom: () => card.getBoundingClientRect().bottom,
 
     dispose() {
