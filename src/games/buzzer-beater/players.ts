@@ -1,4 +1,5 @@
 import { Group, Vector3 } from 'three';
+import { DANCE_EASE, writeDance, type DanceId } from '../../shared/dances';
 import { clamp, type Vec } from './geometry';
 import {
   createAnimator,
@@ -16,13 +17,15 @@ export const BALLER_SCALE = 1.4;
 const BALLER_ARMS = 1.15;
 
 export type KidMove = 'sit' | 'cheer' | 'groan';
-export type AnyMove = Move | KidMove;
+export type AnyMove = Move | KidMove | 'dance';
 
 export interface Baller {
   root: Group;
   person: Person;
   /** Whether the ball is in this player's hands when standing. */
   holding: boolean;
+  /** Which victory dance the `'dance'` move plays. */
+  dance: DanceId;
   setPos(p: Vec): void;
   face(target: Vec): void;
   /** Poses the player for `move`, `t` seconds into it. `delta` is the frame time, for easing. */
@@ -80,7 +83,7 @@ function armsUp(p: Pose, raise = 3.0, out = 0.12) {
 }
 
 /** Poses for every move, in model units (`k` is the world size of one model unit). */
-function buildPose(move: AnyMove, t: number, p: Pose, k: number, holding: boolean) {
+function buildPose(move: AnyMove, t: number, p: Pose, k: number, holding: boolean, dance: DanceId) {
   const lift = (m: Move) => jumpLift(m, t) / k;
   // Shoulder height in model units when standing: used to place the dribbling hand.
   const shoulderY = 0.88 * 0.94;
@@ -268,6 +271,9 @@ function buildPose(move: AnyMove, t: number, p: Pose, k: number, holding: boolea
       armsUp(p, lerp(0.9, 3.0, stand), 0.35);
       break;
     }
+    case 'dance':
+      writeDance(p, dance, t);
+      break;
     case 'groan': {
       const e = Math.sin(clamp(t / 1.2, 0, 1) * Math.PI);
       p.lift = -0.135;
@@ -299,6 +305,7 @@ export function createBaller(style: PersonStyle, scale = 1): Baller {
     root: person.root,
     person,
     holding: false,
+    dance: 'floss',
     size,
     setPos(p) {
       person.root.position.set(p.x, 0, p.z);
@@ -310,10 +317,18 @@ export function createBaller(style: PersonStyle, scale = 1): Baller {
     },
     play(move, t, delta = 1 / 60) {
       if (move !== last) {
-        animator.transition(move === 'sit' || move === 'cheer' || move === 'groan' ? 0.1 : 0.14);
+        animator.transition(
+          move === 'dance'
+            ? DANCE_EASE
+            : move === 'sit' || move === 'cheer' || move === 'groan'
+              ? 0.1
+              : 0.14,
+        );
         last = move;
       }
-      animator.step(delta, (pose) => buildPose(move, Math.max(t, 0), pose, size, baller.holding));
+      animator.step(delta, (pose) =>
+        buildPose(move, Math.max(t, 0), pose, size, baller.holding, baller.dance),
+      );
       // Guarding players sway side to side (drawing only).
       person.body.position.x =
         move === 'guard' ? (Math.sin(t * Math.PI * 2 * 0.8) * 0.15) / size : 0;

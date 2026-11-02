@@ -1,6 +1,9 @@
 /**
  * Dev-only hook for checking every kind of play by eye: with `?play=<HitKind|OutKind>` in the
  * address, every ball in play is forced to that kind. It compiles away in production builds.
+ *
+ * `?win=dance` skips the intro and starts the win ending at once, holding the dance for ever (no
+ * results, nothing saved); with `&start=top` the game ends at bat.
  */
 import { HIT_KINDS, type Bases, type Half, type HitKind, type OutKind } from './rules';
 
@@ -43,4 +46,10 @@ export function devStart(): { half?: Half; bases?: Bases; outs?: number } {
   const outs = Number(q.get('outs'));
   if (outs === 1 || outs === 2) out.outs = outs;
   return out;
+}
+
+/** True for `?win=dance` in a dev build. */
+export function devWinDance(search: string = location.search): true | null {
+  if (!import.meta.env.DEV) return null;
+  return new URLSearchParams(search).get('win') === 'dance' ? true : null;
 }

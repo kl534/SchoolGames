@@ -1,5 +1,6 @@
 import { PerspectiveCamera, Scene, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
+import { devWinDance } from '../src/games/batter-up/dev';
 import {
   createBall,
   createBatter,
@@ -2777,5 +2778,13 @@ describe('manifest', () => {
     expect(manifest.title).toBe('Batter Up');
     expect(manifest.scoring).toBe('score');
     expect(manifest.tags).toEqual(['sports', '3d']);
+  });
+});
+
+describe('batter-up win dance hook', () => {
+  it('reads ?win=dance', () => {
+    expect(devWinDance('?win=dance')).toBe(true);
+    expect(devWinDance('?win=x')).toBeNull();
+    expect(devWinDance('')).toBeNull();
   });
 });

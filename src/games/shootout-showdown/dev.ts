@@ -8,6 +8,8 @@
  * - `?auto=right|wrong`: answer the first question 0.3 s after its reading ends, and skip the
  *   intro and the shooter banners.
  * - `?at=1.7`: freeze the first shot at that script time; the HUD stays.
+ * - `?win=dance`: skip the intro and start the win ending at once, holding the dance for ever
+ *   (no results, nothing saved).
  */
 import type { Band } from '../../shared/hockey/band';
 import { newShootout, nextShot, shootoutDecided, type Side, type State } from './rules';
@@ -76,4 +78,10 @@ export function devShootout(first: Side): State {
     if (shootoutDecided(state)) return fresh;
   }
   return state;
+}
+
+/** True for `?win=dance` in a dev build. */
+export function devWinDance(search: string = location.search): true | null {
+  if (!import.meta.env.DEV) return null;
+  return new URLSearchParams(search).get('win') === 'dance' ? true : null;
 }

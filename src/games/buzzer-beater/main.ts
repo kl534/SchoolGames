@@ -2,6 +2,8 @@ import './style.css';
 import { MathUtils, Vector3 } from 'three';
 import { pressAnswers } from '../../shared/answers';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
+import { DANCE_SECONDS } from '../../shared/dances';
+import { chooseDance } from '../../shared/dances/dev';
 import { createFactFeed, type FactFeed } from '../../shared/feed';
 import { createPointerInput } from '../../shared/input';
 import { showPreview } from '../../shared/preview';
@@ -22,12 +24,13 @@ import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from 
 import { hideFactMap, showFactMap } from '../../shared/maps';
 import { createBall } from './ball';
 import { buildCourt } from './court';
-import { devGame, forcedPlay } from './dev';
+import { devGame, devWinDance, forcedPlay } from './dev';
 import { createEffects } from './effects';
 import {
   FT_DEFENDER,
   FT_SPOT,
   guardSpot,
+  BALL_RADIUS,
   OFFENSE_R,
   RIM,
   RIM_GROUND,
@@ -254,7 +257,7 @@ function run(session: GameSession): void {
   /** The moves each player plays outside a script. */
   const idle: Record<
     Who,
-    { move: 'stand' | 'dribble' | 'guard' | 'run' | 'run-dribble'; t: number }
+    { move: 'stand' | 'dribble' | 'guard' | 'run' | 'run-dribble' | 'dance'; t: number }
   > = {
     us: { move: 'stand', t: 0 },
     them: { move: 'stand', t: 0 },
@@ -405,6 +408,12 @@ function run(session: GameSession): void {
       return (p.x + 1) / 2;
     });
     return (across[0] + across[1]) / 2 > 0.5 ? 0.23 : 0.77;
+  };
+
+  /** Where the win card goes: the side of the screen our dancer is not on. */
+  const winnerSide = () => {
+    const p = point.set(spot.us.x, 1, spot.us.z).project(camera);
+    return (p.x + 1) / 2 > 0.5 ? 0.23 : 0.77;
   };
 
   // ---------- Saving and the scorebug ----------
@@ -895,7 +904,8 @@ function run(session: GameSession): void {
       idle[who].t += delta;
       ballers[who].play(idle[who].move, idle[who].t, delta);
     }
-    if (phase === 'ask') faceEachOther();
+    if (idle.us.move === 'dance') ballers.us.face(camera.position);
+    else if (phase === 'ask') faceEachOther();
   };
 
   const updateBall = (delta: number) => {
@@ -923,6 +933,12 @@ function run(session: GameSession): void {
     }
     if (phase === 'preview' || phase === 'done') {
       ball.setVisible(false);
+      return;
+    }
+    if (idle.us.move === 'dance' && state.ball === 'us') {
+      // Our baller is dancing: the ball rests on the floor at our feet.
+      ball.setVisible(true);
+      ball.place({ x: spot.us.x + 0.4, y: BALL_RADIUS, z: spot.us.z + 0.3 });
       return;
     }
     handBall(state.ball, delta);
@@ -1141,6 +1157,8 @@ function run(session: GameSession): void {
   };
 
   /** The game is won or lost: the buzzer, the banner, then the results. */
+  const holdDance = devWinDance() !== null;
+
   const finishGame = () => {
     hideFactMap();
     timers.clear();
@@ -1156,14 +1174,24 @@ function run(session: GameSession): void {
     sfx.alarm();
     after(0.9, () => (won ? sfx.bigCheer() : sfx.miss()));
     setKids(won ? 'cheer' : 'groan');
+    if (won) {
+      ballers.us.dance = chooseDance();
+      ballers.us.holding = false;
+      idle.us = { move: 'dance', t: 0 };
+    }
     hud.showBanner(
       won ? 'You win!' : `${rival.name} wins!`,
       scoreLine(rival, state.us, state.them),
       won ? 'good' : 'miss',
+      // On a win the banner moves beside the court so the dancer stays in sight.
+      won ? (window.innerHeight > window.innerWidth ? 'top' : 'aside') : 'centre',
+      winnerSide(),
     );
     speak(won ? YOU_WIN_SPEECH : rivalWinsSpeech(rival));
     const token = ++announceToken;
-    after(FINAL_FOR, () => {
+    // Dev `?win=dance`: the dance holds for ever and the results never open.
+    if (holdDance) return;
+    after(won ? DANCE_SECONDS : FINAL_FOR, () => {
       if (token === announceToken) finishRun();
     });
   };
@@ -1236,6 +1264,11 @@ function run(session: GameSession): void {
     hud.shotClock.hide();
     hud.hideBanner();
     refresh();
+    if (holdDance) {
+      state = { ...state, us: 61, them: 52, over: true, winner: 'us' };
+      finishGame();
+      return;
+    }
     if (!withPreview) {
       startIntro();
       return;

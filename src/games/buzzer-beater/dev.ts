@@ -9,6 +9,8 @@
  * - `?start=half2` or `?start=ot` starts in that period, with the ball as the period starts.
  * - `?score=12-10` sets the starting points.
  * - `?fire=1` starts with the streak at 3.
+ * - `?win=dance`: skip the intro and start the win ending at once, holding the dance for ever
+ *   (no results, nothing saved).
  */
 import { firstBall, newGame, ON_FIRE_AFTER, type GameState, type Shot, type Stop } from './rules';
 
@@ -63,4 +65,10 @@ export function devGame(): GameState {
     them: score ? Number(score[2]) : 0,
     streak: q.get('fire') === '1' ? ON_FIRE_AFTER : 0,
   };
+}
+
+/** True for `?win=dance` in a dev build. */
+export function devWinDance(search: string = location.search): true | null {
+  if (!import.meta.env.DEV) return null;
+  return new URLSearchParams(search).get('win') === 'dance' ? true : null;
 }

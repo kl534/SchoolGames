@@ -10,6 +10,8 @@
  *   seconds), so a play runs without taps.
  * - `?at=1.1`: freeze that first play at that script time (everything stops; the HUD stays).
  * - `?variant=a|b`: which build-up every play uses.
+ * - `?win=dance`: skip the intro and start the win ending at once, holding the dance for ever
+ *   (no results, nothing saved).
  */
 import type { Variant } from './plays';
 import {
@@ -97,4 +99,10 @@ export function devGame(): GameState {
     them: score ? Number(score[2]) : 0,
     shootout: period === SHOOTOUT_PERIOD ? { round: 1, us: 0, them: 0, shooter: 'us' } : null,
   };
+}
+
+/** True for `?win=dance` in a dev build. */
+export function devWinDance(search: string = location.search): true | null {
+  if (!import.meta.env.DEV) return null;
+  return new URLSearchParams(search).get('win') === 'dance' ? true : null;
 }

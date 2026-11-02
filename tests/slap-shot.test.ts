@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { devWinDance } from '../src/games/slap-shot/dev';
 import { runs } from './helpers/full';
 import {
   RUSH_SECONDS,
@@ -604,5 +605,13 @@ describe('words', () => {
     ]) {
       expect(VOICE_LINES).toContain(line);
     }
+  });
+});
+
+describe('slap-shot win dance hook', () => {
+  it('reads ?win=dance', () => {
+    expect(devWinDance('?win=dance')).toBe(true);
+    expect(devWinDance('?win=x')).toBeNull();
+    expect(devWinDance('')).toBeNull();
   });
 });

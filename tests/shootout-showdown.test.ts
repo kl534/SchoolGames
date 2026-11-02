@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { devWinDance } from '../src/games/shootout-showdown/dev';
 import { runs } from './helpers/full';
 import {
   COIN_TOSS_SPEECH,
@@ -257,5 +258,13 @@ describe('voice lines', () => {
       const clip = resolve(import.meta.dirname, '../public/voice', `${voiceKey(line)}.mp3`);
       expect(existsSync(clip), line).toBe(true);
     }
+  });
+});
+
+describe('shootout-showdown win dance hook', () => {
+  it('reads ?win=dance', () => {
+    expect(devWinDance('?win=dance')).toBe(true);
+    expect(devWinDance('?win=x')).toBeNull();
+    expect(devWinDance('')).toBeNull();
   });
 });
