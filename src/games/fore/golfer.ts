@@ -20,6 +20,7 @@ import {
   type Person,
   type Pose,
 } from './person';
+import { DANCE_EASE, writeDance, type DanceId } from '../../shared/dances';
 import { BALL_R } from './ball';
 import {
   SWING_TIMING,
@@ -30,7 +31,7 @@ import {
   type SwingKind,
 } from './swing';
 
-export type GolfMove = 'address' | 'swing' | 'follow' | 'cheer' | 'groan';
+export type GolfMove = 'address' | 'swing' | 'follow' | 'cheer' | 'groan' | 'dance';
 
 export interface ClubSpec {
   id: string;
@@ -45,6 +46,8 @@ export interface Golfer {
   setClub(club: ClubSpec): void;
   /** Poses the golfer `t` seconds into a move. */
   play(move: GolfMove, t: number, delta: number): void;
+  /** Which dance the `'dance'` move plays. */
+  setDance(id: DanceId): void;
   /**
    * Stands side-on to the ball as a right-hander: facing the ball line with the target on his
    * left, his feet line `reach` for the club from the ball. `dir` is the shot direction (radians
@@ -654,14 +657,20 @@ export function createGolfer(): Golfer {
 
   let last: GolfMove | null = null;
   let clock = 0;
+  let danceId: DanceId = 'floss';
 
   const golfer: Golfer = {
     root,
     person,
     setClub: attachClub,
+    setDance(id) {
+      danceId = id;
+    },
     play(move, t, delta) {
       if (move !== last) {
-        animator.transition(last === null || move === 'address' ? 0.12 : 0.1);
+        animator.transition(
+          last === null || move === 'address' ? 0.12 : move === 'dance' ? DANCE_EASE : 0.1,
+        );
         last = move;
       }
       clock += delta;
@@ -695,6 +704,11 @@ export function createGolfer(): Golfer {
             p.lift += Math.abs(Math.sin(t * 9)) * 0.08;
             p.headPitch = 0.2;
             break;
+          case 'dance':
+            ikGoal = 0;
+            relaxed(p);
+            writeDance(p, danceId, t);
+            break;
           case 'groan':
             ikGoal = 0;
             relaxed(p);
@@ -720,7 +734,7 @@ export function createGolfer(): Golfer {
         person.elbowR.quaternion.slerp(qIkElbowR, smooth);
         root.updateMatrixWorld(true);
         // The club: between the one in his hands and the one held in the right hand.
-        hold(move === 'cheer');
+        hold(move === 'cheer' || move === 'dance');
         model.group.position.copy(grip);
         model.group.quaternion.copy(qIkClub);
         if (smooth < 1) {
@@ -730,7 +744,7 @@ export function createGolfer(): Golfer {
         }
       } else {
         root.updateMatrixWorld(true);
-        hold(move === 'cheer');
+        hold(move === 'cheer' || move === 'dance');
         model.group.position.copy(pHold);
         model.group.quaternion.copy(qHoldClub);
       }

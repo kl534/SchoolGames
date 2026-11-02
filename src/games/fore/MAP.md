@@ -16,14 +16,14 @@ Nine holes of real golf: each shot is one question. A club is picked from the di
 - `sky.ts`: the sky dome, drifting clouds and birds, and the three hills behind each hole (`createSky`, `buildHills`)
 - `swing.ts`: pure swing numbers: the kind of swing for a club, its timing and the body and arm angles over time (`swingKind`, `timingFor`, `SWING_TIMING`, `swingFrame`)
 - `golfer.ts`: the right-handed golfer: stands side-on to the ball, holds the club in both hands (arm solver), swings per `swing.ts`, cheers and groans (`createGolfer`, `createClub`, `REACH`)
-- `caddie.ts`: the caddie with the bag, who idles, cheers or groans for 1.3 s (`createCaddie`, `REACTION_SECONDS`)
+- `caddie.ts`: the caddie with the bag, who idles, cheers or groans for 1.3 s, or dances on a 3-star finish (`createCaddie`, `REACTION_SECONDS`)
 - `person.ts`: the jointed person rig the golfer uses (`createPerson`, `Pose`, `neutralPose`; a 2 yd cartoon grown-up with a big round face, short neck, chunky limbs, pelvis, hips, slide and heel-raise)
 - `ball.ts`: the true-size dimpled ball (it spins as it rolls) with its tee peg, shadow, splash, one-second shot trail, ring and halo aids and impact puff, and the flight path (`createBall`, `flightPoint`, `flightSeconds`)
 - `travel.ts`: how a struck ball gets to where `finishShot` says it rests: the flight, touchdown short of the ring, hops that get lower and an evenly slowing roll (more off a driver on the fairway, little in rough, none in sand or water), and a putt that slows to a stop; scoring is unaffected (`createTravel`, `Travel`)
 - `guide.ts`: the landing ring and the dotted aim line (`createGuide`, `ringRadius`)
-- `views.ts`: the camera views and screen fitting (`aimView`, `followView`, `landView`, `introView` (the tee-to-green flyover), `fitView`)
+- `views.ts`: the camera views and screen fitting (`aimView`, `followView`, `landView`, `introView` (the tee-to-green flyover), `danceView` (the 3-star end shot), `fitView`)
 - `hud.ts`: scorecard strip, hole map, chips, controls, question, answers, banner and pill (`createHud`, `windChip`)
-- `dev.ts`: dev query hooks (`devStart`, `devHoleState`, `devAim`, `devSide`, `devQuality`, `devHolesOk`, `devSkipIntro`, `devSwing`, `devClubPlan`, `devCam`, `devIntroAt`, `devShadows`)
+- `dev.ts`: dev query hooks (`devStart`, `devHoleState`, `devAim`, `devSide`, `devQuality`, `devHolesOk`, `devSkipIntro`, `devSwing`, `devClubPlan`, `devCam`, `devIntroAt`, `devShadows`, `devWinDance`)
 
 ## Dev hooks
 
@@ -40,6 +40,7 @@ Nine holes of real golf: each shot is one question. A club is picked from the di
 - `?cam=face|dtl|front`: camera 5 yd from the golfer at chest height: across the line at his front, behind the ball along the line, or from the target side.
 - `?introAt=<0..1>`: freeze the hole flyover at that progress (needs no `intro=1`).
 - `?shadows=off`: no real shadow map; the round blob shows under the golfer and caddie again.
+- `?win=dance`: end the round at once as a 3-star finish on the last hole; the golfer and caddie dance for ever (`&dance=<id>` picks the dance), no results, nothing saved.
 - Example: `npm run shots -- "fore?hole=2&lie=sand" --start`
 
 ## Where changes go
