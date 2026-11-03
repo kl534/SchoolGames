@@ -60,6 +60,17 @@ export const WALL_Y_RANGE = [0.5, 1.2] as const;
 /** Wall height of a winner. */
 export const WINNER_WALL_Y = 0.3;
 
+/** The rival slams the ball down; it bounces to this height (m) and goes over the wall. */
+export const OVER_APEX = 4.5;
+/** The ball must be at least this high where it passes the wall (cap top 3.45 + ball + margin). */
+export const OVER_CLEAR_Y = 3.9;
+/** The closest to the wall (m from `WALL_X`) a rival stands to slam one over. */
+export const OVER_MIN_FROM_WALL = 2.0;
+/** Where the shot ends (m left of `WALL_X`), high on its way down, then the ball is hidden. */
+export const OVER_END_BEYOND = 0.9;
+/** Seconds the slam takes, from the hand to the court. */
+export const OVER_SLAM = 0.12;
+
 const lerp = (a: number, b: number, u: number) => a + (b - a) * u;
 const EPS = 1e-9;
 
@@ -263,6 +274,49 @@ export function planShot(
   // The last segment ends exactly in the hand (any fitting error is a hair).
   segments[segments.length - 1].to = { ...to };
   return shotOf(segments);
+}
+
+/**
+ * A smash the rival hits down instead of missing: the ordinary fast smash arrives at the rival's
+ * hand at `to`, who slams it into the court. It bounces up (a real projectile, peak `OVER_APEX`),
+ * passes the wall at least `OVER_CLEAR_Y` high and ends `OVER_END_BEYOND` past it.
+ */
+export function planOverTheWall(from: Vec, to: Vec, wallY: number): Shot {
+  const lead = planShot('smash', from, to, wallY, false);
+  const floor: Vec = { x: to.x - 0.2, y: BALL_R, z: to.z };
+  const slam = segment({ ...to }, floor, OVER_SLAM);
+  const vy0 = Math.sqrt(2 * GRAVITY * (OVER_APEX - BALL_R));
+  const tUp = vy0 / GRAVITY;
+  const tCross = 0.85 * tUp;
+  const vx = (floor.x - WALL_X) / tCross;
+  const at = (t: number): Vec => ({
+    x: floor.x - vx * t,
+    y: BALL_R + vy0 * t - (GRAVITY * t * t) / 2,
+    z: to.z,
+  });
+  // The ball is at the end x when `tEnd`; the segments are cut at the apex if it comes first.
+  const tEnd = tCross + OVER_END_BEYOND / vx;
+  const segments = [...lead.segments, slam];
+  if (tEnd > tUp + 1e-3) {
+    const apex = at(tUp);
+    segments.push(segment(floor, apex, tUp), segment(apex, at(tEnd), tEnd - tUp));
+  } else {
+    segments.push(segment(floor, at(tEnd), tEnd));
+  }
+  return shotOf(segments);
+}
+
+/** Where a rival who will slam one over stands: at least `OVER_MIN_FROM_WALL` from the wall. */
+export function overSpotX(spot: number): number {
+  return Math.max(spot, WALL_X + OVER_MIN_FROM_WALL);
+}
+
+/** The first time the ball is at or past the wall's face, going left of `WALL_X`, or null. */
+export function timeOverWall(shot: Shot): number | null {
+  for (let t = 0; t <= shot.duration + 1e-9; t += 0.01) {
+    if (ballAt(shot, t).x <= WALL_X) return t;
+  }
+  return null;
 }
 
 /** The highest point of a chain of projectile segments. */
