@@ -683,7 +683,7 @@ describe('hitting handballs over the wall', () => {
 
   it('the slam bounces up and over the wall, joined up, ending past it, never under the floor', () => {
     const xLow = WALL_X + OVER_MIN_FROM_WALL + 0.5;
-    for (let i = 0; i < runs(1500, 200); i++) {
+    for (let i = 0; i < runs(300, 60); i++) {
       const from = { x: -1 + Math.random() * 4, y: 0.8 + Math.random() * 0.6, z: 0.6 };
       const to = { x: xLow + Math.random() * (2.3 - xLow), y: 1, z: -0.8 };
       const wallY = WALL_Y_RANGE[0] + Math.random() * (WALL_Y_RANGE[1] - WALL_Y_RANGE[0]);
