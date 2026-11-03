@@ -36,8 +36,6 @@ import { CAM_FOV, CAM_Y, fitCamera, LOOK_X, LOOK_Y, playBand, type PlayBand } fr
 import {
   bonk,
   BONK_TOTAL,
-  dive,
-  DIVE_TOTAL,
   smash,
   SMASH_CONTACT,
   SMASH_TOTAL,
@@ -430,7 +428,7 @@ function run(session: GameSession): void {
     receiver: Kid;
     kind?: 'normal' | 'smash';
     wallY?: number;
-    /** The receiver (a rival) misses: dives, and the ball runs past. `late` dives after the ball. */
+    /** The receiver (a rival) misses: runs for the ball and swings a little early or late (`late`). */
     miss?: { late: boolean; onGone: () => void };
     /** A serve: the ball is bounced once first, and this kid swings. */
     server?: Kid;
@@ -471,10 +469,16 @@ function run(session: GameSession): void {
       f.onHold = () => ask({ kid: o.receiver, flight: f, to });
     } else if (o.miss) {
       const miss = o.miss;
+      // The rival runs for the ball, swings a little too early or too late as it goes by, then
+      // jogs on after it. No standing still, no dive once the ball is gone.
       const crossing = timeAtX(shot, spot - 0.2) ?? shot.duration;
-      pin(f, lead + Math.max(crossing - (miss.late ? 0 : 0.2), 0), () =>
-        o.receiver.play(dive, DIVE_TOTAL),
-      );
+      const chase = Math.min(spot + 0.9, 3.2);
+      o.receiver.walkTo(chase);
+      const swingAt = crossing - SWING_CONTACT + (miss.late ? 0.14 : -0.14);
+      pin(f, lead + Math.max(swingAt, 0), () => {
+        o.receiver.play(swing, SWING_TOTAL);
+        o.receiver.walkTo(Math.min(chase + 1, 3.4));
+      });
       f.onEnd = () => rollOff(ballAt(shot, shot.duration), miss.onGone);
     } else {
       pin(f, f.duration - SWING_CONTACT, () => o.receiver.play(swing, SWING_TOTAL));

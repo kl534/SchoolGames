@@ -7,7 +7,7 @@
 - `main.ts`: the flow (VS card, preview, "Play ball!", serves, questions, hits, whiffs, points, ending, results), the ball's flights, the question clock, camera and wiring
 - `rules.ts`: pure match and ladder rules (`judgeHit`, `step`, `matchWinner`, `isMatchPoint`, `nextRun`, `isCooking`, `scoreCall`, `allScoreCalls`, `pickTarget`, `nextRung`, `pairFor`, `matchStars`), the five `PAIRS`, `outcomeText`, the fixed spoken lines
 - `shots.ts`: the ball's flight as pure physics: every shot is real projectile segments under one `GRAVITY`, with bounces off the court (`FLOOR_BOUNCE`, `FLOOR_KEEP`) and the wall (`WALL_BOUNCE`); `planShot` fits the launch speed (`SHOT_SPEEDS`) so the ball bounces, hits the wall and meets the receiver's hand. Also `ballAt`, `velocityAt`, `contacts`, `pastShot`, `bonkShot`, `serveBounce`, `holdTime`, `timeAtX`, `contactSpot` and the court numbers (`WALL_X`, `PLATE_HEIGHT`, `HOLD_U`, `PAST`)
-- `moves.ts`: every kid move as pure keyframes (`swing`, `smash`, `whiffSpin`, `bonk`, `dive`, `cheer`, `slump`, `runFrame`) and their timings
+- `moves.ts`: every kid move as pure keyframes (`swing`, `smash`, `whiffSpin`, `bonk`, `dive` (unused now), `cheer`, `slump`, `runFrame`) and their timings
 - `layout.ts`: camera fit for the court (side-on, centred on `LOOK_X`), using a subject box (`fitCamera`, `playBand`)
 - `person.ts`: the jointed kid rig, copied from En Garde and extended with sunglasses
 - `kids.ts`: a kid from the rig (`createKid`), the looks of ours and of each pair (`US_LOOKS`, `PAIR_LOOKS`), the home spots (`HOME`)
