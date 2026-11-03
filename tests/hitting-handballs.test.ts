@@ -43,6 +43,7 @@ import {
   allScoreCalls,
   CHAMPION_RUNG,
   coinToss,
+  goesOverTheWall,
   COOKING_RUN,
   isCooking,
   isMatchPoint,
@@ -52,6 +53,8 @@ import {
   newMatch,
   nextRun,
   nextRung,
+  OVER_CHANCE,
+  OVER_THE_WALL_SPEECH,
   outcomeText,
   PAIRS,
   pairFor,
@@ -73,6 +76,11 @@ import {
   contactSpot,
   GRAVITY,
   holdTime,
+  OVER_CLEAR_Y,
+  OVER_END_BEYOND,
+  OVER_MIN_FROM_WALL,
+  overSpotX,
+  planOverTheWall,
   PAST,
   pastShot,
   planShot,
@@ -216,7 +224,7 @@ describe('hitting handballs calls', () => {
 
   it('records every line once', () => {
     expect(new Set(VOICE_LINES).size).toBe(VOICE_LINES.length);
-    expect(VOICE_LINES).toHaveLength(126 + 5 + 6);
+    expect(VOICE_LINES).toHaveLength(126 + 5 + 7);
     for (const pair of PAIRS) expect(VOICE_LINES).toContain(pair.intro);
     for (const line of [
       'Play ball!',
@@ -644,6 +652,87 @@ describe('a missed ball stays in bounds', () => {
         z: -4 + Math.random() * 8,
       };
       inside(pastShot(h, v));
+    }
+  });
+});
+
+describe('hitting handballs over the wall', () => {
+  it('only a smash with both rivals standing that does not win the match goes over', () => {
+    expect(goesOverTheWall(0, 1, false)).toBe(false);
+    expect(goesOverTheWall(0, 2, true)).toBe(false);
+    expect(goesOverTheWall(0, 2, false)).toBe(true);
+    expect(goesOverTheWall(OVER_CHANCE - 0.001, 2, false)).toBe(true);
+    expect(goesOverTheWall(OVER_CHANCE, 2, false)).toBe(false);
+    expect(goesOverTheWall(0.99, 2, false)).toBe(false);
+  });
+
+  it('about one smash in three goes over', () => {
+    const n = runs(30000, 3000);
+    let over = 0;
+    for (let i = 0; i < n; i++) if (goesOverTheWall(Math.random(), 2, false)) over++;
+    expect(over / n).toBeGreaterThan(0.3);
+    expect(over / n).toBeLessThan(0.37);
+  });
+
+  it('speaks the yell', () => {
+    expect(OVER_THE_WALL_SPEECH).toBe('Over the wall!!!');
+    expect(VOICE_LINES).toContain(OVER_THE_WALL_SPEECH);
+  });
+
+  it('the slam bounces up and over the wall, joined up, ending past it, never under the floor', () => {
+    const xLow = WALL_X + OVER_MIN_FROM_WALL + 0.5;
+    for (let i = 0; i < runs(1500, 200); i++) {
+      const from = { x: -1 + Math.random() * 4, y: 0.8 + Math.random() * 0.6, z: 0.6 };
+      const to = { x: xLow + Math.random() * (2.3 - xLow), y: 1, z: -0.8 };
+      const wallY = WALL_Y_RANGE[0] + Math.random() * (WALL_Y_RANGE[1] - WALL_Y_RANGE[0]);
+      const shot = planOverTheWall(from, to, wallY);
+      expect(shot.duration).toBeGreaterThan(0);
+      expect(ballAt(shot, 0)).toEqual(from);
+      let t = 0;
+      for (const s of shot.segments.slice(0, -1)) {
+        t += s.duration;
+        const before = ballAt(shot, t - 1e-9);
+        const after = ballAt(shot, t + 1e-9);
+        expect(Math.abs(before.x - after.x)).toBeLessThan(1e-6);
+        expect(Math.abs(before.y - after.y)).toBeLessThan(1e-6);
+      }
+      expect(ballAt(shot, shot.duration).x).toBeCloseTo(WALL_X - OVER_END_BEYOND, 6);
+      let crossed = false;
+      for (let u = 0; u <= shot.duration; u += 0.005) {
+        const b = ballAt(shot, u);
+        expect(b.y).toBeGreaterThanOrEqual(BALL_R - 1e-6);
+        if (!crossed && b.x <= WALL_X) {
+          crossed = true;
+          expect(b.y).toBeGreaterThanOrEqual(OVER_CLEAR_Y);
+        }
+      }
+      expect(crossed).toBe(true);
+    }
+  });
+
+  it('the slam is a floor contact and the hop is not counted again', () => {
+    const shot = planOverTheWall({ x: 0, y: 1, z: 0.6 }, { x: 0, y: 1, z: -0.8 }, 0.8);
+    const found = contacts(shot);
+    expect(found.filter((c) => c.what === 'wall')).toHaveLength(1);
+    const last = found[found.length - 1];
+    expect(last.what).toBe('floor');
+    expect(last.t).toBeCloseTo(
+      planShot('smash', { x: 0, y: 1, z: 0.6 }, { x: 0, y: 1, z: -0.8 }, 0.8).duration + 0.12,
+      1,
+    );
+    expect(found.every((c) => c.t < shot.duration - 0.5)).toBe(true);
+  });
+
+  it('a rival who slams one over steps up to at least 2 m from the wall', () => {
+    expect(overSpotX(-2.2)).toBe(WALL_X + OVER_MIN_FROM_WALL);
+    expect(overSpotX(-1)).toBe(-1);
+    expect(overSpotX(1.5)).toBe(1.5);
+    for (let i = 0; i < runs(2000, 300); i++) {
+      const home = [-1.4, 1.2][i % 2];
+      const spot = overSpotX(contactSpot(home, Math.random()));
+      expect(spot).toBeGreaterThanOrEqual(-1);
+      expect(spot).toBeGreaterThanOrEqual(-2.2);
+      expect(spot).toBeLessThanOrEqual(2.8);
     }
   });
 });

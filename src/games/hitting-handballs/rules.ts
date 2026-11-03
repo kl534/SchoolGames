@@ -269,3 +269,17 @@ export function vsSubtitle(pair: Pair): string {
 export function rungLabel(rung: number, pair: number): string {
   return rung < CHAMPION_RUNG ? `Rung ${pair + 1} of ${RUNGS}` : 'Rematch';
 }
+
+/** Share of smashes that go over the wall, when both rivals are standing. */
+export const OVER_CHANCE = 1 / 3;
+
+/**
+ * Does this smash send the ball over the wall? `random` is 0..1; `standing` is how many rivals are
+ * on the court (2, or 1 while one sits); `matchOver` is true when the smash wins the match.
+ */
+export function goesOverTheWall(random: number, standing: number, matchOver: boolean): boolean {
+  return !matchOver && standing === 2 && random < OVER_CHANCE;
+}
+
+/** The spoken yell when the ball clears the wall. */
+export const OVER_THE_WALL_SPEECH = 'Over the wall!!!';
