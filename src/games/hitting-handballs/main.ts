@@ -18,6 +18,8 @@ import { createBall } from './ball';
 import { buildCourt } from './court';
 import {
   autoAnswer,
+  devOver,
+  devSit,
   devWinDance,
   devPair,
   devRung,
@@ -31,7 +33,7 @@ import {
 } from './dev';
 import { createShake, createWords } from './effects';
 import { createScoreboard } from './hud';
-import { createKid, HOME, PAIR_LOOKS, US_LOOKS, type Kid } from './kids';
+import { createKid, HOME, PAIR_LOOKS, SIT_SPOT_X, SIT_Z, US_LOOKS, type Kid } from './kids';
 import { CAM_FOV, CAM_Y, fitCamera, LOOK_X, LOOK_Y, playBand, type PlayBand } from './layout';
 import {
   bonk,
@@ -51,6 +53,7 @@ import {
   COOKING_BANNER,
   COOKING_SPEECH,
   coinToss,
+  goesOverTheWall,
   isCooking,
   isMatchPoint,
   matchStars,
@@ -59,6 +62,7 @@ import {
   nextRun,
   nextRung,
   outcomeText,
+  OVER_THE_WALL_SPEECH,
   PAIRS,
   pairFor,
   pickTarget,
@@ -82,11 +86,15 @@ import {
   contactSpot,
   holdTime,
   pastShot,
+  OVER_SLAM,
+  overSpotX,
+  planOverTheWall,
   planShot,
   ROLL_OFF,
   SERVE_WINDUP,
   serveBounce,
   timeAtX,
+  timeOverWall,
   WALL_Y_RANGE,
   WINNER_WALL_Y,
   type Shot,
@@ -213,6 +221,9 @@ function run(session: GameSession): void {
   let themKids: Kid[] = [];
   /** Which kid of each team the ball has gone to lately. */
   const targets: Record<Side, (0 | 1)[]> = { us: [], them: [] };
+  /** The rival who hit one over the wall and sits by the fence; `sitFresh` until a point starts. */
+  let sitter: Kid | null = null;
+  let sitFresh = false;
   let flight: Flight | null = null;
   let holdClock = 0;
   let incoming: Incoming | null = null;
@@ -415,8 +426,16 @@ function run(session: GameSession): void {
 
   const randomWallY = () => WALL_Y_RANGE[0] + Math.random() * (WALL_Y_RANGE[1] - WALL_Y_RANGE[0]);
 
+  const standingRivals = () => (sitter ? 1 : 2);
+
   const nextTarget = (side: Side): 0 | 1 => {
-    const kid = pickTarget(Math.random(), targets[side]);
+    // With one rival sitting the other gets every ball (the "never three in a row" rule is off).
+    const kid: 0 | 1 =
+      side === 'them' && sitter
+        ? themKids[0] === sitter
+          ? 1
+          : 0
+        : pickTarget(Math.random(), targets[side]);
     targets[side].push(kid);
     if (targets[side].length > 4) targets[side].shift();
     return kid;
@@ -430,6 +449,9 @@ function run(session: GameSession): void {
     wallY?: number;
     /** The receiver (a rival) misses: runs for the ball and swings a little early or late (`late`). */
     miss?: { late: boolean; onGone: () => void };
+    /** The rival slams it into the court and it goes over the wall; `onGone` when the ball is gone and the yell is over. */
+    over?: boolean;
+    onGone?: () => void;
     /** A serve: the ball is bounced once first, and this kid swings. */
     server?: Kid;
   }
@@ -437,15 +459,13 @@ function run(session: GameSession): void {
   /** The ball flies from `from` to `receiver`: wall, bounce, kid. A rival returns it; our kid holds it. */
   const send = (o: Send) => {
     const rival = themKids.includes(o.receiver);
-    const spot = contactSpot(o.receiver.home.x, Math.random());
+    const raw = contactSpot(o.receiver.home.x, Math.random());
+    const spot = o.over ? overSpotX(raw) : raw;
     const to = o.receiver.contactPoint(spot);
-    const shot: Shot = planShot(
-      o.kind ?? 'normal',
-      o.from,
-      to,
-      o.wallY ?? randomWallY(),
-      o.miss !== undefined,
-    );
+    const wallY = o.wallY ?? randomWallY();
+    const shot: Shot = o.over
+      ? planOverTheWall(o.from, to, wallY)
+      : planShot(o.kind ?? 'normal', o.from, to, wallY, o.miss !== undefined);
     o.receiver.walkTo(spot);
     const lead = o.server ? SERVE_WINDUP : 0;
     const f = newFlight(lead + shot.duration, (t) => {
@@ -460,13 +480,44 @@ function run(session: GameSession): void {
       pin(f, lead, () => sfx.slap(0.8));
     }
     // The sounds of the first few contacts; the little hops of a ball running off are quiet.
-    for (const c of contacts(shot).slice(0, 4)) {
+    const found = contacts(shot);
+    for (const c of found.slice(0, o.over ? 5 : 4)) {
       pin(f, lead + c.t, () => (c.what === 'wall' ? sfx.thud() : sfx.bump()));
     }
 
     if (!rival) {
       f.holdAt = lead + holdTime(shot);
       f.onHold = () => ask({ kid: o.receiver, flight: f, to });
+    } else if (o.over) {
+      const receiver = o.receiver;
+      const onGone = o.onGone ?? (() => undefined);
+      // The slam is the last floor contact: the hand meets the ball just before it.
+      const slamEnd = found.filter((c) => c.what === 'floor').pop()?.t ?? 0;
+      const handAt = Math.max(slamEnd - OVER_SLAM, 0);
+      pin(f, lead + Math.max(handAt - SMASH_CONTACT, 0), () => receiver.play(smash, SMASH_TOTAL));
+      pin(f, lead + handAt, () => {
+        sfx.slap(1);
+        shake.start(0.15, 0.04);
+      });
+      pin(f, lead + slamEnd, () => sfx.boing());
+      let pending = 2;
+      const part = () => {
+        if (--pending === 0) onGone();
+      };
+      pin(f, lead + (timeOverWall(shot) ?? shot.duration), () => {
+        sayThen(OVER_THE_WALL_SPEECH, part);
+        court.kids.cheer(1.5);
+      });
+      f.onEnd = () => {
+        ball.setVisible(false);
+        // The rival who hit it over sulks by the fence, through the next point.
+        sitter = receiver;
+        sitFresh = true;
+        const i = themKids.indexOf(receiver);
+        receiver.walkTo(SIT_SPOT_X[i], SIT_Z);
+        receiver.setMode('sit');
+        part();
+      };
     } else if (o.miss) {
       const miss = o.miss;
       // The rival runs for the ball, swings a little too early or too late as it goes by, then
@@ -495,6 +546,7 @@ function run(session: GameSession): void {
   const dressKids = (pairIndex: number, crowned: boolean) => {
     [...usKids, ...themKids].forEach((k) => k.dispose());
     const looks = PAIR_LOOKS[PAIRS[pairIndex].id];
+    sitter = null;
     usKids = US_LOOKS.map((look, i) => createKid(HOME.us[i], look));
     themKids = looks.map((look, i) => createKid(HOME.them[i], look));
     for (const k of [...usKids, ...themKids]) scene.add(k.object);
@@ -513,6 +565,8 @@ function run(session: GameSession): void {
     vs = preview = null;
     flight = null;
     incoming = null;
+    sitter = null;
+    sitFresh = false;
     frozen = false;
     freezeUsed = false;
     freezeLeft = null;
@@ -536,6 +590,13 @@ function run(session: GameSession): void {
     feed = createFactFeed(() => session.chooseFacts());
 
     dressKids(index, rung === CHAMPION_RUNG);
+    const sitIndex = devSit();
+    if (sitIndex !== null) {
+      sitter = themKids[sitIndex];
+      sitFresh = true;
+      sitter.placeAt(SIT_SPOT_X[sitIndex], SIT_Z);
+      sitter.setMode('sit');
+    }
     scoreboard.setup({
       ourName: `YOU & ${TEAMMATE_NAME.toUpperCase()}`,
       pairName: pair.name,
@@ -622,13 +683,17 @@ function run(session: GameSession): void {
     banner.hidden = true;
     tapFlow.disarm();
     for (const k of [...usKids, ...themKids]) {
+      // A rival sulking by the fence stays there for this one point.
+      if (k === sitter) continue;
       k.placeAt(k.home.x);
       k.setMode('ready');
     }
+    sitFresh = false;
     scoreboard.setServer(match.server);
     showHud(true, false);
     const serving = match.server === 'us';
-    const server = (serving ? usKids : themKids)[Math.random() < 0.5 ? 0 : 1];
+    const servers = (serving ? usKids : themKids).filter((k) => k !== sitter);
+    const server = servers[Math.floor(Math.random() * servers.length)];
     const from = server.contactPoint(server.x);
     if (serving) {
       send({ from, receiver: themKids[nextTarget('them')], server });
@@ -739,6 +804,23 @@ function run(session: GameSession): void {
     if (strong) shake.start(0.15, 0.04);
     popWord(strong ? WORDS.smash : WORDS.winner, { x: from.x, y: from.y + 0.4, z: from.z });
     const thisTurn = turn;
+    const dev = devOver();
+    if (
+      strong &&
+      dev !== false &&
+      goesOverTheWall(dev ? 0 : Math.random(), standingRivals(), match.winner !== null)
+    ) {
+      send({
+        from,
+        receiver: rival,
+        kind: 'smash',
+        over: true,
+        onGone: () => {
+          if (turn === thisTurn) pointScored();
+        },
+      });
+      return;
+    }
     send({
       from,
       receiver: rival,
@@ -825,7 +907,12 @@ function run(session: GameSession): void {
     scoreboard.setScore(match.us, match.them);
     scoreboard.setServer(match.server);
     scoreboard.setPips(0);
-    for (const k of [...usKids, ...themKids]) k.walkTo(k.home.x);
+    // The rival who sulked through this point jogs home during the score call.
+    if (sitter && !sitFresh) {
+      sitter.setMode('ready');
+      sitter = null;
+    }
+    for (const k of [...usKids, ...themKids]) if (k !== sitter) k.walkTo(k.home.x);
     if (match.server === 'us') {
       sfx.cheer();
       court.kids.cheer(1.2);
@@ -863,6 +950,11 @@ function run(session: GameSession): void {
   const ending = (won: boolean) => {
     const thisTurn = ++turn;
     phase = 'ending';
+    if (sitter) {
+      sitter.setMode('ready');
+      sitter.placeAt(sitter.home.x);
+      sitter = null;
+    }
     showHud(true, false);
     sfx.bell();
     if (won) {

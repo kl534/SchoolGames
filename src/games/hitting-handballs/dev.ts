@@ -15,6 +15,8 @@
  * - `?whiff=spin|bonk`: every whiff is that kind.
  * - `?win=dance`: skip the intro and start the win ending at once, holding the dance for ever
  *   (no results, nothing saved).
+ * - `?over=on|off`: `on` makes every legal smash go over the wall, `off` stops it ever happening.
+ * - `?sit=1|2`: start with that rival (1 front, 2 back) sitting for the first point.
  * - `?at=<s>`: freeze the scene `s` seconds after that first answer; the HUD stays.
  */
 import { matchWinner, PAIRS, type Side } from './rules';
@@ -107,4 +109,18 @@ export function freezeAt(search: string = location.search): number | null {
 export function devWinDance(search: string = location.search): true | null {
   if (!import.meta.env.DEV) return null;
   return query(search).get('win') === 'dance' ? true : null;
+}
+
+/** `?over=on|off` in a dev build: force every legal smash over the wall, or never. */
+export function devOver(search: string = location.search): boolean | null {
+  if (!import.meta.env.DEV) return null;
+  const over = query(search).get('over');
+  return over === 'on' ? true : over === 'off' ? false : null;
+}
+
+/** `?sit=1|2` in a dev build: the index (0 or 1) of the rival who starts out sitting. */
+export function devSit(search: string = location.search): 0 | 1 | null {
+  if (!import.meta.env.DEV) return null;
+  const n = whole(query(search).get('sit'), 1, 2);
+  return n === null ? null : ((n - 1) as 0 | 1);
 }

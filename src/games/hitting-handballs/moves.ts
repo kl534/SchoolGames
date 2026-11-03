@@ -277,3 +277,20 @@ export const slump: Move = () => ({
   hit: limb(0.1, 0.1, 0.2),
   off: limb(0.1, 0.1, 0.2),
 });
+
+/** Seconds the sulk takes to sit down. */
+export const SIT_EASE = 0.4;
+
+/** A sulk on the ground: sat down, legs out in front, arms on the knees, head down. */
+export const sit: Move = (t) => {
+  const k = smooth(t / SIT_EASE);
+  return {
+    lift: -0.45 * k,
+    lean: 0.1 + 0.2 * k,
+    headPitch: -0.5 * k,
+    legA: limb(1.5 * k, 0.1, 0.1 * k),
+    legB: limb(1.5 * k, 0.1, 0.1 * k),
+    hit: limb(0.9 * k, 0.1, 0.4 * k),
+    off: limb(0.9 * k, 0.1, 0.4 * k),
+  };
+};

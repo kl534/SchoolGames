@@ -2,6 +2,8 @@ import { PerspectiveCamera, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import {
   autoAnswer,
+  devOver,
+  devSit,
   devWinDance,
   devPair,
   devRung,
@@ -717,7 +719,8 @@ describe('hitting handballs over the wall', () => {
     const last = found[found.length - 1];
     expect(last.what).toBe('floor');
     expect(last.t).toBeCloseTo(
-      planShot('smash', { x: 0, y: 1, z: 0.6 }, { x: 0, y: 1, z: -0.8 }, 0.8).duration + 0.12,
+      planShot('smash', { x: 0, y: 1, z: 0.6 }, { x: 0, y: 1, z: -0.8 }, 0.8, false).duration +
+        0.12,
       1,
     );
     expect(found.every((c) => c.t < shot.duration - 0.5)).toBe(true);
@@ -734,5 +737,16 @@ describe('hitting handballs over the wall', () => {
       expect(spot).toBeGreaterThanOrEqual(-2.2);
       expect(spot).toBeLessThanOrEqual(2.8);
     }
+  });
+
+  it('reads the over and sit dev hooks', () => {
+    expect(devOver('?over=on')).toBe(true);
+    expect(devOver('?over=off')).toBe(false);
+    expect(devOver('?over=maybe')).toBeNull();
+    expect(devOver('')).toBeNull();
+    expect(devSit('?sit=1')).toBe(0);
+    expect(devSit('?sit=2')).toBe(1);
+    expect(devSit('?sit=3')).toBeNull();
+    expect(devSit('')).toBeNull();
   });
 });
