@@ -53,6 +53,7 @@ PRONUNCIATIONS = {
     "New Orleans": "nˈu ˈɔɹlənz",
     "Oregon": "ˈɔɹəɡən",
     "Raleigh": "ɹˈɔli",
+    "Saint Louis": "sˈAnt lˈuɪs",
     "Santa Fe": "sˈæntə fˈA",
 }
 
