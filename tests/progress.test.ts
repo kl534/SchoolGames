@@ -13,6 +13,8 @@ import {
   migrateRenamedGames,
   OLD_LEVEL_SPOTS,
   recordAnswer,
+  SOCIAL_LEVELS_VERSION,
+  migrateSocialStudiesOrder,
   recordBest,
   recordLadder,
   recordHighScore,
@@ -175,7 +177,11 @@ describe('createProgressStore', () => {
     store.setCurrentPlayer(ava.id);
     expect(store.currentPlayer()).toEqual(ava);
 
-    const progress = { ...emptyProgress(), levelsVersion: LEVELS_VERSION };
+    const progress = {
+      ...emptyProgress(),
+      levelsVersion: LEVELS_VERSION,
+      socialLevelsVersion: SOCIAL_LEVELS_VERSION,
+    };
     recordAnswer(progress, 't', 'f', true);
     store.save(ava.id, progress);
     expect(store.load(ava.id)).toEqual(progress);
@@ -183,7 +189,11 @@ describe('createProgressStore', () => {
     store.removePlayer(ava.id);
     expect(store.listPlayers()).toEqual([]);
     expect(store.currentPlayer()).toBeNull();
-    expect(store.load(ava.id)).toEqual({ ...emptyProgress(), levelsVersion: LEVELS_VERSION });
+    expect(store.load(ava.id)).toEqual({
+      ...emptyProgress(),
+      levelsVersion: LEVELS_VERSION,
+      socialLevelsVersion: SOCIAL_LEVELS_VERSION,
+    });
   });
 
   it('loads progress saved before high scores existed', () => {
@@ -234,7 +244,11 @@ describe('createProgressStore', () => {
     const store = createProgressStore(raw);
     raw.setItem(
       'sg:progress:p1',
-      JSON.stringify({ pathLevelsOpen: { 'social-studies': 3 }, homePath: 'social-studies' }),
+      JSON.stringify({
+        pathLevelsOpen: { 'social-studies': 3 },
+        socialLevelsVersion: SOCIAL_LEVELS_VERSION,
+        homePath: 'social-studies',
+      }),
     );
     const loaded = store.load('p1');
     expect(loaded.pathLevelsOpen).toEqual({ 'social-studies': 3 });
@@ -267,7 +281,11 @@ describe('createProgressStore', () => {
     const progress = emptyProgress();
     recordAnswer(progress, 't', 'f', false);
     store.save(a.id, progress);
-    expect(store.load(b.id)).toEqual({ ...emptyProgress(), levelsVersion: LEVELS_VERSION });
+    expect(store.load(b.id)).toEqual({
+      ...emptyProgress(),
+      levelsVersion: LEVELS_VERSION,
+      socialLevelsVersion: SOCIAL_LEVELS_VERSION,
+    });
   });
 
   it('rejects blank names, trims long ones and falls back to a known avatar', () => {
@@ -527,6 +545,39 @@ describe('migrateMissingNumberLevels', () => {
     fresh.levelsOpen = 3;
     store.save('new', fresh);
     expect(store.load('new').levelsOpen).toBe(3);
+  });
+});
+
+describe('migrateSocialStudiesOrder', () => {
+  const at = (open?: number, version?: number): PlayerProgress => ({
+    ...emptyProgress(),
+    pathLevelsOpen: open === undefined ? undefined : { 'social-studies': open },
+    socialLevelsVersion: version,
+  });
+
+  it('keeps opened state and country levels and re-earns the capitals', () => {
+    for (const [from, to] of [
+      [1, 1],
+      [5, 1],
+      [8, 3],
+      [10, 5],
+      [12, 7],
+      [17, 12],
+    ]) {
+      const p = at(from);
+      migrateSocialStudiesOrder(p);
+      expect(p.pathLevelsOpen?.['social-studies']).toBe(to);
+      expect(p.socialLevelsVersion).toBe(SOCIAL_LEVELS_VERSION);
+    }
+  });
+
+  it('leaves current progress alone and is idempotent', () => {
+    const current = at(8, SOCIAL_LEVELS_VERSION);
+    expect(migrateSocialStudiesOrder(current)).toBe(false);
+    expect(current.pathLevelsOpen?.['social-studies']).toBe(8);
+    const p = at(8);
+    expect(migrateSocialStudiesOrder(p)).toBe(true);
+    expect(migrateSocialStudiesOrder(p)).toBe(false);
   });
 });
 

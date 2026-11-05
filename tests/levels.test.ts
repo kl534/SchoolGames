@@ -495,16 +495,11 @@ describe('Social Studies path', () => {
   /** Answers a social studies fact the way a game does. */
   const answerSocial = (progress: PlayerProgress, fact: (typeof stateCapitals.facts)[number]) => {
     clock += LEARN_SPACING_MS;
-    recordAnswer(progress, stateCapitals.id, fact.id, true, clock);
+    recordAnswer(progress, stateLocations.id, fact.id, true, clock);
   };
 
-  it('has 17 levels: 5 of capitals, 5 of finding the state, then 7 of finding the country', () => {
+  it('has 17 levels: 5 of finding the state, 7 of finding the country, then 5 of capitals', () => {
     expect(SOCIAL_STUDIES_LEVELS.map((l) => l.title)).toEqual([
-      'The Northeast',
-      'The Midwest',
-      'The South',
-      'The West',
-      'All 50 states',
       'Find the Northeast',
       'Find the Midwest',
       'Find the South',
@@ -517,25 +512,30 @@ describe('Social Studies path', () => {
       'Find Asia',
       'Find Oceania',
       'Find all the countries',
+      'The Northeast',
+      'The Midwest',
+      'The South',
+      'The West',
+      'All 50 states',
     ]);
     expect(SOCIAL_STUDIES_LEVELS.map((l) => l.facts.length)).toEqual([
-      9, 12, 16, 13, 50, 9, 12, 16, 13, 50, 10, 10, 14, 10, 12, 4, 60,
+      9, 12, 16, 13, 50, 10, 10, 14, 10, 12, 4, 60, 9, 12, 16, 13, 50,
     ]);
   });
 
   it('puts every state of Find the state in exactly one region level, then all 50 in order', () => {
     const regions = ['northeast', 'midwest', 'south', 'west'];
-    const all = SOCIAL_STUDIES_LEVELS.slice(5, 9).flatMap((l) => l.facts.map((f) => f.fact));
+    const all = SOCIAL_STUDIES_LEVELS.slice(0, 4).flatMap((l) => l.facts.map((f) => f.fact));
     expect(new Set(all)).toEqual(new Set(stateLocations.facts));
     expect(new Set(all).size).toBe(50);
-    SOCIAL_STUDIES_LEVELS.slice(5, 9).forEach((level, i) => {
+    SOCIAL_STUDIES_LEVELS.slice(0, 4).forEach((level, i) => {
       for (const { fact, topic } of level.facts) {
         expect(topic).toBe(stateLocations);
         const row = STATE_CAPITALS[stateLocations.facts.indexOf(fact)];
         expect(DIVISION_REGION[row.division]).toBe(regions[i]);
       }
     });
-    SOCIAL_STUDIES_LEVELS[9].facts.forEach((lf, i) => {
+    SOCIAL_STUDIES_LEVELS[4].facts.forEach((lf, i) => {
       expect(lf.topic).toBe(stateLocations);
       expect(lf.fact).toBe(stateLocations.facts[i]);
     });
@@ -543,16 +543,16 @@ describe('Social Studies path', () => {
 
   it('puts every country in exactly one continent level, then all 60 in order', () => {
     const continents = ['north-america', 'south-america', 'europe', 'africa', 'asia', 'oceania'];
-    const all = SOCIAL_STUDIES_LEVELS.slice(10, 16).flatMap((l) => l.facts.map((f) => f.fact));
+    const all = SOCIAL_STUDIES_LEVELS.slice(5, 11).flatMap((l) => l.facts.map((f) => f.fact));
     expect(new Set(all)).toEqual(new Set(countryLocations.facts));
     expect(all.length).toBe(60);
-    SOCIAL_STUDIES_LEVELS.slice(10, 16).forEach((level, i) => {
+    SOCIAL_STUDIES_LEVELS.slice(5, 11).forEach((level, i) => {
       for (const { fact, topic } of level.facts) {
         expect(topic).toBe(countryLocations);
         expect(COUNTRIES[countryLocations.facts.indexOf(fact)].continent).toBe(continents[i]);
       }
     });
-    SOCIAL_STUDIES_LEVELS[16].facts.forEach((lf, i) => {
+    SOCIAL_STUDIES_LEVELS[11].facts.forEach((lf, i) => {
       expect(lf.topic).toBe(countryLocations);
       expect(lf.fact).toBe(countryLocations.facts[i]);
     });
@@ -560,18 +560,18 @@ describe('Social Studies path', () => {
 
   it('puts every state in exactly one region level, in its own region', () => {
     const regions = ['northeast', 'midwest', 'south', 'west'];
-    const all = SOCIAL_STUDIES_LEVELS.slice(0, 4).flatMap((l) => l.facts.map((f) => f.fact));
+    const all = SOCIAL_STUDIES_LEVELS.slice(12, 16).flatMap((l) => l.facts.map((f) => f.fact));
     expect(all.length).toBe(stateCapitals.facts.length);
     expect(new Set(all).size).toBe(all.length);
     expect(new Set(all)).toEqual(new Set(stateCapitals.facts));
-    SOCIAL_STUDIES_LEVELS.slice(0, 4).forEach((level, i) => {
+    SOCIAL_STUDIES_LEVELS.slice(12, 16).forEach((level, i) => {
       for (const { fact, topic } of level.facts) {
         expect(topic).toBe(stateCapitals);
         expect(stateCapitals.facts).toContain(fact);
         expect(regionOf(fact)).toBe(regions[i]);
       }
     });
-    const last = SOCIAL_STUDIES_LEVELS[4].facts;
+    const last = SOCIAL_STUDIES_LEVELS[16].facts;
     last.forEach((lf, i) => expect(lf.fact).toBe(stateCapitals.facts[i]));
   });
 
@@ -615,7 +615,7 @@ describe('Social Studies path', () => {
   });
 
   it('labels a level', () => {
-    expect(levelLabel(2, path)).toBe('Level 2 of 17: The Midwest');
+    expect(levelLabel(2, path)).toBe('Level 2 of 17: Find the Midwest');
   });
 
   it('opens level 2 at 80% of the Northeast', () => {
@@ -632,14 +632,14 @@ describe('Social Studies path', () => {
     const p = emptyProgress();
     for (const { fact } of SOCIAL_STUDIES_LEVELS[4].facts) answerSocial(p, fact);
     expect(levelsOpen(p, path)).toBe(6);
-    for (const { fact } of SOCIAL_STUDIES_LEVELS[9].facts) {
-      clock += LEARN_SPACING_MS;
-      recordAnswer(p, stateLocations.id, fact.id, true, clock);
-    }
-    expect(levelsOpen(p, path)).toBe(11);
-    for (const { fact } of SOCIAL_STUDIES_LEVELS[16].facts) {
+    for (const { fact } of SOCIAL_STUDIES_LEVELS[11].facts) {
       clock += LEARN_SPACING_MS;
       recordAnswer(p, countryLocations.id, fact.id, true, clock);
+    }
+    expect(levelsOpen(p, path)).toBe(13);
+    for (const { fact } of SOCIAL_STUDIES_LEVELS[16].facts) {
+      clock += LEARN_SPACING_MS;
+      recordAnswer(p, stateCapitals.id, fact.id, true, clock);
     }
     expect(levelsOpen(p, path)).toBe(17);
     expect(levelsOpen(p)).toBe(1);

@@ -505,6 +505,7 @@ function validProgress(v: unknown): v is Partial<PlayerProgress> {
       (isObject(v.pathLevelsOpen) && Object.values(v.pathLevelsOpen).every(isNumber))) &&
     (v.levelsOpen === undefined || isNumber(v.levelsOpen)) &&
     (v.levelsVersion === undefined || isNumber(v.levelsVersion)) &&
+    (v.socialLevelsVersion === undefined || isNumber(v.socialLevelsVersion)) &&
     (v.savedAt === undefined || isNumber(v.savedAt)) &&
     (v.homePath === undefined || typeof v.homePath === 'string')
   );

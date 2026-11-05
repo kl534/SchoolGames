@@ -27,16 +27,8 @@ function continentLevel(title: string, continent: Continent): Level {
   };
 }
 
-/** Social Studies levels, easiest first. Only how many are open is saved: change titles freely, never the order. Append new levels at the end. */
+/** Social Studies levels: find the states, then the countries, then the state capitals. Only how many are open is saved: change titles freely, never the order. Append new levels at the end. */
 export const SOCIAL_STUDIES_LEVELS: Level[] = [
-  regionLevel('The Northeast', 'northeast', stateCapitals),
-  regionLevel('The Midwest', 'midwest', stateCapitals),
-  regionLevel('The South', 'south', stateCapitals),
-  regionLevel('The West', 'west', stateCapitals),
-  {
-    title: 'All 50 states',
-    facts: stateCapitals.facts.map((fact) => ({ topic: stateCapitals, fact })),
-  },
   regionLevel('Find the Northeast', 'northeast', stateLocations),
   regionLevel('Find the Midwest', 'midwest', stateLocations),
   regionLevel('Find the South', 'south', stateLocations),
@@ -54,5 +46,13 @@ export const SOCIAL_STUDIES_LEVELS: Level[] = [
   {
     title: 'Find all the countries',
     facts: countryLocations.facts.map((fact) => ({ topic: countryLocations, fact })),
+  },
+  regionLevel('The Northeast', 'northeast', stateCapitals),
+  regionLevel('The Midwest', 'midwest', stateCapitals),
+  regionLevel('The South', 'south', stateCapitals),
+  regionLevel('The West', 'west', stateCapitals),
+  {
+    title: 'All 50 states',
+    facts: stateCapitals.facts.map((fact) => ({ topic: stateCapitals, fact })),
   },
 ];
