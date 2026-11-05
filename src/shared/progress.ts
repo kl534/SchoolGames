@@ -37,6 +37,8 @@ export interface PlayerProgress {
   levelsVersion?: number;
   /** Open-level count of every path except math (math uses `levelsOpen`), by path id. */
   pathLevelsOpen?: Record<string, number>;
+  /** Which `SOCIAL_STUDIES_LEVELS` order `pathLevelsOpen['social-studies']` counts in; see `migrateSocialStudiesOrder`. */
+  socialLevelsVersion?: number;
   /** The home tab last used: a path id. */
   homePath?: string;
 }
@@ -241,6 +243,31 @@ export function migrateMissingNumberLevels(progress: PlayerProgress): boolean {
   return changed;
 }
 
+/** The Social Studies order `pathLevelsOpen` is counted in. Version 2 put the capitals last. */
+export const SOCIAL_LEVELS_VERSION = 2;
+
+/**
+ * Moves the Social Studies open-level count from the old order (5 capital levels, 5 state levels,
+ * 7 country levels) to the new one (state levels, country levels, then capitals). The state and
+ * country levels a player opened stay open; the capital levels, now last, are earned again.
+ * Returns true when it changed the count; running it again changes nothing.
+ */
+export function migrateSocialStudiesOrder(progress: PlayerProgress): boolean {
+  let changed = false;
+  const old = progress.pathLevelsOpen?.['social-studies'];
+  if (progress.socialLevelsVersion !== SOCIAL_LEVELS_VERSION && typeof old === 'number') {
+    const states = Math.min(Math.max(old - 5, 0), 5);
+    const countries = Math.max(old - 10, 0);
+    const now = countries > 0 ? 5 + countries : Math.max(states, 1);
+    if (progress.pathLevelsOpen && now !== old) {
+      progress.pathLevelsOpen['social-studies'] = now;
+      changed = true;
+    }
+  }
+  progress.socialLevelsVersion = SOCIAL_LEVELS_VERSION;
+  return changed;
+}
+
 /** Games whose id changed: old id -> new id. */
 const RENAMED_GAMES: Record<string, string> = { 'fairway-golf': 'fore' };
 
@@ -331,6 +358,10 @@ export function createProgressStore(store: KeyValueStore = deviceStore()): Progr
       migrateRenamedGames(progress);
       if (typeof data.levelsVersion === 'number') progress.levelsVersion = data.levelsVersion;
       migrateMissingNumberLevels(progress);
+      if (typeof data.socialLevelsVersion === 'number') {
+        progress.socialLevelsVersion = data.socialLevelsVersion;
+      }
+      migrateSocialStudiesOrder(progress);
       return progress;
     },
     save(playerId, progress) {
