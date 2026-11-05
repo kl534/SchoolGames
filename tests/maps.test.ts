@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest';
-import { countryIdByName, drawUsMap, drawWorldMap, stateIdByName } from '../src/shared/maps/draw';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  countryIdByName,
+  drawUsMap,
+  drawWorldInset,
+  drawWorldMap,
+  stateIdByName,
+  WHOLE_WORLD_VIEW,
+} from '../src/shared/maps/draw';
 import { factMapThumb, hideFactMap, showFactMap } from '../src/shared/maps';
 import {
   US_STATE_NEIGHBORS,
@@ -8,7 +15,14 @@ import {
   US_MAP_HEIGHT,
   US_MAP_WIDTH,
 } from '../src/shared/maps/us-states-data';
-import { CONTINENT_VIEWS, WORLD_NEIGHBORS, WORLD_SHAPES } from '../src/shared/maps/world-data';
+import {
+  CONTINENT_VIEWS,
+  WORLD_HEIGHT,
+  WORLD_INSETS,
+  WORLD_NEIGHBORS,
+  WORLD_SHAPES,
+  WORLD_WIDTH,
+} from '../src/shared/maps/world-data';
 import { COUNTRIES, type Continent } from '../src/shared/topics/countries';
 import { countryLocations } from '../src/shared/topics/world';
 import { kebab, STATE_CAPITALS, stateCapitals } from '../src/shared/topics/capitals';
@@ -209,5 +223,77 @@ describe('world map', () => {
     const thumb = factMapThumb(chile)!;
     expect(thumb.querySelector('svg')).not.toBeNull();
     expect(thumb.querySelector('.sg-mapthumb-name')!.textContent).toBe('Chile');
+  });
+
+  it('puts the small world map in a corner clear of each country', () => {
+    expect(Object.keys(WORLD_INSETS).sort()).toEqual([...keys].sort());
+    for (const c of COUNTRIES) {
+      const id = kebab(c.name);
+      const corner = WORLD_INSETS[id];
+      const [vx, vy, vw, vh] = view(c.continent);
+      const { cx, cy } = WORLD_SHAPES[id];
+      // The corner covers 30 % of the width and about a quarter of the height.
+      const inX = corner.endsWith('left') ? cx < vx + 0.3 * vw : cx > vx + 0.7 * vw;
+      const inY = corner.startsWith('top') ? cy < vy + 0.25 * vh : cy > vy + 0.75 * vh;
+      expect(inX && inY, `${id} under ${corner}`).toBe(false);
+    }
+  });
+
+  it('draws the small world map with the continent outlined and a dot per mark', () => {
+    const svg = drawWorldInset({ right: 'chile', wrong: 'peru' }, 'south-america', 'x');
+    expect(svg.getAttribute('viewBox')).toBe(`0 0 ${WORLD_WIDTH} ${WORLD_HEIGHT}`);
+    expect(svg.querySelectorAll('.sg-map-inset-land').length).toBe(
+      Object.keys(WORLD_SHAPES).length,
+    );
+    expect(svg.querySelector('.sg-map-inset-frame')).not.toBeNull();
+    expect(svg.querySelector('.sg-map-inset-dot.is-right')!.getAttribute('data-country')).toBe(
+      'chile',
+    );
+    expect(svg.querySelector('.sg-map-inset-dot.is-wrong')!.getAttribute('data-country')).toBe(
+      'peru',
+    );
+  });
+
+  describe('a country question zooms in from the whole world', () => {
+    const italy = countryLocations.facts.find((f) => f.id === 'world-italy')!;
+    const overlay = () => document.querySelector('.sg-factmap')!;
+    const big = () => overlay().querySelector('.sg-factmap-svg')!;
+    const inset = () => overlay().querySelector('.sg-factmap-inset')!;
+
+    it('starts on the whole world, with every country, a ring on Italy and no corner map', () => {
+      showFactMap(italy, undefined, { zoomAt: 0 });
+      expect(big().getAttribute('viewBox')).toBe(WHOLE_WORLD_VIEW.join(' '));
+      expect(big().querySelector('[data-country="brazil"]')).not.toBeNull();
+      const ring = big().querySelector('.sg-map-ring')!;
+      expect(ring.getAttribute('cx')).toBe(String(WORLD_SHAPES.italy.cx));
+      expect(ring.getAttribute('r')).toBe('30');
+      expect(inset().classList.contains('is-shown')).toBe(false);
+      expect(inset().classList.contains(`is-${WORLD_INSETS.italy}`)).toBe(true);
+    });
+
+    it('ends on the continent with the corner map shown', () => {
+      showFactMap(italy, undefined, { zoomAt: 1 });
+      expect(big().getAttribute('viewBox')).toBe(CONTINENT_VIEWS.europe.join(' '));
+      expect(inset().classList.contains('is-shown')).toBe(true);
+      // Italy is not small: no ring once zoomed in.
+      expect(big().querySelector('.sg-map-ring')).toBeNull();
+    });
+
+    it('plays the zoom by itself, and a miss shows the continent at once', async () => {
+      showFactMap(italy);
+      expect(big().getAttribute('viewBox')).toBe(WHOLE_WORLD_VIEW.join(' '));
+      // The corner map comes in when the zoom ends.
+      await vi.waitFor(() => expect(inset().classList.contains('is-shown')).toBe(true), {
+        timeout: 5000,
+        interval: 100,
+      });
+      expect(big().getAttribute('viewBox')).toBe(CONTINENT_VIEWS.europe.join(' '));
+      expect(big().querySelector('.sg-map-ring')!.classList.contains('is-gone')).toBe(true);
+      expect(big().getAttribute('viewBox')).toBe(CONTINENT_VIEWS.europe.join(' '));
+      showFactMap(italy, { wrong: 'France' });
+      expect(big().getAttribute('viewBox')).toBe(CONTINENT_VIEWS.europe.join(' '));
+      expect(inset().classList.contains('is-shown')).toBe(true);
+      expect(inset().querySelector('.is-wrong')!.getAttribute('data-country')).toBe('france');
+    });
   });
 });

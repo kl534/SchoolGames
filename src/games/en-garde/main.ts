@@ -12,7 +12,18 @@ import { createTimers } from '../../shared/timers';
 import { answerOptions, promptSpeech, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
 import { hideFactMap, showFactMap } from '../../shared/maps';
-import { autoAnswer, devPokes, devRival, devRung, forcedPoke, freezeAt, skipVs } from './dev';
+import {
+  autoAnswer,
+  devPokes,
+  devRival,
+  devRung,
+  devWinDance,
+  forcedPoke,
+  freezeAt,
+  skipVs,
+} from './dev';
+import { DANCE_SECONDS } from '../../shared/dances';
+import { chooseDance } from '../../shared/dances/dev';
 import { createEffects, createWords } from './effects';
 import { createFighter, RIVAL_LOOKS, US_LOOK, type Fighter } from './fighters';
 import { createHealthBars } from './hud';
@@ -379,6 +390,14 @@ function run(session: GameSession): void {
     });
     showHud(false, false);
 
+    if (holdDance) {
+      phase = 'ending';
+      bout = { ...bout, landed: bout.pokesToWin };
+      showHud(true, false);
+      winEnding(turn);
+      return;
+    }
+
     const toPreview = () => {
       phase = 'preview';
       showHud(false, false);
@@ -617,10 +636,48 @@ function run(session: GameSession): void {
     showHud(true, false);
     showBanner('SO CLOSE!', true, true);
     sfx.aww();
-    rival.setMode('dance');
+    rival.setMode('victory');
     speak(SO_CLOSE_SPEECH);
     after(LOSS_RESULTS_AFTER, () => {
       if (turn === thisTurn) results(false);
+    });
+  };
+
+  /** Dev `?win=dance`: the win ending holds the dance for ever and never opens the results. */
+  const holdDance = devWinDance() !== null;
+
+  /** The cake splat, the banner and the dance; then the results (later of the line and the dance). */
+  const winEnding = (thisTurn: number) => {
+    sfx.splat();
+    party.cake.splat();
+    effects.confetti();
+    sfx.bigCheer();
+    party.kids.cheer(2.5);
+    you.setMode('dance', chooseDance());
+    showBanner('VICTORY!', false, true);
+    let spoken = false;
+    let danced = false;
+    const maybeResults = () => {
+      if (spoken && danced && turn === thisTurn && !holdDance) results(true);
+    };
+    after(DANCE_SECONDS, () => {
+      danced = true;
+      maybeResults();
+    });
+    const toResults = () =>
+      after(WIN_RESULTS_AFTER, () => {
+        spoken = true;
+        maybeResults();
+      });
+    speak(VICTORY_SPEECH, () => {
+      if (turn !== thisTurn) return;
+      if (rung === CHAMPION_RUNG - 1) {
+        // Beating the champion: the crown drops onto our head.
+        you.setCrowned(true, true);
+        speak(CHAMPION_SPEECH, toResults);
+      } else {
+        toResults();
+      }
     });
   };
 
@@ -641,26 +698,7 @@ function run(session: GameSession): void {
         popWord(FINISH_WORD, rival, null);
       },
       onLaunch: () => sfx.slideWhistle(),
-      onSplat: () => {
-        sfx.splat();
-        party.cake.splat();
-        effects.confetti();
-        sfx.bigCheer();
-        party.kids.cheer(2.5);
-        you.setMode('victory');
-        showBanner('VICTORY!', false, true);
-        const toResults = () => after(WIN_RESULTS_AFTER, () => turn === thisTurn && results(true));
-        speak(VICTORY_SPEECH, () => {
-          if (turn !== thisTurn) return;
-          if (rung === CHAMPION_RUNG - 1) {
-            // Beating the champion: the crown drops onto our head.
-            you.setCrowned(true, true);
-            speak(CHAMPION_SPEECH, toResults);
-          } else {
-            toResults();
-          }
-        });
-      },
+      onSplat: () => winEnding(thisTurn),
     });
     sfx.whoosh();
   };
@@ -731,8 +769,9 @@ function run(session: GameSession): void {
     }
 
     updateMove(dt);
-    you.update(dt, elapsed);
-    rival.update(dt, elapsed);
+    const cameraSpot = { x: 0, z: camDistance };
+    you.update(dt, elapsed, cameraSpot);
+    rival.update(dt, elapsed, cameraSpot);
     party.update(delta, elapsed);
     effects.update(delta);
 

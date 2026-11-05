@@ -210,6 +210,22 @@ export const MATCH_POINT_SPEECH = 'Match point!';
 export const WE_WIN_SPEECH = 'We win!';
 export const SO_CLOSE_SPEECH = 'So close! Try again!';
 export const CHAMPION_SPEECH = 'You are the Recess Champions!';
+export const COOKING_SPEECH = "You're cooking!";
+export const COOKING_BANNER = "YOU'RE COOKING!";
+/** Points in a row we must win before the cooking call (and again at every multiple). */
+export const COOKING_RUN = 3;
+
+/** Our run of points in a row after a point to `point`. */
+export function nextRun(run: number, point: Side | null): number {
+  if (point === 'us') return run + 1;
+  if (point === 'them') return 0;
+  return run;
+}
+
+/** This run of our points earns the cooking call. */
+export function isCooking(run: number): boolean {
+  return run > 0 && run % COOKING_RUN === 0;
+}
 
 /** Comic words on screen (written, not spoken). */
 export const WORDS = {
@@ -253,3 +269,17 @@ export function vsSubtitle(pair: Pair): string {
 export function rungLabel(rung: number, pair: number): string {
   return rung < CHAMPION_RUNG ? `Rung ${pair + 1} of ${RUNGS}` : 'Rematch';
 }
+
+/** Share of smashes that go over the wall, when both rivals are standing. */
+export const OVER_CHANCE = 1 / 3;
+
+/**
+ * Does this smash send the ball over the wall? `random` is 0..1; `standing` is how many rivals are
+ * on the court (2, or 1 while one sits); `matchOver` is true when the smash wins the match.
+ */
+export function goesOverTheWall(random: number, standing: number, matchOver: boolean): boolean {
+  return !matchOver && standing === 2 && random < OVER_CHANCE;
+}
+
+/** The spoken yell when the ball clears the wall. */
+export const OVER_THE_WALL_SPEECH = 'Over the wall!!!';

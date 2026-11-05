@@ -4,7 +4,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { geoNaturalEarth1, geoPath } from 'd3-geo';
+import { geoContains, geoNaturalEarth1, geoPath } from 'd3-geo';
 import type { GeoPermissibleObjects } from 'd3-geo';
 import { feature, neighbors } from 'topojson-client';
 import { presimplify, quantile, simplify } from 'topojson-simplify';
@@ -20,6 +20,8 @@ const CARD_ASPECT = 975 / 610;
 /** Largest polygon's bigger side under this many units gets the ring. */
 const SMALL_SIZE = 12;
 const ANTARCTICA = '010';
+/** The corner world map's share of the card's width (must match `.sg-factmap-inset` in maps.css). */
+const INSET_WIDTH = 0.3;
 const OUT = 'src/shared/maps/world-data.ts';
 
 const kebab = (text: string): string => text.toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -144,6 +146,56 @@ for (const continent of Object.keys(CONTINENT_TITLES) as Continent[]) {
   views[continent] = [round(cx - w / 2), round(cy - h / 2), round(w), round(h)];
 }
 
+type Corner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+const CORNERS: Corner[] = ['bottom-left', 'bottom-right', 'top-left', 'top-right'];
+/**
+ * The corner for the small world map, per listed country: never over that country, and otherwise
+ * the one covering the least land, where land of a listed country of the continent counts ten times
+ * (it may be a wrong answer).
+ */
+const insets: Record<string, Corner> = {};
+const featureBoxes = collection.features.map((f) => boxOf(f as GeoPermissibleObjects));
+for (const continent of Object.keys(CONTINENT_TITLES) as Continent[]) {
+  const [vx, vy, vw, vh] = views[continent];
+  const iw = (INSET_WIDTH + 0.03) * vw;
+  const ih = (INSET_WIDTH * (HEIGHT / WIDTH) * CARD_ASPECT + 0.03) * vh;
+  const listedHere = COUNTRIES.filter((c) => c.continent === continent);
+  const own = new Set(listedHere.map((c) => indexOf.get(c.name)!));
+  /** Per corner: land score, and which listed countries it covers. */
+  const covers = CORNERS.map((corner) => {
+    const x0 = corner.endsWith('left') ? vx : vx + vw - iw;
+    const y0 = corner.startsWith('top') ? vy : vy + vh - ih;
+    let score = 0;
+    const hits = new Set<number>();
+    for (let i = 0; i <= 16; i++) {
+      for (let j = 0; j <= 8; j++) {
+        const x = x0 + (iw * i) / 16;
+        const y = y0 + (ih * j) / 8;
+        const lonLat = projection.invert!([x, y]);
+        if (!lonLat) continue;
+        const hit = collection.features.findIndex((f, k) => {
+          const [bx0, by0, bx1, by1] = featureBoxes[k];
+          return x >= bx0 && x <= bx1 && y >= by0 && y <= by1 && geoContains(f, lonLat);
+        });
+        if (hit < 0) continue;
+        score += own.has(hit) ? 10 : 1;
+        hits.add(hit);
+      }
+    }
+    // Also a country whose ring centre is under the corner (an island the grid misses).
+    for (const c of listedHere) {
+      const { cx, cy } = shapes[kebab(c.name)];
+      if (cx >= x0 && cx <= x0 + iw && cy >= y0 && cy <= y0 + ih) hits.add(indexOf.get(c.name)!);
+    }
+    return { corner, score, hits };
+  });
+  for (const c of listedHere) {
+    const free = covers.filter((k) => !k.hits.has(indexOf.get(c.name)!));
+    if (!free.length) throw new Error(`Every corner covers ${c.name}`);
+    insets[kebab(c.name)] = free.reduce((a, b) => (b.score < a.score ? b : a)).corner;
+  }
+}
+
 const sorted = <T>(record: Record<string, T>): Record<string, T> =>
   Object.fromEntries(Object.entries(record).sort(([a], [b]) => (a < b ? -1 : 1)));
 const out = Object.fromEntries(
@@ -174,6 +226,11 @@ export const WORLD_SHAPES: Record<string, WorldShape> = ${JSON.stringify(sorted(
 export const WORLD_NEIGHBORS: Record<string, string[]> = ${JSON.stringify(sorted(adjacency))};
 /** viewBox [x, y, w, h] per continent. */
 export const CONTINENT_VIEWS: Record<Continent, [number, number, number, number]> = ${JSON.stringify(views)};
+/** For the 60 only: the corner of the card for the small world map (not over the country). */
+export const WORLD_INSETS: Record<
+  string,
+  'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+> = ${JSON.stringify(sorted(insets))};
 `;
 writeFileSync(OUT, text);
 execFileSync('npx', ['prettier', '--write', OUT], { stdio: 'inherit' });

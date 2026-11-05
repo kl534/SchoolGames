@@ -28,6 +28,7 @@ jobs:
       - run: npm run build
         env:
           BASE_PATH: /${{ github.event.repository.name }}/
+          VITE_SYNC_URL: ${{ vars.SYNC_URL }}
       - name: Publish dist/ to the production branch
         run: |
           touch dist/.nojekyll

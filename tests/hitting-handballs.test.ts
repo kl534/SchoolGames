@@ -2,9 +2,13 @@ import { PerspectiveCamera, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import {
   autoAnswer,
+  devOver,
+  devSit,
+  devWinDance,
   devPair,
   devRung,
   devScore,
+  devRun,
   devServe,
   devStreak,
   forcedWhiff,
@@ -25,7 +29,6 @@ import {
   BONK_TOTAL,
   bonk,
   cheer,
-  dance,
   DIVE_TOTAL,
   dive,
   runFrame,
@@ -42,12 +45,18 @@ import {
   allScoreCalls,
   CHAMPION_RUNG,
   coinToss,
+  goesOverTheWall,
+  COOKING_RUN,
+  isCooking,
   isMatchPoint,
   judgeHit,
   matchStars,
   matchWinner,
   newMatch,
+  nextRun,
   nextRung,
+  OVER_CHANCE,
+  OVER_THE_WALL_SPEECH,
   outcomeText,
   PAIRS,
   pairFor,
@@ -62,10 +71,18 @@ import {
   ballAt,
   LANE,
   BALL_R,
+  PLATE_HEIGHT,
+  WALL_Y_RANGE,
+  WINNER_WALL_Y,
   contacts,
   contactSpot,
   GRAVITY,
   holdTime,
+  OVER_CLEAR_Y,
+  OVER_END_BEYOND,
+  OVER_MIN_FROM_WALL,
+  overSpotX,
+  planOverTheWall,
   PAST,
   pastShot,
   planShot,
@@ -209,7 +226,7 @@ describe('hitting handballs calls', () => {
 
   it('records every line once', () => {
     expect(new Set(VOICE_LINES).size).toBe(VOICE_LINES.length);
-    expect(VOICE_LINES).toHaveLength(126 + 5 + 5);
+    expect(VOICE_LINES).toHaveLength(126 + 5 + 7);
     for (const pair of PAIRS) expect(VOICE_LINES).toContain(pair.intro);
     for (const line of [
       'Play ball!',
@@ -217,9 +234,41 @@ describe('hitting handballs calls', () => {
       'We win!',
       'So close! Try again!',
       'You are the Recess Champions!',
+      "You're cooking!",
     ]) {
       expect(VOICE_LINES).toContain(line);
     }
+  });
+});
+
+describe('hitting handballs cooking', () => {
+  it('counts our points in a row and resets on theirs', () => {
+    expect(nextRun(0, 'us')).toBe(1);
+    expect(nextRun(2, 'us')).toBe(3);
+    expect(nextRun(4, 'them')).toBe(0);
+    expect(nextRun(2, null)).toBe(2);
+  });
+
+  it('calls it at every third point in a row', () => {
+    expect([0, 1, 2, 3, 4, 5, 6, 9].map(isCooking)).toEqual([
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+    ]);
+    expect(COOKING_RUN).toBe(3);
+  });
+
+  it('reads devRun', () => {
+    expect(devRun('?run=2')).toBe(2);
+    expect(devRun('?run=x')).toBeNull();
+    expect(devRun('')).toBeNull();
+    expect(devWinDance('?win=dance')).toBe(true);
+    expect(devWinDance('?win=x')).toBeNull();
   });
 });
 
@@ -297,6 +346,11 @@ describe('hitting handballs ladder', () => {
 });
 
 describe('hitting handballs shots', () => {
+  it('every shot hits the wall above the plate', () => {
+    expect(WINNER_WALL_Y - BALL_R).toBeGreaterThan(PLATE_HEIGHT);
+    expect(WALL_Y_RANGE[0] - BALL_R).toBeGreaterThan(PLATE_HEIGHT);
+  });
+
   const from: Vec = { x: 1, y: 1, z: 0.6 };
   const to: Vec = { x: 2, y: 1, z: -0.8 };
 
@@ -481,7 +535,6 @@ describe('hitting handballs moves', () => {
     expect(dive(DIVE_TOTAL / 2).roll).toBeGreaterThan(1);
     expect(bonk(0.4).dizzy).toBe(true);
     expect(cheer(0.1).hit?.raise).toBeGreaterThan(2);
-    expect(dance(0.3).twist).toBeDefined();
     expect(runFrame(1, 0).legA?.raise).toBe(0);
   });
 });
@@ -567,11 +620,16 @@ describe('a missed ball stays in bounds', () => {
     { x: 1.2, z: -0.8 },
   ];
   const inside = (shot: ReturnType<typeof planShot>) => {
+    // Track the extremes and assert once per shot: an `expect` per sample made the sweep slow.
+    let low = Infinity;
+    let high = -Infinity;
     for (let t = 0; t <= shot.duration; t += 0.02) {
       const z = ballAt(shot, t).z;
-      expect(z).toBeGreaterThanOrEqual(LANE.min - 1e-6);
-      expect(z).toBeLessThanOrEqual(LANE.max + 1e-6);
+      low = Math.min(low, z);
+      high = Math.max(high, z);
     }
+    expect(low).toBeGreaterThanOrEqual(LANE.min - 1e-6);
+    expect(high).toBeLessThanOrEqual(LANE.max + 1e-6);
   };
 
   it('a rival who whiffs: the ball runs on inside the side lines', () => {
@@ -597,5 +655,98 @@ describe('a missed ball stays in bounds', () => {
       };
       inside(pastShot(h, v));
     }
+  });
+});
+
+describe('hitting handballs over the wall', () => {
+  it('only a smash with both rivals standing that does not win the match goes over', () => {
+    expect(goesOverTheWall(0, 1, false)).toBe(false);
+    expect(goesOverTheWall(0, 2, true)).toBe(false);
+    expect(goesOverTheWall(0, 2, false)).toBe(true);
+    expect(goesOverTheWall(OVER_CHANCE - 0.001, 2, false)).toBe(true);
+    expect(goesOverTheWall(OVER_CHANCE, 2, false)).toBe(false);
+    expect(goesOverTheWall(0.99, 2, false)).toBe(false);
+  });
+
+  it('about one smash in three goes over', () => {
+    const n = runs(30000, 3000);
+    let over = 0;
+    for (let i = 0; i < n; i++) if (goesOverTheWall(Math.random(), 2, false)) over++;
+    expect(over / n).toBeGreaterThan(0.3);
+    expect(over / n).toBeLessThan(0.37);
+  });
+
+  it('speaks the yell', () => {
+    expect(OVER_THE_WALL_SPEECH).toBe('Over the wall!!!');
+    expect(VOICE_LINES).toContain(OVER_THE_WALL_SPEECH);
+  });
+
+  it('the slam bounces up and over the wall, joined up, ending past it, never under the floor', () => {
+    const xLow = WALL_X + OVER_MIN_FROM_WALL + 0.5;
+    for (let i = 0; i < runs(300, 60); i++) {
+      const from = { x: -1 + Math.random() * 4, y: 0.8 + Math.random() * 0.6, z: 0.6 };
+      const to = { x: xLow + Math.random() * (2.3 - xLow), y: 1, z: -0.8 };
+      const wallY = WALL_Y_RANGE[0] + Math.random() * (WALL_Y_RANGE[1] - WALL_Y_RANGE[0]);
+      const shot = planOverTheWall(from, to, wallY);
+      expect(shot.duration).toBeGreaterThan(0);
+      expect(ballAt(shot, 0)).toEqual(from);
+      let t = 0;
+      for (const s of shot.segments.slice(0, -1)) {
+        t += s.duration;
+        const before = ballAt(shot, t - 1e-9);
+        const after = ballAt(shot, t + 1e-9);
+        expect(Math.abs(before.x - after.x)).toBeLessThan(1e-6);
+        expect(Math.abs(before.y - after.y)).toBeLessThan(1e-6);
+      }
+      expect(ballAt(shot, shot.duration).x).toBeCloseTo(WALL_X - OVER_END_BEYOND, 6);
+      let crossed = false;
+      for (let u = 0; u <= shot.duration; u += 0.005) {
+        const b = ballAt(shot, u);
+        expect(b.y).toBeGreaterThanOrEqual(BALL_R - 1e-6);
+        if (!crossed && b.x <= WALL_X) {
+          crossed = true;
+          expect(b.y).toBeGreaterThanOrEqual(OVER_CLEAR_Y);
+        }
+      }
+      expect(crossed).toBe(true);
+    }
+  });
+
+  it('the slam is a floor contact and the hop is not counted again', () => {
+    const shot = planOverTheWall({ x: 0, y: 1, z: 0.6 }, { x: 0, y: 1, z: -0.8 }, 0.8);
+    const found = contacts(shot);
+    expect(found.filter((c) => c.what === 'wall')).toHaveLength(1);
+    const last = found[found.length - 1];
+    expect(last.what).toBe('floor');
+    expect(last.t).toBeCloseTo(
+      planShot('smash', { x: 0, y: 1, z: 0.6 }, { x: 0, y: 1, z: -0.8 }, 0.8, false).duration +
+        0.12,
+      1,
+    );
+    expect(found.every((c) => c.t < shot.duration - 0.5)).toBe(true);
+  });
+
+  it('a rival who slams one over steps up to at least 2 m from the wall', () => {
+    expect(overSpotX(-2.2)).toBe(WALL_X + OVER_MIN_FROM_WALL);
+    expect(overSpotX(-1)).toBe(-1);
+    expect(overSpotX(1.5)).toBe(1.5);
+    for (let i = 0; i < runs(2000, 300); i++) {
+      const home = [-1.4, 1.2][i % 2];
+      const spot = overSpotX(contactSpot(home, Math.random()));
+      expect(spot).toBeGreaterThanOrEqual(-1);
+      expect(spot).toBeGreaterThanOrEqual(-2.2);
+      expect(spot).toBeLessThanOrEqual(2.8);
+    }
+  });
+
+  it('reads the over and sit dev hooks', () => {
+    expect(devOver('?over=on')).toBe(true);
+    expect(devOver('?over=off')).toBe(false);
+    expect(devOver('?over=maybe')).toBeNull();
+    expect(devOver('')).toBeNull();
+    expect(devSit('?sit=1')).toBe(0);
+    expect(devSit('?sit=2')).toBe(1);
+    expect(devSit('?sit=3')).toBeNull();
+    expect(devSit('')).toBeNull();
   });
 });

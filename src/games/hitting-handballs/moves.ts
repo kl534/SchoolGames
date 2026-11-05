@@ -270,17 +270,6 @@ export const cheer: Move = (t) => ({
   off: limb(2.8, 0.3, 0.2),
 });
 
-/** A wiggling victory dance, a loop. */
-export const dance: Move = (t) => ({
-  twist: Math.sin(t * 9) * 0.5,
-  roll: Math.sin(t * 9) * 0.1,
-  lift: Math.abs(Math.sin(t * 4.5)) * 0.07,
-  hit: limb(1.5 + Math.sin(t * 7) * 0.7, 0.3, 0.4),
-  off: limb(1.0 + Math.sin(t * 7 + 2) * 0.5, 0.6, 0.6),
-  legA: limb(Math.sin(t * 9) * 0.5, 0.1, 0.35),
-  legB: limb(-Math.sin(t * 9) * 0.5, 0.1, 0.35),
-});
-
 /** The watching kids slump. */
 export const slump: Move = () => ({
   lean: 0.3,
@@ -288,3 +277,20 @@ export const slump: Move = () => ({
   hit: limb(0.1, 0.1, 0.2),
   off: limb(0.1, 0.1, 0.2),
 });
+
+/** Seconds the sulk takes to sit down. */
+export const SIT_EASE = 0.4;
+
+/** A sulk on the ground: sat down, legs out in front, arms on the knees, head down. */
+export const sit: Move = (t) => {
+  const k = smooth(t / SIT_EASE);
+  return {
+    lift: -0.45 * k,
+    lean: 0.1 + 0.2 * k,
+    headPitch: -0.5 * k,
+    legA: limb(1.5 * k, 0.1, 0.1 * k),
+    legB: limb(1.5 * k, 0.1, 0.1 * k),
+    hit: limb(0.9 * k, 0.1, 0.4 * k),
+    off: limb(0.9 * k, 0.1, 0.4 * k),
+  };
+};

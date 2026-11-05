@@ -7,11 +7,16 @@
  * - `?score=<us>-<them>`: the starting score, ignored if the match would already be over.
  * - `?serve=us|them`: who serves first.
  * - `?streak=<n>`: the starting rally streak (below the pair's `streakToWin`).
+ * - `?run=<n>`: points in a row we have already won (for the "You're cooking!" call).
  * - `?vs=skip`: skip the VS card.
  * - `?auto=smash|return|winner|wrong`: answer the first question 0.3 s after its reading ends,
  *   skip the VS card, the preview and "Play ball!". `smash` judges at 0.3 s, `return` judges at
  *   99 s and `winner` sets the streak to `streakToWin - 1` and judges at 99 s.
  * - `?whiff=spin|bonk`: every whiff is that kind.
+ * - `?win=dance`: skip the intro and start the win ending at once, holding the dance for ever
+ *   (no results, nothing saved).
+ * - `?over=on|off`: `on` makes every legal smash go over the wall, `off` stops it ever happening.
+ * - `?sit=1|2`: start with that rival (1 front, 2 back) sitting for the first point.
  * - `?at=<s>`: freeze the scene `s` seconds after that first answer; the HUD stays.
  */
 import { matchWinner, PAIRS, type Side } from './rules';
@@ -62,6 +67,12 @@ export function devStreak(streakToWin: number, search: string = location.search)
   return whole(query(search).get('streak'), 0, streakToWin - 1);
 }
 
+/** `?run=<n>` in a dev build: points in a row we have already won (0 to 20). */
+export function devRun(search: string = location.search): number | null {
+  if (!import.meta.env.DEV) return null;
+  return whole(query(search).get('run'), 0, 20);
+}
+
 /** True for `?vs=skip` or `?auto=` in a dev build. */
 export function skipVs(search: string = location.search): true | null {
   if (!import.meta.env.DEV) return null;
@@ -92,4 +103,24 @@ export function freezeAt(search: string = location.search): number | null {
   const at = query(search).get('at');
   if (at === null || at === '' || Number.isNaN(Number(at)) || Number(at) < 0) return null;
   return Number(at);
+}
+
+/** True for `?win=dance` in a dev build. */
+export function devWinDance(search: string = location.search): true | null {
+  if (!import.meta.env.DEV) return null;
+  return query(search).get('win') === 'dance' ? true : null;
+}
+
+/** `?over=on|off` in a dev build: force every legal smash over the wall, or never. */
+export function devOver(search: string = location.search): boolean | null {
+  if (!import.meta.env.DEV) return null;
+  const over = query(search).get('over');
+  return over === 'on' ? true : over === 'off' ? false : null;
+}
+
+/** `?sit=1|2` in a dev build: the index (0 or 1) of the rival who starts out sitting. */
+export function devSit(search: string = location.search): 0 | 1 | null {
+  if (!import.meta.env.DEV) return null;
+  const n = whole(query(search).get('sit'), 1, 2);
+  return n === null ? null : ((n - 1) as 0 | 1);
 }

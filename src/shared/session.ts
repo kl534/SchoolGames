@@ -19,6 +19,7 @@ import {
   topicOfFact,
 } from './levels';
 import { devFacts } from './devfacts';
+import { scheduleSync } from './sync/engine';
 import { chooseRoundFacts, KICKS_PER_ROUND } from './round';
 import { getTopic, promptSpeech, statementSpeech, type Fact, type Topic } from './topics';
 
@@ -79,7 +80,11 @@ export function startGameSession(
   const store = createProgressStore();
   const player = store.currentPlayer();
   const progress = player ? store.load(player.id) : emptyProgress();
-  const save = () => player && store.save(player.id, progress);
+  const save = () => {
+    if (!player) return;
+    store.save(player.id, progress);
+    scheduleSync();
+  };
   const topic = path
     ? myLevelTopic(() => levelLabel(levelsOpen(progress, path), path), path)
     : realTopic;

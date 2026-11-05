@@ -3,6 +3,8 @@ import { MathUtils, Vector3 } from 'three';
 import { fillAnswers, lockAnswers, markAnswers, pressAnswers } from '../../shared/answers';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
 import { createFactFeed, type FactFeed } from '../../shared/feed';
+import { DANCE_SECONDS } from '../../shared/dances';
+import { chooseDance } from '../../shared/dances/dev';
 import { showPreview } from '../../shared/preview';
 import { showResults } from '../../shared/results';
 import { createScene } from '../../shared/scene';
@@ -16,10 +18,14 @@ import { createBall } from './ball';
 import { buildCourt } from './court';
 import {
   autoAnswer,
+  devOver,
+  devSit,
+  devWinDance,
   devPair,
   devRung,
   devScore,
   devServe,
+  devRun,
   devStreak,
   forcedWhiff,
   freezeAt,
@@ -27,13 +33,11 @@ import {
 } from './dev';
 import { createShake, createWords } from './effects';
 import { createScoreboard } from './hud';
-import { createKid, HOME, PAIR_LOOKS, US_LOOKS, type Kid } from './kids';
+import { createKid, HOME, PAIR_LOOKS, SIT_SPOT_X, SIT_Z, US_LOOKS, type Kid } from './kids';
 import { CAM_FOV, CAM_Y, fitCamera, LOOK_X, LOOK_Y, playBand, type PlayBand } from './layout';
 import {
   bonk,
   BONK_TOTAL,
-  dive,
-  DIVE_TOTAL,
   smash,
   SMASH_CONTACT,
   SMASH_TOTAL,
@@ -46,13 +50,19 @@ import {
 import {
   CHAMPION_RUNG,
   CHAMPION_SPEECH,
+  COOKING_BANNER,
+  COOKING_SPEECH,
   coinToss,
+  goesOverTheWall,
+  isCooking,
   isMatchPoint,
   matchStars,
   MATCH_POINT_SPEECH,
   newMatch,
+  nextRun,
   nextRung,
   outcomeText,
+  OVER_THE_WALL_SPEECH,
   PAIRS,
   pairFor,
   pickTarget,
@@ -76,11 +86,15 @@ import {
   contactSpot,
   holdTime,
   pastShot,
+  OVER_SLAM,
+  overSpotX,
+  planOverTheWall,
   planShot,
   ROLL_OFF,
   SERVE_WINDUP,
   serveBounce,
   timeAtX,
+  timeOverWall,
   WALL_Y_RANGE,
   WINNER_WALL_Y,
   type Shot,
@@ -198,6 +212,8 @@ function run(session: GameSession): void {
   let fact: Fact | undefined;
   let options: string[] = [];
   let match: Match = newMatch(0, 'us');
+  /** Points in a row we have won. */
+  let usRun = 0;
   /** The ladder place this match began at. */
   let rung = 0;
   let lastPair: number | undefined;
@@ -205,6 +221,9 @@ function run(session: GameSession): void {
   let themKids: Kid[] = [];
   /** Which kid of each team the ball has gone to lately. */
   const targets: Record<Side, (0 | 1)[]> = { us: [], them: [] };
+  /** The rival who hit one over the wall and sits by the fence; `sitFresh` until a point starts. */
+  let sitter: Kid | null = null;
+  let sitFresh = false;
   let flight: Flight | null = null;
   let holdClock = 0;
   let incoming: Incoming | null = null;
@@ -407,8 +426,16 @@ function run(session: GameSession): void {
 
   const randomWallY = () => WALL_Y_RANGE[0] + Math.random() * (WALL_Y_RANGE[1] - WALL_Y_RANGE[0]);
 
+  const standingRivals = () => (sitter ? 1 : 2);
+
   const nextTarget = (side: Side): 0 | 1 => {
-    const kid = pickTarget(Math.random(), targets[side]);
+    // With one rival sitting the other gets every ball (the "never three in a row" rule is off).
+    const kid: 0 | 1 =
+      side === 'them' && sitter
+        ? themKids[0] === sitter
+          ? 1
+          : 0
+        : pickTarget(Math.random(), targets[side]);
     targets[side].push(kid);
     if (targets[side].length > 4) targets[side].shift();
     return kid;
@@ -420,8 +447,11 @@ function run(session: GameSession): void {
     receiver: Kid;
     kind?: 'normal' | 'smash';
     wallY?: number;
-    /** The receiver (a rival) misses: dives, and the ball runs past. `late` dives after the ball. */
+    /** The receiver (a rival) misses: runs for the ball and swings a little early or late (`late`). */
     miss?: { late: boolean; onGone: () => void };
+    /** The rival slams it into the court and it goes over the wall; `onGone` when the ball is gone and the yell is over. */
+    over?: boolean;
+    onGone?: () => void;
     /** A serve: the ball is bounced once first, and this kid swings. */
     server?: Kid;
   }
@@ -429,15 +459,13 @@ function run(session: GameSession): void {
   /** The ball flies from `from` to `receiver`: wall, bounce, kid. A rival returns it; our kid holds it. */
   const send = (o: Send) => {
     const rival = themKids.includes(o.receiver);
-    const spot = contactSpot(o.receiver.home.x, Math.random());
+    const raw = contactSpot(o.receiver.home.x, Math.random());
+    const spot = o.over ? overSpotX(raw) : raw;
     const to = o.receiver.contactPoint(spot);
-    const shot: Shot = planShot(
-      o.kind ?? 'normal',
-      o.from,
-      to,
-      o.wallY ?? randomWallY(),
-      o.miss !== undefined,
-    );
+    const wallY = o.wallY ?? randomWallY();
+    const shot: Shot = o.over
+      ? planOverTheWall(o.from, to, wallY)
+      : planShot(o.kind ?? 'normal', o.from, to, wallY, o.miss !== undefined);
     o.receiver.walkTo(spot);
     const lead = o.server ? SERVE_WINDUP : 0;
     const f = newFlight(lead + shot.duration, (t) => {
@@ -452,19 +480,56 @@ function run(session: GameSession): void {
       pin(f, lead, () => sfx.slap(0.8));
     }
     // The sounds of the first few contacts; the little hops of a ball running off are quiet.
-    for (const c of contacts(shot).slice(0, 4)) {
+    const found = contacts(shot);
+    for (const c of found.slice(0, o.over ? 5 : 4)) {
       pin(f, lead + c.t, () => (c.what === 'wall' ? sfx.thud() : sfx.bump()));
     }
 
     if (!rival) {
       f.holdAt = lead + holdTime(shot);
       f.onHold = () => ask({ kid: o.receiver, flight: f, to });
+    } else if (o.over) {
+      const receiver = o.receiver;
+      const onGone = o.onGone ?? (() => undefined);
+      // The slam is the last floor contact: the hand meets the ball just before it.
+      const slamEnd = found.filter((c) => c.what === 'floor').pop()?.t ?? 0;
+      const handAt = Math.max(slamEnd - OVER_SLAM, 0);
+      pin(f, lead + Math.max(handAt - SMASH_CONTACT, 0), () => receiver.play(smash, SMASH_TOTAL));
+      pin(f, lead + handAt, () => {
+        sfx.slap(1);
+        shake.start(0.15, 0.04);
+      });
+      pin(f, lead + slamEnd, () => sfx.boing());
+      let pending = 2;
+      const part = () => {
+        if (--pending === 0) onGone();
+      };
+      pin(f, lead + (timeOverWall(shot) ?? shot.duration), () => {
+        sayThen(OVER_THE_WALL_SPEECH, part);
+        court.kids.cheer(1.5);
+      });
+      f.onEnd = () => {
+        ball.setVisible(false);
+        // The rival who hit it over sulks by the fence, through the next point.
+        sitter = receiver;
+        sitFresh = true;
+        const i = themKids.indexOf(receiver);
+        receiver.walkTo(SIT_SPOT_X[i], SIT_Z);
+        receiver.setMode('sit');
+        part();
+      };
     } else if (o.miss) {
       const miss = o.miss;
+      // The rival runs for the ball, swings a little too early or too late as it goes by, then
+      // jogs on after it. No standing still, no dive once the ball is gone.
       const crossing = timeAtX(shot, spot - 0.2) ?? shot.duration;
-      pin(f, lead + Math.max(crossing - (miss.late ? 0 : 0.2), 0), () =>
-        o.receiver.play(dive, DIVE_TOTAL),
-      );
+      const chase = Math.min(spot + 0.9, 3.2);
+      o.receiver.walkTo(chase);
+      const swingAt = crossing - SWING_CONTACT + (miss.late ? 0.14 : -0.14);
+      pin(f, lead + Math.max(swingAt, 0), () => {
+        o.receiver.play(swing, SWING_TOTAL);
+        o.receiver.walkTo(Math.min(chase + 1, 3.4));
+      });
       f.onEnd = () => rollOff(ballAt(shot, shot.duration), miss.onGone);
     } else {
       pin(f, f.duration - SWING_CONTACT, () => o.receiver.play(swing, SWING_TOTAL));
@@ -481,6 +546,7 @@ function run(session: GameSession): void {
   const dressKids = (pairIndex: number, crowned: boolean) => {
     [...usKids, ...themKids].forEach((k) => k.dispose());
     const looks = PAIR_LOOKS[PAIRS[pairIndex].id];
+    sitter = null;
     usKids = US_LOOKS.map((look, i) => createKid(HOME.us[i], look));
     themKids = looks.map((look, i) => createKid(HOME.them[i], look));
     for (const k of [...usKids, ...themKids]) scene.add(k.object);
@@ -499,6 +565,8 @@ function run(session: GameSession): void {
     vs = preview = null;
     flight = null;
     incoming = null;
+    sitter = null;
+    sitFresh = false;
     frozen = false;
     freezeUsed = false;
     freezeLeft = null;
@@ -514,6 +582,7 @@ function run(session: GameSession): void {
     const index = devPair() ?? pairFor(rung, Math.random(), lastPair);
     const pair = PAIRS[index];
     match = newMatch(index, devServe() ?? coinToss(Math.random()));
+    usRun = devRun() ?? 0;
     const score = devScore();
     if (score) match = { ...match, us: score.us, them: score.them };
     const streak = auto === 'winner' ? pair.streakToWin - 1 : devStreak(pair.streakToWin);
@@ -521,6 +590,13 @@ function run(session: GameSession): void {
     feed = createFactFeed(() => session.chooseFacts());
 
     dressKids(index, rung === CHAMPION_RUNG);
+    const sitIndex = devSit();
+    if (sitIndex !== null) {
+      sitter = themKids[sitIndex];
+      sitFresh = true;
+      sitter.placeAt(SIT_SPOT_X[sitIndex], SIT_Z);
+      sitter.setMode('sit');
+    }
     scoreboard.setup({
       ourName: `YOU & ${TEAMMATE_NAME.toUpperCase()}`,
       pairName: pair.name,
@@ -532,6 +608,21 @@ function run(session: GameSession): void {
     });
     scoreboard.setPips(match.streak);
     showHud(false, false);
+
+    if (holdDance) {
+      match = { ...match, us: 11, them: 6 };
+      scoreboard.setup({
+        ourName: `YOU & ${TEAMMATE_NAME.toUpperCase()}`,
+        pairName: pair.name,
+        rungText: rungLabel(rung, index),
+        streakToWin: pair.streakToWin,
+        us: match.us,
+        them: match.them,
+        server: match.server,
+      });
+      ending(true);
+      return;
+    }
 
     const toPreview = () => {
       phase = 'preview';
@@ -592,13 +683,17 @@ function run(session: GameSession): void {
     banner.hidden = true;
     tapFlow.disarm();
     for (const k of [...usKids, ...themKids]) {
+      // A rival sulking by the fence stays there for this one point.
+      if (k === sitter) continue;
       k.placeAt(k.home.x);
       k.setMode('ready');
     }
+    sitFresh = false;
     scoreboard.setServer(match.server);
     showHud(true, false);
     const serving = match.server === 'us';
-    const server = (serving ? usKids : themKids)[Math.random() < 0.5 ? 0 : 1];
+    const servers = (serving ? usKids : themKids).filter((k) => k !== sitter);
+    const server = servers[Math.floor(Math.random() * servers.length)];
     const from = server.contactPoint(server.x);
     if (serving) {
       send({ from, receiver: themKids[nextTarget('them')], server });
@@ -666,6 +761,7 @@ function run(session: GameSession): void {
     session.recordAnswer(current, right);
     const out = step(match, right, seconds);
     match = out.match;
+    usRun = nextRun(usRun, out.point);
     const freeze = freezeAt();
     if (freeze !== null && !freezeUsed) {
       freezeUsed = true;
@@ -708,6 +804,23 @@ function run(session: GameSession): void {
     if (strong) shake.start(0.15, 0.04);
     popWord(strong ? WORDS.smash : WORDS.winner, { x: from.x, y: from.y + 0.4, z: from.z });
     const thisTurn = turn;
+    const dev = devOver();
+    if (
+      strong &&
+      dev !== false &&
+      goesOverTheWall(dev ? 0 : Math.random(), standingRivals(), match.winner !== null)
+    ) {
+      send({
+        from,
+        receiver: rival,
+        kind: 'smash',
+        over: true,
+        onGone: () => {
+          if (turn === thisTurn) pointScored();
+        },
+      });
+      return;
+    }
     send({
       from,
       receiver: rival,
@@ -794,7 +907,12 @@ function run(session: GameSession): void {
     scoreboard.setScore(match.us, match.them);
     scoreboard.setServer(match.server);
     scoreboard.setPips(0);
-    for (const k of [...usKids, ...themKids]) k.walkTo(k.home.x);
+    // The rival who sulked through this point jogs home during the score call.
+    if (sitter && !sitFresh) {
+      sitter.setMode('ready');
+      sitter = null;
+    }
+    for (const k of [...usKids, ...themKids]) if (k !== sitter) k.walkTo(k.home.x);
     if (match.server === 'us') {
       sfx.cheer();
       court.kids.cheer(1.2);
@@ -813,22 +931,53 @@ function run(session: GameSession): void {
       showBanner('MATCH POINT!', false, true);
       sayThen(MATCH_POINT_SPEECH, next);
     };
-    if (call) sayThen(call, matchPoint);
-    else matchPoint();
+    const cooking = () => {
+      if (!isCooking(usRun)) {
+        matchPoint();
+        return;
+      }
+      showBanner(COOKING_BANNER, false, true);
+      sayThen(COOKING_SPEECH, matchPoint);
+    };
+    if (call) sayThen(call, cooking);
+    else cooking();
   };
+
+  /** Dev `?win=dance`: the win ending holds the dance for ever and never opens the results. */
+  const holdDance = devWinDance() !== null;
 
   /** The bell, then the win or the loss. */
   const ending = (won: boolean) => {
     const thisTurn = ++turn;
     phase = 'ending';
+    if (sitter) {
+      sitter.setMode('ready');
+      sitter.placeAt(sitter.home.x);
+      sitter = null;
+    }
     showHud(true, false);
     sfx.bell();
     if (won) {
       showBanner('WE WIN!', false, true);
       sfx.bigCheer();
       court.kids.cheer(3);
-      usKids.forEach((k) => k.setMode('cheer'));
-      const toResults = () => after(WIN_RESULTS_AFTER, () => turn === thisTurn && results(true));
+      const dance = chooseDance();
+      usKids.forEach((k) => k.setMode('dance', dance));
+      // The results come after the last line and after the dance, whichever is later.
+      let spoken = false;
+      let danced = false;
+      const maybeResults = () => {
+        if (spoken && danced && turn === thisTurn && !holdDance) results(true);
+      };
+      after(DANCE_SECONDS, () => {
+        danced = true;
+        maybeResults();
+      });
+      const toResults = () =>
+        after(WIN_RESULTS_AFTER, () => {
+          spoken = true;
+          maybeResults();
+        });
       sayThen(WE_WIN_SPEECH, () => {
         if (rung === CHAMPION_RUNG - 1) {
           // Beating the Legends: crowns drop onto both our heads.
@@ -840,7 +989,7 @@ function run(session: GameSession): void {
       });
     } else {
       showBanner('SO CLOSE!', true, true);
-      themKids.forEach((k) => k.setMode('dance'));
+      themKids.forEach((k) => k.setMode('cheer'));
       speak(SO_CLOSE_SPEECH);
       after(LOSS_RESULTS_AFTER, () => turn === thisTurn && results(false));
     }
@@ -928,7 +1077,8 @@ function run(session: GameSession): void {
     );
 
     stepFlight(dt);
-    for (const k of [...usKids, ...themKids]) k.update(dt, elapsed);
+    const cameraSpot = { x: LOOK_X, z: camDistance };
+    for (const k of [...usKids, ...themKids]) k.update(dt, elapsed, cameraSpot);
     court.update(delta, elapsed);
     ball.update(dt);
 

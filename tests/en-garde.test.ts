@@ -32,6 +32,7 @@ import {
 import {
   autoAnswer,
   devPokes,
+  devWinDance,
   devRival,
   devRung,
   forcedPoke,
@@ -310,6 +311,8 @@ describe('en garde dev hooks', () => {
   it('reads ?pokes= for a rival and rejects counts that would end the bout', () => {
     expect(devPokes(8, '?pokes=7-2')).toEqual({ landed: 7, taken: 2 });
     expect(devPokes(8, '?pokes=0-0')).toEqual({ landed: 0, taken: 0 });
+    expect(devWinDance('?win=dance')).toBe(true);
+    expect(devWinDance('?win=x')).toBeNull();
     expect(devPokes(8, '?pokes=8-0')).toBeNull();
     expect(devPokes(8, '?pokes=0-3')).toBeNull();
     expect(devPokes(12, '?pokes=11-2')).toEqual({ landed: 11, taken: 2 });
