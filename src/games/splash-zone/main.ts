@@ -31,10 +31,10 @@ import {
   followSide,
   fovFor,
   playBand,
-  LOOK_LAG,
   bandFraction,
   framingMid,
   stuntDistance,
+  stuntLookD,
   stuntPose,
   type Framing,
 } from './layout';
@@ -79,6 +79,7 @@ import {
   respawnFrame,
   trickDuration,
   trickEvents,
+  focusOf,
   trickFraming,
   trickFrame,
   trickRate,
@@ -356,9 +357,9 @@ function run(session: GameSession, dev: DevOptions | null): void {
       dolphin.object.position.set(d.s, d.y, entryZ - d.d);
       dolphin.pose(d.phase);
     });
-    // The camera follows the thrown rider, else the ski.
-    if (r.mode === 'free' && r.visible) focus.set(r.s, Math.max(r.y, 0), entryZ - r.d);
-    else focus.set(x, Math.max(k.y, 0), z);
+    // The camera follows the ski, or the middle of the ski and a rider thrown clear of it.
+    const target = focusOf(f);
+    focus.set(target.s, target.y, entryZ - target.d);
     skiX = x;
     skiZ = z;
   };
@@ -1061,15 +1062,9 @@ function run(session: GameSession, dev: DevOptions | null): void {
   const updateCameraTargets = (delta: number, snap: boolean) => {
     const f = followTrick ? framing : RESULT_FRAMING;
     const fov = fovFor(camera.aspect);
-    const dist = stuntDistance(f, fov, bandFraction(viewW, viewH));
-    let lookZ = focus.z;
-    if (followTrick) {
-      // The camera lags the ski by up to LOOK_LAG, but never so far that a narrow screen loses it.
-      const halfWidth = dist * Math.tan((fov * Math.PI) / 360) * camera.aspect;
-      const lag = Math.min(LOOK_LAG, halfWidth * 0.3);
-      const d = entryZ - focus.z;
-      lookZ = entryZ - (d - MathUtils.clamp(d - lipDist, 0, lag));
-    }
+    const dist = stuntDistance(f, fov, bandFraction(viewW, viewH), camera.aspect);
+    const d = entryZ - focus.z;
+    const lookZ = entryZ - (followTrick ? stuntLookD(d, lipDist, dist, fov, camera.aspect) : d);
     look.set(focus.x, 0, lookZ);
     if (snap || (camW <= 0.001 && camGoal === 0)) {
       camFocus.copy(look);

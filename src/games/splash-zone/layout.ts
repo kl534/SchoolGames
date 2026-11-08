@@ -54,7 +54,11 @@ export const CAM_EYE = 1.75;
 export const LOOK_LAG = 4;
 /** The nearest and furthest the stunt camera goes (u). */
 export const STUNT_MIN_DIST = 10;
-export const STUNT_MAX_DIST = 34;
+export const STUNT_MAX_DIST = 46;
+/** The ski and a free rider stay at least this far (a fraction of the width) from each side edge. */
+export const SIDE_MARGIN = 0.08;
+/** Room for the camera trailing the action while it eases after it (u). */
+const EASE_ROOM = 4.5;
 
 /** Seconds to swing out to the stunt view, and back after a clear. */
 export const SWING_IN = 0.5;
@@ -89,25 +93,50 @@ export const followSide = (skiX: number): number => skiX * 0.5;
 export interface Framing {
   peak: number;
   low: number;
+  /** The most the ski and a free rider are ever apart along the course (u), for the width. */
+  span?: number;
 }
 
 /** The middle of a framing, which the stunt camera looks at. */
 export const framingMid = (f: Framing): number => (f.peak + f.low) / 2;
 
 /**
- * How far the stunt camera stands back so the whole height range of the action fits in the
- * band the HUD leaves clear (with 20 % to spare): taller tricks (tier 3) stand further back.
+ * How far the stunt camera stands back so the action fits the band the HUD leaves clear, in
+ * height (with 20 % to spare) and in width (the ski and a free rider, with the side margins and
+ * some room for the camera trailing them): taller tricks (tier 3) stand further back, and so does
+ * any trick on a narrow screen. `aspect` is the screen's width over its height.
  */
 export function stuntDistance(
   f: Framing,
   fov: number,
   bandFraction: number,
+  aspect = 2,
   min = STUNT_MIN_DIST,
 ): number {
   const tan = Math.tan((fov * Math.PI) / 360);
   const need = Math.max(f.peak - f.low, 1) * 1.2;
-  const d = need / (2 * tan * Math.max(bandFraction, 0.1));
-  return Math.min(Math.max(d, min), STUNT_MAX_DIST);
+  const high = need / (2 * tan * Math.max(bandFraction, 0.1));
+  // The course runs across the picture (sin of the angle off the view axis); both sides keep a margin.
+  const across = (f.span ?? 0) + EASE_ROOM;
+  const wide =
+    across / (2 * tan * Math.max(aspect, 0.1) * (1 - 2 * SIDE_MARGIN) * Math.sin(CAM_AZIMUTH));
+  return Math.min(Math.max(high, wide, min), STUNT_MAX_DIST);
+}
+
+/**
+ * Where along the course the stunt camera looks: at the launcher's lip while the ski takes off,
+ * then following `focusD`, lagging it by up to LOOK_LAG (less on a narrow screen).
+ */
+export function stuntLookD(
+  focusD: number,
+  lipD: number,
+  dist: number,
+  fov: number,
+  aspect: number,
+): number {
+  const halfWidth = dist * Math.tan((fov * Math.PI) / 360) * aspect;
+  const lag = Math.min(LOOK_LAG, halfWidth * 0.3);
+  return focusD - Math.min(Math.max(focusD - lipD, 0), lag);
 }
 
 /** How much of the screen's height the HUD leaves clear. */

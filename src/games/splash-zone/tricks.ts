@@ -163,6 +163,29 @@ export function trickFrame(
   return out;
 }
 
+/**
+ * What the stunt camera follows: the ski, or the middle of the ski and a rider who has left it
+ * (so the two stay in the picture together), into `out`.
+ */
+export function focusOf(f: Frame, out: Pos = { d: 0, y: 0, s: 0 }): Pos {
+  const k = f.ski;
+  const r = f.rider;
+  if (r.mode === 'free' && r.visible && k.visible) {
+    out.d = (k.d + r.d) / 2;
+    out.s = (k.s + r.s) / 2;
+    out.y = Math.max((k.y + r.y) / 2, 0);
+  } else if (r.mode === 'free' && r.visible) {
+    out.d = r.d;
+    out.s = r.s;
+    out.y = Math.max(r.y, 0);
+  } else {
+    out.d = k.d;
+    out.s = k.s;
+    out.y = Math.max(k.y, 0);
+  }
+  return out;
+}
+
 const framingCache = new Map<Def, Framing>();
 
 /**
@@ -175,6 +198,7 @@ export function trickFraming(id: TrickId, outcome: Outcome): Framing {
   if (!framing) {
     let peak = 1.5;
     let low = 0;
+    let span = 0;
     const f = createFrame();
     for (let t = 0; t <= d.duration + 1e-9; t += 1 / 30) {
       trickFrame(id, outcome, t, f);
@@ -186,8 +210,21 @@ export function trickFraming(id: TrickId, outcome: Outcome): Framing {
         peak = Math.max(peak, f.rider.y + 1.15);
         low = Math.min(low, f.rider.y - 0.3);
       }
+      const focus = focusOf(f);
+      // A rider flung towards the camera is seen from higher up, so he sits lower in the picture.
+      if (f.rider.mode === 'free' && f.rider.visible) {
+        low = Math.min(low, f.rider.y - 0.3 - 0.14 * Math.max(f.rider.s - focus.s, 0));
+      }
+      if (f.ski.visible) span = Math.max(span, 2 * Math.abs(f.ski.d - focus.d) + 2.6);
+      if (f.rider.mode === 'free' && f.rider.visible) {
+        // A rider flung towards the camera looms larger, so sideways counts too.
+        span = Math.max(
+          span,
+          2 * Math.abs(f.rider.d - focus.d) + 1.6 + 1.6 * Math.abs(f.rider.s - focus.s),
+        );
+      }
     }
-    framing = { peak, low };
+    framing = { peak, low, span };
     framingCache.set(d, framing);
   }
   return framing;

@@ -22,6 +22,10 @@ function el<K extends keyof HTMLElementTagNameMap>(
 
 const SVG = 'http://www.w3.org/2000/svg';
 
+/** The least gap from the screen's side edges for comic words and pops (px), and how much they overshoot when they pop. */
+const EDGE = 12;
+const POP_SCALE = 1.2;
+
 function svgIcon(viewBox: string): {
   svg: SVGSVGElement;
   add(tag: string, attrs: Record<string, string>): void;
@@ -319,10 +323,11 @@ export function createHud(avatar: string): Hud {
         Math.max(Math.min(window.innerWidth, window.innerHeight) * 0.09, 34),
         76,
       );
-      word.style.fontSize = `${Math.min(base, (window.innerWidth - 24) / (text.length * 0.66)).toFixed(1)}px`;
-      // Keep the whole word on screen, whatever its length.
-      const half = word.offsetWidth / 2 + 8;
-      word.style.left = `${Math.min(Math.max(at.x, half), Math.max(window.innerWidth - half, half))}px`;
+      word.style.fontSize = `${Math.min(base, (window.innerWidth - 2 * EDGE - 16) / (text.length * 0.72)).toFixed(1)}px`;
+      // Keep the whole word on screen (12 px from each edge, even while it pops up 18 % bigger).
+      const half = (word.offsetWidth / 2) * POP_SCALE + EDGE;
+      const room = window.innerWidth / 2;
+      word.style.left = `${Math.min(Math.max(at.x, Math.min(half, room)), Math.max(window.innerWidth - half, room))}px`;
       restart(word);
     },
     hideWord() {
@@ -331,7 +336,10 @@ export function createHud(avatar: string): Hud {
     pop(text, at, kind) {
       const node = make('div', `sz-pop ${kind}`, root);
       node.textContent = text;
-      node.style.left = `${at.x}px`;
+      // Clamp it so the whole message stays on screen, 12 px from each edge.
+      const half = (node.offsetWidth / 2) * POP_SCALE + EDGE;
+      const room = window.innerWidth / 2;
+      node.style.left = `${Math.min(Math.max(at.x, Math.min(half, room)), Math.max(window.innerWidth - half, room))}px`;
       node.style.top = `${at.y}px`;
       node.addEventListener('animationend', () => node.remove());
       setTimeout(() => node.remove(), 1600);
