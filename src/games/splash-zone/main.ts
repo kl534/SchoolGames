@@ -304,6 +304,8 @@ function run(session: GameSession, dev: DevOptions | null): void {
   let mega: MegaRun | null = null;
   let target: Target = 'launcher';
   let course: MegaCourse | null = null;
+  /** The stunt has posed the course's props: they stay as it left them, so no idle motion on top. */
+  let courseHeld = false;
   let normals = 0;
   let nextIsMega = dev?.mega ?? false;
   let worldChangePending = false;
@@ -412,6 +414,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
       course = megaPool.get(mega.id);
       if (course.object.parent !== scene) scene.add(course.object);
       course.reset();
+      courseHeld = false;
       course.object.position.set(0, 0, entryZ);
       course.object.visible = true;
     } else {
@@ -806,6 +809,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     if (!m || !course) return;
     stunt = makeMegaStunt(m.id, m.passed as Passed);
     course.reset();
+    courseHeld = true;
     frameStunt(stunt);
     phase = 'stunt';
     camGoal = 1;
@@ -857,7 +861,10 @@ function run(session: GameSession, dev: DevOptions | null): void {
     frameAt: (t, out) => void megaFrame(id, passed, t, out),
     rateAt: (t) => megaRate(id, passed, t),
     wordAt: (t) => megaWordAt(id, passed, t),
-    propsAt: (t) => megaPool.get(id).update(passed, t),
+    propsAt: (t) => {
+      courseHeld = true;
+      megaPool.get(id).update(passed, t);
+    },
   });
 
   /** The camera frames this stunt: its height range, and the lip it takes off from. */
@@ -1506,7 +1513,8 @@ function run(session: GameSession, dev: DevOptions | null): void {
 
     // Idle motion of the launchers, the water and the world.
     launcher?.ambient(elapsed);
-    course?.ambient(elapsed);
+    // The course idles only while it waits ahead: a stunt poses its props itself every frame.
+    if (!courseHeld) course?.ambient(elapsed);
     gates.forEach((gate) => gate.object.visible && gate.ambient(elapsed));
     const ski = active();
     world.update(skiZ, camera.position, delta, elapsed);
@@ -1575,6 +1583,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     activeIndex = 0;
     skis[0].object.visible = true;
     course?.reset();
+    courseHeld = false;
   };
 
   function stepLab(delta: number, elapsed: number) {

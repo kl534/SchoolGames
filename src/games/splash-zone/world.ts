@@ -3,7 +3,9 @@
  * 70 u either side of the ski's path. The Lagoon is sandy islands with palm trees, sailboats, a
  * lighthouse, a pier with a cheering crowd every ~120 u, and dolphins that leap now and then; Harbour
  * City is concrete docks with skyline towers and containers, tugboats, cranes and a skyline beyond,
- * with the same cheering pier. All procedural; nothing to load.
+ * with the same cheering pier. Iceberg Bay has icebergs, ice floes with penguins and snowy peaks;
+ * Volcano Island dark sand islands, palms and a smoking volcano; Shark Reef coral rocks, circling
+ * shark fins, a moored pirate ship and a low sunset sun. All procedural; nothing to load.
  */
 import {
   AmbientLight,
@@ -13,6 +15,7 @@ import {
   BufferGeometry,
   CanvasTexture,
   CapsuleGeometry,
+  CircleGeometry,
   Color,
   ConeGeometry,
   CylinderGeometry,
@@ -36,10 +39,11 @@ import {
   SphereGeometry,
   Vector3,
 } from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { swell } from './anim';
 import { createDolphin, type Dolphin } from './critters';
 import type { WorldId } from './rules';
+import * as scenery from './scenery';
+import { hash, merge, part } from './scenery';
 
 export type WorldTheme = WorldId;
 
@@ -51,6 +55,8 @@ export interface WorldPalette {
   fog: number;
   fogNear: number;
   fogFar: number;
+  /** The daylight: sky and ground tints of the hemisphere light, the sun's colour and strength. */
+  light?: { sky: number; ground: number; sun: number; sunPower: number };
 }
 
 export const PALETTES: Record<WorldTheme, WorldPalette> = {
@@ -71,6 +77,36 @@ export const PALETTES: Record<WorldTheme, WorldPalette> = {
     fog: 0xcfe3f1,
     fogNear: 90,
     fogFar: 200,
+  },
+  iceberg: {
+    skyTop: 0xbfe6ff,
+    skyBottom: 0xffffff,
+    water: 0x3aa0c8,
+    sand: 0xf4fbff,
+    fog: 0xeaf6ff,
+    fogNear: 80,
+    fogFar: 190,
+    light: { sky: 0xeaf6ff, ground: 0x7fb4d0, sun: 0xffffff, sunPower: 2.1 },
+  },
+  volcano: {
+    skyTop: 0xff9a5c,
+    skyBottom: 0xffd38a,
+    water: 0x1aa39a,
+    sand: 0x4a4650,
+    fog: 0xffd6a0,
+    fogNear: 95,
+    fogFar: 240,
+    light: { sky: 0xffe0b8, ground: 0x3a8a7a, sun: 0xffc78a, sunPower: 2.2 },
+  },
+  reef: {
+    skyTop: 0xff7a59,
+    skyBottom: 0xffd1a1,
+    water: 0x1f8fb8,
+    sand: 0x7a5876,
+    fog: 0xffc9a8,
+    fogNear: 85,
+    fogFar: 210,
+    light: { sky: 0xffd9c0, ground: 0x3a7a96, sun: 0xff9e6b, sunPower: 2.3 },
   },
 };
 
@@ -99,11 +135,6 @@ export interface World {
   dispose(): void;
 }
 
-const hash = (n: number) => {
-  const s = Math.sin(n * 127.1 + 311.7) * 43758.5453;
-  return s - Math.floor(s);
-};
-
 /** One chunk of scenery covers this much of the course (u). */
 const CHUNK = 60;
 /** Chunks kept alive at once: some behind the ski, the rest ahead out to the fog. */
@@ -112,57 +143,9 @@ const SLOTS = 6;
 const PIER_EVERY = 2;
 const CROWD = 12;
 
-const matrix = new Matrix4();
-const quaternion = new Quaternion();
 const euler = new Euler();
 const scaleVec = new Vector3();
 const positionVec = new Vector3();
-
-/** A geometry moved, turned and scaled, painted a single colour (as vertex colours). */
-function part(
-  geometry: BufferGeometry,
-  hex: number,
-  x = 0,
-  y = 0,
-  z = 0,
-  rx = 0,
-  ry = 0,
-  rz = 0,
-  sx = 1,
-  sy = 1,
-  sz = 1,
-): BufferGeometry {
-  quaternion.setFromEuler(euler.set(rx, ry, rz));
-  matrix.compose(positionVec.set(x, y, z), quaternion, scaleVec.set(sx, sy, sz));
-  geometry.applyMatrix4(matrix);
-  const color = new Color(hex);
-  const count = geometry.getAttribute('position').count;
-  const colors = new Float32Array(count * 3);
-  for (let i = 0; i < count; i++) {
-    colors[i * 3] = color.r;
-    colors[i * 3 + 1] = color.g;
-    colors[i * 3 + 2] = color.b;
-  }
-  geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
-  return geometry;
-}
-
-/** Merges painted parts into one geometry (so a whole palm tree is a single draw call). */
-function merge(parts: BufferGeometry[]): BufferGeometry {
-  // Same attributes everywhere: drop anything the shapes do not all share.
-  const merged = mergeGeometries(
-    parts.map((p) => {
-      const g = p.index ? p.toNonIndexed() : p;
-      for (const name of Object.keys(g.attributes)) {
-        if (!['position', 'normal', 'color'].includes(name)) g.deleteAttribute(name);
-      }
-      return g;
-    }),
-    false,
-  );
-  parts.forEach((p) => p.dispose());
-  return merged;
-}
 
 function skyGeometry(palette: WorldPalette): BufferGeometry {
   // A dome painted with vertex colours: top colour overhead, bottom colour at the horizon.
@@ -190,13 +173,19 @@ interface Slot {
   pier: Group;
   crowd: { bodies: InstancedMesh; heads: InstancedMesh; arms: InstancedMesh };
   skyline: [Mesh, Mesh];
+  /** The glowing lava and the smoke on a strip's volcano (Volcano Island only). */
+  glow: { lava: Mesh; smoke: Mesh }[];
   boatBase: [number, number];
+  /** Shark Reef: the middle of the circle each fin swims round (x, z), and the ship's own spot. */
+  boatCentre: [number, number][];
   pierSide: number;
   hasPier: boolean;
 }
 
 export function createWorld(scene: Scene, theme: WorldTheme): World {
   const palette = PALETTES[theme];
+  const volcanic = theme === 'volcano';
+  const reefy = theme === 'reef';
   const geometries: BufferGeometry[] = [];
   const materials: (MeshStandardMaterial | MeshBasicMaterial)[] = [];
   const track = <T extends BufferGeometry>(g: T): T => {
@@ -223,9 +212,15 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
   dome.frustumCulled = false;
   root.add(dome);
   const lights = new Group();
-  lights.add(new HemisphereLight(0xdcf4ff, 0x4aa7b0, 1.7));
+  const daylight = palette.light ?? {
+    sky: 0xdcf4ff,
+    ground: 0x4aa7b0,
+    sun: 0xfff2d8,
+    sunPower: 2.4,
+  };
+  lights.add(new HemisphereLight(daylight.sky, daylight.ground, 1.7));
   lights.add(new AmbientLight(0xffffff, 0.45));
-  const sun = new DirectionalLight(0xfff2d8, 2.4);
+  const sun = new DirectionalLight(daylight.sun, daylight.sunPower);
   sun.position.set(-14, 26, 10);
   lights.add(sun);
   root.add(lights);
@@ -238,6 +233,31 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
   farWater.position.y = -0.12;
   farWater.frustumCulled = false;
   root.add(farWater);
+
+  // Shark Reef sits under a low sunset sun with a soft halo, far off in the sky.
+  const sunDisc = new Group();
+  if (reefy) {
+    const disc = new Mesh(
+      track(new CircleGeometry(26, 40)),
+      new MeshBasicMaterial({ color: 0xfff1bf, fog: false, depthWrite: false }),
+    );
+    const halo = new Mesh(
+      track(new CircleGeometry(58, 40)),
+      new MeshBasicMaterial({
+        color: 0xffc58a,
+        fog: false,
+        transparent: true,
+        opacity: 0.4,
+        depthWrite: false,
+      }),
+    );
+    materials.push(disc.material as MeshBasicMaterial, halo.material as MeshBasicMaterial);
+    disc.renderOrder = halo.renderOrder = -9;
+    halo.position.z = -0.5;
+    sunDisc.add(halo, disc);
+    sunDisc.frustumCulled = false;
+    root.add(sunDisc);
+  }
 
   // ---------- Shared parts ----------
   const sceneryMaterial = std({ vertexColors: true, roughness: 0.8, flatShading: true });
@@ -434,12 +454,72 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
     return track(merge(parts));
   };
 
-  const harbour = theme === 'harbour';
   const palmGeometry = makePalm();
-  const islandGeometry = harbour ? makeDock() : makeSandIsland();
-  const boatGeometry = harbour ? makeTug() : makeBoat();
-  const lighthouseGeometry = harbour ? makeCrane() : makeLighthouse();
-  const skylineGeometries = harbour ? [makeSkyline(1), makeSkyline(2)] : [];
+  /** What each world puts in the same places: islands, boats, a landmark and far-off strips. */
+  const set = (() => {
+    switch (theme) {
+      case 'harbour':
+        return {
+          island: makeDock(),
+          boat: makeTug(),
+          landmark: makeCrane(),
+          strips: [makeSkyline(1), makeSkyline(2)],
+          palms: false,
+        };
+      case 'iceberg':
+        return {
+          island: track(scenery.makeIceberg()),
+          boat: track(scenery.makeIceFloe()),
+          landmark: track(scenery.makeIceSpires()),
+          strips: [track(scenery.makeSnowPeaks(1)), track(scenery.makeSnowPeaks(2))],
+          palms: false,
+        };
+      case 'reef':
+        return {
+          island: track(scenery.makeCoralIsland()),
+          boat: track(scenery.makeSharkFin()),
+          landmark: track(scenery.makePirateShip()),
+          strips: [] as BufferGeometry[],
+          palms: false,
+        };
+      case 'volcano':
+        return {
+          island: track(scenery.makeLavaIsland(palette.sand)),
+          boat: track(scenery.makeRockStack()),
+          landmark: track(scenery.makeRockStack()),
+          // The volcano first, then two stretches of low dark ridge between volcanoes.
+          strips: [
+            track(scenery.makeVolcano()),
+            track(scenery.makeDarkRidge(1)),
+            track(scenery.makeDarkRidge(2)),
+          ],
+          palms: true,
+        };
+      default:
+        return {
+          island: makeSandIsland(),
+          boat: makeBoat(),
+          landmark: makeLighthouse(),
+          strips: [] as BufferGeometry[],
+          palms: true,
+        };
+    }
+  })();
+  const lavaGeometry = volcanic ? track(scenery.makeVolcanoLava()) : null;
+  const smokeGeometry = volcanic ? track(scenery.makeSmoke()) : null;
+  const lavaMaterial = new MeshBasicMaterial({ vertexColors: true });
+  const smokeMaterial = std({
+    color: 0x9a9290,
+    roughness: 1,
+    transparent: true,
+    opacity: 0.88,
+    flatShading: true,
+  });
+  materials.push(lavaMaterial);
+  const islandGeometry = set.island;
+  const boatGeometry = set.boat;
+  const lighthouseGeometry = set.landmark;
+  const skylineGeometries = set.strips;
   const emptyGeometry = track(new BufferGeometry());
   const pierGeometry = makePier();
   const personBody = track(new CapsuleGeometry(0.2, 0.45, 4, 8));
@@ -457,7 +537,7 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
     const makeIslandGroup = () => {
       const g = new Group();
       g.add(new Mesh(islandGeometry, sceneryMaterial));
-      for (const [x, z] of harbour
+      for (const [x, z] of !set.palms
         ? []
         : [
             [-2.0, 1.2],
@@ -473,18 +553,31 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
     };
     const islands: [Group, Group] = [makeIslandGroup(), makeIslandGroup()];
     const lighthouse = new Mesh(lighthouseGeometry, sceneryMaterial);
+    if (volcanic) lighthouse.scale.setScalar(2.2);
     group.add(lighthouse);
     const boats: [Mesh, Mesh] = [
       new Mesh(boatGeometry, boatMaterial),
       new Mesh(boatGeometry, boatMaterial),
     ];
     boats.forEach((b) => group.add(b));
+    const glow: Slot['glow'] = [];
     const makeStrip = (side: number) => {
-      const strip = new Mesh(skylineGeometries[(s + side) % 2] ?? emptyGeometry, sceneryMaterial);
-      strip.visible = harbour;
+      const strip = new Mesh(
+        skylineGeometries[(s + side) % skylineGeometries.length] ?? emptyGeometry,
+        sceneryMaterial,
+      );
+      strip.visible = skylineGeometries.length > 0;
       strip.rotation.y = side === 0 ? Math.PI : 0;
       strip.frustumCulled = false;
       group.add(strip);
+      if (lavaGeometry && smokeGeometry) {
+        // A volcano glows with lava and smokes (both unlit or soft, so they read in any light).
+        const lava = new Mesh(lavaGeometry, lavaMaterial);
+        const smoke = new Mesh(smokeGeometry, smokeMaterial);
+        lava.frustumCulled = smoke.frustumCulled = false;
+        strip.add(lava, smoke);
+        glow.push({ lava, smoke });
+      }
       return strip;
     };
     const skyline: [Mesh, Mesh] = [makeStrip(0), makeStrip(1)];
@@ -509,8 +602,13 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
       lighthouse,
       pier,
       skyline,
+      glow,
       crowd: { bodies, heads, arms },
       boatBase: [0, 0],
+      boatCentre: [
+        [0, 0],
+        [0, 0],
+      ],
       pierSide: 1,
       hasPier: false,
     });
@@ -537,7 +635,15 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
     });
     // The lighthouse stands on the biggest island of a chunk now and then.
     slot.lighthouse.visible = false;
-    if (c % 5 === 3) {
+    if (reefy) {
+      // The pirate ship is moored out on the water every third chunk.
+      if (c % 3 === 1) {
+        const side = h(12) < 0.5 ? -1 : 1;
+        slot.lighthouse.visible = true;
+        slot.lighthouse.position.set(side * (38 + h(13) * 10), 0.3, (h(15) - 0.5) * CHUNK * 0.5);
+        slot.lighthouse.rotation.y = side * (0.5 + h(16) * 0.8);
+      }
+    } else if (c % 5 === 3) {
       const i = h(12) < 0.5 ? 0 : 1;
       if (slot.islands[i].visible) {
         slot.lighthouse.visible = true;
@@ -553,8 +659,19 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
       boat.position.set(side * (20 + h(16 + i) * 38), 0, (h(18 + i) - 0.5) * CHUNK * 0.8);
       boat.rotation.y = h(20 + i) * 6.28;
       slot.boatBase[i] = boat.rotation.y;
+      slot.boatCentre[i] = [boat.position.x, boat.position.z];
     });
-    if (harbour) {
+    if (volcanic) {
+      // A big smoking volcano on one side or the other, and low dark ridges in between.
+      slot.skyline.forEach((strip, i) => {
+        const volcano = (c + i) % 2 === 0;
+        strip.geometry = skylineGeometries[volcano ? 0 : 1 + ((c + i) % 3 === 0 ? 1 : 0)];
+        const far = volcano ? 128 + h(30 + i) * 10 : 84 + h(30 + i) * 8;
+        strip.position.set((i === 0 ? -1 : 1) * far, 0, 0);
+        slot.glow[i].lava.visible = volcano;
+        slot.glow[i].smoke.visible = volcano;
+      });
+    } else if (skylineGeometries.length > 0) {
       slot.skyline[0].position.set(-(84 + h(30) * 8), 0, 0);
       slot.skyline[1].position.set(84 + h(31) * 8, 0, 0);
     }
@@ -684,6 +801,7 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
     update(skiZ, camera, delta, time) {
       lastSkiZ = skiZ;
       dome.position.set(camera.x, 0, camera.z);
+      sunDisc.position.set(camera.x - 175, 36, camera.z - 215);
       farWater.position.x = camera.x;
       farWater.position.z = camera.z;
       // Recycle: chunks from one behind the ski out to the fog.
@@ -697,7 +815,21 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
       const amount = Math.min(1, moodLeft / 0.3);
       for (const slot of slots) {
         animateCrowd(slot, time, mood, mood === 'idle' ? 0 : Math.max(amount, 0.0001));
+        slot.glow.forEach((g, i) => {
+          // The smoke drifts up and breathes; the lava glows a little brighter and dimmer.
+          g.smoke.position.y = 1.5 * Math.sin(time * 0.35 + slot.chunk + i);
+          g.smoke.scale.setScalar(1 + 0.05 * Math.sin(time * 0.6 + i * 2 + slot.chunk));
+        });
         slot.boats.forEach((boat, i) => {
+          if (reefy) {
+            // The fins circle: round a point, nose along the way they swim.
+            const dir = i === 0 ? 1 : -1;
+            const a = time * 0.6 * dir + slot.chunk * 1.7 + i * 2.4;
+            const [cx, cz] = slot.boatCentre[i];
+            boat.position.x = cx + 5.5 * Math.cos(a);
+            boat.position.z = cz + 5.5 * Math.sin(a);
+            boat.rotation.y = Math.atan2(Math.sin(a) * dir, -Math.cos(a) * dir);
+          }
           const y = swell(boat.position.x, boat.position.z + slot.group.position.z, time);
           boat.position.y = y + 0.08;
           boat.rotation.z = Math.sin(time * 1.4 + i + slot.chunk) * 0.05;
