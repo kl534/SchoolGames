@@ -38,8 +38,9 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { swell } from './anim';
 import { createDolphin, type Dolphin } from './critters';
+import type { WorldId } from './rules';
 
-export type WorldTheme = 'lagoon';
+export type WorldTheme = WorldId;
 
 export interface WorldPalette {
   skyTop: number;
@@ -58,6 +59,15 @@ export const PALETTES: Record<WorldTheme, WorldPalette> = {
     water: 0x1fc7c1,
     sand: 0xffe2a0,
     fog: 0xbfefff,
+    fogNear: 90,
+    fogFar: 200,
+  },
+  harbour: {
+    skyTop: 0x7ab8e8,
+    skyBottom: 0xe4f1fb,
+    water: 0x2a8fb0,
+    sand: 0xb9bdc6,
+    fog: 0xcfe3f1,
     fogNear: 90,
     fogFar: 200,
   },

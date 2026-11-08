@@ -4,10 +4,10 @@
  * Plain elements styled in style.css (prefix `sz-`); the game loop in main.ts drives them.
  */
 import { fillAnswers, lockAnswers } from '../../shared/answers';
-import { SKIS, type LauncherKind } from './rules';
+import { MEGA_PIECES, SKIS, type LauncherKind, type MegaId } from './rules';
 
-/** Questions in a Mega Stunt: the pips `setMega` lights (the Mega Stunts themselves come later). */
-export const MEGA_PIECES = 3;
+/** What the wake strip's goal icon can show: a launcher, a checkpoint gate or a Mega course. */
+export type Goal = LauncherKind | 'gate' | MegaId;
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -78,10 +78,19 @@ export function waveIcon(): SVGSVGElement {
 }
 
 /** The launcher icons on the wake strip: a wave emoji, and a kicker and a mega ramp drawn small. */
-export function launcherIcon(kind: LauncherKind): Node {
+export function launcherIcon(kind: Goal): Node {
   if (kind === 'wave') return document.createTextNode('🌊');
+  if (kind === 'whale-of-a-time') return document.createTextNode('🐳');
+  if (kind === 'harbour-havoc') return document.createTextNode('🌉');
   const { svg, add } = svgIcon('0 0 26 26');
-  if (kind === 'kicker') {
+  if (kind === 'gate') {
+    // Two striped buoys and the banner arch between them.
+    add('rect', { x: '4', y: '8', width: '4', height: '15', rx: '2', fill: '#ff5a5a' });
+    add('rect', { x: '4', y: '13', width: '4', height: '4', fill: '#fff' });
+    add('rect', { x: '18', y: '8', width: '4', height: '15', rx: '2', fill: '#ff5a5a' });
+    add('rect', { x: '18', y: '13', width: '4', height: '4', fill: '#fff' });
+    add('path', { d: 'M5 9Q13 1 21 9', fill: 'none', stroke: '#ffd43b', 'stroke-width': '3' });
+  } else if (kind === 'kicker') {
     add('path', { d: 'M2 21 22 21 22 11Z', fill: '#ff5a5a' });
     add('path', { d: 'M9 21 22 21 22 11 19 11Z', fill: '#fff' });
     add('rect', { x: '2', y: '21', width: '22', height: '3', rx: '1.5', fill: '#ffd43b' });
@@ -113,7 +122,7 @@ export interface Hud {
   /** Progress along the wake strip: 0 at the start, 1 on arrival. */
   setWake(progress: number, state: { urgent: boolean; waiting: boolean }): void;
   /** The launcher icon at the end of the wake strip. */
-  setLauncher(kind: LauncherKind): void;
+  setLauncher(kind: Goal): void;
   /**
    * Mega Stunt pips: hidden when `total` is 0, else the first `done` are lit. With `missed` the
    * pip after them shows red, so the player sees which question stopped the chain.

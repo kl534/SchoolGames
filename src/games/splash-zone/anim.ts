@@ -452,7 +452,8 @@ export type EventType =
   | 'sfx:splat'
   | 'sfx:slideWhistle'
   | 'sfx:whoosh'
-  | 'sfx:bump';
+  | 'sfx:bump'
+  | 'fireworks';
 
 /** An effect or sound at a time (seconds into the trick) and a launcher-local spot. */
 export type Ev = readonly [at: number, type: EventType, d: number, y: number, s?: number];

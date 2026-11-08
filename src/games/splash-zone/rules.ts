@@ -204,3 +204,53 @@ export function coinSide(i: number, n: number, sign: number): number {
   if (n <= 1) return 0;
   return sign * COIN_SWAY * Math.sin((Math.PI * i) / (n - 1));
 }
+
+// ---------- Worlds and Mega Stunts ----------
+
+/** The worlds, in the order the run visits them (and then round again). */
+export type WorldId = 'lagoon' | 'harbour';
+export const WORLD_ORDER: readonly WorldId[] = ['lagoon', 'harbour'];
+
+export const WORLD_NAMES: Record<WorldId, string> = {
+  lagoon: 'Lagoon',
+  harbour: 'Harbour City',
+};
+
+/** Normal turns in a world before its Mega Stunt, which is the turn after the last of them. */
+export const NORMALS_PER_WORLD = 7;
+
+/** The Mega courses, one per world. */
+export type MegaId = 'whale-of-a-time' | 'harbour-havoc';
+export const MEGA_IDS: readonly MegaId[] = ['whale-of-a-time', 'harbour-havoc'];
+
+export const WORLD_MEGA: Record<WorldId, MegaId> = {
+  lagoon: 'whale-of-a-time',
+  harbour: 'harbour-havoc',
+};
+
+/** The Mega Stunt starts the turn after the 7th normal one in a world. */
+export function startsMega(normalsInWorld: number): boolean {
+  return normalsInWorld === NORMALS_PER_WORLD;
+}
+
+/** The world after `world`: the order loops. */
+export function nextWorld(world: WorldId): WorldId {
+  const at = WORLD_ORDER.indexOf(world);
+  return WORLD_ORDER[(at + 1) % WORLD_ORDER.length];
+}
+
+/** Questions asked up front, and elements in a Mega course. */
+export const MEGA_PIECES = 3;
+/** How many of the questions were right before the first miss: 0 to MEGA_PIECES. */
+export type Passed = 0 | 1 | 2 | 3;
+/** Seconds each checkpoint buoy gate shows its result before the next question. */
+export const GATE_BEAT = 0.5;
+/** Seconds the "MEGA STUNT!" banner shows. */
+export const MEGA_BANNER = 1.5;
+/** Points for clearing every element of a Mega Stunt. */
+export const MEGA_BONUS = 500;
+/** Seconds the cleared banner shows before the world changes, and the world title after it. */
+export const MEGA_CLEARED_BEAT = 2.2;
+export const WORLD_TITLE_SECONDS = 1.5;
+/** Seconds the wave takes to sweep over the screen, and again to sweep off. */
+export const WIPE_SECONDS = 0.45;
