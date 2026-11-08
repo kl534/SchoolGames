@@ -38,6 +38,7 @@ import {
   easeToward,
   hitPoints,
   loseSki,
+  meterFill,
   nextStreak,
   nextTrick,
   outOfSkis,
@@ -54,6 +55,10 @@ import { runs } from './helpers/full';
 describe('tier', () => {
   it('steps up at streaks 3 and 6', () => {
     expect([0, 2, 3, 5, 6, 40].map(tierFor)).toEqual([1, 1, 2, 2, 3, 3]);
+  });
+
+  it('the tier meter is empty until the first right answer, then fills to the tier', () => {
+    expect([0, 1, 2, 3, 5, 6, 40].map(meterFill)).toEqual([0, 1, 1, 2, 2, 3, 3]);
   });
 
   it('tiers have their launcher', () => {

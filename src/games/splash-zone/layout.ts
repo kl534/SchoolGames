@@ -17,7 +17,7 @@ export interface PlayBand {
  */
 export function playBand(width: number, height: number): PlayBand {
   if (height <= 460) return { top: 96, bottom: height - 84 };
-  if (width <= 640) return { top: 250, bottom: height - 170 };
+  if (width <= 640) return { top: 284, bottom: height - 170 };
   return { top: 118, bottom: height - 100 };
 }
 
@@ -40,12 +40,12 @@ export const CAM_UP = 2.7;
 export const CAM_BACK = 9;
 export const LOOK_AHEAD = 12;
 /** The point looked at is this high above the ski. */
-export const LOOK_UP = 0.2;
+export const LOOK_UP = 0.8;
 
 /** The stunt camera's offset from what it follows: to the right, up and behind (u). */
-export const SIDE = 10;
-export const UP = 3.5;
-export const BACK = 5;
+export const SIDE = 8;
+export const UP = 3;
+export const BACK = 4.5;
 
 /** Seconds to swing out to the stunt view, and back after a clear. */
 export const SWING_IN = 0.5;

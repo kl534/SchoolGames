@@ -111,6 +111,11 @@ export function hitPoints(timeLeft: number, timeTotal: number, tier: Tier): numb
   return Math.round((BASE_POINTS + TIME_BONUS * left) * tier);
 }
 
+/** How many of the tier meter's three waves are filled: none until the first right answer. */
+export function meterFill(streak: number): 0 | Tier {
+  return streak <= 0 ? 0 : tierFor(streak);
+}
+
 /** The streak after a right answer (one more) or a miss (back to zero). */
 export function nextStreak(streak: number, hit: boolean): number {
   return hit ? streak + 1 : 0;
