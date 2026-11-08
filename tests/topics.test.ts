@@ -445,7 +445,7 @@ describe('state capitals', () => {
   it('is the last menu group, Social Studies', () => {
     expect(groupBySubject().at(-1)).toEqual({
       subject: 'Social Studies',
-      topics: [stateCapitals, stateLocations, countryLocations],
+      topics: [stateLocations, countryLocations, stateCapitals],
     });
   });
 });
