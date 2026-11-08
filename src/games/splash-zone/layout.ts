@@ -95,8 +95,6 @@ export interface Framing {
   low: number;
   /** The most the ski and a free rider are ever apart along the course (u), for the width. */
   span?: number;
-  /** How far ahead of the ski (u) the next element of a Mega course must show as the ski reaches it. */
-  ahead?: number;
 }
 
 /** The middle of a framing, which the stunt camera looks at. */
@@ -119,7 +117,7 @@ export function stuntDistance(
   const need = Math.max(f.peak - f.low, 1) * 1.2;
   const high = need / (2 * tan * Math.max(bandFraction, 0.1));
   // The course runs across the picture (sin of the angle off the view axis); both sides keep a margin.
-  const across = Math.max((f.span ?? 0) + EASE_ROOM, 2 * ((f.ahead ?? 0) + EASE_ROOM / 2));
+  const across = (f.span ?? 0) + EASE_ROOM;
   const wide =
     across / (2 * tan * Math.max(aspect, 0.1) * (1 - 2 * SIDE_MARGIN) * Math.sin(CAM_AZIMUTH));
   return Math.min(Math.max(high, wide, min), STUNT_MAX_DIST);

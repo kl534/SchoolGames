@@ -10,7 +10,6 @@ import {
   framingMid,
   playBand,
   stuntDistance,
-  stuntLookD,
   stuntPose,
 } from '../src/games/splash-zone/layout';
 import {
@@ -18,7 +17,10 @@ import {
   megaDuration,
   megaEvents,
   megaFloorY,
-  megaFraming,
+  LOOK_BIAS_MAX,
+  megaFramingAt,
+  megaLookBias,
+  megaSegmentFraming,
   megaFrame,
   megaLength,
   megaLocate,
@@ -427,46 +429,68 @@ function probeCamera(width: number, height: number): PerspectiveCamera {
   return camera;
 }
 
+/** The ski plus a seated rider (1.7 u tall) must be at least this much of the band's height. */
+const MIN_SKI_BAND = 0.06;
+
 describe.each(cases)('the stunt camera over %s with %i right', (id, passed) => {
-  it.each(SCREENS)('keeps the ski and a free rider in frame at %i x %i', (w, h) => {
+  it.each(SCREENS)('keeps the ski, a free rider and the element in frame at %i x %i', (w, h) => {
     const band = playBand(w, h);
+    const bandH = band.bottom - band.top;
     const aspect = w / h;
     const fov = fovFor(aspect);
-    const framing = megaFraming(id, passed);
-    const dist = stuntDistance(framing, fov, bandFraction(w, h), aspect);
-    const mid = framingMid(framing);
     const camera = probeCamera(w, h);
     const frame = createFrame();
     const focus = { d: 0, y: 0, s: 0 };
+    const plan = megaSegments(id, passed);
+    const offsets = megaOffsets(id);
+    const elements = MEGA_SPECS[id].elements;
+    const boundaries = new Map(plan.slice(1).map((seg) => [Math.round(seg.start * FPS), seg]));
+    const duration = megaDuration(id, passed);
+    // What the game's camera aims at for a frame, as `updateCameraTargets` does.
+    const targets = (t: number) => {
+      const framing = megaFramingAt(id, passed, t);
+      return {
+        look: focus.d + megaLookBias(id, focus.d),
+        dist: stuntDistance(framing, fov, bandFraction(w, h), aspect),
+        mid: framingMid(framing),
+      };
+    };
     megaFrame(id, passed, 0, frame);
     focusOf2(frame, focus);
-    // The camera as the game steers it: it eases after the look point at rate 8.
-    let camD = stuntLookD(focus.d, Infinity, dist, fov, aspect);
+    // The camera snaps to its targets at the start, then eases after them.
+    let aim = targets(0);
+    let camD = aim.look;
     let camS = focus.s;
+    let camDist = aim.dist;
+    let camMid = aim.mid;
     const screen = (s: number, y: number, d: number) => {
       const p = new Vector3(s, y, -d).project(camera);
       return { x: ((p.x + 1) / 2) * w, y: ((1 - p.y) / 2) * h };
     };
-    const aim = () => {
-      const pose = stuntPose(camS, -camD, mid, dist);
+    const place = () => {
+      const pose = stuntPose(camS, -camD, camMid, camDist);
       camera.position.set(pose.x, pose.y, pose.z);
       camera.lookAt(pose.lookX, pose.lookY, pose.lookZ);
       camera.updateMatrixWorld();
     };
-    const plan = megaSegments(id, passed);
-    const offsets = megaOffsets(id);
-    const boundaries = new Map(plan.slice(1).map((seg) => [Math.round(seg.start * FPS), seg]));
-    const duration = megaDuration(id, passed);
+    let smallest = Infinity;
     for (let t = 0; t <= duration + 1e-9; t += DT) {
       megaFrame(id, passed, t, frame);
       focusOf2(frame, focus);
-      camD = easeToward(camD, stuntLookD(focus.d, Infinity, dist, fov, aspect), 8, DT);
+      aim = targets(t);
+      camD = easeToward(camD, aim.look, 8, DT);
       camS = easeToward(camS, focus.s, 8, DT);
+      camMid = easeToward(camMid, aim.mid, 5, DT);
+      camDist = easeToward(camDist, aim.dist, 5, DT);
       if (t < SWING_IN) continue;
-      aim();
+      place();
       const seen: { x: number; y: number; what: string }[] = [];
       if (frame.ski.visible) {
         seen.push({ ...screen(frame.ski.s, frame.ski.y, frame.ski.d), what: 'ski' });
+        // The ski and a seated rider: how many band-heights tall are 1.7 u at the ski?
+        const top = screen(frame.ski.s, frame.ski.y + 1.7, frame.ski.d);
+        const base = screen(frame.ski.s, frame.ski.y, frame.ski.d);
+        smallest = Math.min(smallest, Math.abs(base.y - top.y) / bandH);
       }
       if (frame.rider.mode === 'free' && frame.rider.visible) {
         seen.push({ ...screen(frame.rider.s, frame.rider.y, frame.rider.d), what: 'rider' });
@@ -474,8 +498,18 @@ describe.each(cases)('the stunt camera over %s with %i right', (id, passed) => {
       const seg = boundaries.get(Math.round(t * FPS));
       if (seg && plan[seg.index - 1].outcome === 'clear') {
         // The next element's cue is in frame as the ski reaches it.
-        const cue = MEGA_SPECS[id].elements[seg.index].cue;
+        const cue = elements[seg.index].cue;
         seen.push({ ...screen(0, cue.y, offsets[seg.index] + cue.d), what: 'next element' });
+      }
+      // The element being ridden is in frame while the ski is on it.
+      const here = megaLocate(id, passed, t);
+      const element = elements[here.index];
+      const on = frame.ski.d - offsets[here.index];
+      if (frame.ski.visible && on >= element.extent[0] && on <= element.extent[1]) {
+        seen.push({
+          ...screen(0, element.anchor.y, offsets[here.index] + element.anchor.d),
+          what: `${element.name}`,
+        });
       }
       for (const point of seen) {
         const where = `${id}:${passed} ${point.what} at ${t.toFixed(2)}s, ${w}x${h}`;
@@ -485,6 +519,32 @@ describe.each(cases)('the stunt camera over %s with %i right', (id, passed) => {
         expect(point.y, where).toBeLessThanOrEqual(band.bottom);
       }
     }
+    expect(smallest, `smallest ski and rider at ${w}x${h}`).toBeGreaterThanOrEqual(MIN_SKI_BAND);
+  });
+});
+
+describe('the Mega camera framing', () => {
+  it.each(cases)('%s with %i right frames the element being ridden', (id, passed) => {
+    const plan = megaSegments(id, passed);
+    for (const seg of plan) {
+      const own = megaSegmentFraming(id, passed, seg.index);
+      expect(own.peak).toBeGreaterThan(own.low);
+      expect(own.span ?? 0).toBeGreaterThan(0);
+      // At any moment of an element the view fits at least that element's own framing.
+      for (const at of [seg.start, seg.start + seg.duration / 2, seg.start + seg.duration]) {
+        const f = megaFramingAt(id, passed, at);
+        expect(f.peak).toBeGreaterThanOrEqual(own.peak - 1e-9);
+        expect(f.low).toBeLessThanOrEqual(own.low + 1e-9);
+        expect(f.span ?? 0).toBeGreaterThanOrEqual((own.span ?? 0) - 1e-9);
+      }
+    }
+    for (let x = -5; x < megaLength(id) + 5; x += 0.5) {
+      expect(Math.abs(megaLookBias(id, x))).toBeLessThanOrEqual(LOOK_BIAS_MAX + 1e-9);
+    }
+  });
+
+  it.each(MEGA_IDS)('%s starts tighter than its finale needs', (id) => {
+    expect(megaFramingAt(id, 3, 0).peak).toBeLessThan(megaSegmentFraming(id, 3, 2).peak);
   });
 });
 
@@ -723,5 +783,33 @@ describe('Harbour Havoc specifics', () => {
     expect(highest).toBeLessThan(6);
     const end = frameAt('harbour-havoc', 2, megaDuration('harbour-havoc', 2));
     expect(end.rider.mode).toBe('free');
+  });
+});
+
+// ---------- The comic word follows the element ----------
+
+describe.each(cases)('the comic word of %s with %i right', (id, passed) => {
+  it('belongs to the element being ridden, and changes when the next one starts', () => {
+    const plan = megaSegments(id, passed);
+    const elements = MEGA_SPECS[id].elements;
+    const words = megaEvents(id, passed).filter((e) => e.type === 'word');
+    for (const seg of plan) {
+      const own = elements[seg.index][seg.outcome];
+      for (let t = seg.start; t < seg.start + seg.duration - 1e-6; t += 1 / 20) {
+        const w = megaWordAt(id, passed, t);
+        expect(w.text, `at ${t.toFixed(2)}s`).toBe(own.word);
+        expect(w.good).toBe(seg.outcome === 'clear');
+      }
+      // The word event of an element fires inside that element's own window.
+      const inside = words.filter((e) => e.at >= seg.start && e.at <= seg.start + seg.duration);
+      expect(inside.length).toBeGreaterThanOrEqual(1);
+      for (const e of inside) expect(megaWordAt(id, passed, e.at).text).toBe(own.word);
+    }
+    // Neighbouring elements never share a word.
+    for (let i = 1; i < plan.length; i++) {
+      expect(megaWordAt(id, passed, plan[i].start).text).not.toBe(
+        megaWordAt(id, passed, plan[i].start - 1e-6).text,
+      );
+    }
   });
 });

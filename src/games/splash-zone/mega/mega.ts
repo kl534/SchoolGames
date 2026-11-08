@@ -32,6 +32,9 @@ export interface MegaElement {
   floorY: number; // lowest y the ski or the rider may reach
   /** What the camera has to show of this element as the ski reaches it (a point a little ahead). */
   cue: { d: number; y: number };
+  /** The element's props along the course (element-local d): the camera keeps `anchor`, the middle of them, in frame while the ski is within `extent` (at most about 9 u either side of the anchor, so a phone held upright can show both). */
+  anchor: { d: number; y: number };
+  extent: readonly [from: number, to: number];
   clear: Def; // plays when this element is cleared
   fail: Def; // plays when this is the element the ski wipes out on
 }
@@ -252,26 +255,73 @@ export function megaRate(id: MegaId, passed: Passed, t: number): number {
   return rate;
 }
 
-const framingCache = new Map<string, Framing>();
+// ---------- The camera over a course ----------
+
+/** The most the camera looks ahead of or behind the ski towards the element it is on (u). */
+export const LOOK_BIAS_MAX = 5.5;
+/** Seconds ahead the camera already makes room for the next element. */
+export const VIEW_LEAD = 0.7;
 
 /**
- * What the stunt camera has to fit for a stunt that clears `passed` elements: how high and how low
- * the ski and the rider go (u above the water, with room for the head and the underside), how far
- * apart the ski and a thrown rider get along the course, and how far ahead of the ski the next
- * element's cue is when the ski reaches it.
+ * Where along the course the camera is drawn to: the middle of the element the ski is on while it
+ * is on it, and in between elements a slide from the last one's middle to the next one's cue (at
+ * its entry line) and on to its middle, so the view moves smoothly. Course-local d.
  */
-export function megaFraming(id: MegaId, passed: Passed): Framing {
-  const key = `${id}:${passed}`;
-  let framing = framingCache.get(key);
+export function megaAttractor(id: MegaId, x: number): number {
+  const offsets = megaOffsets(id);
+  const knots: [number, number][] = [];
+  specOf(id).elements.forEach((e, i) => {
+    // Arriving at an element's entry line the camera already looks at its cue, then at its middle.
+    knots.push(
+      i > 0 ? [offsets[i], offsets[i] + e.cue.d] : [0, 3],
+      [offsets[i] + e.extent[0], offsets[i] + e.anchor.d],
+      [offsets[i] + e.extent[1], offsets[i] + e.anchor.d],
+    );
+  });
+  // Past the last element the camera is drawn to nothing: it just follows.
+  knots.push([megaLength(id), megaLength(id)]);
+  if (!(x > knots[0][0])) return knots[0][1];
+  for (let i = 1; i < knots.length; i++) {
+    if (x <= knots[i][0]) {
+      const [x0, y0] = knots[i - 1];
+      const [x1, y1] = knots[i];
+      return x1 > x0 ? lerp(y0, y1, (x - x0) / (x1 - x0)) : y1;
+    }
+  }
+  return knots[knots.length - 1][1];
+}
+
+/** How far ahead (+) or behind (-) of the ski at `x` the camera looks: half way to the attractor. */
+export function megaLookBias(id: MegaId, x: number): number {
+  const bias = (megaAttractor(id, x) - x) / 2;
+  return Math.min(Math.max(bias, -LOOK_BIAS_MAX), LOOK_BIAS_MAX);
+}
+
+const segmentFramingCache = new Map<string, Framing>();
+
+/**
+ * What the camera has to fit while one element plays: how high and how low the ski and the rider
+ * go (u above the water, with room for the head and the underside), and how wide the picture must
+ * be: the ski and a thrown rider, the element's middle while the ski is on it, and the next
+ * element's cue as the ski reaches it, all measured from where the camera looks.
+ */
+export function megaSegmentFraming(id: MegaId, passed: Passed, index: 0 | 1 | 2): Framing {
+  const key = `${id}:${passed}:${index}`;
+  let framing = segmentFramingCache.get(key);
   if (!framing) {
+    const seg = megaSegments(id, passed).find((s) => s.index === index);
+    if (!seg) throw new Error(`No element ${index} when ${passed} are right`);
+    const spec = specOf(id);
+    const element = spec.elements[index];
+    const offset = megaOffsets(id)[index];
+    const anchorD = offset + element.anchor.d;
     let peak = 1.5;
     let low = 0;
-    let span = 0;
+    let half = 1.5;
     const f = createFrame();
     const focus = { d: 0, y: 0, s: 0 };
-    const duration = megaDuration(id, passed);
-    for (let t = 0; t <= duration + 1e-9; t += 1 / 30) {
-      megaFrame(id, passed, t, f);
+    for (let t = 0; t <= seg.duration + 1e-9; t += 1 / 30) {
+      megaFrame(id, passed, seg.start + t, f);
       if (f.ski.visible) {
         peak = Math.max(peak, f.ski.y + 1.0);
         low = Math.min(low, f.ski.y - 0.3);
@@ -281,27 +331,58 @@ export function megaFraming(id: MegaId, passed: Passed): Framing {
         low = Math.min(low, f.rider.y - 0.3);
       }
       focusOf(f, focus);
+      const look = focus.d + megaLookBias(id, focus.d);
       if (f.rider.mode === 'free' && f.rider.visible) {
+        // A rider flung towards the camera is seen from higher up, so he sits lower in the picture.
         low = Math.min(low, f.rider.y - 0.3 - 0.14 * Math.max(f.rider.s - focus.s, 0));
       }
-      if (f.ski.visible) span = Math.max(span, 2 * Math.abs(f.ski.d - focus.d) + 2.6);
+      if (f.ski.visible) half = Math.max(half, Math.abs(f.ski.d - look) + 1.3);
       if (f.rider.mode === 'free' && f.rider.visible) {
-        span = Math.max(
-          span,
-          2 * Math.abs(f.rider.d - focus.d) + 1.6 + 1.6 * Math.abs(f.rider.s - focus.s),
+        // A rider flung towards the camera looms larger, so sideways counts too.
+        half = Math.max(
+          half,
+          Math.abs(f.rider.d - look) + 0.8 + 0.8 * Math.abs(f.rider.s - focus.s),
         );
       }
-    }
-    // The next element's cue, as far ahead as it is when the ski reaches it.
-    let ahead = 0;
-    for (const seg of megaSegments(id, passed)) {
-      if (seg.index < 2 && seg.outcome === 'clear') {
-        ahead = Math.max(ahead, specOf(id).elements[seg.index + 1].cue.d);
-        peak = Math.max(peak, specOf(id).elements[seg.index + 1].cue.y + 1);
+      if (f.ski.d >= offset + element.extent[0] && f.ski.d <= offset + element.extent[1]) {
+        half = Math.max(half, Math.abs(anchorD - look) + 1.0);
+        peak = Math.max(peak, element.anchor.y + 1.0);
       }
     }
-    framing = { peak, low, span, ahead };
-    framingCache.set(key, framing);
+    if (seg.outcome === 'clear' && index < 2) {
+      // The next element's cue, as the ski reaches it.
+      const next = spec.elements[index + 1];
+      megaFrame(id, passed, seg.start + seg.duration, f);
+      focusOf(f, focus);
+      const look = focus.d + megaLookBias(id, focus.d);
+      half = Math.max(half, Math.abs(offset + element.length + next.cue.d - look) + 0.5);
+      peak = Math.max(peak, next.cue.y + 1.0);
+    }
+    framing = { peak, low, span: 2 * half };
+    segmentFramingCache.set(key, framing);
   }
   return framing;
+}
+
+/**
+ * What the camera frames at stunt time `t`: the element being ridden, and from `VIEW_LEAD` seconds
+ * before it the next one too, so the camera has eased out by the time the bigger one starts.
+ */
+export function megaFramingAt(id: MegaId, passed: Passed, t: number): Framing {
+  const time = finite(t);
+  let peak = Number.NEGATIVE_INFINITY;
+  let low = Number.POSITIVE_INFINITY;
+  let span = 0;
+  for (const seg of megaSegments(id, passed)) {
+    if (seg.start + seg.duration < time || seg.start > time + VIEW_LEAD) continue;
+    const f = megaSegmentFraming(id, passed, seg.index);
+    peak = Math.max(peak, f.peak);
+    low = Math.min(low, f.low);
+    span = Math.max(span, f.span ?? 0);
+  }
+  if (peak === Number.NEGATIVE_INFINITY) {
+    const last = megaSegments(id, passed).slice(-1)[0];
+    return megaSegmentFraming(id, passed, last.index);
+  }
+  return { peak, low, span };
 }
