@@ -550,6 +550,12 @@ export const sfx = {
       noise(ctx, 'lowpass', 1400, 200, t, 0.25, 0.9);
       tone(ctx, 'sine', 150, 50, t, 0.25, 0.8);
     }),
+  /** A big splash into water: a low rushing hiss, then a bright spatter on top. */
+  splash: () =>
+    play((ctx, t) => {
+      noise(ctx, 'lowpass', 2600, 380, t, 0.6, 0.8);
+      noise(ctx, 'bandpass', 1400, 3200, t + 0.04, 0.35, 0.35);
+    }),
   /** A cartoon fall: a whistle sliding from high to low. */
   slideWhistle: () => play((ctx, t) => tone(ctx, 'sine', 1500, 250, t, 0.9, 0.2)),
   /** A rubbery balloon squeak: two quick chirps, the first sliding up and the second down. */
