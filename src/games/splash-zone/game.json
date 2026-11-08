@@ -1,0 +1,8 @@
+{
+  "id": "splash-zone",
+  "title": "Splash Zone",
+  "description": "Ride a jet ski off waves and ramps. Answer right to pull off flips and spins. Answer wrong and it's a spectacular wipeout!",
+  "thumbnail": "thumbnail.svg",
+  "tags": ["jet ski", "action", "3d"],
+  "scoring": "score"
+}
