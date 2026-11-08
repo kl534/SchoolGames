@@ -282,7 +282,7 @@ describe('Social Studies level session', () => {
   it('starts at level 1', () => {
     const session = start('Social starter');
     expect(session.topic.id).toBe(SOCIAL_STUDIES_LEVEL_ID);
-    expect(session.topic.description).toBe('Level 1 of 17: The Northeast');
+    expect(session.topic.description).toBe('Level 1 of 17: Find the Northeast');
   });
 
   it("saves answers under the fact's own topic and the social level count only", () => {
@@ -290,7 +290,7 @@ describe('Social Studies level session', () => {
     const [fact] = session.chooseFacts();
     session.recordAnswer(fact, true);
     const data = saved();
-    expect(data.facts['state-capitals'][fact.id].correct).toBe(1);
+    expect(data.facts['state-locations'][fact.id].correct).toBe(1);
     expect(data.facts[SOCIAL_STUDIES_LEVEL_ID]).toBeUndefined();
     expect(data.pathLevelsOpen).toEqual({ 'social-studies': 1 });
     expect(data.levelsOpen).toBeUndefined();
@@ -307,16 +307,16 @@ describe('Social Studies level session', () => {
     expect(data.highScores[MY_LEVEL_ID]).toBeUndefined();
   });
 
-  it('counts capitals learned through topic practice', () => {
+  it('counts states found through topic practice', () => {
     const store = createProgressStore();
-    store.setCurrentPlayer(store.addPlayer('Capital learner', AVATARS[0]).id);
-    const practice = startGameSession('level-game', '?topic=state-capitals');
-    if (!practice) throw new Error('State capitals not found');
+    store.setCurrentPlayer(store.addPlayer('State finder', AVATARS[0]).id);
+    const practice = startGameSession('level-game', '?topic=state-locations');
+    if (!practice) throw new Error('State locations not found');
     for (const { fact } of SOCIAL_STUDIES_LEVELS[0].facts.slice(0, 8)) {
       practice.recordAnswer(fact, true);
     }
     expect(startGameSession('level-game', search)?.topic.description).toBe(
-      'Level 2 of 17: The Midwest',
+      'Level 2 of 17: Find the Midwest',
     );
   });
 });
