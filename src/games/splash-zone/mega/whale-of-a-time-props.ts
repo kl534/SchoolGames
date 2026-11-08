@@ -183,7 +183,7 @@ function buildWhale(kit: Kit): MegaBuilt {
     11,
     16,
     24,
-    (y) => (y < 0.18 ? 0xb8cfe2 : y < 0.7 ? 0x5a80ad : 0x3a5a85),
+    (y) => (y < 0.18 ? 0x8fb0cc : y < 0.7 ? 0x35577f : 0x233f63),
   );
   // The tail: a thick stalk and a wide fluke, hinged under the back at s = 3.5.
   const skin = kit.lit(0x4f719c, 0.45);
