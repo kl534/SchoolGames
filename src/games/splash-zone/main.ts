@@ -38,10 +38,37 @@ import {
   stuntPose,
   type Framing,
 } from './layout';
+import {
+  MEGA_SPECS,
+  megaDuration,
+  megaEvents,
+  megaFraming,
+  megaFrame,
+  megaLength,
+  megaRate,
+  megaWordAt,
+} from './mega/mega';
+import {
+  GATE_HEIGHT,
+  createGate,
+  createMegaCoursePool,
+  type Gate,
+  type MegaCourse,
+} from './mega/mega-props';
 import { createRider } from './rider';
 import {
   COIN_GAP,
   COIN_POINTS,
+  GATE_BEAT,
+  MEGA_BANNER,
+  MEGA_BONUS,
+  MEGA_CLEARED_BEAT,
+  MEGA_PIECES,
+  WIPE_SECONDS,
+  WORLD_MEGA,
+  WORLD_NAMES,
+  WORLD_ORDER,
+  WORLD_TITLE_SECONDS,
   COIN_Y,
   ENTRY_SPEED,
   GREAT_RIDING_SPEECH,
@@ -62,14 +89,19 @@ import {
   meterFill,
   nextStreak,
   nextTrick,
+  nextWorld,
   outOfSkis,
+  startsMega,
   tierFor,
   trailLength,
   turboSpeed,
   worldSpeedFactor,
+  type MegaId,
   type Outcome,
+  type Passed,
   type Tier,
   type TrickId,
+  type WorldId,
 } from './rules';
 import {
   LAUNCHERS,
@@ -89,7 +121,7 @@ import {
   type TrickEvent,
 } from './tricks';
 import { createWater } from './water';
-import { createWorld } from './world';
+import { createWorld, type World } from './world';
 
 const GAME_ID = 'splash-zone';
 
@@ -107,16 +139,50 @@ const RESPAWN_DELAY = 0.6;
 
 type Phase = 'preview' | 'countdown' | 'riding' | 'turbo' | 'stunt' | 'result' | 'ending' | 'done';
 
-/** One trick or wipeout being played. */
+/** A trick, a wipeout or a Mega course being played: they all step the same way. */
 interface Stunt {
-  trick: TrickId;
+  /** The trick being played; null for a Mega course. */
+  trick: TrickId | null;
+  mega: boolean;
   outcome: Outcome;
   t: number;
   duration: number;
   events: TrickEvent[];
   next: number;
   scale: number;
+  /** d of the end of what it plays on (the trick's landing, or the whole Mega course). */
+  length: number;
+  /** What the stunt camera has to fit, and where it looks first (Infinity: it just follows). */
+  framing: Framing;
+  lipD: number;
+  frameAt(t: number, out: Frame): void;
+  /** Playback rate at a stunt time: 1 normally, slower in slow motion. */
+  rateAt(t: number): number;
+  /** The comic word at a time, and whether it is a good one. */
+  wordAt(t: number): { text: string; good: boolean };
+  /** Poses the props that belong to the stunt (a Mega course's whale, ferry or bridge). */
+  propsAt?(t: number): void;
 }
+
+/** Where a Mega Stunt has got to: its questions up front, then the long stunt. */
+interface MegaRun {
+  id: MegaId;
+  /** Questions answered right before the first miss. */
+  passed: number;
+  /** Questions asked so far. */
+  asked: number;
+  /** A miss or a time-out stopped the questions. */
+  ended: boolean;
+  /** The fact that was missed, for the result banner, and whether the clock ran out. */
+  missed?: Fact;
+  timedOut: boolean;
+}
+
+/** What the ski is riding to: a launcher, a checkpoint gate or the Mega course. */
+type Target = 'launcher' | 'gate' | 'course';
+
+/** How far ahead the Mega course waits when the questions are over (u). */
+const COURSE_GAP = 120;
 
 const EFFECT_KINDS: readonly string[] = [
   'spray',
@@ -138,7 +204,8 @@ function run(session: GameSession, dev: DevOptions | null): void {
   // ---------- Scene ----------
   const ctx = createScene(container, { fov: 52, near: 0.3, far: 420 });
   const { scene, camera } = ctx;
-  const world = createWorld(scene, 'lagoon');
+  let worldId: WorldId = dev?.world ?? 'lagoon';
+  let world: World = createWorld(scene, worldId);
   const water = createWater(world.water);
   scene.add(water.object);
   const effects = createEffects();
@@ -147,6 +214,13 @@ function run(session: GameSession, dev: DevOptions | null): void {
   for (const kind of ['wave', 'kicker', 'mega-ramp'] as const) {
     scene.add(launchers.get(kind).object);
   }
+  // Three checkpoint gates and the Mega courses, built once and reused by every Mega Stunt.
+  const megaPool = createMegaCoursePool();
+  const gates: Gate[] = Array.from({ length: MEGA_PIECES }, (_, i) => {
+    const gate = createGate(i + 1);
+    scene.add(gate.object);
+    return gate;
+  });
 
   const skis: [JetSki, JetSki] = [createJetSki(), createJetSki()];
   for (const ski of skis) scene.add(ski.object);
@@ -219,6 +293,13 @@ function run(session: GameSession, dev: DevOptions | null): void {
   let trick: TrickId = 'wave-hop';
   let tier: Tier = 1;
   let launcher: Launcher | null = null;
+  // The Mega Stunt in progress, and the count towards the next one.
+  let mega: MegaRun | null = null;
+  let target: Target = 'launcher';
+  let course: MegaCourse | null = null;
+  let normals = 0;
+  let nextIsMega = dev?.mega ?? false;
+  let worldChangePending = false;
   let entryZ = 0;
   let approachGap = 0;
   let approachStartZ = 0;
@@ -308,16 +389,40 @@ function run(session: GameSession, dev: DevOptions | null): void {
   const setScoreHud = (pulse = false) =>
     hud.setScore(score, Math.max(session.highScore(), 0), pulse);
 
-  /** The launcher for this tier, `gap` ahead of the ski. */
-  const placeLauncher = (gap: number) => {
+  /** Puts the target (a launcher, the question's gate or the Mega course) `gap` ahead of the ski. */
+  const placeTarget = (gap: number) => {
     launcherPlaced = true;
     approachGap = gap;
     approachStartZ = skiZ;
     entryZ = skiZ - gap;
     launchers.hideAll();
-    launcher = launchers.get(TIER_LAUNCHER[tier]);
-    launcher.object.position.set(0, 0, entryZ);
-    launcher.object.visible = true;
+    launcher = null;
+    course = null;
+    if (target === 'gate' && mega) {
+      const gate = gates[Math.max(mega.asked - 1, 0)];
+      gate.object.position.set(0, 0, entryZ);
+      gate.object.visible = true;
+    } else if (target === 'course' && mega) {
+      course = megaPool.get(mega.id);
+      if (course.object.parent !== scene) scene.add(course.object);
+      course.reset();
+      course.object.position.set(0, 0, entryZ);
+      course.object.visible = true;
+    } else {
+      launcher = launchers.get(TIER_LAUNCHER[tier]);
+      launcher.object.position.set(0, 0, entryZ);
+      launcher.object.visible = true;
+    }
+  };
+
+  /** Hides the gates and the Mega course (a new world, a new run). */
+  const clearMegaProps = () => {
+    gates.forEach((gate) => {
+      gate.reset();
+      gate.object.visible = false;
+    });
+    if (course) course.object.visible = false;
+    course = null;
   };
 
   /** The nearest thing a reader would call the action on screen, for the comic words. */
@@ -409,6 +514,16 @@ function run(session: GameSession, dev: DevOptions | null): void {
     launcherPlaced = false;
     launchers.hideAll();
     launcher = null;
+    mega = null;
+    target = 'launcher';
+    normals = 0;
+    nextIsMega = dev?.mega ?? false;
+    worldChangePending = false;
+    clearMegaProps();
+    hud.setMega(0, 0);
+    hud.wipe('idle');
+    hud.hideWorldTitle();
+    setWorld(dev?.world ?? 'lagoon');
     effects.clear();
     coins.forEach((c) => (c.visible = false));
     world.setShadow(0, 0, 0, 0);
@@ -462,7 +577,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     });
   };
 
-  /** Picks the next trick, shows the question and reads it out. */
+  /** The next turn: a Mega Stunt after seven normal ones in a world, else the next trick. */
   const askNext = () => {
     if (phase === 'ending' || phase === 'done') return;
     timers.clear();
@@ -470,14 +585,63 @@ function run(session: GameSession, dev: DevOptions | null): void {
     stopSpeaking();
     hud.hideWord();
     hud.hideBanner();
+    if (mega === null && (nextIsMega || startsMega(normals))) {
+      nextIsMega = false;
+      beginMega();
+      return;
+    }
+    askPiece();
+  };
+
+  /**
+   * A Mega Stunt: three questions up front, each ridden to a checkpoint gate, then one long
+   * course that clears as many elements as were right and wipes out on the next.
+   */
+  const beginMega = () => {
+    const id = WORLD_MEGA[worldId];
+    mega = { id, passed: 0, asked: 0, ended: false, timedOut: false };
+    target = 'gate';
+    clearMegaProps();
+    hud.setMega(MEGA_PIECES, 0);
+    hud.setLauncher('gate');
+    phase = 'riding';
+    fact = undefined;
+    clockRunning = false;
+    launcherPlaced = false;
+    rideSpeedGoal = RIDE_SPEED * worldSpeedFactor(landed);
+    hud.setTopVisible(false, 0);
+    hud.showBanner('MEGA STUNT!', MEGA_SPECS[id].title, 'warn');
+    sfx.alarm();
+    const thisTurn = ++turn;
+    after(MEGA_BANNER, () => {
+      if (turn !== thisTurn) return;
+      hud.hideBanner();
+      askPiece();
+    });
+  };
+
+  /**
+   * Picks the trick (a normal turn), shows the question and reads it out. In a Mega Stunt the
+   * target is that question's gate and there is no trick.
+   */
+  const askPiece = () => {
+    if (phase === 'ending' || phase === 'done') return;
     // The tier is fixed now, from the streak before the question, so the launcher on screen always
     // matches the trick that plays and the points it pays.
-    if (dev && dev.tricks.length > 0) {
-      trick = dev.tricks[devTrickIndex++ % dev.tricks.length];
-      tier = TRICK_TIER[trick];
-    } else {
+    if (mega) {
+      mega.asked++;
+      target = 'gate';
       tier = tierFor(streak);
-      trick = nextTrick(tier, lastTrick, Math.random());
+    } else {
+      normals++;
+      target = 'launcher';
+      if (dev && dev.tricks.length > 0) {
+        trick = dev.tricks[devTrickIndex++ % dev.tricks.length];
+        tier = TRICK_TIER[trick];
+      } else {
+        tier = tierFor(streak);
+        trick = nextTrick(tier, lastTrick, Math.random());
+      }
     }
     const thisTurn = ++turn;
     fact = feed.take();
@@ -489,7 +653,8 @@ function run(session: GameSession, dev: DevOptions | null): void {
     hud.setAnswers(options);
     hud.problemText.textContent = current.prompt;
     showFactMap(current);
-    hud.setLauncher(TIER_LAUNCHER[tier]);
+    hud.setLauncher(mega ? 'gate' : TIER_LAUNCHER[tier]);
+    hud.setMega(mega ? MEGA_PIECES : 0, mega?.passed ?? 0);
     clockTotal = Math.max(session.timerSecondsFor(current), 1);
     clockLeft = clockTotal;
     clockRunning = false;
@@ -508,7 +673,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
   const startClock = () => {
     if (clockRunning || launcherPlaced) return;
     const ap = approach(landed, clockTotal);
-    placeLauncher(ap.gap);
+    placeTarget(ap.gap);
     rideSpeedGoal = ap.rideSpeed;
     startSpeed = speed;
     clockRunning = true;
@@ -533,7 +698,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     hud.lockAnswers();
     const correct = options[index] === current.answer;
     // If the question is still being read the clock has not started: the answer counts as full time.
-    if (!launcherPlaced) placeLauncher(approach(landed, clockTotal).gap);
+    if (!launcherPlaced) placeTarget(approach(landed, clockTotal).gap);
     clockRunning = false;
     buttons[index].classList.add('chosen');
     hideFactMap();
@@ -572,30 +737,126 @@ function run(session: GameSession, dev: DevOptions | null): void {
     streak = nextStreak(streak, false);
     buttons[options.indexOf(current.answer)]?.classList.add('right');
     setScoreHud();
-    startStunt('fail');
+    // At a gate the ski has just arrived and rides on; at a launcher it wipes out.
+    if (target === 'gate') passGate(false);
+    else startStunt('fail');
+  };
+
+  // ---------- Mega Stunt: gates and the course ----------
+  /** The ski reaches a gate: its light shows whether the answer was right, and the ride goes on. */
+  const passGate = (right: boolean) => {
+    const m = mega;
+    if (!m) return;
+    const gate = gates[Math.max(m.asked - 1, 0)];
+    const current = fact;
+    const thisTurn = turn;
+    hud.speedLines(false);
+    phase = 'riding';
+    clockRunning = false;
+    fact = undefined;
+    if (right) {
+      m.passed++;
+      gate.setState('pass');
+      hud.setMega(MEGA_PIECES, m.passed);
+      sfx.chime();
+      effects.sparkle(0, GATE_HEIGHT + 0.6, entryZ);
+      awardPoints(toScreen(0, GATE_HEIGHT - 0.6, entryZ));
+      updateTier(true);
+    } else {
+      m.ended = true;
+      m.missed = current;
+      m.timedOut = timedOut;
+      gate.setState('miss');
+      hud.setMega(MEGA_PIECES, m.passed, true);
+      updateTier();
+      sfx.miss();
+      effects.fire('stars', 0, GATE_HEIGHT + 0.6, entryZ);
+      pendingPoints = 0;
+    }
+    after(GATE_BEAT, () => {
+      if (turn !== thisTurn || mega !== m) return;
+      if (m.ended || m.asked >= MEGA_PIECES) enterCourse();
+      else askPiece();
+    });
+  };
+
+  /** The questions are over: the ski turbos to the course, which waits far ahead. */
+  const enterCourse = () => {
+    const m = mega;
+    if (!m) return;
+    target = 'course';
+    hud.lockAnswers();
+    hud.setLauncher(m.id);
+    if (m.passed >= MEGA_PIECES) hud.showBanner(MEGA_SPECS[m.id].title, '', 'hit');
+    placeTarget(COURSE_GAP);
+    phase = 'turbo';
+    sfx.rev();
+    hud.speedLines(true);
+  };
+
+  /** The ski is at the entry line: the elements the player earned, then the finale or a wipeout. */
+  const startMegaStunt = () => {
+    const m = mega;
+    if (!m || !course) return;
+    stunt = makeMegaStunt(m.id, m.passed as Passed);
+    course.reset();
+    frameStunt(stunt);
+    phase = 'stunt';
+    camGoal = 1;
+    hud.speedLines(false);
+    // A clean finale: nothing to answer any more, so the question comes down.
+    if (m.passed >= MEGA_PIECES) hud.setTopVisible(false, 0);
+    hud.hideBanner();
+    skiZ = entryZ;
   };
 
   // ---------- Tricks ----------
   const makeStunt = (id: TrickId, outcome: Outcome): Stunt => ({
     trick: id,
+    mega: false,
     outcome,
     t: 0,
     duration: trickDuration(id, outcome),
     events: trickEvents(id, outcome),
     next: 0,
     scale: 1,
+    length: TRICK_SPECS[id].length,
+    framing: trickFraming(id, outcome),
+    lipD: LAUNCHERS[TRICK_SPECS[id].launcher].lipD,
+    frameAt: (t, out) => void trickFrame(id, outcome, t, out),
+    rateAt: (t) => trickRate(id, outcome, t),
+    wordAt: () => ({ text: trickWord(id, outcome), good: outcome === 'clear' }),
   });
 
-  /** The camera frames this trick: its height range, and the lip it takes off from. */
-  const frameTrick = (id: TrickId, outcome: Outcome) => {
-    framing = trickFraming(id, outcome);
-    lipDist = LAUNCHERS[TRICK_SPECS[id].launcher].lipD;
+  /** The one long stunt of a Mega course that clears `passed` elements and wipes out on the next. */
+  const makeMegaStunt = (id: MegaId, passed: Passed): Stunt => ({
+    trick: null,
+    mega: true,
+    outcome: passed === MEGA_PIECES ? 'clear' : 'fail',
+    t: 0,
+    duration: megaDuration(id, passed),
+    events: megaEvents(id, passed),
+    next: 0,
+    scale: 1,
+    length: megaLength(id),
+    framing: megaFraming(id, passed),
+    lipD: Number.POSITIVE_INFINITY,
+    frameAt: (t, out) => void megaFrame(id, passed, t, out),
+    rateAt: (t) => megaRate(id, passed, t),
+    wordAt: (t) => megaWordAt(id, passed, t),
+    propsAt: (t) => megaPool.get(id).update(passed, t),
+  });
+
+  /** The camera frames this stunt: its height range, and the lip it takes off from. */
+  const frameStunt = (s: Stunt) => {
+    framing = s.framing;
+    lipDist = s.lipD;
     followTrick = true;
   };
 
   const startStunt = (outcome: Outcome) => {
     stunt = makeStunt(trick, outcome);
-    frameTrick(trick, outcome);
+    frameStunt(stunt);
     phase = 'stunt';
     camGoal = 1;
     hud.speedLines(false);
@@ -617,7 +878,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
       case 'cheer': {
         world.cheer();
         sfx.cheer();
-        if (s.outcome === 'clear') {
+        if (s.outcome === 'clear' && !s.mega) {
           const before = hud.tierShown;
           updateTier(true);
           awardPoints(focusScreen(1.6));
@@ -638,7 +899,13 @@ function run(session: GameSession, dev: DevOptions | null): void {
         break;
       }
       case 'word': {
-        hud.showWord(trickWord(s.trick, s.outcome), wordScreen(), s.outcome === 'clear');
+        const w = s.wordAt(e.at);
+        hud.showWord(w.text, wordScreen(), w.good);
+        break;
+      }
+      case 'fireworks': {
+        effects.fireworks(x, e.y, z);
+        sfx.firework();
         break;
       }
       default:
@@ -662,23 +929,55 @@ function run(session: GameSession, dev: DevOptions | null): void {
   };
 
   const finishStunt = (s: Stunt) => {
-    lastTrick = s.trick;
+    const m = mega;
+    if (s.trick) lastTrick = s.trick;
     followTrick = false;
     if (s.outcome === 'clear') {
       // Riding on from the end of the trick at the speed it left off.
-      landed++;
+      landed += m ? m.passed : 1;
       skiX = 0;
-      skiZ = entryZ - TRICK_SPECS[s.trick].length;
+      skiZ = entryZ - s.length;
       speed = ENTRY_SPEED - 2;
       stunt = null;
       if (pendingPoints > 0) awardPoints(focusScreen(1.6));
       phase = 'riding';
       camGoal = 0;
+      if (m) {
+        // All three elements: the finale, the fireworks and the bonus, then on to the next world.
+        score += MEGA_BONUS;
+        setScoreHud(true);
+        effects.fireworks(skiX, 3, skiZ);
+        sfx.firework();
+        sfx.bigCheer();
+        mega = null;
+        target = 'launcher';
+        hud.setMega(0, 0);
+        hud.setTopVisible(false, 0);
+        hud.showBanner('MEGA STUNT CLEARED!', `+${MEGA_BONUS}`, 'hit');
+        worldChangePending = true;
+        timers.clear();
+        const thisTurn = ++turn;
+        after(0.25, sfx.firework);
+        after(0.5, sfx.firework);
+        after(MEGA_CLEARED_BEAT, () => turn === thisTurn && changeWorld());
+        return;
+      }
       askNext();
       return;
     }
+    if (m) {
+      // A wipeout in a Mega Stunt: the question that was missed is the one shown, and the world
+      // changes once the player has tapped the green answer.
+      fact = m.missed;
+      timedOut = m.timedOut;
+      landed += m.passed;
+      mega = null;
+      target = 'launcher';
+      hud.setMega(0, 0);
+      worldChangePending = true;
+    }
     // A wipeout: the ski and the rider stay where they ended while the lifeguard comes.
-    trickFrame(s.trick, s.outcome, s.duration, failEnd);
+    s.frameAt(s.duration, failEnd);
     const reach = Math.max(failEnd.ski.d, failEnd.rider.mode === 'free' ? failEnd.rider.d : 0);
     respawnSkiD = reach + 5;
     respawnRiderD = failEnd.rider.d;
@@ -799,8 +1098,65 @@ function run(session: GameSession, dev: DevOptions | null): void {
     hud.hideBanner();
     speed = 0;
     camGoal = 0;
+    if (worldChangePending) {
+      changeWorld();
+      return;
+    }
     askNext();
   };
+
+  // ---------- A new world ----------
+  /** Builds the world `id` (the scenery, the sky and the water's colour) in place of this one. */
+  function setWorld(id: WorldId) {
+    if (id === worldId && world) return;
+    world.dispose();
+    worldId = id;
+    world = createWorld(scene, worldId);
+    water.setColor(world.water);
+  }
+
+  /**
+   * After a Mega Stunt: a blue wave sweeps up over the screen, the next world is built behind it,
+   * the wave sweeps off and the world's name shows, then the next question.
+   */
+  function changeWorld() {
+    worldChangePending = false;
+    timers.clear();
+    tapFlow.disarm();
+    stopSpeaking();
+    hud.hideBanner();
+    hud.hideWord();
+    const thisTurn = ++turn;
+    clockRunning = false;
+    phase = 'riding';
+    hud.wipe('cover');
+    after(WIPE_SECONDS, () => {
+      if (turn !== thisTurn) return;
+      hud.setTopVisible(false, 0);
+      hud.setMega(0, 0);
+      clearMegaProps();
+      launchers.hideAll();
+      launcher = null;
+      launcherPlaced = false;
+      effects.clear();
+      coins.forEach((c) => (c.visible = false));
+      boat.object.visible = false;
+      skis[1 - activeIndex].object.visible = false;
+      normals = 0;
+      setWorld(nextWorld(worldId));
+      hud.wipe('off');
+    });
+    after(2 * WIPE_SECONDS, () => {
+      if (turn !== thisTurn) return;
+      hud.wipe('idle');
+      hud.showWorldTitle(WORLD_NAMES[worldId]);
+    });
+    after(2 * WIPE_SECONDS + WORLD_TITLE_SECONDS, () => {
+      if (turn !== thisTurn) return;
+      hud.hideWorldTitle();
+      askNext();
+    });
+  }
 
   const beginEnding = (last: Fact | undefined) => {
     phase = 'ending';
@@ -976,7 +1332,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
   };
 
   /** Seconds of trick per second of real time: a tap fast-forwards, else the slow motion. */
-  const playRate = (s: Stunt) => (s.scale > 1 ? s.scale : trickRate(s.trick, s.outcome, s.t));
+  const playRate = (s: Stunt) => (s.scale > 1 ? s.scale : s.rateAt(s.t));
 
   /** Foam and spray from the nozzle while the ski is on the water. */
   const wakeEffects = (delta: number) => {
@@ -1015,8 +1371,11 @@ function run(session: GameSession, dev: DevOptions | null): void {
         const goal = Math.max(turboSpeed(remaining), Math.min(remaining / 0.3, TURBO_MAX));
         speed = easeToward(speed, goal, 8, delta);
         skiZ = Math.max(skiZ - speed * delta, entryZ);
-        if (skiZ <= entryZ + 1e-6)
-          startStunt(chosen >= 0 && options[chosen] === fact?.answer ? 'clear' : 'fail');
+        if (skiZ <= entryZ + 1e-6) {
+          if (target === 'course') startMegaStunt();
+          else if (target === 'gate') passGate(chosen >= 0 && options[chosen] === fact?.answer);
+          else startStunt(chosen >= 0 && options[chosen] === fact?.answer ? 'clear' : 'fail');
+        }
         break;
       }
       default:
@@ -1028,8 +1387,9 @@ function run(session: GameSession, dev: DevOptions | null): void {
       phase === 'riding' || phase === 'turbo' || phase === 'countdown' || phase === 'preview';
     if (phase === 'stunt' && stunt) {
       stepStunt(stunt, delta * playRate(stunt));
-      trickFrame(stunt.trick, stunt.outcome, stunt.t, frame);
+      stunt.frameAt(stunt.t, frame);
       applyFrame(frame, elapsed);
+      stunt.propsAt?.(stunt.t);
       speed = ENTRY_SPEED;
       if (stunt.t >= stunt.duration) finishStunt(stunt);
     } else if (phase === 'result') {
@@ -1116,6 +1476,8 @@ function run(session: GameSession, dev: DevOptions | null): void {
 
     // Idle motion of the launchers, the water and the world.
     launcher?.ambient(elapsed);
+    course?.ambient(elapsed);
+    gates.forEach((gate) => gate.object.visible && gate.ambient(elapsed));
     const ski = active();
     world.update(skiZ, camera.position, delta, elapsed);
     water.update(elapsed, skiX, skiZ);
@@ -1182,6 +1544,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     skis[1].object.visible = false;
     activeIndex = 0;
     skis[0].object.visible = true;
+    course?.reset();
   };
 
   function stepLab(delta: number, elapsed: number) {
@@ -1192,9 +1555,23 @@ function run(session: GameSession, dev: DevOptions | null): void {
       if ('trick' in lab) {
         trick = lab.trick;
         tier = TRICK_TIER[trick];
-        placeLauncher(0);
+        placeTarget(0);
         entryZ = LAB_ENTRY_Z;
         launcher?.object.position.set(0, 0, entryZ);
+      } else if ('mega' in lab) {
+        // A Mega lab shows the course in its own world.
+        setWorld(WORLD_ORDER.find((w) => WORLD_MEGA[w] === lab.mega) ?? 'lagoon');
+        mega = {
+          id: lab.mega,
+          passed: lab.passed,
+          asked: MEGA_PIECES,
+          ended: false,
+          timedOut: false,
+        };
+        target = 'course';
+        placeTarget(0);
+        entryZ = LAB_ENTRY_Z;
+        course?.object.position.set(0, 0, entryZ);
       } else {
         respawnSkiD = 14;
         respawnRiderD = 9;
@@ -1242,15 +1619,17 @@ function run(session: GameSession, dev: DevOptions | null): void {
       camGoal = 0;
       if (s.z <= entryZ) {
         s.phase = 'play';
-        s.stunt = makeStunt(lab.trick, labOutcome(lab));
-        frameTrick(lab.trick, labOutcome(lab));
+        s.stunt = labStunt(lab);
+        frameStunt(s.stunt);
+        course?.reset();
         camGoal = 1;
       }
     } else if (s.phase === 'play' && s.stunt) {
       stunt = s.stunt;
       stepStunt(s.stunt, delta * playRate(s.stunt));
-      trickFrame(s.stunt.trick, s.stunt.outcome, s.stunt.t, frame);
+      s.stunt.frameAt(s.stunt.t, frame);
       applyFrame(frame, elapsed);
+      s.stunt.propsAt?.(s.stunt.t);
       camGoal = 1;
       if (s.stunt.t >= s.stunt.duration) {
         s.phase = 'hold';
@@ -1268,7 +1647,9 @@ function run(session: GameSession, dev: DevOptions | null): void {
     wakeEffects(delta);
   }
 
-  const labOutcome = (l: Lab): Outcome => ('trick' in l ? l.outcome : 'clear');
+  /** The stunt a trick or Mega lab loops. */
+  const labStunt = (l: Exclude<Lab, { respawn: true }>): Stunt =>
+    'mega' in l ? makeMegaStunt(l.mega, l.passed) : makeStunt(l.trick, l.outcome);
 
   /** Starts the lab's boat loop: a fallen rider in the water and the lifeguard on the way. */
   function beginLabRespawn() {
@@ -1293,11 +1674,12 @@ function run(session: GameSession, dev: DevOptions | null): void {
       updateCameraTargets(0, true);
       return;
     }
-    const s = makeStunt(lab.trick, lab.outcome);
+    const s = labStunt(lab);
+    course?.reset();
     // Aim the camera first, so the comic word lands where the ski will be.
-    trickFrame(s.trick, s.outcome, Math.min(at, s.duration), frame);
+    s.frameAt(Math.min(at, s.duration), frame);
     applyFrame(frame, 2);
-    frameTrick(s.trick, s.outcome);
+    frameStunt(s);
     camW = camGoal = 1;
     layout();
     updateCameraTargets(0, true);
@@ -1309,8 +1691,9 @@ function run(session: GameSession, dev: DevOptions | null): void {
     }
     labState.stunt = s;
     stunt = null;
-    trickFrame(s.trick, s.outcome, s.t, frame);
+    s.frameAt(s.t, frame);
     applyFrame(frame, 2);
+    s.propsAt?.(s.t);
   }
 
   // ---------- Start ----------
@@ -1343,6 +1726,8 @@ function run(session: GameSession, dev: DevOptions | null): void {
     boat.dispose();
     dolphins.forEach((d) => d.dispose());
     launchers.dispose();
+    megaPool.dispose();
+    gates.forEach((gate) => gate.dispose());
     water.dispose();
     world.dispose();
     coinGeometry.dispose();

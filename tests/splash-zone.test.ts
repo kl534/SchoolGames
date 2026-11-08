@@ -481,10 +481,25 @@ describe('parseDev', () => {
       at: 3.5,
     });
     expect(parseDev('?lab=respawn&at=0.9')).toMatchObject({ lab: { respawn: true }, at: 0.9 });
+    expect(parseDev('?lab=whale-of-a-time:3&at=7.4')).toMatchObject({
+      lab: { mega: 'whale-of-a-time', passed: 3 },
+      at: 7.4,
+    });
+    expect(parseDev('?lab=harbour-havoc:0').lab).toEqual({ mega: 'harbour-havoc', passed: 0 });
+    expect(parseDev('?world=harbour').world).toBe('harbour');
+    expect(parseDev('?mega=1').mega).toBe(true);
   });
 
   it('has nothing set by default', () => {
-    expect(parseDev('')).toEqual({ tricks: [], streak: null, skis: null, lab: null, at: null });
+    expect(parseDev('')).toEqual({
+      tricks: [],
+      streak: null,
+      skis: null,
+      lab: null,
+      at: null,
+      world: null,
+      mega: false,
+    });
   });
 
   it('ignores malformed input', () => {
@@ -504,6 +519,17 @@ describe('parseDev', () => {
     expect(parseDev('?lab=backflip:crash').lab).toBeNull();
     expect(parseDev('?lab=nope:clear').lab).toBeNull();
     expect(parseDev('?lab=backflip:clear:0').lab).toBeNull();
+    expect(parseDev('?lab=whale-of-a-time').lab).toBeNull();
+    expect(parseDev('?lab=whale-of-a-time:4').lab).toBeNull();
+    expect(parseDev('?lab=whale-of-a-time:-1').lab).toBeNull();
+    expect(parseDev('?lab=whale-of-a-time:1.5').lab).toBeNull();
+    expect(parseDev('?lab=whale-of-a-time:clear').lab).toBeNull();
+    expect(parseDev('?lab=nope:2').lab).toBeNull();
+    expect(parseDev('?lab=harbour-havoc:2:1').lab).toBeNull();
+    expect(parseDev('?world=iceberg').world).toBeNull();
+    expect(parseDev('?world=').world).toBeNull();
+    expect(parseDev('?mega=0').mega).toBe(false);
+    expect(parseDev('?mega=yes').mega).toBe(false);
     expect(parseDev('?at=abc').at).toBeNull();
     expect(parseDev('?at=').at).toBeNull();
   });
