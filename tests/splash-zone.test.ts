@@ -489,6 +489,11 @@ describe('parseDev', () => {
     expect(parseDev('?world=harbour').world).toBe('harbour');
     expect(parseDev('?world=iceberg').world).toBe('iceberg');
     expect(parseDev('?world=volcano').world).toBe('volcano');
+    expect(parseDev('?world=reef').world).toBe('reef');
+    expect(parseDev('?lab=jaws-some-jump:1&at=4').lab).toEqual({
+      mega: 'jaws-some-jump',
+      passed: 1,
+    });
     expect(parseDev('?lab=geyser-blast:3&at=9').lab).toEqual({ mega: 'geyser-blast', passed: 3 });
     expect(parseDev('?lab=penguin-parade:2&at=4').lab).toEqual({
       mega: 'penguin-parade',

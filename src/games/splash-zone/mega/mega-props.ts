@@ -20,6 +20,7 @@ import { Kit, type Placed } from '../kit';
 import type { MegaId, Passed } from '../rules';
 import { buildGeyserBlastProps } from './geyser-blast-props';
 import { buildHarbourHavocProps } from './harbour-havoc-props';
+import { buildJawsSomeJumpProps } from './jaws-some-jump-props';
 import { buildPenguinParadeProps } from './penguin-parade-props';
 import { MEGA_SPECS, megaLength, megaLocate, megaOffsets } from './mega';
 import type { MegaBuilt } from './props-kit';
@@ -37,6 +38,7 @@ const BUILDERS: Record<MegaId, (kit: Kit) => [MegaBuilt, MegaBuilt, MegaBuilt]> 
   'harbour-havoc': buildHarbourHavocProps,
   'penguin-parade': buildPenguinParadeProps,
   'geyser-blast': buildGeyserBlastProps,
+  'jaws-some-jump': buildJawsSomeJumpProps,
 };
 
 function createMegaCourse(id: MegaId): MegaCourse {

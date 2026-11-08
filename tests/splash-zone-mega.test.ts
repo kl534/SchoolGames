@@ -73,6 +73,18 @@ import {
 } from '../src/games/splash-zone/mega/whale-of-a-time';
 import { spoutLevel, tailAngle } from '../src/games/splash-zone/mega/whale-of-a-time-props';
 import {
+  FETCH,
+  SHARK,
+  SHIP,
+  TANGLE as SAIL_TANGLE,
+  TUMBLE,
+  WAVE,
+  plankY,
+  sharkMouth,
+  sharkPose,
+  waveLevel,
+} from '../src/games/splash-zone/mega/jaws-some-jump';
+import {
   BONK,
   BOULDERS,
   CHUTE,
@@ -102,6 +114,7 @@ const WORLDS: [WorldId, string, MegaId][] = [
   ['harbour', 'Harbour City', 'harbour-havoc'],
   ['iceberg', 'Iceberg Bay', 'penguin-parade'],
   ['volcano', 'Volcano Island', 'geyser-blast'],
+  ['reef', 'Shark Reef', 'jaws-some-jump'],
 ];
 const FPS = 60;
 const DT = 1 / FPS;
@@ -132,7 +145,9 @@ describe('worlds and the Mega count', () => {
   });
 
   it('visits the worlds in order and loops round', () => {
+    expect(WORLD_ORDER).toEqual(['lagoon', 'harbour', 'iceberg', 'volcano', 'reef']);
     expect(WORLD_ORDER).toEqual(WORLDS.map(([id]) => id));
+    expect(nextWorld('reef')).toBe('lagoon');
     WORLDS.forEach(([id], i) => expect(nextWorld(id)).toBe(WORLDS[(i + 1) % WORLDS.length][0]));
     expect(nextWorld(WORLDS[WORLDS.length - 1][0])).toBe('lagoon');
     let world: WorldId = 'lagoon';
@@ -161,6 +176,11 @@ describe('worlds and the Mega count', () => {
       skyTop: 0xff9a5c,
       skyBottom: 0xffd38a,
       water: 0x1aa39a,
+    });
+    expect(PALETTES.reef).toMatchObject({
+      skyTop: 0xff7a59,
+      skyBottom: 0xffd1a1,
+      water: 0x1f8fb8,
     });
     // Every world looks different at a glance: its own sky and its own water.
     const palettes = WORLD_ORDER.map((w) => PALETTES[w]);
@@ -1043,6 +1063,114 @@ describe('Geyser Blast specifics', () => {
     expect(end.rider.props.seaweed).toBe(true);
     // The ski comes down on its own, well before the rider does.
     expect(frameAt(id, 2, start + CHUTE.shotAt + 1.6).ski.y).toBeCloseTo(0, 1);
+  });
+});
+
+// ---------- Jaws-Some Jump ----------
+
+describe('Jaws-Some Jump specifics', () => {
+  const id = 'jaws-some-jump';
+  const [, j2, j3] = megaOffsets(id);
+
+  it('jumps the shark well above its back and its dorsal fin', () => {
+    const d1 = MEGA_SPECS[id].elements[0].clear.duration;
+    for (let t = 0; t <= d1; t += DT) {
+      const f = frameAt(id, 1, t);
+      if (f.ski.d > SHARK.nose - 1 && f.ski.d < SHARK.centerD + SHARK.half + 1) {
+        expect(f.ski.y).toBeGreaterThan(SHARK.backY + 1);
+      }
+      if (Math.abs(f.ski.d - SHARK.finD) < 2) expect(f.ski.y).toBeGreaterThan(SHARK.finTop + 1);
+    }
+    expect(sharkPose('clear', 1.2)).toEqual({ lift: 0, pitch: 0, yaw: 0, roll: 0 });
+  });
+
+  it('is caught in the shark jaws, shaken like a fetch toy and tossed away', () => {
+    const hold = (FETCH.catchAt + FETCH.tossAt) / 2;
+    const f = frameAt(id, 0, hold);
+    const mouth = sharkMouth('fail', hold);
+    expect(Math.abs(f.ski.d - mouth.d - 0.4)).toBeLessThan(1e-6);
+    expect(Math.abs(f.ski.y - mouth.y)).toBeLessThan(1e-6);
+    expect(f.ski.y).toBeGreaterThan(2.5);
+    expect(sharkPose('fail', hold).lift).toBeGreaterThan(1);
+    const end = frameAt(id, 0, megaDuration(id, 0));
+    expect(end.ski.d).toBeGreaterThan(FETCH.skiLand[0]);
+    expect(Math.sign(end.ski.s)).toBe(-Math.sign(end.rider.s));
+    expect(end.rider).toMatchObject({ mode: 'free', pose: 'float' });
+    // The shark settles back into the water before the end.
+    expect(sharkPose('fail', megaDuration(id, 0)).lift).toBe(0);
+  });
+
+  it('carves through the barrel of the wave, which builds up first', () => {
+    const plan = megaSegments(id, 2);
+    const start = plan[1].start;
+    let inside = 0;
+    for (let t = 0; t < plan[1].duration; t += DT) {
+      const f = frameAt(id, 2, start + t);
+      expect(f.ski.wet).toBe(true);
+      if (f.ski.d - j2 > WAVE.from && f.ski.d - j2 < WAVE.to) {
+        inside++;
+        expect(Math.abs(f.ski.s - WAVE.axisS)).toBeLessThan(WAVE.radius - 1.5);
+      }
+    }
+    expect(inside).toBeGreaterThan(1.5 * FPS);
+    expect(waveLevel('clear', 0)).toBeLessThan(0.3);
+    expect(waveLevel('clear', 1)).toBeCloseTo(1, 6);
+  });
+
+  it('is tumbled by the curl coming down mid-barrel', () => {
+    const start = megaSegments(id, 1)[1].start;
+    expect(waveLevel('fail', TUMBLE.at - 0.05)).toBeGreaterThan(0.9);
+    expect(waveLevel('fail', TUMBLE.at + 0.6)).toBeLessThan(0.3);
+    const before = frameAt(id, 1, start + TUMBLE.at - 0.05);
+    expect(before.rider.mode).toBe('seated');
+    expect(before.ski.d - j2).toBeGreaterThan(WAVE.from);
+    const end = frameAt(id, 1, megaDuration(id, 1));
+    expect(end.rider).toMatchObject({ mode: 'free', pose: 'float' });
+    expect(end.ski.roll).toBeCloseTo(2 * TAU + Math.PI, 6);
+  });
+
+  it('flies through the hole in each sail and does a double backflip with three fireworks', () => {
+    const plan = megaSegments(id, 3);
+    const start = plan[2].start;
+    expect(plankY(SHIP.lip)).toBeCloseTo(SHIP.lipY, 6);
+    for (const sail of SHIP.sails) {
+      // The moment the ski crosses the sail's plane, the hole's middle is half a unit or so over it.
+      let best = Number.POSITIVE_INFINITY;
+      let height = 0;
+      for (let t = 0; t < plan[2].duration; t += 1 / 240) {
+        const g = megaFrame(id, 3, start + t);
+        const away = Math.abs(g.ski.d - j3 - sail.d);
+        if (away < best) {
+          best = away;
+          height = g.ski.y;
+        }
+      }
+      expect(Math.abs(height + 0.7 - sail.y), `hole of the sail at ${sail.d}`).toBeLessThan(
+        SHIP.holeRadius - 0.9,
+      );
+    }
+    const end = frameAt(id, 3, megaDuration(id, 3));
+    expect(end.ski.pitch).toBeCloseTo(2 * TAU, 6);
+    const fireworks = megaEvents(id, 3).filter((e) => e.type === 'fireworks');
+    expect(fireworks).toHaveLength(3);
+    for (const e of fireworks) expect(e.at).toBeGreaterThan(start + 2.0);
+    for (const passed of [0, 1, 2] as const) {
+      expect(megaEvents(id, passed).some((e) => e.type === 'fireworks')).toBe(false);
+    }
+  });
+
+  it('flies short into the first sail and hangs there tangled before it all drops', () => {
+    const start = megaSegments(id, 2)[2].start;
+    const hit = frameAt(id, 2, start + SAIL_TANGLE.hitAt);
+    expect(Math.abs(hit.ski.d - j3 - SAIL_TANGLE.hit[0])).toBeLessThan(0.1);
+    // Below the hole, so it meets the canvas.
+    expect(hit.ski.y).toBeLessThan(SHIP.sails[0].y - SHIP.holeRadius);
+    const hang = frameAt(id, 2, start + (SAIL_TANGLE.hitAt + SAIL_TANGLE.dropAt) / 2);
+    expect(hang.rider).toMatchObject({ mode: 'free', pose: 'flail', face: 'scared' });
+    expect(hang.rider.y).toBeGreaterThan(4);
+    const end = frameAt(id, 2, megaDuration(id, 2));
+    expect(end.rider).toMatchObject({ mode: 'free', pose: 'float' });
+    expect(end.ski.y).toBeLessThan(0.6);
   });
 });
 

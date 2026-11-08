@@ -24,6 +24,7 @@ import type { MegaId, Passed } from '../rules';
 import { SLOW_RAMP, SLOW_RATE, SLOW_SPAN, focusOf } from '../tricks';
 import { GEYSER_BLAST } from './geyser-blast';
 import { HARBOUR_HAVOC } from './harbour-havoc';
+import { JAWS_SOME_JUMP } from './jaws-some-jump';
 import { PENGUIN_PARADE } from './penguin-parade';
 import { WHALE_OF_A_TIME } from './whale-of-a-time';
 
@@ -53,6 +54,7 @@ export const MEGA_SPECS: Record<MegaId, MegaSpec> = {
   'harbour-havoc': HARBOUR_HAVOC,
   'penguin-parade': PENGUIN_PARADE,
   'geyser-blast': GEYSER_BLAST,
+  'jaws-some-jump': JAWS_SOME_JUMP,
 };
 
 const specOf = (id: MegaId) => MEGA_SPECS[id];
