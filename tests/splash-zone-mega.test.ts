@@ -72,8 +72,25 @@ import {
   whaleY,
 } from '../src/games/splash-zone/mega/whale-of-a-time';
 import { spoutLevel, tailAngle } from '../src/games/splash-zone/mega/whale-of-a-time-props';
+import {
+  ARCH,
+  BERG,
+  BUMP,
+  FLOE,
+  FREEZE,
+  SKID,
+  bergY,
+  floeY,
+} from '../src/games/splash-zone/mega/penguin-parade';
 
 const PASSED: Passed[] = [0, 1, 2, 3];
+
+/** The worlds in the order the run visits them: id, name and the Mega each one holds. */
+const WORLDS: [WorldId, string, MegaId][] = [
+  ['lagoon', 'Lagoon', 'whale-of-a-time'],
+  ['harbour', 'Harbour City', 'harbour-havoc'],
+  ['iceberg', 'Iceberg Bay', 'penguin-parade'],
+];
 const FPS = 60;
 const DT = 1 / FPS;
 
@@ -103,27 +120,35 @@ describe('worlds and the Mega count', () => {
   });
 
   it('visits the worlds in order and loops round', () => {
-    expect(WORLD_ORDER).toEqual(['lagoon', 'harbour']);
-    expect(nextWorld('lagoon')).toBe('harbour');
-    expect(nextWorld('harbour')).toBe('lagoon');
+    expect(WORLD_ORDER).toEqual(WORLDS.map(([id]) => id));
+    WORLDS.forEach(([id], i) => expect(nextWorld(id)).toBe(WORLDS[(i + 1) % WORLDS.length][0]));
+    expect(nextWorld(WORLDS[WORLDS.length - 1][0])).toBe('lagoon');
     let world: WorldId = 'lagoon';
     const seen: WorldId[] = [];
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 2 * WORLDS.length; i++) {
       seen.push(world);
       world = nextWorld(world);
     }
-    expect(seen).toEqual(['lagoon', 'harbour', 'lagoon', 'harbour', 'lagoon', 'harbour']);
+    expect(seen).toEqual([...WORLD_ORDER, ...WORLD_ORDER]);
   });
 
   it('gives every world a name, a palette and its own Mega', () => {
-    expect(WORLD_NAMES).toEqual({ lagoon: 'Lagoon', harbour: 'Harbour City' });
-    expect(WORLD_MEGA).toEqual({ lagoon: 'whale-of-a-time', harbour: 'harbour-havoc' });
+    expect(WORLD_NAMES).toEqual(Object.fromEntries(WORLDS.map(([id, name]) => [id, name])));
+    expect(WORLD_MEGA).toEqual(Object.fromEntries(WORLDS.map(([id, , mega]) => [id, mega])));
     for (const world of WORLD_ORDER) {
       expect(PALETTES[world]).toBeDefined();
       expect(MEGA_SPECS[WORLD_MEGA[world]]).toBeDefined();
     }
     expect(PALETTES.harbour).toMatchObject({ skyTop: 0x7ab8e8, water: 0x2a8fb0 });
-    expect(PALETTES.harbour.water).not.toBe(PALETTES.lagoon.water);
+    expect(PALETTES.iceberg).toMatchObject({
+      skyTop: 0xbfe6ff,
+      skyBottom: 0xffffff,
+      water: 0x3aa0c8,
+    });
+    // Every world looks different at a glance: its own sky and its own water.
+    const palettes = WORLD_ORDER.map((w) => PALETTES[w]);
+    expect(new Set(palettes.map((p) => p.water)).size).toBe(WORLD_ORDER.length);
+    expect(new Set(palettes.map((p) => p.skyTop)).size).toBe(WORLD_ORDER.length);
     expect(new Set(Object.values(WORLD_MEGA)).size).toBe(WORLD_ORDER.length);
     expect(Object.keys(MEGA_SPECS).sort()).toEqual([...MEGA_IDS].sort());
   });
@@ -783,6 +808,122 @@ describe('Harbour Havoc specifics', () => {
     expect(highest).toBeLessThan(6);
     const end = frameAt('harbour-havoc', 2, megaDuration('harbour-havoc', 2));
     expect(end.rider.mode).toBe('free');
+  });
+});
+
+// ---------- Penguin Parade ----------
+
+describe('Penguin Parade specifics', () => {
+  const id = 'penguin-parade';
+  const [, p2, p3] = megaOffsets(id);
+
+  it('hops the row of penguins with room to spare', () => {
+    const d1 = MEGA_SPECS[id].elements[0].clear.duration;
+    for (let t = 0; t <= d1; t += DT) {
+      const f = frameAt(id, 1, t);
+      expect(f.ski.y).toBeGreaterThanOrEqual(floeY(f.ski.d) - 1e-6);
+      for (const d of FLOE.penguins) {
+        if (Math.abs(f.ski.d - d) < 1.2) {
+          expect(f.ski.y, `over the penguin at ${d}`).toBeGreaterThan(
+            FLOE.deckY + FLOE.penguinHeight + 0.3,
+          );
+        }
+      }
+    }
+    // They stand on the middle line, one after another along the floe.
+    expect(FLOE.penguins).toHaveLength(5);
+    for (const d of FLOE.penguins) expect(d).toBeGreaterThan(FLOE.lip);
+  });
+
+  it('is bumped off by the penguins: the ski one way, the rider the other', () => {
+    const hit = frameAt(id, 0, BUMP.at + 0.05);
+    expect(hit.ski.y).toBeCloseTo(FLOE.deckY, 1);
+    expect(Math.abs(hit.ski.d - FLOE.penguins[0])).toBeLessThan(1.5);
+    const end = frameAt(id, 0, megaDuration(id, 0));
+    expect(end.rider.mode).toBe('free');
+    expect(Math.sign(end.rider.s)).toBe(-Math.sign(end.ski.s));
+    expect(Math.abs(end.ski.s)).toBeGreaterThan(FLOE.halfWidth);
+  });
+
+  it('climbs the iceberg and slides down its chute on the ice', () => {
+    const plan = megaSegments(id, 2);
+    const start = plan[1].start;
+    let highest = 0;
+    let sliding = 0;
+    for (let t = 0; t < plan[1].duration; t += DT) {
+      const f = frameAt(id, 2, start + t);
+      const d = f.ski.d - p2;
+      if (d > BERG.foot + 0.5 && d < BERG.chuteEnd - 0.1) {
+        sliding++;
+        expect(f.ski.y).toBeCloseTo(bergY(d), 6);
+        expect(f.ski.wet).toBe(false);
+        highest = Math.max(highest, f.ski.y);
+      }
+    }
+    expect(highest).toBeCloseTo(BERG.summitY, 1);
+    expect(sliding).toBeGreaterThan(1.8 * FPS);
+  });
+
+  it('skids off the chute and ploughs into the snow bank, throwing the rider on', () => {
+    const start = megaSegments(id, 1)[1].start;
+    const hit = frameAt(id, 1, start + SKID.hitAt);
+    expect(Math.abs(hit.ski.d - p2 - BERG.bank.d)).toBeLessThan(1.2);
+    expect(Math.abs(hit.ski.s - BERG.bank.s)).toBeLessThan(1.2);
+    const end = frameAt(id, 1, megaDuration(id, 1));
+    expect(end.rider.mode).toBe('free');
+    expect(end.rider.d).toBeGreaterThan(hit.ski.d + 3);
+    expect(end.ski.y).toBeLessThan(0.6);
+  });
+
+  it('spins twice through the opening of the arch, which the ski clears', () => {
+    const plan = megaSegments(id, 3);
+    const start = plan[2].start;
+    let through = 0;
+    for (let t = 0; t < plan[2].duration; t += DT) {
+      const f = frameAt(id, 3, start + t);
+      if (Math.abs(f.ski.d - p3 - ARCH.d) < 1.5) {
+        through++;
+        expect(f.ski.y).toBeGreaterThan(0.8);
+        expect(f.ski.y + 1.7).toBeLessThan(ARCH.cy + ARCH.radius);
+        expect(Math.abs(f.ski.s)).toBeLessThan(ARCH.radius - 1.5);
+      }
+    }
+    expect(through).toBeGreaterThan(5);
+    const end = frameAt(id, 3, megaDuration(id, 3));
+    expect(end.ski.roll).toBeCloseTo(2 * TAU, 6);
+    expect(megaEvents(id, 3).some((e) => e.type === 'confetti')).toBe(true);
+  });
+
+  it('freezes the rider into an ice cube under the arch, who then floats on his own', () => {
+    const start = megaSegments(id, 2)[2].start;
+    const before = frameAt(id, 2, start + FREEZE.at - 0.1);
+    expect(before.rider.mode).toBe('seated');
+    const frozen = frameAt(id, 2, start + FREEZE.at + FREEZE.hold - 0.05);
+    expect(frozen.rider.mode).toBe('seated');
+    expect(frozen.rider.pose).toBe('flail');
+    expect(Math.abs(frozen.ski.d - p3 - ARCH.d)).toBeLessThan(5);
+    const end = frameAt(id, 2, megaDuration(id, 2));
+    expect(end.rider).toMatchObject({ mode: 'free', pose: 'float', face: 'scared' });
+    const pool = createMegaCoursePool();
+    const course = pool.get(id);
+    course.update(2, megaSegments(id, 2)[2].start + FREEZE.at - 0.2);
+    const cubes = () => {
+      let shown = 0;
+      course.object.traverse((o) => {
+        if (
+          o.visible &&
+          o.type === 'Group' &&
+          o.children.length === 1 &&
+          o.parent?.type === 'Group'
+        )
+          shown++;
+      });
+      return shown;
+    };
+    const idle = cubes();
+    course.update(2, megaSegments(id, 2)[2].start + FREEZE.at + 0.5);
+    expect(cubes()).toBeGreaterThan(idle);
+    pool.dispose();
   });
 });
 

@@ -82,6 +82,7 @@ export function launcherIcon(kind: Goal): Node {
   if (kind === 'wave') return document.createTextNode('🌊');
   if (kind === 'whale-of-a-time') return document.createTextNode('🐳');
   if (kind === 'harbour-havoc') return document.createTextNode('🌉');
+  if (kind === 'penguin-parade') return document.createTextNode('🐧');
   const { svg, add } = svgIcon('0 0 26 26');
   if (kind === 'gate') {
     // Two striped buoys and the banner arch between them.

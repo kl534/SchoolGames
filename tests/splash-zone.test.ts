@@ -487,6 +487,11 @@ describe('parseDev', () => {
     });
     expect(parseDev('?lab=harbour-havoc:0').lab).toEqual({ mega: 'harbour-havoc', passed: 0 });
     expect(parseDev('?world=harbour').world).toBe('harbour');
+    expect(parseDev('?world=iceberg').world).toBe('iceberg');
+    expect(parseDev('?lab=penguin-parade:2&at=4').lab).toEqual({
+      mega: 'penguin-parade',
+      passed: 2,
+    });
     expect(parseDev('?mega=1').mega).toBe(true);
   });
 
@@ -526,8 +531,9 @@ describe('parseDev', () => {
     expect(parseDev('?lab=whale-of-a-time:clear').lab).toBeNull();
     expect(parseDev('?lab=nope:2').lab).toBeNull();
     expect(parseDev('?lab=harbour-havoc:2:1').lab).toBeNull();
-    expect(parseDev('?world=iceberg').world).toBeNull();
+    expect(parseDev('?world=atlantis').world).toBeNull();
     expect(parseDev('?world=').world).toBeNull();
+    expect(parseDev('?lab=penguin-parade:4').lab).toBeNull();
     expect(parseDev('?mega=0').mega).toBe(false);
     expect(parseDev('?mega=yes').mega).toBe(false);
     expect(parseDev('?at=abc').at).toBeNull();

@@ -19,6 +19,7 @@ import { TAU } from '../anim';
 import { Kit, type Placed } from '../kit';
 import type { MegaId, Passed } from '../rules';
 import { buildHarbourHavocProps } from './harbour-havoc-props';
+import { buildPenguinParadeProps } from './penguin-parade-props';
 import { MEGA_SPECS, megaLength, megaLocate, megaOffsets } from './mega';
 import type { MegaBuilt } from './props-kit';
 import { buildWhaleProps } from './whale-of-a-time-props';
@@ -33,6 +34,7 @@ export interface MegaCourse extends Placed {
 const BUILDERS: Record<MegaId, (kit: Kit) => [MegaBuilt, MegaBuilt, MegaBuilt]> = {
   'whale-of-a-time': buildWhaleProps,
   'harbour-havoc': buildHarbourHavocProps,
+  'penguin-parade': buildPenguinParadeProps,
 };
 
 function createMegaCourse(id: MegaId): MegaCourse {

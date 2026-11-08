@@ -36,10 +36,11 @@ import {
   SphereGeometry,
   Vector3,
 } from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { swell } from './anim';
 import { createDolphin, type Dolphin } from './critters';
 import type { WorldId } from './rules';
+import * as scenery from './scenery';
+import { hash, merge, part } from './scenery';
 
 export type WorldTheme = WorldId;
 
@@ -51,6 +52,8 @@ export interface WorldPalette {
   fog: number;
   fogNear: number;
   fogFar: number;
+  /** The daylight: sky and ground tints of the hemisphere light, the sun's colour and strength. */
+  light?: { sky: number; ground: number; sun: number; sunPower: number };
 }
 
 export const PALETTES: Record<WorldTheme, WorldPalette> = {
@@ -71,6 +74,16 @@ export const PALETTES: Record<WorldTheme, WorldPalette> = {
     fog: 0xcfe3f1,
     fogNear: 90,
     fogFar: 200,
+  },
+  iceberg: {
+    skyTop: 0xbfe6ff,
+    skyBottom: 0xffffff,
+    water: 0x3aa0c8,
+    sand: 0xf4fbff,
+    fog: 0xeaf6ff,
+    fogNear: 80,
+    fogFar: 190,
+    light: { sky: 0xeaf6ff, ground: 0x7fb4d0, sun: 0xffffff, sunPower: 2.1 },
   },
 };
 
@@ -99,11 +112,6 @@ export interface World {
   dispose(): void;
 }
 
-const hash = (n: number) => {
-  const s = Math.sin(n * 127.1 + 311.7) * 43758.5453;
-  return s - Math.floor(s);
-};
-
 /** One chunk of scenery covers this much of the course (u). */
 const CHUNK = 60;
 /** Chunks kept alive at once: some behind the ski, the rest ahead out to the fog. */
@@ -112,57 +120,9 @@ const SLOTS = 6;
 const PIER_EVERY = 2;
 const CROWD = 12;
 
-const matrix = new Matrix4();
-const quaternion = new Quaternion();
 const euler = new Euler();
 const scaleVec = new Vector3();
 const positionVec = new Vector3();
-
-/** A geometry moved, turned and scaled, painted a single colour (as vertex colours). */
-function part(
-  geometry: BufferGeometry,
-  hex: number,
-  x = 0,
-  y = 0,
-  z = 0,
-  rx = 0,
-  ry = 0,
-  rz = 0,
-  sx = 1,
-  sy = 1,
-  sz = 1,
-): BufferGeometry {
-  quaternion.setFromEuler(euler.set(rx, ry, rz));
-  matrix.compose(positionVec.set(x, y, z), quaternion, scaleVec.set(sx, sy, sz));
-  geometry.applyMatrix4(matrix);
-  const color = new Color(hex);
-  const count = geometry.getAttribute('position').count;
-  const colors = new Float32Array(count * 3);
-  for (let i = 0; i < count; i++) {
-    colors[i * 3] = color.r;
-    colors[i * 3 + 1] = color.g;
-    colors[i * 3 + 2] = color.b;
-  }
-  geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
-  return geometry;
-}
-
-/** Merges painted parts into one geometry (so a whole palm tree is a single draw call). */
-function merge(parts: BufferGeometry[]): BufferGeometry {
-  // Same attributes everywhere: drop anything the shapes do not all share.
-  const merged = mergeGeometries(
-    parts.map((p) => {
-      const g = p.index ? p.toNonIndexed() : p;
-      for (const name of Object.keys(g.attributes)) {
-        if (!['position', 'normal', 'color'].includes(name)) g.deleteAttribute(name);
-      }
-      return g;
-    }),
-    false,
-  );
-  parts.forEach((p) => p.dispose());
-  return merged;
-}
 
 function skyGeometry(palette: WorldPalette): BufferGeometry {
   // A dome painted with vertex colours: top colour overhead, bottom colour at the horizon.
@@ -223,9 +183,15 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
   dome.frustumCulled = false;
   root.add(dome);
   const lights = new Group();
-  lights.add(new HemisphereLight(0xdcf4ff, 0x4aa7b0, 1.7));
+  const daylight = palette.light ?? {
+    sky: 0xdcf4ff,
+    ground: 0x4aa7b0,
+    sun: 0xfff2d8,
+    sunPower: 2.4,
+  };
+  lights.add(new HemisphereLight(daylight.sky, daylight.ground, 1.7));
   lights.add(new AmbientLight(0xffffff, 0.45));
-  const sun = new DirectionalLight(0xfff2d8, 2.4);
+  const sun = new DirectionalLight(daylight.sun, daylight.sunPower);
   sun.position.set(-14, 26, 10);
   lights.add(sun);
   root.add(lights);
@@ -434,12 +400,40 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
     return track(merge(parts));
   };
 
-  const harbour = theme === 'harbour';
   const palmGeometry = makePalm();
-  const islandGeometry = harbour ? makeDock() : makeSandIsland();
-  const boatGeometry = harbour ? makeTug() : makeBoat();
-  const lighthouseGeometry = harbour ? makeCrane() : makeLighthouse();
-  const skylineGeometries = harbour ? [makeSkyline(1), makeSkyline(2)] : [];
+  /** What each world puts in the same places: islands, boats, a landmark and far-off strips. */
+  const set = (() => {
+    switch (theme) {
+      case 'harbour':
+        return {
+          island: makeDock(),
+          boat: makeTug(),
+          landmark: makeCrane(),
+          strips: [makeSkyline(1), makeSkyline(2)],
+          palms: false,
+        };
+      case 'iceberg':
+        return {
+          island: track(scenery.makeIceberg()),
+          boat: track(scenery.makeIceFloe()),
+          landmark: track(scenery.makeIceSpires()),
+          strips: [track(scenery.makeSnowPeaks(1)), track(scenery.makeSnowPeaks(2))],
+          palms: false,
+        };
+      default:
+        return {
+          island: makeSandIsland(),
+          boat: makeBoat(),
+          landmark: makeLighthouse(),
+          strips: [] as BufferGeometry[],
+          palms: true,
+        };
+    }
+  })();
+  const islandGeometry = set.island;
+  const boatGeometry = set.boat;
+  const lighthouseGeometry = set.landmark;
+  const skylineGeometries = set.strips;
   const emptyGeometry = track(new BufferGeometry());
   const pierGeometry = makePier();
   const personBody = track(new CapsuleGeometry(0.2, 0.45, 4, 8));
@@ -457,7 +451,7 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
     const makeIslandGroup = () => {
       const g = new Group();
       g.add(new Mesh(islandGeometry, sceneryMaterial));
-      for (const [x, z] of harbour
+      for (const [x, z] of !set.palms
         ? []
         : [
             [-2.0, 1.2],
@@ -481,7 +475,7 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
     boats.forEach((b) => group.add(b));
     const makeStrip = (side: number) => {
       const strip = new Mesh(skylineGeometries[(s + side) % 2] ?? emptyGeometry, sceneryMaterial);
-      strip.visible = harbour;
+      strip.visible = skylineGeometries.length > 0;
       strip.rotation.y = side === 0 ? Math.PI : 0;
       strip.frustumCulled = false;
       group.add(strip);
@@ -554,7 +548,7 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
       boat.rotation.y = h(20 + i) * 6.28;
       slot.boatBase[i] = boat.rotation.y;
     });
-    if (harbour) {
+    if (skylineGeometries.length > 0) {
       slot.skyline[0].position.set(-(84 + h(30) * 8), 0, 0);
       slot.skyline[1].position.set(84 + h(31) * 8, 0, 0);
     }
