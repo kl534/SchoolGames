@@ -10,8 +10,15 @@ import {
   createPose,
   fovFor,
   playBand,
-  riseFor,
+  bandFraction,
+  framingMid,
+  stuntDistance,
   stuntPose,
+  CAM_AZIMUTH,
+  CAM_EYE,
+  LOOK_LAG,
+  STUNT_MAX_DIST,
+  STUNT_MIN_DIST,
 } from '../src/games/splash-zone/layout';
 import {
   BASE_POINTS,
@@ -49,6 +56,8 @@ import {
   type Tier,
   type TrickId,
 } from '../src/games/splash-zone/rules';
+import { LAUNCHERS } from '../src/games/splash-zone/anim';
+import { TRICK_SPECS, trickFraming } from '../src/games/splash-zone/tricks';
 import { VOICE_LINES } from '../src/games/splash-zone/voice';
 import { runs } from './helpers/full';
 
@@ -238,7 +247,7 @@ const SCREENS: [number, number][] = [
 /** The screen row of a world point for the chase camera resting behind a ski at the origin. */
 function chaseRow(width: number, height: number, x: number, y: number, z: number): number {
   const camera = new PerspectiveCamera(fovFor(width / height), width / height, 0.3, 400);
-  camera.setViewOffset(width, height, 0, -bandShift(width, height), width, height);
+  camera.setViewOffset(width, height, 0, bandShift(width, height), width, height);
   const pose = chasePose(0, 0, 0);
   camera.position.set(pose.x, pose.y, pose.z);
   camera.lookAt(pose.lookX, pose.lookY, pose.lookZ);
@@ -296,13 +305,25 @@ describe('layout', () => {
     }
   });
 
-  it('the stunt camera swings out to the right and blends smoothly from the chase', () => {
+  it('the stunt camera is a three-quarter side view on the right, nearly level', () => {
+    const pose = stuntPose(1, -20, 3, 15);
+    expect(pose.lookX).toBe(1);
+    expect(pose.lookZ).toBe(-20);
+    expect(pose.lookY).toBe(3);
+    expect(pose.y - pose.lookY).toBeCloseTo(CAM_EYE, 9);
+    // 70 degrees off the travel axis, to the right and a little behind.
+    const dx = pose.x - pose.lookX;
+    const dz = pose.z - pose.lookZ;
+    expect(dx).toBeGreaterThan(0);
+    expect(dz).toBeGreaterThan(0);
+    expect(Math.hypot(dx, dz)).toBeCloseTo(15, 9);
+    expect((Math.atan2(dx, dz) * 180) / Math.PI).toBeCloseTo(70, 6);
+    expect(CAM_AZIMUTH).toBeCloseTo((70 * Math.PI) / 180, 9);
+  });
+
+  it('blends smoothly from the chase pose into the stunt pose', () => {
     const chase = chasePose(0, 0, 0);
-    const stunt = stuntPose(0, 2, -20, 0);
-    expect(stunt.x).toBeGreaterThan(5);
-    expect(stunt.z).toBeGreaterThan(stunt.lookZ);
-    expect(stunt.lookX).toBe(0);
-    expect(stunt.lookZ).toBe(-20);
+    const stunt = stuntPose(0, -20, 2, 15);
     const start = blendCam(chase, stunt, 0, createPose());
     const end = blendCam(chase, stunt, 1, createPose());
     expect(start.x).toBeCloseTo(chase.x, 9);
@@ -313,11 +334,67 @@ describe('layout', () => {
     expect(mid.x).toBeLessThan(stunt.x);
   });
 
-  it('riseFor lifts the camera only for high flights, never beyond the limit', () => {
-    expect(riseFor(2)).toBe(0);
-    expect(riseFor(9.2)).toBeGreaterThan(0);
-    expect(riseFor(100, 3)).toBe(3);
-    expect(riseFor(Number.NaN)).toBe(0);
+  it('taller tricks stand further back, within limits', () => {
+    const fov = fovFor(844 / 390);
+    const fraction = bandFraction(844, 390);
+    const wave = stuntDistance(trickFraming('wave-hop', 'clear'), fov, fraction);
+    const kicker = stuntDistance(trickFraming('backflip', 'clear'), fov, fraction);
+    const mega = stuntDistance(trickFraming('double-backflip', 'clear'), fov, fraction);
+    expect(wave).toBeLessThan(kicker);
+    expect(kicker).toBeLessThan(mega);
+    for (const id of TRICK_IDS) {
+      for (const outcome of ['clear', 'fail'] as const) {
+        const d = stuntDistance(trickFraming(id, outcome), fov, fraction);
+        expect(d).toBeGreaterThanOrEqual(STUNT_MIN_DIST);
+        expect(d).toBeLessThanOrEqual(STUNT_MAX_DIST);
+      }
+    }
+    expect(framingMid({ peak: 8, low: -2 })).toBe(3);
+  });
+
+  it('every trick fits its arc in the band, with the ski big enough and the lip in frame', () => {
+    for (const [w, h] of [
+      [844, 390],
+      [390, 844],
+      [1024, 768],
+    ] as const) {
+      const band = playBand(w, h);
+      const bandH = band.bottom - band.top;
+      const aspect = w / h;
+      const fov = fovFor(aspect);
+      for (const id of TRICK_IDS) {
+        for (const outcome of ['clear', 'fail'] as const) {
+          const framing = trickFraming(id, outcome);
+          const dist = stuntDistance(framing, fov, bandFraction(w, h));
+          const mid = framingMid(framing);
+          const lip = LAUNCHERS[TRICK_SPECS[id].launcher];
+          const camera = new PerspectiveCamera(fov, aspect, 0.3, 400);
+          camera.setViewOffset(w, h, 0, bandShift(w, h), w, h);
+          // At take-off: the camera looks at the lip, with nothing in front of it.
+          const pose = stuntPose(0, -lip.lipD, mid, dist);
+          camera.position.set(pose.x, pose.y, pose.z);
+          camera.lookAt(pose.lookX, pose.lookY, pose.lookZ);
+          camera.updateMatrixWorld();
+          const row = (y: number, z = -lip.lipD) =>
+            ((1 - new Vector3(0, y, z).project(camera).y) / 2) * h;
+          // The top and bottom of the action are inside the band.
+          const top = row(framing.peak);
+          const bottom = row(framing.low);
+          expect(top).toBeGreaterThanOrEqual(band.top - 1);
+          expect(bottom).toBeLessThanOrEqual(band.bottom + 1);
+          // The lip is in frame, at the right height on screen.
+          const lipRow = row(lip.lipY);
+          expect(lipRow).toBeGreaterThan(band.top);
+          expect(lipRow).toBeLessThan(band.bottom);
+          // The ski and its seated rider (1.7 u tall) are a good part of the band's height.
+          const pixelsPerUnit = h / (2 * dist * Math.tan((fov * Math.PI) / 360));
+          if (dist < STUNT_MAX_DIST) {
+            expect((1.7 * pixelsPerUnit) / bandH).toBeGreaterThanOrEqual(0.115);
+          }
+        }
+      }
+    }
+    expect(LOOK_LAG).toBeGreaterThan(0);
   });
 });
 

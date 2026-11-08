@@ -6,7 +6,7 @@ A jet-ski trick game seen from a chase camera: each answer sends the ski off a l
 
 - `main.ts`: the game loop, learning loop, trick playback, respawn, coins, camera and wiring of everything below
 - `rules.ts`: pure scoring, tiers, jet skis, approach and turbo maths, coin trails, spoken lines (`TRICK_IDS`, `tierFor`, `nextTrick`, `hitPoints`, `approach`, `coinSide`)
-- `layout.ts`: camera poses and screen fitting (`playBand`, `bandShift`, `fovFor`, `chasePose`, `stuntPose`, `blendCam`, `riseFor`)
+- `layout.ts`: camera poses and screen fitting (`playBand`, `bandShift`, `fovFor`, `chasePose`, `stuntPose`, `stuntDistance`, `blendCam`); the stunt camera is a 70-degree three-quarter side view, its distance set per trick from `trickFraming`
 - `anim.ts`: the animation toolkit (`track`, `prog`, `arc`, `swell`), the `Frame` type, launcher geometry (`LAUNCHERS`, `surfaceY`) and the shared run-up/arc/landing (`launch`, `clearDef`)
 - `tricks.ts`: the ten tricks and ten wipeouts as one registry and sampler, plus the lifeguard respawn (`trickFrame`, `trickEvents`, `trickRate`, `TRICK_SPECS`, `respawnFrame`)
 - `tricks-t1.ts`: tier 1 off the wave: Wave Hop, Spray Spin, Superman, Tail Stand
@@ -38,7 +38,7 @@ A jet-ski trick game seen from a chase camera: each answer sends the ski off a l
 - Scoring, tiers, jet skis or approach timing: `rules.ts`.
 - A new effect or particle kind: `effects.ts` (and `EVENT` types in `anim.ts` for a trick to fire it).
 - Rider poses or the vest: `rider.ts`. Ski or boat look: `jetski.ts`.
-- Camera and screen fitting: `layout.ts`. A new state that is hard to reach: extend `parseDev` in `dev.ts` and its test.
+- Camera and screen fitting: `layout.ts` (a trick that needs a different view: its framing comes from `trickFraming` in `tricks.ts`). A new state that is hard to reach: extend `parseDev` in `dev.ts` and its test.
 
 ## Tests
 

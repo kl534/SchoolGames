@@ -11,6 +11,8 @@ import {
   arc,
   basePitch,
   clearDef,
+  createFrame,
+  hoverOf,
   flight,
   launch,
   lerp,
@@ -261,13 +263,29 @@ const spraySpinFail: Def = (() => {
 
 // ---------- Superman ----------
 
+/** How far the rider flies out behind the bars and up off the seat at full stretch. */
+const FLY_BACK = 0.75;
+const FLY_UP = 0.8;
+
+/** 0 on the seat, 1 flying out flat: eased out after take-off and back in before the landing. */
+const flyAmount = (t: number, from: number, to: number) =>
+  smooth((t - from) / 0.3) * (1 - smooth((t - (to - 0.3)) / 0.3));
+
+/** The rider flying out flat behind the ski, holding the bars, `w` of the way (0 = seated). */
+function flyOut(f: Frame, w: number): void {
+  if (w <= 0.001) return;
+  const p = hoverOf(f.ski, FLY_BACK * w, FLY_UP * w);
+  setFree(f, p.d, p.y, p.s, f.ski.pitch, f.ski.roll, f.ski.yaw, 'superman', 'happy');
+}
+
 const supermanClear = clearDef({
   launcher: 'wave',
   air: 1.2,
   peak: 1.6,
   word: 'SUPERMAN!',
   pitch: (u) => 0.25 * Math.sin(TAU * u),
-  pose: (t, L) => (t > L.tLip + 0.15 && t < L.tLand - 0.25 ? 'superman' : 'ride'),
+  pose: () => 'ride',
+  rider: (t, L, f) => flyOut(f, flyAmount(t, L.tLip + 0.1, L.tLand)),
 });
 
 const supermanFail: Def = (() => {
@@ -286,14 +304,22 @@ const supermanFail: Def = (() => {
     k.wet = !(t > L.tLip && t < L.tLand);
   };
   const letGo = L.tLip + 0.6;
-  const s0 = seatAtTime(skiAt, letGo);
+  const hoverFrame = createFrame();
+  const flyW = (time: number) => flyAmount(time, L.tLip + 0.1, L.tLand + 9);
+  skiAt(letGo, hoverFrame);
+  const s0 = {
+    ...hoverOf(hoverFrame.ski, FLY_BACK * flyW(letGo), FLY_UP * flyW(letGo)),
+    pitch: hoverFrame.ski.pitch,
+  };
   const flop = L.tLand + 0.45;
   const popAt = flop + 0.5;
   const end = popAt + 1.5;
   const farD = L.land + 6;
   const riderAt = (t: number, f: Frame) => {
-    if (t > L.tLip + 0.15 && t < letGo) f.rider.pose = 'superman';
-    if (t < letGo) return;
+    if (t < letGo) {
+      flyOut(f, flyW(t));
+      return;
+    }
     if (t < flop) {
       const u = (t - letGo) / (flop - letGo);
       setFree(

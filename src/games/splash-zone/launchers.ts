@@ -57,7 +57,14 @@ function buildWave(kit: Kit): Launcher {
     pos.setY(i, h + 0.02);
     // Lighter toward the crest.
     const k = Math.min(h / 1.4, 1);
-    colors.push(0.03 + 0.14 * k, 0.36 + 0.3 * k, 0.62 + 0.22 * k);
+    // The water's own colour at the foot, a deeper blue up the swell, lighter at the crest.
+    const deep = Math.min(k * 2.2, 1);
+    const crest = Math.max(k * 1.6 - 0.6, 0);
+    colors.push(
+      0.014 + (0.02 - 0.014) * deep + 0.18 * crest,
+      0.57 + (0.34 - 0.57) * deep + 0.3 * crest,
+      0.53 + (0.62 - 0.53) * deep + 0.25 * crest,
+    );
   }
   plane.setAttribute('color', new Float32BufferAttribute(colors, 3));
   plane.computeVertexNormals();

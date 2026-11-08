@@ -26,6 +26,7 @@ import {
   type Pos,
   type TrickEvent,
 } from './anim';
+import type { Framing } from './layout';
 import { TRICK_IDS, TRICK_TIER, type LauncherKind, type Outcome, type TrickId } from './rules';
 import { BACKFLIP, BARREL_ROLL, HELICOPTER } from './tricks-t2';
 import { CORKSCREW, DOUBLE_BACKFLIP, SUBMARINE } from './tricks-t3';
@@ -160,6 +161,36 @@ export function trickFrame(
   d.at(time, out);
   if (out.rider.mode === 'seated') sitOnSki(out);
   return out;
+}
+
+const framingCache = new Map<Def, Framing>();
+
+/**
+ * How high and how low a trick takes the ski and the rider (u above the water, with room for the
+ * rider's head and the ski's underside): what the stunt camera has to fit in the frame.
+ */
+export function trickFraming(id: TrickId, outcome: Outcome): Framing {
+  const d = def(id, outcome);
+  let framing = framingCache.get(d);
+  if (!framing) {
+    let peak = 1.5;
+    let low = 0;
+    const f = createFrame();
+    for (let t = 0; t <= d.duration + 1e-9; t += 1 / 30) {
+      trickFrame(id, outcome, t, f);
+      if (f.ski.visible) {
+        peak = Math.max(peak, f.ski.y + 1.0);
+        low = Math.min(low, f.ski.y - 0.3);
+      }
+      if (f.rider.visible) {
+        peak = Math.max(peak, f.rider.y + 1.15);
+        low = Math.min(low, f.rider.y - 0.3);
+      }
+    }
+    framing = { peak, low };
+    framingCache.set(d, framing);
+  }
+  return framing;
 }
 
 /**

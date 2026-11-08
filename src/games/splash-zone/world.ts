@@ -10,6 +10,7 @@ import {
   BoxGeometry,
   BufferAttribute,
   BufferGeometry,
+  CanvasTexture,
   CapsuleGeometry,
   Color,
   ConeGeometry,
@@ -81,7 +82,7 @@ export interface World {
   cheer(): void;
   groan(): void;
   /** The blob shadow under a flying ski: its spot on the water and its height above it. */
-  setShadow(x: number, z: number, height: number): void;
+  setShadow(slot: 0 | 1, x: number, z: number, height: number): void;
   /** Leaps one dolphin right now (for the lab). */
   leapDolphin(): void;
   dispose(): void;
@@ -530,18 +531,38 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
     l.dolphin.object.visible = true;
   };
 
-  // ---------- The blob shadow ----------
+  // ---------- The blob shadows (one for the ski, one for a free rider) ----------
+  const shadowTexture = (() => {
+    if (typeof document === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 64;
+    const g = canvas.getContext('2d');
+    if (!g) return null;
+    const fill = g.createRadialGradient(32, 32, 2, 32, 32, 32);
+    fill.addColorStop(0, 'rgba(6, 50, 62, 0.85)');
+    fill.addColorStop(0.55, 'rgba(6, 50, 62, 0.45)');
+    fill.addColorStop(1, 'rgba(6, 50, 62, 0)');
+    g.fillStyle = fill;
+    g.fillRect(0, 0, 64, 64);
+    return new CanvasTexture(canvas);
+  })();
   const shadowMaterial = new MeshBasicMaterial({
-    color: 0x0b3d4a,
+    map: shadowTexture ?? undefined,
+    color: shadowTexture ? 0xffffff : 0x0b3d4a,
     transparent: true,
-    opacity: 0.35,
+    opacity: 0.8,
     depthWrite: false,
   });
   materials.push(shadowMaterial);
-  const shadow = new Mesh(track(new PlaneGeometry(1, 1).rotateX(-Math.PI / 2)), shadowMaterial);
-  shadow.visible = false;
-  shadow.renderOrder = 1;
-  root.add(shadow);
+  const shadowGeometry = track(new PlaneGeometry(1, 1).rotateX(-Math.PI / 2));
+  const shadows = [0, 1].map(() => {
+    const mesh = new Mesh(shadowGeometry, shadowMaterial.clone());
+    materials.push(mesh.material as MeshBasicMaterial);
+    mesh.visible = false;
+    mesh.renderOrder = 1;
+    root.add(mesh);
+    return mesh;
+  });
 
   // ---------- The crowd's mood ----------
   let mood: Mood = 'idle';
@@ -601,14 +622,16 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
       mood = 'groan';
       moodLeft = 2.4;
     },
-    setShadow(x, z, height) {
-      const visible = height > 0.2 && height < 14;
+    setShadow(slot, x, z, height) {
+      const shadow = shadows[slot];
+      const visible = height > 0.15 && height < 16;
       shadow.visible = visible;
       if (!visible) return;
-      const k = 1.5 + height * 0.18;
-      shadow.scale.set(k * 0.9, 1, k * 1.8);
-      shadow.position.set(x, 0.04, z);
-      shadowMaterial.opacity = Math.max(0.08, 0.38 - height * 0.03);
+      // A soft round blob that shrinks and fades the higher the thing is.
+      const k = Math.max(0.9, 2.6 - height * 0.14);
+      shadow.scale.set(k, 1, k);
+      shadow.position.set(x, 0.05, z);
+      (shadow.material as MeshBasicMaterial).opacity = Math.max(0.18, 0.85 - height * 0.07);
     },
     leapDolphin() {
       startLeap(lastSkiZ);
@@ -622,6 +645,7 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
       }
       geometries.forEach((g) => g.dispose());
       materials.forEach((m) => m.dispose());
+      shadowTexture?.dispose();
       root.removeFromParent();
       scene.fog = null;
     },

@@ -139,6 +139,7 @@ const doubleBackflipFail: Def = (() => {
       [hit, 'sfx:splash', ski(hit).d, 0],
       [hit, 'groan', ski(hit).d, 1],
       [hit + 0.05, 'word', ski(hit).d, 4],
+      ...trail(hit + 0.1, popAt - 0.05, 0.1, 'bubbles', ski, 0.3),
       [popAt, 'splash', s0.d, 0, 1.4],
       [popAt + 0.2, 'drips', s0.d, 0.6, 1.4],
     ],
@@ -212,7 +213,7 @@ const submarineClear: Def = (() => {
   const dolphinAt = (t: number, f: Frame) => {
     const v = clamp01((t - tExit) / fly);
     const dolphins = f.dolphins;
-    const sides = [-3.4, 3.4];
+    const sides = [-3.4, -6.4];
     const lead = [1.15, 1.0];
     const delay = [0, 0.12];
     dolphins.forEach((dolphin, i) => {

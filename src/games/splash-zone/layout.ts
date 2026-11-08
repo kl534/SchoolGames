@@ -40,12 +40,21 @@ export const CAM_UP = 2.7;
 export const CAM_BACK = 9;
 export const LOOK_AHEAD = 12;
 /** The point looked at is this high above the ski. */
-export const LOOK_UP = 0.8;
+export const LOOK_UP = 0.1;
 
-/** The stunt camera's offset from what it follows: to the right, up and behind (u). */
-export const SIDE = 8;
-export const UP = 3;
-export const BACK = 4.5;
+/**
+ * The stunt camera sits out to the right of the action, 70 degrees off the travel axis (a true
+ * three-quarter side view) and nearly level with it: `CAM_EYE` above the middle of the trick's
+ * height range, looking at that middle height so the horizon sits behind the ski and the height
+ * of the air reads.
+ */
+export const CAM_AZIMUTH = (70 * Math.PI) / 180;
+export const CAM_EYE = 1.75;
+/** While the ski takes off the camera looks at the lip, lagging at most this far behind the ski (u). */
+export const LOOK_LAG = 4;
+/** The nearest and furthest the stunt camera goes (u). */
+export const STUNT_MIN_DIST = 10;
+export const STUNT_MAX_DIST = 34;
 
 /** Seconds to swing out to the stunt view, and back after a clear. */
 export const SWING_IN = 0.5;
@@ -76,23 +85,54 @@ export function chasePose(camX: number, skiY: number, skiZ: number, out: CamPose
 /** The camera follows a ski's side position at half, so the ski can drift in the picture. */
 export const followSide = (skiX: number): number => skiX * 0.5;
 
+/** What a trick's camera has to fit: how high the action goes and how low (u above the water). */
+export interface Framing {
+  peak: number;
+  low: number;
+}
+
+/** The middle of a framing, which the stunt camera looks at. */
+export const framingMid = (f: Framing): number => (f.peak + f.low) / 2;
+
 /**
- * The stunt pose: from the focus (the ski, or the thrown rider) out to the right, up and back,
- * looking at the focus. `rise` lifts the camera and what it looks at with a high flight.
+ * How far the stunt camera stands back so the whole height range of the action fits in the
+ * band the HUD leaves clear (with 20 % to spare): taller tricks (tier 3) stand further back.
+ */
+export function stuntDistance(
+  f: Framing,
+  fov: number,
+  bandFraction: number,
+  min = STUNT_MIN_DIST,
+): number {
+  const tan = Math.tan((fov * Math.PI) / 360);
+  const need = Math.max(f.peak - f.low, 1) * 1.2;
+  const d = need / (2 * tan * Math.max(bandFraction, 0.1));
+  return Math.min(Math.max(d, min), STUNT_MAX_DIST);
+}
+
+/** How much of the screen's height the HUD leaves clear. */
+export function bandFraction(width: number, height: number): number {
+  const band = playBand(width, height);
+  return (band.bottom - band.top) / Math.max(height, 1);
+}
+
+/**
+ * The stunt pose: `dist` out to the right (70 degrees off the travel axis) of the point (lookX,
+ * lookZ), `CAM_EYE` above the middle height `mid`, looking at that point at height `mid`.
  */
 export function stuntPose(
-  focusX: number,
-  focusY: number,
-  focusZ: number,
-  rise: number,
+  lookX: number,
+  lookZ: number,
+  mid: number,
+  dist: number,
   out: CamPose = createPose(),
 ) {
-  out.x = focusX + SIDE;
-  out.y = focusY + UP + rise;
-  out.z = focusZ + BACK;
-  out.lookX = focusX;
-  out.lookY = focusY + rise * 0.8;
-  out.lookZ = focusZ;
+  out.x = lookX + dist * Math.sin(CAM_AZIMUTH);
+  out.y = mid + CAM_EYE;
+  out.z = lookZ + dist * Math.cos(CAM_AZIMUTH);
+  out.lookX = lookX;
+  out.lookY = mid;
+  out.lookZ = lookZ;
   return out;
 }
 
@@ -112,20 +152,4 @@ export function blendCam(chase: CamPose, stunt: CamPose, w: number, out: CamPose
   out.lookY = chase.lookY + (stunt.lookY - chase.lookY) * k;
   out.lookZ = chase.lookZ + (stunt.lookZ - chase.lookZ) * k;
   return out;
-}
-
-// ---------- Rising with the action ----------
-
-/** The camera starts rising once the highest point of the action is above this (u). */
-export const RISE_FROM = 6;
-/** The most the camera may rise (u). */
-export const RISE_MAX = 6;
-
-/**
- * How far to raise the stunt camera for an action that climbs above the usual view: (top -
- * RISE_FROM), never below 0 or above `max`.
- */
-export function riseFor(top: number, max = RISE_MAX): number {
-  if (!Number.isFinite(top) || !Number.isFinite(max)) return 0;
-  return Math.max(0, Math.min(top - RISE_FROM, max));
 }

@@ -244,6 +244,23 @@ export function seatOf(ski: SkiFrame, out: Pos = { d: 0, y: 0, s: 0 }): Pos {
   return out;
 }
 
+/**
+ * The point `back` behind and `up` above the ski's seat, turned with the ski (into `out`): where a
+ * rider hovers when stretched out flat behind the bars.
+ */
+export function hoverOf(
+  ski: SkiFrame,
+  back: number,
+  up: number,
+  out: Pos = { d: 0, y: 0, s: 0 },
+): Pos {
+  turned(scratch, 0, SEAT.up + up, SEAT.back + back, ski.pitch, ski.roll, ski.yaw);
+  out.d = ski.d + scratch.d;
+  out.y = ski.y + scratch.y;
+  out.s = ski.s + scratch.s;
+  return out;
+}
+
 /** A seated rider takes the ski's seat and angles: call after the ski is posed. */
 export function sitOnSki(f: Frame): void {
   const r = f.rider;
@@ -490,6 +507,8 @@ export interface ClearSpec {
   side?(u: number): number;
   /** The rider's pose at a time (seated on the ski). */
   pose?(t: number, L: Launch): PoseName;
+  /** Lets a trick put the rider somewhere other than the seat (after the ski and pose are set). */
+  rider?(t: number, L: Launch, f: Frame): void;
   /** Slow motion at the peak (tier 3). */
   slow?: boolean;
   /** Further events. */
@@ -521,6 +540,7 @@ export function clearDef(spec: ClearSpec): Def {
     k.wet = !inAir;
     f.rider.pose = spec.pose?.(t, L) ?? (inAir ? 'fistPump' : 'ride');
     f.rider.face = 'happy';
+    spec.rider?.(t, L, f);
   };
   const mid = L.tLip + L.air / 2;
   return {

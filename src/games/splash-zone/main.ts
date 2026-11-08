@@ -31,8 +31,12 @@ import {
   followSide,
   fovFor,
   playBand,
-  riseFor,
+  LOOK_LAG,
+  bandFraction,
+  framingMid,
+  stuntDistance,
   stuntPose,
+  type Framing,
 } from './layout';
 import { createRider } from './rider';
 import {
@@ -68,12 +72,14 @@ import {
   type TrickId,
 } from './rules';
 import {
+  LAUNCHERS,
   RESPAWN_TIME,
   createFrame,
   createRespawnFrame,
   respawnFrame,
   trickDuration,
   trickEvents,
+  trickFraming,
   trickFrame,
   trickRate,
   trickWord,
@@ -85,6 +91,9 @@ import { createWater } from './water';
 import { createWorld } from './world';
 
 const GAME_ID = 'splash-zone';
+
+/** The framing once a trick is over: the wreck, the boat and the rider climbing back on. */
+const RESULT_FRAMING: Framing = { peak: 3.5, low: -1.2 };
 
 /** Seconds a trick runs before a tap can fast-forward it. */
 const FAST_FORWARD_AFTER = 0.6;
@@ -239,8 +248,13 @@ function run(session: GameSession, dev: DevOptions | null): void {
   let camGoal = 0;
   const focus = new Vector3();
   const camFocus = new Vector3();
-  let camRise = 0;
-  let riseGoal = 0;
+  // What the stunt view frames: how high and low the trick goes, and where its launcher's lip is.
+  let framing: Framing = RESULT_FRAMING;
+  let lipDist = 0;
+  let followTrick = false;
+  let camMid = framingMid(RESULT_FRAMING);
+  let camDist = 12;
+  const look = new Vector3();
   let shake = 0;
   let turboAmount = 0;
   let wakeIn = 0;
@@ -271,7 +285,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     viewH = h;
     camera.aspect = w / Math.max(h, 1);
     camera.fov = fovFor(camera.aspect);
-    camera.setViewOffset(w, h, 0, -bandShift(w, h), w, h);
+    camera.setViewOffset(w, h, 0, bandShift(w, h), w, h);
     camera.updateProjectionMatrix();
   };
 
@@ -307,6 +321,14 @@ function run(session: GameSession, dev: DevOptions | null): void {
 
   /** The nearest thing a reader would call the action on screen, for the comic words. */
   const focusScreen = (dy = 2.2) => toScreen(focus.x, focus.y + dy, focus.z);
+
+  /** Where the comic word goes: above the action, or below it when there is no room up there. */
+  const wordScreen = () => {
+    const p = toScreen(focus.x, focus.y, focus.z);
+    const band = playBand(viewW, viewH);
+    const above = p.y - 100;
+    return { x: p.x, y: above >= band.top + 30 ? above : Math.min(p.y + 100, band.bottom - 30) };
+  };
 
   // ---------- Posing the ski and the rider ----------
   /** Puts the ski and rider where a trick frame says (launcher-local, `entryZ` as the origin). */
@@ -388,7 +410,8 @@ function run(session: GameSession, dev: DevOptions | null): void {
     launcher = null;
     effects.clear();
     coins.forEach((c) => (c.visible = false));
-    world.setShadow(0, 0, 0);
+    world.setShadow(0, 0, 0, 0);
+    world.setShadow(1, 0, 0, 0);
     boat.object.visible = false;
     activeIndex = 0;
     skis[1].object.visible = false;
@@ -562,8 +585,16 @@ function run(session: GameSession, dev: DevOptions | null): void {
     scale: 1,
   });
 
+  /** The camera frames this trick: its height range, and the lip it takes off from. */
+  const frameTrick = (id: TrickId, outcome: Outcome) => {
+    framing = trickFraming(id, outcome);
+    lipDist = LAUNCHERS[TRICK_SPECS[id].launcher].lipD;
+    followTrick = true;
+  };
+
   const startStunt = (outcome: Outcome) => {
     stunt = makeStunt(trick, outcome);
+    frameTrick(trick, outcome);
     phase = 'stunt';
     camGoal = 1;
     hud.speedLines(false);
@@ -606,7 +637,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
         break;
       }
       case 'word': {
-        hud.showWord(trickWord(s.trick, s.outcome), focusScreen(2.4), s.outcome === 'clear');
+        hud.showWord(trickWord(s.trick, s.outcome), wordScreen(), s.outcome === 'clear');
         break;
       }
       default:
@@ -631,6 +662,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
 
   const finishStunt = (s: Stunt) => {
     lastTrick = s.trick;
+    followTrick = false;
     if (s.outcome === 'clear') {
       // Riding on from the end of the trick at the speed it left off.
       landed++;
@@ -641,7 +673,6 @@ function run(session: GameSession, dev: DevOptions | null): void {
       if (pendingPoints > 0) awardPoints(focusScreen(1.6));
       phase = 'riding';
       camGoal = 0;
-      riseGoal = 0;
       askNext();
       return;
     }
@@ -767,7 +798,6 @@ function run(session: GameSession, dev: DevOptions | null): void {
     hud.hideBanner();
     speed = 0;
     camGoal = 0;
-    riseGoal = 0;
     askNext();
   };
 
@@ -1023,10 +1053,40 @@ function run(session: GameSession, dev: DevOptions | null): void {
     updateCoins(delta, elapsed, phase === 'riding' || phase === 'turbo');
   };
 
+  /**
+   * What the stunt view looks at and how far it stands back. While a trick plays it looks at the
+   * launcher's lip (the ski a little ahead of the middle), then follows the ski, or the thrown
+   * rider; afterwards it frames the wreck. Eased so a thrown rider is followed smoothly.
+   */
+  const updateCameraTargets = (delta: number, snap: boolean) => {
+    const f = followTrick ? framing : RESULT_FRAMING;
+    const fov = fovFor(camera.aspect);
+    const dist = stuntDistance(f, fov, bandFraction(viewW, viewH));
+    let lookZ = focus.z;
+    if (followTrick) {
+      // The camera lags the ski by up to LOOK_LAG, but never so far that a narrow screen loses it.
+      const halfWidth = dist * Math.tan((fov * Math.PI) / 360) * camera.aspect;
+      const lag = Math.min(LOOK_LAG, halfWidth * 0.3);
+      const d = entryZ - focus.z;
+      lookZ = entryZ - (d - MathUtils.clamp(d - lipDist, 0, lag));
+    }
+    look.set(focus.x, 0, lookZ);
+    if (snap || (camW <= 0.001 && camGoal === 0)) {
+      camFocus.copy(look);
+      camMid = framingMid(f);
+      camDist = dist;
+      return;
+    }
+    camFocus.x = easeToward(camFocus.x, look.x, 8, delta);
+    camFocus.z = easeToward(camFocus.z, look.z, 8, delta);
+    camMid = easeToward(camMid, framingMid(f), 5, delta);
+    camDist = easeToward(camDist, dist, 5, delta);
+  };
+
   /** Points the camera: the chase view blended into the three-quarter side view. */
   const aimCamera = (dx: number, dy: number) => {
     chasePose(camSide, 0, skiZ, chase);
-    stuntPose(camFocus.x, camFocus.y, camFocus.z, camRise, stuntCam);
+    stuntPose(camFocus.x, camFocus.z, camMid, camDist, stuntCam);
     blendCam(chase, stuntCam, camW, blended);
     camera.position.set(blended.x + dx, blended.y + dy, blended.z);
     camera.lookAt(blended.lookX + dx, blended.lookY + dy, blended.lookZ);
@@ -1064,9 +1124,21 @@ function run(session: GameSession, dev: DevOptions | null): void {
     const ski = active();
     world.update(skiZ, camera.position, delta, elapsed);
     water.update(elapsed, skiX, skiZ);
-    if (stunt || phase === 'result') {
-      world.setShadow(ski.object.position.x, ski.object.position.z, ski.object.position.y);
-    } else world.setShadow(0, 0, 0);
+    // Soft blobs on the water under the ski and under a free rider show how high they are.
+    const skiUp = ski.object.position.y;
+    world.setShadow(
+      0,
+      ski.object.position.x,
+      ski.object.position.z,
+      ski.object.visible && !wetSki ? skiUp : 0,
+    );
+    const free = rider.mode === 'free' && rider.root.visible;
+    world.setShadow(
+      1,
+      rider.root.position.x,
+      rider.root.position.z,
+      free ? rider.root.position.y : 0,
+    );
     // A lab frozen at a time (`&at=`) keeps its splashes and spray as they were.
     if (!(lab && dev?.at !== null && dev?.at !== undefined)) effects.update(delta);
     rider.update(delta, elapsed);
@@ -1082,21 +1154,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
       0,
       1,
     );
-    // What the stunt view follows, eased so a thrown rider is followed smoothly.
-    if (camW <= 0.001 && camGoal === 0) camFocus.copy(focus);
-    else {
-      camFocus.x = easeToward(camFocus.x, focus.x, 8, delta);
-      camFocus.y = easeToward(camFocus.y, focus.y, 8, delta);
-      camFocus.z = easeToward(camFocus.z, focus.z, 8, delta);
-    }
-    if (stunt || phase === 'result' || phase === 'ending') {
-      const top = Math.max(
-        frame.ski.visible ? frame.ski.y + 1.8 : -9,
-        frame.rider.mode === 'free' && frame.rider.visible ? frame.rider.y + 1.2 : -9,
-      );
-      riseGoal = riseFor(top);
-    } else riseGoal = 0;
-    camRise = easeToward(camRise, riseGoal, 4, delta);
+    updateCameraTargets(delta, !!lab && dev?.at !== null && dev?.at !== undefined);
     camSide = easeToward(camSide, followSide(skiX), 4, delta);
     shake = easeToward(shake, 0, 3.5, delta);
     const fov = fovFor(camera.aspect) + 6 * turboAmount;
@@ -1165,8 +1223,6 @@ function run(session: GameSession, dev: DevOptions | null): void {
       // Frozen for screenshots: posed at `at` and nothing advances.
       ctx.renderer.domElement.dataset.frozen = '1';
       camW = camGoal = 1;
-      camFocus.copy(focus);
-      camRise = riseGoal = labRise();
       camSide = 0;
       return;
     }
@@ -1180,9 +1236,6 @@ function run(session: GameSession, dev: DevOptions | null): void {
         s.phase = 'play';
       }
       camW = camGoal = 1;
-      camFocus.x = easeToward(camFocus.x, focus.x, 8, delta);
-      camFocus.y = easeToward(camFocus.y, focus.y, 8, delta);
-      camFocus.z = easeToward(camFocus.z, focus.z, 8, delta);
       return;
     }
     if (s.phase === 'ride') {
@@ -1195,6 +1248,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
       if (s.z <= entryZ) {
         s.phase = 'play';
         s.stunt = makeStunt(lab.trick, labOutcome(lab));
+        frameTrick(lab.trick, labOutcome(lab));
         camGoal = 1;
       }
     } else if (s.phase === 'play' && s.stunt) {
@@ -1216,22 +1270,10 @@ function run(session: GameSession, dev: DevOptions | null): void {
         });
       }
     }
-    camFocus.x = easeToward(camFocus.x, focus.x, 8, delta);
-    camFocus.y = easeToward(camFocus.y, focus.y, 8, delta);
-    camFocus.z = easeToward(camFocus.z, focus.z, 8, delta);
-    camRise = easeToward(camRise, labRise(), 4, delta);
     wakeEffects(delta);
   }
 
   const labOutcome = (l: Lab): Outcome => ('trick' in l ? l.outcome : 'clear');
-
-  const labRise = () => {
-    const top = Math.max(
-      frame.ski.visible ? frame.ski.y + 1.8 : -9,
-      frame.rider.mode === 'free' && frame.rider.visible ? frame.rider.y + 1.2 : -9,
-    );
-    return riseFor(top);
-  };
 
   /** Starts the lab's boat loop: a fallen rider in the water and the lifeguard on the way. */
   function beginLabRespawn() {
@@ -1252,17 +1294,18 @@ function run(session: GameSession, dev: DevOptions | null): void {
       beginLabRespawn();
       respawnT = at;
       poseRespawn(2);
-      camFocus.copy(focus);
+      followTrick = false;
+      updateCameraTargets(0, true);
       return;
     }
     const s = makeStunt(lab.trick, lab.outcome);
     // Aim the camera first, so the comic word lands where the ski will be.
     trickFrame(s.trick, s.outcome, Math.min(at, s.duration), frame);
     applyFrame(frame, 2);
-    camFocus.copy(focus);
+    frameTrick(s.trick, s.outcome);
     camW = camGoal = 1;
-    camRise = labRise();
     layout();
+    updateCameraTargets(0, true);
     aimCamera(0, 0);
     const step = 1 / 30;
     for (let t = 0; t < at; t += step) {

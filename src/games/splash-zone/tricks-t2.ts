@@ -109,7 +109,7 @@ const backflipFail: Def = (() => {
       skiAt(t, f);
       riderAt(t, f);
     },
-    events: () => [
+    events: (ski, rider) => [
       [L.tLip - 0.2, 'sfx:whoosh', L.lipD - 2, L.lipY],
       [L.tLip, 'spray', L.lipD, L.lipY],
       [L.tLip, 'sfx:boing', L.lipD, L.lipY],
@@ -120,6 +120,8 @@ const backflipFail: Def = (() => {
       [hit, 'sfx:splash', L.land, 0],
       [hit, 'groan', L.land, 1],
       [hit + 0.05, 'word', L.land, 3],
+      ...trail(hit + 0.05, sitUp - 0.1, 0.12, 'bubbles', rider, 0.3),
+      ...trail(hit + 0.3, hit + 1.0, 0.2, 'bubbles', ski, 0.3),
       [sitUp + 0.2, 'drips', L.land + 1.5, 0.6, 2.2],
     ],
   };
