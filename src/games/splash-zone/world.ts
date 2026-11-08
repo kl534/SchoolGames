@@ -85,6 +85,16 @@ export const PALETTES: Record<WorldTheme, WorldPalette> = {
     fogFar: 190,
     light: { sky: 0xeaf6ff, ground: 0x7fb4d0, sun: 0xffffff, sunPower: 2.1 },
   },
+  volcano: {
+    skyTop: 0xff9a5c,
+    skyBottom: 0xffd38a,
+    water: 0x1aa39a,
+    sand: 0x4a4650,
+    fog: 0xffd6a0,
+    fogNear: 95,
+    fogFar: 240,
+    light: { sky: 0xffe0b8, ground: 0x3a8a7a, sun: 0xffc78a, sunPower: 2.2 },
+  },
 };
 
 export type Mood = 'idle' | 'cheer' | 'groan';
@@ -150,6 +160,8 @@ interface Slot {
   pier: Group;
   crowd: { bodies: InstancedMesh; heads: InstancedMesh; arms: InstancedMesh };
   skyline: [Mesh, Mesh];
+  /** The glowing lava and the smoke on a strip's volcano (Volcano Island only). */
+  glow: { lava: Mesh; smoke: Mesh }[];
   boatBase: [number, number];
   pierSide: number;
   hasPier: boolean;
@@ -420,6 +432,19 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
           strips: [track(scenery.makeSnowPeaks(1)), track(scenery.makeSnowPeaks(2))],
           palms: false,
         };
+      case 'volcano':
+        return {
+          island: track(scenery.makeLavaIsland(palette.sand)),
+          boat: track(scenery.makeRockStack()),
+          landmark: track(scenery.makeRockStack()),
+          // The volcano first, then two stretches of low dark ridge between volcanoes.
+          strips: [
+            track(scenery.makeVolcano()),
+            track(scenery.makeDarkRidge(1)),
+            track(scenery.makeDarkRidge(2)),
+          ],
+          palms: true,
+        };
       default:
         return {
           island: makeSandIsland(),
@@ -430,6 +455,18 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
         };
     }
   })();
+  const volcanic = theme === 'volcano';
+  const lavaGeometry = volcanic ? track(scenery.makeVolcanoLava()) : null;
+  const smokeGeometry = volcanic ? track(scenery.makeSmoke()) : null;
+  const lavaMaterial = new MeshBasicMaterial({ vertexColors: true });
+  const smokeMaterial = std({
+    color: 0x9a9290,
+    roughness: 1,
+    transparent: true,
+    opacity: 0.88,
+    flatShading: true,
+  });
+  materials.push(lavaMaterial);
   const islandGeometry = set.island;
   const boatGeometry = set.boat;
   const lighthouseGeometry = set.landmark;
@@ -467,18 +504,31 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
     };
     const islands: [Group, Group] = [makeIslandGroup(), makeIslandGroup()];
     const lighthouse = new Mesh(lighthouseGeometry, sceneryMaterial);
+    if (volcanic) lighthouse.scale.setScalar(2.2);
     group.add(lighthouse);
     const boats: [Mesh, Mesh] = [
       new Mesh(boatGeometry, boatMaterial),
       new Mesh(boatGeometry, boatMaterial),
     ];
     boats.forEach((b) => group.add(b));
+    const glow: Slot['glow'] = [];
     const makeStrip = (side: number) => {
-      const strip = new Mesh(skylineGeometries[(s + side) % 2] ?? emptyGeometry, sceneryMaterial);
+      const strip = new Mesh(
+        skylineGeometries[(s + side) % skylineGeometries.length] ?? emptyGeometry,
+        sceneryMaterial,
+      );
       strip.visible = skylineGeometries.length > 0;
       strip.rotation.y = side === 0 ? Math.PI : 0;
       strip.frustumCulled = false;
       group.add(strip);
+      if (lavaGeometry && smokeGeometry) {
+        // A volcano glows with lava and smokes (both unlit or soft, so they read in any light).
+        const lava = new Mesh(lavaGeometry, lavaMaterial);
+        const smoke = new Mesh(smokeGeometry, smokeMaterial);
+        lava.frustumCulled = smoke.frustumCulled = false;
+        strip.add(lava, smoke);
+        glow.push({ lava, smoke });
+      }
       return strip;
     };
     const skyline: [Mesh, Mesh] = [makeStrip(0), makeStrip(1)];
@@ -503,6 +553,7 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
       lighthouse,
       pier,
       skyline,
+      glow,
       crowd: { bodies, heads, arms },
       boatBase: [0, 0],
       pierSide: 1,
@@ -548,7 +599,17 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
       boat.rotation.y = h(20 + i) * 6.28;
       slot.boatBase[i] = boat.rotation.y;
     });
-    if (skylineGeometries.length > 0) {
+    if (volcanic) {
+      // A big smoking volcano on one side or the other, and low dark ridges in between.
+      slot.skyline.forEach((strip, i) => {
+        const volcano = (c + i) % 2 === 0;
+        strip.geometry = skylineGeometries[volcano ? 0 : 1 + ((c + i) % 3 === 0 ? 1 : 0)];
+        const far = volcano ? 128 + h(30 + i) * 10 : 84 + h(30 + i) * 8;
+        strip.position.set((i === 0 ? -1 : 1) * far, 0, 0);
+        slot.glow[i].lava.visible = volcano;
+        slot.glow[i].smoke.visible = volcano;
+      });
+    } else if (skylineGeometries.length > 0) {
       slot.skyline[0].position.set(-(84 + h(30) * 8), 0, 0);
       slot.skyline[1].position.set(84 + h(31) * 8, 0, 0);
     }
@@ -691,6 +752,11 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
       const amount = Math.min(1, moodLeft / 0.3);
       for (const slot of slots) {
         animateCrowd(slot, time, mood, mood === 'idle' ? 0 : Math.max(amount, 0.0001));
+        slot.glow.forEach((g, i) => {
+          // The smoke drifts up and breathes; the lava glows a little brighter and dimmer.
+          g.smoke.position.y = 1.5 * Math.sin(time * 0.35 + slot.chunk + i);
+          g.smoke.scale.setScalar(1 + 0.05 * Math.sin(time * 0.6 + i * 2 + slot.chunk));
+        });
         slot.boats.forEach((boat, i) => {
           const y = swell(boat.position.x, boat.position.z + slot.group.position.z, time);
           boat.position.y = y + 0.08;

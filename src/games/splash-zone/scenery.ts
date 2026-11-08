@@ -187,32 +187,60 @@ export function makeRockStack(): BufferGeometry {
   ]);
 }
 
-/** The volcano's cone: dark rock, a crater with glowing lava and lava running down its slopes. */
+const VOLCANO_HEIGHT = 46;
+const VOLCANO_RADIUS = 36;
+
+/** The volcano's cone of dark rock with a crater rim (it faces -x, like the other far strips). */
 export function makeVolcano(): BufferGeometry {
-  const height = 46;
+  return merge([
+    part(new ConeGeometry(VOLCANO_RADIUS, VOLCANO_HEIGHT, 14), 0x4a3a3c, 0, VOLCANO_HEIGHT / 2, 0),
+    part(new ConeGeometry(26, 30, 10), 0x5a4642, -9, 15, 10, 0, 0.4, 0),
+    part(new ConeGeometry(20, 22, 9), 0x3e3236, 12, 11, -14, 0, 0.9, 0),
+    part(new CylinderGeometry(7.2, 8.6, 2.6, 14), 0x2e2428, 0, VOLCANO_HEIGHT - 0.4, 0),
+  ]);
+}
+
+/**
+ * The glow: the lava lake in the crater and the lava running down the slope facing the course. It
+ * is drawn with an unlit material so it stays bright whatever the light.
+ */
+export function makeVolcanoLava(): BufferGeometry {
   const parts: BufferGeometry[] = [
-    part(new ConeGeometry(36, height, 14, 1, true), 0x4a3a3c, 0, height / 2, 0),
-    part(new ConeGeometry(30, height * 0.7, 14, 1, true), 0x5a4642, -6, height * 0.35, 3),
-    part(new CylinderGeometry(7.5, 8.5, 2.4, 14), 0x2e2428, 0, height - 0.4, 0),
-    part(new CylinderGeometry(6.4, 6.4, 0.6, 14), 0xff6a1a, 0, height + 0.5, 0),
+    part(new CylinderGeometry(6.3, 6.3, 0.8, 14), 0xff6a1a, 0, VOLCANO_HEIGHT + 0.9, 0),
+    part(
+      new SphereGeometry(2.4, 8, 6),
+      0xffb02e,
+      -2,
+      VOLCANO_HEIGHT + 1.6,
+      1,
+      0,
+      0,
+      0,
+      1.4,
+      0.4,
+      1.2,
+    ),
   ];
-  // Lava running down the slope facing the course (-x side is the course for the left strip).
   for (let i = 0; i < 4; i++) {
-    const a = Math.PI * (0.7 + i * 0.2);
-    const run = 11 + hash(i * 3.3) * 14;
-    const slope = Math.atan(36 / height);
-    parts.push(
-      part(
-        new BoxGeometry(1.5, run, 0.5),
-        i % 2 ? 0xffa02e : 0xff6a1a,
-        Math.cos(a) * (8 + run * 0.3) * 1.0,
-        height - 3 - run * 0.5 * Math.cos(slope),
-        Math.sin(a) * (8 + run * 0.3) * 1.0,
-        0,
-        -a + Math.PI / 2,
-        Math.sin(slope) * 0.9,
-      ),
-    );
+    const a = Math.PI * (0.78 + i * 0.15);
+    const run = 22 + hash(i * 3.3) * 14;
+    for (let k = 0; k < 9; k++) {
+      const y = VOLCANO_HEIGHT - 2 - (k / 8) * run;
+      const r = VOLCANO_RADIUS * (1 - y / VOLCANO_HEIGHT) + 0.5;
+      const w = 1.7 - k * 0.1;
+      parts.push(
+        part(
+          new BoxGeometry(w, 2.8, w),
+          (k + i) % 2 ? 0xffa02e : 0xff6a1a,
+          Math.cos(a) * r,
+          y,
+          Math.sin(a) * r,
+          0.3 * k,
+          a,
+          0.2 * i,
+        ),
+      );
+    }
   }
   return merge(parts);
 }

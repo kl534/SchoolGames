@@ -472,7 +472,20 @@ export function createRider(avatar: string, style: RiderStyle = DEFAULT_STYLE): 
     );
   }
 
-  const faces: Record<FaceName, Group> = { happy, scared, dizzy, soaked };
+  // Soot: a charcoal mask over the face with wide white eyes and a gasping mouth.
+  const sooty = joint(head, 0, 0);
+  const soot = new MeshStandardMaterial({ color: 0x241f1f, roughness: 0.95 });
+  mesh(new SphereGeometry(HEAD_R + 0.006, 22, 14, Math.PI / 2 - 1.0, 2.0, 0.5, 1.75), soot, sooty);
+  for (const side of [-1, 1]) {
+    mesh(new SphereGeometry(0.05, 12, 10), white, sooty, side * 0.072, 0.03, HEAD_R - 0.03);
+    mesh(new SphereGeometry(0.02, 8, 6), dark, sooty, side * 0.072, 0.025, HEAD_R + 0.016);
+    // A few puffs of soot on the helmet side and the cheeks.
+    mesh(new SphereGeometry(0.02, 6, 5), soot, sooty, side * 0.13, -0.05, HEAD_R - 0.045);
+  }
+  mesh(new TorusGeometry(0.028, 0.011, 6, 14), mouthMaterial, sooty, 0, -0.07, HEAD_R - 0.004);
+  mesh(new BoxGeometry(0.05, 0.016, 0.01), white, sooty, 0, -0.045, HEAD_R + 0.002);
+
+  const faces: Record<FaceName, Group> = { happy, scared, dizzy, soaked, sooty };
 
   // The helmet: a glossy shell with a visor ridge, a chin strap and the avatar stickers.
   const headWear = joint(head, 0, 0);
@@ -638,6 +651,7 @@ export function createRider(avatar: string, style: RiderStyle = DEFAULT_STYLE): 
         vest,
         vestStrap,
         dropMaterial,
+        soot,
       ]) {
         m.dispose();
       }

@@ -208,26 +208,33 @@ export function coinSide(i: number, n: number, sign: number): number {
 // ---------- Worlds and Mega Stunts ----------
 
 /** The worlds, in the order the run visits them (and then round again). */
-export type WorldId = 'lagoon' | 'harbour' | 'iceberg';
-export const WORLD_ORDER: readonly WorldId[] = ['lagoon', 'harbour', 'iceberg'];
+export type WorldId = 'lagoon' | 'harbour' | 'iceberg' | 'volcano';
+export const WORLD_ORDER: readonly WorldId[] = ['lagoon', 'harbour', 'iceberg', 'volcano'];
 
 export const WORLD_NAMES: Record<WorldId, string> = {
   lagoon: 'Lagoon',
   harbour: 'Harbour City',
   iceberg: 'Iceberg Bay',
+  volcano: 'Volcano Island',
 };
 
 /** Normal turns in a world before its Mega Stunt, which is the turn after the last of them. */
 export const NORMALS_PER_WORLD = 7;
 
 /** The Mega courses, one per world. */
-export type MegaId = 'whale-of-a-time' | 'harbour-havoc' | 'penguin-parade';
-export const MEGA_IDS: readonly MegaId[] = ['whale-of-a-time', 'harbour-havoc', 'penguin-parade'];
+export type MegaId = 'whale-of-a-time' | 'harbour-havoc' | 'penguin-parade' | 'geyser-blast';
+export const MEGA_IDS: readonly MegaId[] = [
+  'whale-of-a-time',
+  'harbour-havoc',
+  'penguin-parade',
+  'geyser-blast',
+];
 
 export const WORLD_MEGA: Record<WorldId, MegaId> = {
   lagoon: 'whale-of-a-time',
   harbour: 'harbour-havoc',
   iceberg: 'penguin-parade',
+  volcano: 'geyser-blast',
 };
 
 /** The Mega Stunt starts the turn after the 7th normal one in a world. */

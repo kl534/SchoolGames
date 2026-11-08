@@ -73,6 +73,17 @@ import {
 } from '../src/games/splash-zone/mega/whale-of-a-time';
 import { spoutLevel, tailAngle } from '../src/games/splash-zone/mega/whale-of-a-time-props';
 import {
+  BONK,
+  BOULDERS,
+  CHUTE,
+  GEYSER,
+  LAVA,
+  SOOT,
+  boulderLandAt,
+  lavaY,
+} from '../src/games/splash-zone/mega/geyser-blast';
+import { geyserLevel } from '../src/games/splash-zone/mega/geyser-blast-props';
+import {
   ARCH,
   BERG,
   BUMP,
@@ -90,6 +101,7 @@ const WORLDS: [WorldId, string, MegaId][] = [
   ['lagoon', 'Lagoon', 'whale-of-a-time'],
   ['harbour', 'Harbour City', 'harbour-havoc'],
   ['iceberg', 'Iceberg Bay', 'penguin-parade'],
+  ['volcano', 'Volcano Island', 'geyser-blast'],
 ];
 const FPS = 60;
 const DT = 1 / FPS;
@@ -144,6 +156,11 @@ describe('worlds and the Mega count', () => {
       skyTop: 0xbfe6ff,
       skyBottom: 0xffffff,
       water: 0x3aa0c8,
+    });
+    expect(PALETTES.volcano).toMatchObject({
+      skyTop: 0xff9a5c,
+      skyBottom: 0xffd38a,
+      water: 0x1aa39a,
     });
     // Every world looks different at a glance: its own sky and its own water.
     const palettes = WORLD_ORDER.map((w) => PALETTES[w]);
@@ -924,6 +941,108 @@ describe('Penguin Parade specifics', () => {
     course.update(2, megaSegments(id, 2)[2].start + FREEZE.at + 0.5);
     expect(cubes()).toBeGreaterThan(idle);
     pool.dispose();
+  });
+});
+
+// ---------- Geyser Blast ----------
+
+describe('Geyser Blast specifics', () => {
+  const id = 'geyser-blast';
+  const [, g2, g3] = megaOffsets(id);
+
+  it('rides over the lava arch and leaps off its far end', () => {
+    const d1 = MEGA_SPECS[id].elements[0].clear.duration;
+    let crown = 0;
+    for (let t = 0; t <= d1; t += DT) {
+      const f = frameAt(id, 1, t);
+      expect(f.ski.y).toBeGreaterThanOrEqual(lavaY(f.ski.d) - 1e-6);
+      if (f.ski.d > LAVA.foot + 0.5 && f.ski.d < LAVA.lipD - 0.1) {
+        crown++;
+        expect(f.ski.y).toBeCloseTo(lavaY(f.ski.d), 6);
+        expect(f.ski.wet).toBe(false);
+      }
+    }
+    expect(crown).toBeGreaterThan(1.5 * FPS);
+    expect(frameAt(id, 1, LAVA.lipD / 12 + 0.5).ski.y).toBeGreaterThan(LAVA.lipY + 1);
+  });
+
+  it('blows soot into the rider face from the vent and sends the blind ski off the side', () => {
+    const start = SOOT.at;
+    expect(frameAt(id, 0, start - 0.1).rider.face).toBe('happy');
+    expect(frameAt(id, 0, start + 0.3).rider.face).toBe('sooty');
+    expect(Math.abs(frameAt(id, 0, start).ski.d - LAVA.vent)).toBeLessThan(0.5);
+    const end = frameAt(id, 0, megaDuration(id, 0));
+    expect(end.rider).toMatchObject({ mode: 'free', pose: 'float', face: 'sooty' });
+    expect(Math.abs(end.ski.s)).toBeGreaterThan(LAVA.halfWidth);
+    expect(Math.abs(end.rider.s)).toBeGreaterThan(LAVA.halfWidth);
+  });
+
+  it('weaves round every coconut-boulder, which lands before the ski gets there', () => {
+    const d2 = MEGA_SPECS[id].elements[1].clear.duration;
+    BOULDERS.list.forEach(({ d, s }, i) => {
+      const t = d / 12;
+      const f = frameAt(id, 2, megaSegments(id, 2)[1].start + t);
+      expect(Math.abs(f.ski.s - s), `clear of boulder ${i}`).toBeGreaterThan(BOULDERS.radius + 1.2);
+      expect(boulderLandAt(i)).toBeLessThan(t);
+      expect(boulderLandAt(i)).toBeGreaterThan(BOULDERS.fall);
+    });
+    expect(frameAt(id, 2, megaSegments(id, 2)[1].start + d2).ski.s).toBeCloseTo(0, 6);
+    for (let t = 0; t <= d2; t += DT) {
+      expect(frameAt(id, 2, megaSegments(id, 2)[1].start + t).ski.wet).toBe(true);
+    }
+  });
+
+  it('gets bonked on the head by the second boulder and sees stars', () => {
+    const dodged = frameAt(id, 1, megaSegments(id, 1)[1].start + 13 / 12);
+    expect(Math.abs(dodged.ski.s)).toBeGreaterThan(2);
+    const hit = frameAt(id, 1, megaSegments(id, 1)[1].start + BONK.at);
+    expect(Math.abs(hit.ski.d - g2 - BONK.d)).toBeLessThan(0.1);
+    expect(Math.abs(hit.ski.s - BONK.s)).toBeLessThan(0.1);
+    const dizzy = frameAt(id, 1, megaSegments(id, 1)[1].start + BONK.at + 0.6);
+    expect(dizzy.rider).toMatchObject({ mode: 'seated', pose: 'dizzy', face: 'dizzy' });
+    const stars = megaEvents(id, 1).filter((e) => e.type === 'stars');
+    expect(stars.length).toBeGreaterThanOrEqual(4);
+    const end = frameAt(id, 1, megaDuration(id, 1));
+    expect(end.rider).toMatchObject({ mode: 'free', pose: 'float', face: 'dizzy' });
+  });
+
+  it('rides the steam geyser up and does a double corkscrew off it', () => {
+    const plan = megaSegments(id, 3);
+    const start = plan[2].start;
+    let highest = 0;
+    for (let t = 0; t < plan[2].duration; t += DT) {
+      highest = Math.max(highest, frameAt(id, 3, start + t).ski.y);
+    }
+    expect(highest).toBeGreaterThan(GEYSER.crownY + 3);
+    const end = frameAt(id, 3, megaDuration(id, 3));
+    expect(end.ski.roll).toBeCloseTo(2 * TAU, 6);
+    expect(end.ski.s).toBeCloseTo(0, 6);
+    expect(frameAt(id, 3, start).ski.d).toBeCloseTo(g3, 6);
+    expect(geyserLevel('clear', 0)).toBe(0);
+    expect(geyserLevel('clear', 1)).toBeCloseTo(1, 6);
+    expect(megaEvents(id, 3).some((e) => e.type === 'confetti')).toBe(true);
+  });
+
+  it('shoots the rider up on a surge and brings him down slowly under a seaweed parachute', () => {
+    const plan = megaSegments(id, 2);
+    const start = plan[2].start;
+    expect(geyserLevel('fail', CHUTE.shotAt + 0.3)).toBeGreaterThan(1.1);
+    let peak = 0;
+    let fastest = 0;
+    let last = frameAt(id, 2, start + CHUTE.peakAt).rider.y;
+    for (let t = CHUTE.peakAt; t < CHUTE.landAt - 0.1; t += DT) {
+      const f = frameAt(id, 2, start + t);
+      peak = Math.max(peak, f.rider.y);
+      fastest = Math.max(fastest, (last - f.rider.y) * FPS);
+      last = f.rider.y;
+    }
+    expect(peak).toBeCloseTo(CHUTE.peakY, 0);
+    expect(fastest).toBeLessThan(7);
+    const end = frameAt(id, 2, megaDuration(id, 2));
+    expect(end.rider).toMatchObject({ mode: 'free', pose: 'float', face: 'soaked' });
+    expect(end.rider.props.seaweed).toBe(true);
+    // The ski comes down on its own, well before the rider does.
+    expect(frameAt(id, 2, start + CHUTE.shotAt + 1.6).ski.y).toBeCloseTo(0, 1);
   });
 });
 

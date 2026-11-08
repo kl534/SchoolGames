@@ -18,6 +18,7 @@ import {
 import { TAU } from '../anim';
 import { Kit, type Placed } from '../kit';
 import type { MegaId, Passed } from '../rules';
+import { buildGeyserBlastProps } from './geyser-blast-props';
 import { buildHarbourHavocProps } from './harbour-havoc-props';
 import { buildPenguinParadeProps } from './penguin-parade-props';
 import { MEGA_SPECS, megaLength, megaLocate, megaOffsets } from './mega';
@@ -35,6 +36,7 @@ const BUILDERS: Record<MegaId, (kit: Kit) => [MegaBuilt, MegaBuilt, MegaBuilt]> 
   'whale-of-a-time': buildWhaleProps,
   'harbour-havoc': buildHarbourHavocProps,
   'penguin-parade': buildPenguinParadeProps,
+  'geyser-blast': buildGeyserBlastProps,
 };
 
 function createMegaCourse(id: MegaId): MegaCourse {

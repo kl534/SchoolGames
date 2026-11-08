@@ -102,7 +102,7 @@ export type PoseName =
   | 'frisbee'
   | 'float'
   | 'climb';
-export type FaceName = 'happy' | 'scared' | 'dizzy' | 'soaked';
+export type FaceName = 'happy' | 'scared' | 'dizzy' | 'soaked' | 'sooty';
 
 export interface SkiFrame {
   d: number;

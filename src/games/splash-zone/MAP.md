@@ -1,6 +1,6 @@
 # Splash Zone map
 
-A jet-ski trick game seen from a chase camera: each answer sends the ski off a launcher (a wave, a kicker ramp or a mega ramp, by the player's streak tier) and the trick either comes off or goes spectacularly wrong. The clock is the distance to the launcher. Three jet skis, endless run. Each world (Lagoon, Harbour City, Iceberg Bay, then round again) has seven normal turns and then its own Mega Stunt: three questions through checkpoint buoy gates, then one long course (Whale of a Time, Harbour Havoc, Penguin Parade) that clears as many elements as were right and wipes out on the next. After the Mega a blue wave wipes the screen and the next world appears with its name. Volcano Island and Shark Reef come in the next commits.
+A jet-ski trick game seen from a chase camera: each answer sends the ski off a launcher (a wave, a kicker ramp or a mega ramp, by the player's streak tier) and the trick either comes off or goes spectacularly wrong. The clock is the distance to the launcher. Three jet skis, endless run. Each world (Lagoon, Harbour City, Iceberg Bay, Volcano Island, then round again) has seven normal turns and then its own Mega Stunt: three questions through checkpoint buoy gates, then one long course (Whale of a Time, Harbour Havoc, Penguin Parade, Geyser Blast) that clears as many elements as were right and wipes out on the next. After the Mega a blue wave wipes the screen and the next world appears with its name. Shark Reef comes in the next commit.
 
 ## Files
 
@@ -17,13 +17,15 @@ A jet-ski trick game seen from a chase camera: each answer sends the ski off a l
 - `mega/whale-of-a-time.ts`: Lagoon Mega: palm sandbar island, whale bounce, spout and triple backflip (`WHALE_OF_A_TIME`, `SANDBAR`, `WHALE`, `SPOUT`)
 - `mega/harbour-havoc.ts`: Harbour City Mega: ferry leap, pier railing grind, drawbridge and fireworks (`HARBOUR_HAVOC`, `FERRY`, `PIER`, `BRIDGE`, `leafAngle`)
 - `mega/penguin-parade.ts`: Iceberg Bay Mega: penguin floe hop, iceberg chute, ice arch spin and the ice cube wipeout (`PENGUIN_PARADE`, `FLOE`, `BERG`, `ARCH`, `BUMP`, `SKID`, `FREEZE`)
+- `mega/geyser-blast.ts`: Volcano Island Mega: lava-rock arch leap, weaving coconut-boulders, steam geyser double corkscrew and the soot, bonk and parachute wipeouts (`GEYSER_BLAST`, `LAVA`, `BOULDERS`, `GEYSER`, `SOOT`, `BONK`, `CHUTE`)
 - `mega/props-kit.ts`: what the course props are built from (`MegaBuilt`, `profile`)
 - `mega/whale-of-a-time-props.ts`: Whale of a Time meshes (`buildWhaleProps`, `tailAngle`, `spoutLevel`)
 - `mega/harbour-havoc-props.ts`: Harbour Havoc meshes (`buildHarbourHavocProps`)
 - `mega/penguin-parade-props.ts`: Penguin Parade meshes: penguins, floe, iceberg, snow bank, arch, the ice cube (`buildPenguinParadeProps`)
+- `mega/geyser-blast-props.ts`: Geyser Blast meshes: lava arch with soot puffs, falling coconut-boulders, the steam jet and the seaweed parachute (`buildGeyserBlastProps`, `geyserLevel`)
 - `mega/mega-props.ts`: the Mega courses and the checkpoint buoy gates as three.js objects (`createMegaCoursePool`, `createGate`)
 - `jetski.ts`: the jet ski and the lifeguard's rescue boat (`createJetSki`, `createRescueBoat`)
-- `rider.ts`: the kid rider's rig, life vest and poses (`createRider`, `POSES`)
+- `rider.ts`: the kid rider's rig, life vest, faces (happy, scared, dizzy, soaked, sooty) and poses (`createRider`, `POSES`)
 - `critters.ts`: the dolphin and the seaweed and fish gag props (`createDolphin`, `createSeaweed`, `createFish`)
 - `launchers.ts`: the wave, kicker and mega ramp meshes (`createLauncherPool`)
 - `water.ts`: the heaving water plane and the V-shaped foam wake (`createWater`)
@@ -41,8 +43,8 @@ A jet-ski trick game seen from a chase camera: each answer sends the ski off a l
 - `?streak=6`: start the run with this streak (0 to 20). `?skis=1`: start with 1 to 3 jet skis.
 - `?lab=<trickId>:<clear|fail>`: trick lab, loops one animation with its camera swing and the HUD hidden except the comic word. `?lab=respawn` loops the lifeguard boat.
 - `&at=<seconds>` freezes the lab at that time (effects and props included).
-- `?lab=<megaId>:<0-3>`: the same lab for a Mega course (`whale-of-a-time`, `harbour-havoc`, `penguin-parade`) with that many questions right: it clears that many elements and wipes out on the next (3 = the finale). `&at=` freezes it. Times to look at: whale-of-a-time:3 finale at `at=9`, :0 palm tangle `at=2.8`, :2 fizzle `at=8.6`; harbour-havoc:3 finale `at=9.7`, :0 lifeboat `at=3.7`, :1 crab pots `at=5.7`, :2 bridge drop `at=9`; penguin-parade:3 finale `at=9.2`, :0 penguin bump `at=1.95`, :1 snow bank `at=6`, :2 ice cube `at=9.8`.
-- `?world=<lagoon|harbour|iceberg>`: start the run in that world. `?mega=1`: the first turn is this world's Mega Stunt (banner, three gate questions, the course, then the wipe and the next world).
+- `?lab=<megaId>:<0-3>`: the same lab for a Mega course (`whale-of-a-time`, `harbour-havoc`, `penguin-parade`, `geyser-blast`) with that many questions right: it clears that many elements and wipes out on the next (3 = the finale). `&at=` freezes it. Times to look at: whale-of-a-time:3 finale at `at=9`, :0 palm tangle `at=2.8`, :2 fizzle `at=8.6`; harbour-havoc:3 finale `at=9.7`, :0 lifeboat `at=3.7`, :1 crab pots `at=5.7`, :2 bridge drop `at=9`; penguin-parade:3 finale `at=9.2`, :0 penguin bump `at=1.95`, :1 snow bank `at=6`, :2 ice cube `at=9.8`; geyser-blast:3 finale `at=9.8`, :0 soot `at=2.1`, :1 boulder bonk `at=5.6`, :2 parachute `at=10.5`.
+- `?world=<lagoon|harbour|iceberg|volcano>`: start the run in that world. `?mega=1`: the first turn is this world's Mega Stunt (banner, three gate questions, the course, then the wipe and the next world).
 - Example: `npm run shots -- "splash-zone?lab=backflip:clear&at=1.3" "splash-zone?lab=submarine:fail&at=3.5" "splash-zone?lab=respawn&at=0.9" --sizes 844x390`
 
 ## Where changes go
