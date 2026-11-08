@@ -42,7 +42,9 @@ import {
   MEGA_SPECS,
   megaDuration,
   megaEvents,
-  megaFraming,
+  megaFramingAt,
+  megaLocate,
+  megaLookBias,
   megaFrame,
   megaLength,
   megaRate,
@@ -152,9 +154,14 @@ interface Stunt {
   scale: number;
   /** d of the end of what it plays on (the trick's landing, or the whole Mega course). */
   length: number;
-  /** What the stunt camera has to fit, and where it looks first (Infinity: it just follows). */
-  framing: Framing;
+  /** What the stunt camera has to fit at a stunt time, and where it looks first (Infinity: it just follows). */
+  framingAt(t: number): Framing;
   lipD: number;
+  /** A Mega course: how far ahead of the ski (course d) the camera looks, towards the element it is on. */
+  lookBias?(d: number): number;
+  /** A Mega course: which element is playing at a time, so a word never outlives its element. */
+  segmentAt?(t: number): number;
+  seg: number;
   frameAt(t: number, out: Frame): void;
   /** Playback rate at a stunt time: 1 normally, slower in slow motion. */
   rateAt(t: number): number;
@@ -331,8 +338,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
   const focus = new Vector3();
   const camFocus = new Vector3();
   // What the stunt view frames: how high and low the trick goes, and where its launcher's lip is.
-  let framing: Framing = RESULT_FRAMING;
-  let lipDist = 0;
+  let camStunt: Stunt | null = null;
   let followTrick = false;
   let camMid = framingMid(RESULT_FRAMING);
   let camDist = 12;
@@ -811,22 +817,26 @@ function run(session: GameSession, dev: DevOptions | null): void {
   };
 
   // ---------- Tricks ----------
-  const makeStunt = (id: TrickId, outcome: Outcome): Stunt => ({
-    trick: id,
-    mega: false,
-    outcome,
-    t: 0,
-    duration: trickDuration(id, outcome),
-    events: trickEvents(id, outcome),
-    next: 0,
-    scale: 1,
-    length: TRICK_SPECS[id].length,
-    framing: trickFraming(id, outcome),
-    lipD: LAUNCHERS[TRICK_SPECS[id].launcher].lipD,
-    frameAt: (t, out) => void trickFrame(id, outcome, t, out),
-    rateAt: (t) => trickRate(id, outcome, t),
-    wordAt: () => ({ text: trickWord(id, outcome), good: outcome === 'clear' }),
-  });
+  const makeStunt = (id: TrickId, outcome: Outcome): Stunt => {
+    const framing = trickFraming(id, outcome);
+    return {
+      trick: id,
+      mega: false,
+      outcome,
+      t: 0,
+      duration: trickDuration(id, outcome),
+      events: trickEvents(id, outcome),
+      next: 0,
+      scale: 1,
+      length: TRICK_SPECS[id].length,
+      framingAt: () => framing,
+      seg: 0,
+      lipD: LAUNCHERS[TRICK_SPECS[id].launcher].lipD,
+      frameAt: (t, out) => void trickFrame(id, outcome, t, out),
+      rateAt: (t) => trickRate(id, outcome, t),
+      wordAt: () => ({ text: trickWord(id, outcome), good: outcome === 'clear' }),
+    };
+  };
 
   /** The one long stunt of a Mega course that clears `passed` elements and wipes out on the next. */
   const makeMegaStunt = (id: MegaId, passed: Passed): Stunt => ({
@@ -839,7 +849,10 @@ function run(session: GameSession, dev: DevOptions | null): void {
     next: 0,
     scale: 1,
     length: megaLength(id),
-    framing: megaFraming(id, passed),
+    framingAt: (t) => megaFramingAt(id, passed, t),
+    lookBias: (d) => megaLookBias(id, d),
+    segmentAt: (t) => megaLocate(id, passed, t).index,
+    seg: 0,
     lipD: Number.POSITIVE_INFINITY,
     frameAt: (t, out) => void megaFrame(id, passed, t, out),
     rateAt: (t) => megaRate(id, passed, t),
@@ -849,8 +862,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
 
   /** The camera frames this stunt: its height range, and the lip it takes off from. */
   const frameStunt = (s: Stunt) => {
-    framing = s.framing;
-    lipDist = s.lipD;
+    camStunt = s;
     followTrick = true;
   };
 
@@ -925,7 +937,18 @@ function run(session: GameSession, dev: DevOptions | null): void {
   /** Advances the trick by `dt` seconds of trick time, firing the events it passes. */
   const stepStunt = (s: Stunt, dt: number) => {
     s.t = Math.min(s.t + dt, s.duration);
-    while (s.next < s.events.length && s.events[s.next].at <= s.t) fireEvent(s.events[s.next++], s);
+    // A comic word never outlives its element: when the stunt moves on to the next, it goes.
+    const sync = (at: number) => {
+      const k = s.segmentAt?.(at);
+      if (k === undefined || k === s.seg) return;
+      s.seg = k;
+      hud.hideWord();
+    };
+    while (s.next < s.events.length && s.events[s.next].at <= s.t) {
+      sync(s.events[s.next].at);
+      fireEvent(s.events[s.next++], s);
+    }
+    sync(s.t);
   };
 
   const finishStunt = (s: Stunt) => {
@@ -1420,11 +1443,18 @@ function run(session: GameSession, dev: DevOptions | null): void {
    * rider; afterwards it frames the wreck. Eased so a thrown rider is followed smoothly.
    */
   const updateCameraTargets = (delta: number, snap: boolean) => {
-    const f = followTrick ? framing : RESULT_FRAMING;
+    const cs = followTrick ? camStunt : null;
+    const f = cs ? cs.framingAt(cs.t) : RESULT_FRAMING;
     const fov = fovFor(camera.aspect);
     const dist = stuntDistance(f, fov, bandFraction(viewW, viewH), camera.aspect);
     const d = entryZ - focus.z;
-    const lookZ = entryZ - (followTrick ? stuntLookD(d, lipDist, dist, fov, camera.aspect) : d);
+    // A Mega course looks towards the element it is on; a trick looks at its lip, then follows.
+    const lookD = !cs
+      ? d
+      : cs.lookBias
+        ? d + cs.lookBias(d)
+        : stuntLookD(d, cs.lipD, dist, fov, camera.aspect);
+    const lookZ = entryZ - lookD;
     look.set(focus.x, 0, lookZ);
     if (snap || (camW <= 0.001 && camGoal === 0)) {
       camFocus.copy(look);
@@ -1682,8 +1712,10 @@ function run(session: GameSession, dev: DevOptions | null): void {
     frameStunt(s);
     camW = camGoal = 1;
     layout();
+    s.t = Math.min(at, s.duration);
     updateCameraTargets(0, true);
     aimCamera(0, 0);
+    s.t = 0;
     const step = 1 / 30;
     for (let t = 0; t < at; t += step) {
       stepStunt(s, Math.min(step, at - t));

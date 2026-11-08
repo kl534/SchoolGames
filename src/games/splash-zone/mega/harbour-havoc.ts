@@ -494,7 +494,7 @@ const bridgeFail: Def = (() => {
   const s0 = seatAtTime(skiAt, tFree);
   const flyT = 0.8;
   const splat = tFree + flyT;
-  const riderD = 30;
+  const riderD = 27.5;
   const popEnd = splat + 0.5;
   const settle = popEnd + 0.1;
   const riderAt = (t: number, f: Frame) => {
@@ -550,6 +550,8 @@ export const HARBOUR_HAVOC: MegaSpec = {
       length: LENGTH1,
       floorY: -1.2,
       cue: { d: 8, y: 1.0 },
+      anchor: { d: (FERRY.foot + FERRY.end) / 2, y: FERRY.deckY },
+      extent: [FERRY.foot + 1, FERRY.end - 1],
       clear: ferryClear,
       fail: ferryFail,
     },
@@ -558,6 +560,8 @@ export const HARBOUR_HAVOC: MegaSpec = {
       length: LENGTH2,
       floorY: -1.2,
       cue: { d: 6, y: 0.6 },
+      anchor: { d: (PIER.rampFoot + PIER.railTo) / 2, y: PIER.railY },
+      extent: [PIER.railFrom - 0.5, PIER.railTo - 3.5],
       clear: pierClear,
       fail: pierFail,
     },
@@ -566,6 +570,8 @@ export const HARBOUR_HAVOC: MegaSpec = {
       length: LENGTH3,
       floorY: -1.2,
       cue: { d: 8, y: 0.6 },
+      anchor: { d: (BRIDGE.hinge + BRIDGE.lip) / 2, y: 2.8 },
+      extent: [BRIDGE.hinge, BRIDGE.lip],
       clear: bridgeClear,
       fail: bridgeFail,
     },
