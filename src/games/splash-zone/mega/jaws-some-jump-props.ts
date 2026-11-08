@@ -181,13 +181,17 @@ function buildShark(kit: Kit): MegaBuilt {
     wave.rotation.z =
       0.5 * near * Math.sin(t * 12) + (outcome === 'fail' ? 0.6 * Math.sin(t * 9) : 0);
   };
+  const idle = (time: number) => {
+    bob.position.y = 0.06 * Math.sin(time * 1.7);
+    bob.rotation.z = 0.025 * Math.sin(time * 1.3);
+  };
   return {
     group,
-    update: pose,
-    ambient(time) {
-      bob.position.y = 0.06 * Math.sin(time * 1.7);
-      bob.rotation.z = 0.025 * Math.sin(time * 1.3);
+    update(outcome, t) {
+      pose(outcome, t);
+      idle(t);
     },
+    ambient: idle,
     reset: () => pose('clear', 0),
   };
 }
@@ -522,6 +526,10 @@ function buildShip(kit: Kit): MegaBuilt {
     sails[0].g.position.z = sails[0].baseZ - 0.9 * hit;
     sails[0].g.rotation.x = -0.12 * hit;
   };
+  const idle = (time: number) => {
+    sails.forEach((s, i) => (s.cloth.rotation.y = 0.03 * Math.sin(time * 1.2 + i)));
+    flag.rotation.y = 0.2 * Math.sin(time * 3);
+  };
   return {
     group,
     update(outcome, t) {
@@ -529,11 +537,9 @@ function buildShip(kit: Kit): MegaBuilt {
       placeBundle(outcome, t);
       const finale = outcome === 'clear' && t > 1.083 + 2.6 * 0.55 ? 1 : 0;
       poseCrew(finale, t);
+      idle(t);
     },
-    ambient(time) {
-      sails.forEach((s, i) => (s.cloth.rotation.y = 0.03 * Math.sin(time * 1.2 + i)));
-      flag.rotation.y = 0.2 * Math.sin(time * 3);
-    },
+    ambient: idle,
     reset() {
       poseSails('clear', 0);
       bundle.visible = false;

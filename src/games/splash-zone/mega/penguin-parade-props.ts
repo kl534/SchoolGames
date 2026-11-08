@@ -133,10 +133,15 @@ function buildFloe(kit: Kit): MegaBuilt {
       p.flippers[1].rotation.z = -0.25 - flap;
     });
   };
+  const idle = (time: number) =>
+    row.forEach((p, i) => (p.sway.rotation.z = 0.04 * Math.sin(time * 1.5 + i)));
   return {
     group,
-    update: (outcome, t) => pose(outcome, t, t),
-    ambient: (time) => row.forEach((p, i) => (p.sway.rotation.z = 0.04 * Math.sin(time * 1.5 + i))),
+    update: (outcome, t) => {
+      pose(outcome, t, t);
+      idle(t);
+    },
+    ambient: idle,
     reset: () => pose('clear', 0, 0),
   };
 }
@@ -348,18 +353,20 @@ function buildArch(kit: Kit): MegaBuilt {
     cubeRoot.rotation.y = f.rider.mode === 'free' ? f.rider.pitch * 0.25 : 0;
     cubeRoot.scale.setScalar(0.25 + 0.75 * prog(t, FREEZE.at, FREEZE.at + 0.25, 'o'));
   };
+  const idle = (time: number) => {
+    cubeBob.position.y = 0.06 * Math.sin(time * 2.4);
+    cubeBob.rotation.z = 0.04 * Math.sin(time * 1.9);
+    cheer.forEach((c) => (c.p.sway.rotation.z = 0.04 * Math.sin(time * 1.5 + c.phase)));
+  };
   return {
     group,
     update(outcome, t) {
       placeCube(outcome, t);
       const mid = ARCH.lip / 12 + 1.1;
       poseCheer(outcome === 'clear' && t >= mid ? 1 : 0, t);
+      idle(t);
     },
-    ambient(time) {
-      cubeBob.position.y = 0.06 * Math.sin(time * 2.4);
-      cubeBob.rotation.z = 0.04 * Math.sin(time * 1.9);
-      cheer.forEach((c) => (c.p.sway.rotation.z = 0.04 * Math.sin(time * 1.5 + c.phase)));
-    },
+    ambient: idle,
     reset() {
       cubeRoot.visible = false;
       poseCheer(0, 0);

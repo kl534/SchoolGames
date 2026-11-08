@@ -53,7 +53,7 @@ A jet-ski trick game seen from a chase camera: each answer sends the ski off a l
 
 - A new trick: a clear and a fail `Def` in the right `tricks-t*.ts`, `TrickId`, `TRICK_IDS`, `TRICK_TIER` and `TRICK_NAMES` in `rules.ts`, the registry and `FLOOR_Y` in `tricks.ts`.
 - Scoring, tiers, jet skis or approach timing: `rules.ts`.
-- A new Mega course: a `MegaSpec` (three elements, each a clear and a fail `Def`, a `cue` and a `floorY`) in `mega/<id>.ts`, its meshes in `mega/<id>-props.ts`, then `MegaId`, `MEGA_IDS` and `WORLD_MEGA` in `rules.ts`, the registries in `mega/mega.ts` and `mega/mega-props.ts` and the wake strip icon in `launcherIcon` (`hud.ts`). A prop's `ambient` runs every frame after `update`, so it may only move parts that `update` leaves alone (a child group for the sway).
+- A new Mega course: a `MegaSpec` (three elements, each a clear and a fail `Def`, a `cue` and a `floorY`) in `mega/<id>.ts`, its meshes in `mega/<id>-props.ts`, then `MegaId`, `MEGA_IDS` and `WORLD_MEGA` in `rules.ts`, the registries in `mega/mega.ts` and `mega/mega-props.ts` and the wake strip icon in `launcherIcon` (`hud.ts`). `main.ts` runs a course's `ambient` only while it waits ahead of the ski (`courseHeld`): once a stunt (or a lab frame) has posed the props, `update` is the only thing that moves them, so idle motion during a stunt (sway, bob, flag) goes in `update` too, from the stunt time.
 - A new world: `WorldId`, `WORLD_ORDER`, `WORLD_NAMES` in `rules.ts`, `PALETTES` and a `case` in `world.ts` (its islands, boats, landmark and far strips) with the shapes in `scenery.ts`.
 - A new effect or particle kind: `effects.ts` (and `EVENT` types in `anim.ts` for a trick to fire it).
 - Rider poses or the vest: `rider.ts`. Ski or boat look: `jetski.ts`.
