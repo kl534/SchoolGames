@@ -107,13 +107,18 @@ const sandClear: Def = (() => {
 })();
 
 /** The fail: a pathetic hop, a skid into a palm tree, the rider tangled in its fronds. */
-export const TANGLE = { tree: [20.5, 3.5] as const, crown: [21.2, 3.6, 5.6] as const };
+export const TANGLE = {
+  tree: [20.5, 3.5] as const,
+  crown: [21.2, 3.6, 5.6] as const,
+  /** When the ski hits the palm: the hop's air time and the skid after it. */
+  hitAt: T_LIP1 + 0.29 + 0.45,
+};
 
 const sandFail: Def = (() => {
   const HOP = 0.29;
   const tLand = T_LIP1 + HOP;
   const landD = SANDBAR.lip + SPEED * HOP;
-  const tHit = tLand + 0.45;
+  const tHit = TANGLE.hitAt;
   const [treeD, treeS] = TANGLE.tree;
   const skiD = track([
     [tLand, landD],

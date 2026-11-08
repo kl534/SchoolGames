@@ -45,8 +45,31 @@ import {
   type Passed,
   type WorldId,
 } from '../src/games/splash-zone/rules';
-import { SLOW_RATE } from '../src/games/splash-zone/tricks';
+import { SLOW_RATE, focusOf as focusOf2 } from '../src/games/splash-zone/tricks';
 import { PALETTES } from '../src/games/splash-zone/world';
+import { createGate, createMegaCoursePool } from '../src/games/splash-zone/mega/mega-props';
+import {
+  BRIDGE,
+  CRASH,
+  FERRY,
+  LEAF_REST,
+  LIFEBOAT,
+  PIER,
+  ferryY,
+  leafAngle,
+} from '../src/games/splash-zone/mega/harbour-havoc';
+import {
+  FIZZLE,
+  SANDBAR,
+  SPOUT,
+  TANGLE,
+  T_FLICK,
+  WHALE,
+  sandbarY,
+  spoutY,
+  whaleY,
+} from '../src/games/splash-zone/mega/whale-of-a-time';
+import { spoutLevel, tailAngle } from '../src/games/splash-zone/mega/whale-of-a-time-props';
 
 const PASSED: Passed[] = [0, 1, 2, 3];
 const FPS = 60;
@@ -465,5 +488,236 @@ describe.each(cases)('the stunt camera over %s with %i right', (id, passed) => {
   });
 });
 
-// Local alias so the camera loop reads like the trick one.
-import { focusOf as focusOf2 } from '../src/games/splash-zone/tricks';
+// ---------- The props ----------
+
+describe('the course props', () => {
+  it.each(MEGA_IDS)('%s builds, follows every moment of every stunt and disposes', (id) => {
+    const pool = createMegaCoursePool();
+    const course = pool.get(id);
+    expect(pool.get(id)).toBe(course);
+    expect(course.id).toBe(id);
+    expect(course.length).toBe(megaLength(id));
+    expect(course.object.children).toHaveLength(3);
+    for (const passed of PASSED) {
+      const duration = megaDuration(id, passed);
+      for (let t = 0; t <= duration + 1e-9; t += 1 / 20) {
+        course.update(passed, t);
+        course.ambient(t);
+      }
+      course.update(passed, duration + 3);
+      course.reset();
+    }
+    course.object.traverse((o) => {
+      expect(Number.isFinite(o.position.x + o.position.y + o.position.z)).toBe(true);
+      expect(Number.isFinite(o.scale.x + o.scale.y + o.scale.z)).toBe(true);
+    });
+    pool.dispose();
+  });
+
+  it('builds three checkpoint gates that light up and dispose', () => {
+    for (const n of [1, 2, 3]) {
+      const gate = createGate(n);
+      expect(gate.number).toBe(n);
+      expect(gate.object.visible).toBe(false);
+      for (const state of ['idle', 'pass', 'miss'] as const) {
+        gate.setState(state);
+        gate.ambient(0.3);
+      }
+      gate.reset();
+      gate.dispose();
+    }
+  });
+});
+
+// ---------- Whale of a Time ----------
+
+const frameAt = (id: MegaId, passed: Passed, t: number) => megaFrame(id, passed, t);
+
+describe('Whale of a Time specifics', () => {
+  const [e1, e2, e3] = megaOffsets('whale-of-a-time');
+
+  it('flies over the sandbar island with room to spare and never touches a palm', () => {
+    const d1 = MEGA_SPECS['whale-of-a-time'].elements[0].clear.duration;
+    for (let t = 0; t <= d1; t += DT) {
+      const f = frameAt('whale-of-a-time', 1, t);
+      expect(f.ski.y).toBeGreaterThanOrEqual(sandbarY(f.ski.d) - 1e-6);
+      if (f.ski.d > SANDBAR.lip + 0.5 && f.ski.d < SANDBAR.end) {
+        expect(f.ski.y - sandbarY(f.ski.d)).toBeGreaterThan(0.2);
+      }
+    }
+    for (const [, s] of SANDBAR.palms) expect(Math.abs(s)).toBeGreaterThan(3);
+    expect(e1).toBe(0);
+  });
+
+  it('tangles the rider in the palm fronds and drops him in the water', () => {
+    const duration = megaDuration('whale-of-a-time', 0);
+    const [, , crownY] = TANGLE.crown;
+    let hung = 0;
+    for (let t = 0; t <= duration; t += DT) {
+      const f = frameAt('whale-of-a-time', 0, t);
+      if (f.rider.mode === 'free' && f.rider.y > crownY - 0.4 && f.rider.pose === 'flail') {
+        hung++;
+        expect(f.rider.props.seaweed).toBe(true);
+      }
+    }
+    expect(hung).toBeGreaterThan(0.8 * FPS);
+    const end = frameAt('whale-of-a-time', 0, duration);
+    expect(end.rider.props.seaweed).toBe(true);
+    expect(end.rider.y).toBeLessThan(0);
+    // The ski skids to the palm that is hit.
+    const hit = frameAt('whale-of-a-time', 0, TANGLE.hitAt);
+    expect(Math.abs(hit.ski.s - TANGLE.tree[1])).toBeLessThan(0.3);
+    expect(Math.abs(hit.ski.d - TANGLE.tree[0])).toBeLessThan(0.6);
+  });
+
+  it('bounces off the top of the whale and flips once', () => {
+    const plan = megaSegments('whale-of-a-time', 2);
+    const top = frameAt('whale-of-a-time', 2, plan[1].start + WHALE.d / 12);
+    expect(top.ski.d - e2).toBeCloseTo(WHALE.d, 1);
+    expect(top.ski.y).toBeCloseTo(WHALE.top, 1);
+    expect(frameAt('whale-of-a-time', 2, plan[2].start).ski.d).toBeCloseTo(e3, 6);
+    // Up the whale's side the ski rides on its back.
+    for (let t = 0.5; t < WHALE.d / 12; t += DT) {
+      const g = frameAt('whale-of-a-time', 2, plan[1].start + t);
+      expect(g.ski.y).toBeCloseTo(whaleY(g.ski.d - e2), 1);
+    }
+    const flipped = frameAt('whale-of-a-time', 2, plan[2].start - 1e-6);
+    expect(flipped.ski.pitch).toBeCloseTo(TAU, 3);
+  });
+
+  it('is flicked off by the tail and thrown clear to the side', () => {
+    const plan = megaSegments('whale-of-a-time', 1);
+    const duration = megaDuration('whale-of-a-time', 1);
+    let farthest = 0;
+    for (let t = plan[1].start; t <= duration; t += DT) {
+      const f = frameAt('whale-of-a-time', 1, t);
+      farthest = Math.max(farthest, f.ski.s, f.rider.mode === 'free' ? f.rider.s : 0);
+    }
+    expect(farthest).toBeGreaterThan(10);
+    expect(tailAngle('fail', T_FLICK + 0.18)).toBeGreaterThan(1.2);
+    expect(tailAngle('fail', 0)).toBeLessThan(0.3);
+    expect(tailAngle('fail', 6)).toBeLessThan(0.3);
+    expect(tailAngle('clear', 1)).toBeLessThan(0.3);
+  });
+
+  it('rides the spout up and does a triple backflip off it', () => {
+    const plan = megaSegments('whale-of-a-time', 3);
+    const start = plan[2].start;
+    for (let t = SPOUT.foot / 12 + 0.05; t < SPOUT.foot / 12 + 0.65; t += DT) {
+      const f = frameAt('whale-of-a-time', 3, start + t);
+      expect(f.ski.y).toBeCloseTo(spoutY(f.ski.d - e3), 1);
+      expect(spoutLevel('clear', t)).toBeCloseTo(1, 6);
+    }
+    const end = frameAt('whale-of-a-time', 3, megaDuration('whale-of-a-time', 3));
+    // Three more turns on top of the whale bounce's one.
+    expect(end.ski.pitch).toBeCloseTo(4 * TAU, 6);
+    const rates = Array.from({ length: 1000 }, (_, i) =>
+      megaRate('whale-of-a-time', 3, start + i * 0.005),
+    );
+    expect(Math.min(...rates)).toBeCloseTo(SLOW_RATE, 6);
+  });
+
+  it('lets the spout fizzle out before the ski comes down flat', () => {
+    expect(spoutLevel('fail', FIZZLE.at - 0.01)).toBeGreaterThan(0.99);
+    expect(spoutLevel('fail', FIZZLE.gone)).toBeCloseTo(0, 6);
+    const plan = megaSegments('whale-of-a-time', 2);
+    let topY = 0;
+    let flat = 0;
+    for (let t = 0; t <= plan[2].duration; t += DT) {
+      const f = frameAt('whale-of-a-time', 2, plan[2].start + t);
+      topY = Math.max(topY, f.ski.y);
+      if (t > 2.2 && offTurn(f.ski.pitch) < 0.2) flat++;
+    }
+    expect(topY).toBeLessThan(5.5);
+    expect(topY).toBeGreaterThan(2);
+    expect(flat).toBeGreaterThan(0);
+  });
+});
+
+// ---------- Harbour Havoc ----------
+
+describe('Harbour Havoc specifics', () => {
+  const [, h2, h3] = megaOffsets('harbour-havoc');
+
+  it('leaps the ferry above the passengers, the cabin and the funnels', () => {
+    const d1 = MEGA_SPECS['harbour-havoc'].elements[0].clear.duration;
+    for (let t = 0; t <= d1; t += DT) {
+      const f = frameAt('harbour-havoc', 1, t);
+      expect(f.ski.y).toBeGreaterThanOrEqual(ferryY(f.ski.d) - 1e-6);
+      if (f.ski.d > FERRY.cabinFrom - 1 && f.ski.d < FERRY.end + 1) {
+        expect(f.ski.y).toBeGreaterThan(FERRY.cabinTop + 0.4);
+      }
+      // The lifeboat floats astern and the ski sails over it.
+      if (Math.abs(f.ski.d - FERRY.boatD) < 2.2) expect(f.ski.y).toBeGreaterThan(1.5);
+    }
+    // The passengers stand to the sides of the middle line the ski flies along.
+    for (const [, s] of FERRY.passengers) expect(Math.abs(s)).toBeGreaterThan(1);
+    expect(FERRY.funnelS).toBeGreaterThan(1.5);
+  });
+
+  it('lands the short leap in the lifeboat, which tips them out', () => {
+    const f = frameAt('harbour-havoc', 0, LIFEBOAT.landAt + 0.3);
+    expect(Math.abs(f.ski.d - FERRY.boatD)).toBeLessThan(0.8);
+    expect(f.ski.y).toBeLessThan(0.7);
+    expect(f.rider.mode).toBe('seated');
+    const after = frameAt('harbour-havoc', 0, LIFEBOAT.tipAt + 0.9);
+    expect(after.rider.mode).toBe('free');
+  });
+
+  it('grinds along the railing, balancing, and hops off the end', () => {
+    const start = megaSegments('harbour-havoc', 2)[1].start;
+    let grinding = 0;
+    for (let t = 0; t < 3.4; t += DT) {
+      const f = frameAt('harbour-havoc', 2, start + t);
+      if (f.ski.d - h2 > PIER.railFrom + 0.2 && f.ski.d - h2 < PIER.railTo - 0.2) {
+        grinding++;
+        expect(f.ski.y).toBeCloseTo(PIER.railY, 6);
+        expect(f.ski.wet).toBe(false);
+        expect(f.rider.pose).toBe('armsUp');
+      }
+    }
+    expect(grinding).toBeGreaterThan(1.5 * FPS);
+  });
+
+  it('ploughs into the crab pots and is thrown into the water with a fish', () => {
+    const start = megaSegments('harbour-havoc', 1)[1].start;
+    const hit = frameAt('harbour-havoc', 1, start + CRASH.hitAt);
+    expect(Math.abs(hit.ski.d - h2 - PIER.crab.d)).toBeLessThan(1);
+    expect(Math.abs(hit.ski.s - PIER.crab.s)).toBeLessThan(1);
+    const end = frameAt('harbour-havoc', 1, megaDuration('harbour-havoc', 1));
+    expect(end.rider.props.fish).toBe(true);
+    expect(end.rider.s).toBeGreaterThan(PIER.deckS[1]);
+  });
+
+  it('launches off the raised drawbridge into a double backflip with three fireworks', () => {
+    const plan = megaSegments('harbour-havoc', 3);
+    const start = plan[2].start;
+    expect(leafAngle.clear(0)).toBeCloseTo(LEAF_REST, 6);
+    expect(leafAngle.clear(1)).toBeCloseTo(0.44, 6);
+    for (let t = BRIDGE.hinge / 12 + 0.1; t < BRIDGE.lip / 12; t += DT) {
+      const f = frameAt('harbour-havoc', 3, start + t);
+      expect(f.ski.y).toBeCloseTo((f.ski.d - h3 - BRIDGE.hinge) * Math.tan(leafAngle.clear(t)), 6);
+    }
+    const end = frameAt('harbour-havoc', 3, megaDuration('harbour-havoc', 3));
+    expect(end.ski.pitch).toBeCloseTo(2 * TAU, 6);
+    const fireworks = megaEvents('harbour-havoc', 3).filter((e) => e.type === 'fireworks');
+    expect(fireworks).toHaveLength(3);
+    for (const e of fireworks) expect(e.at).toBeGreaterThan(start + 1.7);
+    for (const passed of [0, 1, 2] as const) {
+      expect(megaEvents('harbour-havoc', passed).some((e) => e.type === 'fireworks')).toBe(false);
+    }
+  });
+
+  it('drops the bridge under the ski, which slides off the end', () => {
+    expect(leafAngle.fail(1.3)).toBeCloseTo(0.44, 6);
+    expect(leafAngle.fail(2.4)).toBeLessThan(0.05);
+    const plan = megaSegments('harbour-havoc', 2);
+    let highest = 0;
+    for (let t = 0; t <= plan[2].duration; t += DT) {
+      highest = Math.max(highest, frameAt('harbour-havoc', 2, plan[2].start + t).ski.y);
+    }
+    expect(highest).toBeLessThan(6);
+    const end = frameAt('harbour-havoc', 2, megaDuration('harbour-havoc', 2));
+    expect(end.rider.mode).toBe('free');
+  });
+});

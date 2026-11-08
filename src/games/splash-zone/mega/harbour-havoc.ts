@@ -113,13 +113,18 @@ const ferryClear: Def = (() => {
 })();
 
 /** The fail: a short leap that lands in the lifeboat, which tips them both out. */
-export const LIFEBOAT = { landD: FERRY.boatD, tipAt: 3.5 };
+export const LIFEBOAT = {
+  landD: FERRY.boatD,
+  tipAt: 3.5,
+  /** When the ski comes down in the boat. */
+  landAt: T_LIP1 + (FERRY.boatD - FERRY.lip) / SPEED,
+};
 
 const ferryFail: Def = (() => {
   const landD = LIFEBOAT.landD;
   const air = (landD - FERRY.lip) / SPEED;
   const tLand = T_LIP1 + air;
-  const seatY = 0.55;
+  const seatY = 0.3;
   const tTip = LIFEBOAT.tipAt;
   const out = track([
     [tTip, 0],
