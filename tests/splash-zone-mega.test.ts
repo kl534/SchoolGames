@@ -585,15 +585,19 @@ describe('Whale of a Time specifics', () => {
     expect(flipped.ski.pitch).toBeCloseTo(TAU, 3);
   });
 
-  it('is flicked off by the tail and thrown clear to the side', () => {
+  it('is flicked off by the tail and thrown clear down the course', () => {
     const plan = megaSegments('whale-of-a-time', 1);
     const duration = megaDuration('whale-of-a-time', 1);
     let farthest = 0;
+    let furthestOut = 0;
     for (let t = plan[1].start; t <= duration; t += DT) {
       const f = frameAt('whale-of-a-time', 1, t);
-      farthest = Math.max(farthest, f.ski.s, f.rider.mode === 'free' ? f.rider.s : 0);
+      farthest = Math.max(farthest, f.rider.mode === 'free' ? f.rider.d - e2 : 0);
+      furthestOut = Math.max(furthestOut, f.ski.s, f.rider.mode === 'free' ? f.rider.s : 0);
     }
-    expect(farthest).toBeGreaterThan(10);
+    // Thrown well on along the course and a little to the side.
+    expect(farthest).toBeGreaterThan(20);
+    expect(furthestOut).toBeGreaterThan(7);
     expect(tailAngle('fail', T_FLICK + 0.18)).toBeGreaterThan(1.2);
     expect(tailAngle('fail', 0)).toBeLessThan(0.3);
     expect(tailAngle('fail', 6)).toBeLessThan(0.3);

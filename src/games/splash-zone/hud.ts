@@ -139,6 +139,14 @@ export interface Hud {
   pop(text: string, at: { x: number; y: number }, kind: 'good' | 'bad' | 'plain'): void;
   speedLines(on: boolean): void;
   flashCrash(): void;
+  /**
+   * The wave wipe between worlds: `cover` sweeps a blue wave up over the screen, `off` sweeps it
+   * away off the top, `idle` puts it back under the screen with no motion.
+   */
+  wipe(state: 'cover' | 'off' | 'idle'): void;
+  /** The big world title ("Harbour City") that shows after the wipe. */
+  showWorldTitle(name: string): void;
+  hideWorldTitle(): void;
   setTopVisible(visible: boolean, optionCount: number): void;
   lockAnswers(): void;
   /** Sets the four answer buttons to these texts and clears their states. */
@@ -212,6 +220,14 @@ export function createHud(avatar: string): Hud {
   word.hidden = true;
   const speed = make('div', 'sz-speed', root);
   const flash = make('div', 'sz-flash', root);
+  const wipeEl = make('div', 'sz-wipe', root);
+  wipeEl.setAttribute('aria-hidden', 'true');
+  const worldTitle = make('div', 'sz-world', root);
+  worldTitle.setAttribute('role', 'status');
+  const worldKicker = make('div', 'sz-world-kicker', worldTitle);
+  worldKicker.textContent = 'Now riding';
+  const worldName = make('div', 'sz-world-name', worldTitle);
+  worldTitle.hidden = true;
 
   const restart = (node: HTMLElement) => {
     node.classList.remove('on');
@@ -358,6 +374,19 @@ export function createHud(avatar: string): Hud {
     },
     flashCrash() {
       restart(flash);
+    },
+    wipe(state) {
+      wipeEl.classList.toggle('cover', state === 'cover');
+      wipeEl.classList.toggle('off', state === 'off');
+    },
+    showWorldTitle(name) {
+      worldName.textContent = name;
+      worldTitle.hidden = false;
+      restart(worldTitle);
+    },
+    hideWorldTitle() {
+      worldTitle.hidden = true;
+      worldTitle.classList.remove('on');
     },
     setTopVisible(visible, optionCount) {
       top.hidden = !visible;

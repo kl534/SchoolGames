@@ -1,8 +1,9 @@
 /**
  * The world around the water: a sky dome, fog, sun, and scenery recycled along the course at 18 to
- * 70 u either side of the ski's path. The Lagoon (the only world so far) is sandy islands with
- * palm trees, sailboats, a lighthouse, a pier with a cheering crowd every ~120 u, and dolphins that
- * leap now and then. All procedural; nothing to load.
+ * 70 u either side of the ski's path. The Lagoon is sandy islands with palm trees, sailboats, a
+ * lighthouse, a pier with a cheering crowd every ~120 u, and dolphins that leap now and then; Harbour
+ * City is concrete docks with skyline towers and containers, tugboats, cranes and a skyline beyond,
+ * with the same cheering pier. All procedural; nothing to load.
  */
 import {
   AmbientLight,
@@ -188,6 +189,7 @@ interface Slot {
   lighthouse: Mesh;
   pier: Group;
   crowd: { bodies: InstancedMesh; heads: InstancedMesh; arms: InstancedMesh };
+  skyline: [Mesh, Mesh];
   boatBase: [number, number];
   pierSide: number;
   hasPier: boolean;
@@ -241,7 +243,7 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
   const sceneryMaterial = std({ vertexColors: true, roughness: 0.8, flatShading: true });
   const boatMaterial = std({ vertexColors: true, roughness: 0.6, side: DoubleSide });
 
-  const makeIsland = () => {
+  const makeSandIsland = () => {
     const radius = 7;
     const sand = merge([
       part(new CylinderGeometry(radius * 0.8, radius, 1.5, 22), palette.sand, 0, 0.05, 0),
@@ -352,10 +354,93 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
     return track(merge(parts));
   };
 
+  // ---------- Harbour City parts ----------
+  const makeDock = () => {
+    const parts: BufferGeometry[] = [
+      part(new BoxGeometry(15, 1.6, 10), palette.sand, 0, 0.1, 0),
+      part(new BoxGeometry(15.3, 0.25, 10.3), 0x8d93a0, 0, 0.95, 0),
+    ];
+    const towers: [number, number, number, number, number, number][] = [
+      [-3.5, -1.5, 4, 9, 4, 0x8fb0d8],
+      [1.5, 0.5, 3.4, 13, 3.4, 0xc9d6e8],
+      [4.6, -2, 3, 6, 3.4, 0xe6b8a2],
+      [-4.8, 2.6, 2.8, 5, 2.8, 0xa7c4a0],
+    ];
+    for (const [x, z, w, h, d, color] of towers) {
+      parts.push(part(new BoxGeometry(w, h, d), color, x, 1.05 + h / 2, z));
+      for (let y = 2.2; y < h + 0.4; y += 1.5) {
+        parts.push(part(new BoxGeometry(w * 0.78, 0.5, 0.06), 0x2c4a70, x, y, z + d / 2 + 0.02));
+        parts.push(part(new BoxGeometry(w * 0.78, 0.5, 0.06), 0x2c4a70, x, y, z - d / 2 - 0.02));
+      }
+    }
+    const boxes = [0xe8403a, 0x2fa4e7, 0xffd43b, 0x7be07b];
+    for (let i = 0; i < 6; i++) {
+      parts.push(
+        part(
+          new BoxGeometry(2.4, 1.05, 1.0),
+          boxes[i % 4],
+          5.2 - (i % 3) * 2.5,
+          1.65 + (i > 2 ? 1.05 : 0),
+          3.6,
+        ),
+      );
+    }
+    return track(merge(parts));
+  };
+
+  const makeCrane = () => {
+    const parts: BufferGeometry[] = [
+      part(new BoxGeometry(2.4, 1.2, 2.4), 0x4a5266, 0, 0.6, 0),
+      part(new BoxGeometry(0.9, 12, 0.9), 0xffc83d, 0, 7.2, 0),
+      part(new BoxGeometry(12, 0.7, 0.7), 0xffc83d, 2.6, 13.4, 0),
+      part(new BoxGeometry(2.2, 1.5, 1.5), 0x6c7488, -3.4, 13.0, 0),
+      part(new BoxGeometry(1.4, 1.2, 1.2), 0xf6f6f6, 0.9, 12.4, 0.9),
+      part(new CylinderGeometry(0.04, 0.04, 7, 6), 0x2b2f3a, 7.6, 9.8, 0),
+      part(new BoxGeometry(0.6, 0.5, 0.6), 0xe8403a, 7.6, 6.2, 0),
+    ];
+    return track(merge(parts));
+  };
+
+  const makeTug = () =>
+    track(
+      merge([
+        part(new BoxGeometry(2.8, 0.9, 6.2), 0xd8453a, 0, 0.1, 0),
+        part(new BoxGeometry(2.84, 0.18, 6.24), 0xffffff, 0, 0.45, 0),
+        part(new ConeGeometry(1.4, 1.6, 4), 0xd8453a, 0, 0.1, -3.9, -Math.PI / 2, Math.PI / 4, 0),
+        part(new BoxGeometry(1.8, 1.2, 2.2), 0xffffff, 0, 1.15, 0.9),
+        part(new BoxGeometry(1.84, 0.4, 2.0), 0x2c4a70, 0, 1.35, 0.5),
+        part(new CylinderGeometry(0.34, 0.4, 1.3, 10), 0x22262e, 0, 2.3, 1.3),
+        part(new CylinderGeometry(0.36, 0.36, 0.3, 10), 0xe8403a, 0, 2.7, 1.3),
+      ]),
+    );
+
+  /** A strip of far-off towers facing -x (the side the course is on); turned round for the other side. */
+  const makeSkyline = (seed: number) => {
+    const parts: BufferGeometry[] = [];
+    const tints = [0xaec6e0, 0xc9d6e8, 0xd9c3b3, 0xb6cbb0, 0x9fb4cf];
+    let z = -29;
+    for (let i = 0; i < 9; i++) {
+      const w = 3.2 + hash(seed * 31 + i * 3.1) * 3;
+      const h = 9 + hash(seed * 17 + i * 5.3) * 19;
+      const d = 5 + hash(seed * 11 + i * 2.7) * 3;
+      const x = hash(seed * 7 + i) * 6;
+      z += d / 2;
+      parts.push(part(new BoxGeometry(d, h, w), tints[i % tints.length], x, h / 2, z));
+      for (let y = 2; y < h; y += 1.8) {
+        parts.push(part(new BoxGeometry(0.06, 0.7, w * 0.8), 0x2c4a70, x - d / 2 - 0.02, y, z));
+      }
+      z += d / 2 + 0.6;
+    }
+    return track(merge(parts));
+  };
+
+  const harbour = theme === 'harbour';
   const palmGeometry = makePalm();
-  const islandGeometry = makeIsland();
-  const boatGeometry = makeBoat();
-  const lighthouseGeometry = makeLighthouse();
+  const islandGeometry = harbour ? makeDock() : makeSandIsland();
+  const boatGeometry = harbour ? makeTug() : makeBoat();
+  const lighthouseGeometry = harbour ? makeCrane() : makeLighthouse();
+  const skylineGeometries = harbour ? [makeSkyline(1), makeSkyline(2)] : [];
+  const emptyGeometry = track(new BufferGeometry());
   const pierGeometry = makePier();
   const personBody = track(new CapsuleGeometry(0.2, 0.45, 4, 8));
   const personHead = track(new SphereGeometry(0.17, 10, 8));
@@ -372,10 +457,12 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
     const makeIslandGroup = () => {
       const g = new Group();
       g.add(new Mesh(islandGeometry, sceneryMaterial));
-      for (const [x, z] of [
-        [-2.0, 1.2],
-        [2.2, -1.5],
-      ]) {
+      for (const [x, z] of harbour
+        ? []
+        : [
+            [-2.0, 1.2],
+            [2.2, -1.5],
+          ]) {
         const palm = new Mesh(palmGeometry, sceneryMaterial);
         palm.position.set(x, 1.1, z);
         palm.rotation.y = x * 2;
@@ -392,6 +479,15 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
       new Mesh(boatGeometry, boatMaterial),
     ];
     boats.forEach((b) => group.add(b));
+    const makeStrip = (side: number) => {
+      const strip = new Mesh(skylineGeometries[(s + side) % 2] ?? emptyGeometry, sceneryMaterial);
+      strip.visible = harbour;
+      strip.rotation.y = side === 0 ? Math.PI : 0;
+      strip.frustumCulled = false;
+      group.add(strip);
+      return strip;
+    };
+    const skyline: [Mesh, Mesh] = [makeStrip(0), makeStrip(1)];
     const pier = new Group();
     pier.add(new Mesh(pierGeometry, sceneryMaterial));
     group.add(pier);
@@ -412,6 +508,7 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
       boats,
       lighthouse,
       pier,
+      skyline,
       crowd: { bodies, heads, arms },
       boatBase: [0, 0],
       pierSide: 1,
@@ -457,6 +554,10 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
       boat.rotation.y = h(20 + i) * 6.28;
       slot.boatBase[i] = boat.rotation.y;
     });
+    if (harbour) {
+      slot.skyline[0].position.set(-(84 + h(30) * 8), 0, 0);
+      slot.skyline[1].position.set(84 + h(31) * 8, 0, 0);
+    }
     slot.pier.visible = slot.hasPier;
     if (slot.hasPier) {
       // The pier juts out from the shore towards the course, ending 19 u from its middle.

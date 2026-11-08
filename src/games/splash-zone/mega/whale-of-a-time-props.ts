@@ -5,6 +5,7 @@
  */
 import {
   BufferGeometry,
+  CatmullRomCurve3,
   ConeGeometry,
   CylinderGeometry,
   DoubleSide,
@@ -12,6 +13,8 @@ import {
   Group,
   MeshStandardMaterial,
   SphereGeometry,
+  TubeGeometry,
+  Vector3,
   type Mesh,
 } from 'three';
 import { clamp01, lerp, prog } from '../anim';
@@ -180,7 +183,7 @@ function buildWhale(kit: Kit): MegaBuilt {
     11,
     16,
     24,
-    (y) => (y < 0.5 ? 0xcfe0ee : y < 1.0 ? 0x8fb2d4 : 0x5a7ea6),
+    (y) => (y < 0.18 ? 0xb8cfe2 : y < 0.7 ? 0x5a80ad : 0x3a5a85),
   );
   // The tail: a thick stalk and a wide fluke, hinged under the back at s = 3.5.
   const skin = kit.lit(0x4f719c, 0.45);
@@ -247,39 +250,52 @@ export function spoutLevel(outcome: 'clear' | 'fail', t: number): number {
 
 function buildSpout(kit: Kit): MegaBuilt {
   const group = new Group();
-  // The second whale, mostly under the water: a dark back with a blowhole.
-  const back = kit.mesh(
-    new SphereGeometry(1, 20, 12),
-    kit.lit(0x3b5a85, 0.5),
-    group,
-    0.4,
-    -0.55,
-    -SPOUT.whaleD,
-  );
-  back.scale.set(7, 0.95, 3.2);
+  let tailWave: (time: number) => void = () => {};
+  // The second whale, mostly under the water: a big dark back with a blowhole, and its tail
+  // standing up out of the water further along, waving.
+  const skin = kit.lit(0x4f719c, 0.45);
+  const back = kit.mesh(new SphereGeometry(1, 20, 12), skin, group, 0.4, -0.35, -SPOUT.whaleD);
+  back.scale.set(7.5, 1.5, 3.4);
   kit.mesh(
-    new CylinderGeometry(0.35, 0.5, 0.3, 12),
+    new CylinderGeometry(0.4, 0.55, 0.3, 12),
     kit.lit(0x16233a, 0.5),
     group,
     0,
-    0.18,
+    0.55,
     -(SPOUT.foot + 0.3),
   );
-  // The jet: a curved ramp of white water from the foot up to the crown.
+  const tail = new Group();
+  tail.position.set(7.5, -0.4, -(SPOUT.whaleD + 1));
+  group.add(tail);
+  const stalk = kit.mesh(new CylinderGeometry(0.28, 0.5, 3.2, 10), skin, tail, 0, 1.6, 0);
+  stalk.rotation.z = -0.18;
+  for (const side of [-1, 1]) {
+    const lobe = kit.mesh(new SphereGeometry(1, 14, 8), skin, tail, -0.35, 3.3, side * 1.3);
+    lobe.scale.set(0.2, 0.9, 1.7);
+    lobe.rotation.x = side * -0.5;
+  }
+  tailWave = (time) => {
+    tail.rotation.z = 0.12 * Math.sin(time * 1.6);
+  };
+  // The jet: a fat curved pipe of white water from the foot up to the crown, with foam at its base.
   const jet = new Group();
   group.add(jet);
-  profile(
-    kit,
-    jet,
-    spoutY,
-    SPOUT.foot,
-    SPOUT.crownD,
-    0.5,
-    (d) => spoutY(d) - 0.9,
-    1.4,
-    0xffffff,
-    0xbfeaff,
+  const water = kit.lit(0xe6f8ff, 0.55);
+  const points: Vector3[] = [];
+  for (let i = 0; i <= 12; i++) {
+    const d = lerp(SPOUT.foot, SPOUT.crownD, i / 12);
+    points.push(new Vector3(0, spoutY(d) - 1.0, -d));
+  }
+  kit.mesh(new TubeGeometry(new CatmullRomCurve3(points), 28, 1.05, 12), water, jet);
+  const base = kit.mesh(
+    new SphereGeometry(2.3, 14, 8),
+    kit.lit(0xf4fcff, 0.9),
+    group,
+    0,
+    0.05,
+    -SPOUT.foot,
   );
+  base.scale.y = 0.28;
   // The plume at the top: a cluster of foamy balls.
   const foam = kit.lit(0xf4fcff, 0.9);
   const plume = new Group();
@@ -308,6 +324,7 @@ function buildSpout(kit: Kit): MegaBuilt {
     plume.scale.setScalar(Math.max(level, 0.001));
     plume.position.y = SPOUT.crownY * level;
     balls.forEach((b, i) => b.scale.setScalar(1 + 0.08 * Math.sin(time * 6 + i)));
+    tailWave(time);
   };
   return {
     group,
@@ -315,6 +332,7 @@ function buildSpout(kit: Kit): MegaBuilt {
       pose(spoutLevel(outcome, t), t);
     },
     ambient(time) {
+      tailWave(time);
       if (jet.visible) pose(jet.scale.y, time);
     },
     reset() {

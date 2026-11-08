@@ -313,7 +313,7 @@ const whaleClear: Def = (() => {
 })();
 
 /** The fail: the whale flicks the ski and the rider away with its tail. */
-export const FLICK = { skiLand: [17, 11.5] as const, riderLand: [19.5, 14.5] as const };
+export const FLICK = { skiLand: [22, 7.5] as const, riderLand: [27, 9.5] as const };
 
 const whaleFail: Def = (() => {
   const slideEnd = 1.55;

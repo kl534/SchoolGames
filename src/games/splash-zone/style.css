@@ -56,6 +56,7 @@
 .sz-mega[hidden],
 .sz-mega-pip[hidden],
 .sz-count[hidden],
+.sz-world[hidden],
 .sz-word[hidden] {
   display: none;
 }
@@ -766,6 +767,117 @@
   }
   100% {
     opacity: 0;
+  }
+}
+
+/* The wave wipe between worlds: a blue wave sweeps up over the screen, then off the top. */
+.sz-wipe {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: linear-gradient(180deg, #2fd0f0, #1596d6);
+  pointer-events: none;
+  transform: translateY(110%);
+  visibility: hidden;
+}
+
+.sz-wipe::before,
+.sz-wipe::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 90px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 80' preserveAspectRatio='none'%3E%3Cpath d='M0 40C40 0 80 0 120 40S200 80 240 40V80H0Z' fill='%232fd0f0'/%3E%3C/svg%3E")
+    repeat-x bottom / 240px 90px;
+}
+
+.sz-wipe::before {
+  top: -89px;
+}
+
+.sz-wipe::after {
+  bottom: -89px;
+  transform: scaleY(-1);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 80' preserveAspectRatio='none'%3E%3Cpath d='M0 40C40 0 80 0 120 40S200 80 240 40V80H0Z' fill='%231596d6'/%3E%3C/svg%3E");
+}
+
+.sz-wipe.cover {
+  visibility: visible;
+  transform: translateY(0);
+  transition: transform 0.45s cubic-bezier(0.25, 0.7, 0.35, 1);
+}
+
+.sz-wipe.off {
+  visibility: visible;
+  transform: translateY(-110%);
+  transition: transform 0.45s cubic-bezier(0.55, 0, 0.8, 0.4);
+}
+
+/* The world's name, big in the middle of the screen. */
+.sz-world {
+  position: fixed;
+  left: 50%;
+  top: 44%;
+  z-index: 13;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: max-content;
+  max-width: 94vw;
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: sz-world 1.5s ease-out both;
+}
+
+.sz-world-kicker {
+  font-size: clamp(18px, 4.6vmin, 34px);
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
+}
+
+.sz-world-name {
+  font-size: clamp(44px, 13vmin, 110px);
+  font-weight: 900;
+  line-height: 1.05;
+  color: #ffe066;
+  text-shadow:
+    0 6px 0 rgba(0, 0, 0, 0.35),
+    0 0 40px rgba(255, 224, 102, 0.55);
+}
+
+@keyframes sz-world {
+  0% {
+    transform: translate(-50%, -50%) scale(0.5);
+    opacity: 0;
+  }
+  18% {
+    transform: translate(-50%, -50%) scale(1.08);
+    opacity: 1;
+  }
+  28% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  85% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.04);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sz-world {
+    animation: none;
+  }
+
+  .sz-wipe.cover,
+  .sz-wipe.off {
+    transition-duration: 0.01s;
   }
 }
 
