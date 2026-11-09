@@ -746,6 +746,7 @@ function run(session: GameSession): void {
     speak(newHighScore ? NEW_HIGH_SCORE_SPEECH : GREAT_FLYING_SPEECH);
     showResults({
       topicId: session.topic.id,
+      steps: session.takeStepReport(),
       correct: feed.correct,
       total: feed.answered,
       stars,

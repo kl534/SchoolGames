@@ -1,4 +1,4 @@
-import { factWeight, isMastered, type FactStat, type PlayerProgress } from './progress';
+import { factWeight, isMastered, isWaiting, type FactStat, type PlayerProgress } from './progress';
 import { shuffle, weightedSample, type Random } from './random';
 import { answerOptions, type Fact, type Topic } from './topics';
 import { SOCIAL_STUDIES_LEVELS } from './levels-social';
@@ -360,41 +360,90 @@ export function needsWork(stat: FactStat | undefined): boolean {
   return !isMastered(stat);
 }
 
+/** The facts of the first `open` levels, each once, in first-seen level order. */
+function openFacts(path: LevelPath, open: number): LevelFact[] {
+  const openLevels = new Set(path.levels.slice(0, open).flatMap((l) => l.facts));
+  return pathFacts(path).filter((lf) => openLevels.has(lf));
+}
+
+const statOf =
+  (progress: PlayerProgress) =>
+  ({ topic, fact }: LevelFact) =>
+    progress.facts[topic.id]?.[fact.id];
+
 /**
- * Picks the facts for a My Level round from every open level. Facts that need work fill most
- * slots, weighted toward the ones missed; about `REVIEW_SHARE` of the slots are learned facts
- * coming back. Repeats facts when the pool is small, like `chooseRoundFacts`.
+ * The facts of the first `open` levels that can still earn credit right now: not learned and not
+ * inside their 6-hour wait.
+ */
+export function readyWork(
+  progress: PlayerProgress,
+  path: LevelPath,
+  open: number,
+  now: number,
+): LevelFact[] {
+  const stat = statOf(progress);
+  return openFacts(path, open).filter((lf) => needsWork(stat(lf)) && !isWaiting(stat(lf), now));
+}
+
+/**
+ * How many levels to have open for a round of `count`: the saved count, plus more levels while
+ * the open ones have fewer ready facts that need work than a round needs. Never below
+ * `levelsOpen`, never past the last level.
+ */
+export function openForWork(
+  progress: PlayerProgress,
+  path: LevelPath,
+  count: number,
+  now: number,
+): number {
+  let open = levelsOpen(progress, path);
+  while (open < path.levels.length && readyWork(progress, path, open, now).length < count) open++;
+  return open;
+}
+
+/**
+ * Picks the facts for a My Level round from every open level. Facts that need work and are not
+ * waiting fill most slots, weighted toward the ones missed; about `REVIEW_SHARE` of the slots are
+ * learned facts coming back. Facts inside their 6-hour wait are only used to fill a round that
+ * would otherwise be short. Repeats facts when the pools are small, like `chooseRoundFacts`.
  */
 export function chooseLevelFacts(
   progress: PlayerProgress,
   count: number,
   random: Random = Math.random,
   path: LevelPath = MATH_PATH,
+  now: number = Date.now(),
 ): Fact[] {
-  const stat = ({ topic, fact }: LevelFact) => progress.facts[topic.id]?.[fact.id];
-  const openLevels = new Set(
-    path.levels.slice(0, levelsOpen(progress, path)).flatMap((l) => l.facts),
-  );
-  const open = pathFacts(path).filter((lf) => openLevels.has(lf));
-  const work = open.filter((lf) => needsWork(stat(lf)));
+  const stat = statOf(progress);
+  const open = openFacts(path, levelsOpen(progress, path));
+  const work = open.filter((lf) => needsWork(stat(lf)) && !isWaiting(stat(lf), now));
   const review = open.filter((lf) => !needsWork(stat(lf)));
+  const waiting = open.filter((lf) => needsWork(stat(lf)) && isWaiting(stat(lf), now));
 
-  // When everything open is learned, every slot is a review, so the pool never runs dry.
+  // When nothing ready needs work, every slot is a review, so the pool never runs dry.
   let reviewSlots = 0;
   for (let i = 0; i < count; i++) {
     if (review.length > 0 && (work.length === 0 || random() < REVIEW_SHARE)) reviewSlots++;
   }
 
-  const fill = (pool: LevelFact[], slots: number): Fact[] => {
-    const picked: LevelFact[] = [];
-    while (picked.length < slots && pool.length > 0) {
-      picked.push(
-        ...weightedSample(pool, (lf) => factWeight(stat(lf)), slots - picked.length, random),
-      );
-    }
-    return picked.map((lf) => lf.fact);
-  };
-  return shuffle([...fill(work, count - reviewSlots), ...fill(review, reviewSlots)], random);
+  const sample = (pool: LevelFact[], slots: number): LevelFact[] =>
+    weightedSample(pool, (lf) => factWeight(stat(lf)), slots, random);
+  const workSlots = count - reviewSlots;
+  const picked = sample(work, workSlots);
+  picked.push(...sample(waiting, workSlots - picked.length));
+  // Still short: repeat facts from the first pool that has any.
+  const extra = [review, work, waiting].find((pool) => pool.length > 0) ?? [];
+  while (picked.length < workSlots && extra.length > 0) {
+    picked.push(...sample(extra, workSlots - picked.length));
+  }
+  const reviewPicked: LevelFact[] = [];
+  while (reviewPicked.length < reviewSlots && review.length > 0) {
+    reviewPicked.push(...sample(review, reviewSlots - reviewPicked.length));
+  }
+  return shuffle(
+    [...picked, ...reviewPicked].map((lf) => lf.fact),
+    random,
+  );
 }
 
 /** 'Level 5 of 90: Sums to 20' */

@@ -1,5 +1,6 @@
 import './overlays.css';
 import { factMapThumb } from './maps';
+import type { StepReport } from './progress';
 import { button } from './preview';
 import type { Fact } from './topics';
 import { topicMenuUrl } from './ui';
@@ -26,6 +27,8 @@ export interface ResultsOptions {
   outcome?: string;
   /** Label of the play again button; defaults to 'Play again ⚽'. */
   playAgainLabel?: string;
+  /** What the round moved, from `session.takeStepReport()`. */
+  steps?: StepReport;
   container?: HTMLElement;
 }
 
@@ -54,6 +57,28 @@ export interface ResultsSummary {
   /** Whether to show the stars (a game without a score). */
   showStars: boolean;
   playAgainLabel: string;
+  /** '⬆ 3 facts moved up a step · ⭐ 1 learned!', or null when no fact moved. */
+  steps: string | null;
+  /** '🕒 4 facts waiting: they count again after 6 hours', or null when none were held back. */
+  waiting: string | null;
+}
+
+function stepsText(steps: StepReport | undefined): string | null {
+  if (!steps) return null;
+  const parts: string[] = [];
+  if (steps.movedUp > 0) {
+    parts.push(`⬆ ${steps.movedUp} ${steps.movedUp === 1 ? 'fact' : 'facts'} moved up a step`);
+  }
+  if (steps.learned > 0) parts.push(`⭐ ${steps.learned} learned!`);
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+function waitingText(steps: StepReport | undefined): string | null {
+  const n = steps?.waiting ?? 0;
+  if (n <= 0) return null;
+  return n === 1
+    ? '🕒 1 fact waiting: it counts again after 6 hours'
+    : `🕒 ${n} facts waiting: they count again after 6 hours`;
 }
 
 /** What the results screen says, apart from the facts to practice. Pure, so it is easy to test. */
@@ -78,6 +103,8 @@ export function resultsSummary(options: ResultsOptions): ResultsSummary {
     right: `${options.correct} out of ${options.total} right`,
     showStars: !scored,
     playAgainLabel: options.playAgainLabel ?? 'Play again ⚽',
+    steps: stepsText(options.steps),
+    waiting: waitingText(options.steps),
   };
 }
 
@@ -144,6 +171,19 @@ export function showResults(options: ResultsOptions): { dispose(): void } {
     if (outcome) card.appendChild(outcome);
     card.append(stars, right);
     if (badge) card.appendChild(badge);
+  }
+
+  if (summary.steps) {
+    const line = document.createElement('p');
+    line.className = 'sg-steps';
+    line.textContent = summary.steps;
+    card.appendChild(line);
+  }
+  if (summary.waiting) {
+    const line = document.createElement('p');
+    line.className = 'sg-steps sg-muted';
+    line.textContent = summary.waiting;
+    card.appendChild(line);
   }
 
   if (options.missed.length > 0) {

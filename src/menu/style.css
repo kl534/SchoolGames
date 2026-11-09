@@ -208,15 +208,26 @@ h2.subject {
 }
 
 .mastery-bar {
+  display: flex;
   height: 8px;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.1);
   overflow: hidden;
 }
 
-.mastery-fill {
+.mastery-fill,
+.mastery-almost,
+.mastery-started {
   height: 100%;
   background: var(--accent);
+}
+
+.mastery-almost {
+  opacity: 0.55;
+}
+
+.mastery-started {
+  opacity: 0.28;
 }
 
 .best {
@@ -286,6 +297,30 @@ h2.subject {
   margin: 4px 0 0;
   color: var(--muted);
   font-size: 16px;
+}
+
+.facts-link-row {
+  max-width: 1100px;
+  margin: -8px auto 12px;
+}
+
+.facts-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: 24px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  touch-action: manipulation;
+}
+
+.facts-link:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
 }
 
 @media (max-height: 500px) {
@@ -483,6 +518,7 @@ h3.pick-subject {
 }
 
 .tile-bar {
+  display: flex;
   position: absolute;
   right: 0;
   bottom: 0;
@@ -491,10 +527,20 @@ h3.pick-subject {
   background: rgba(255, 255, 255, 0.1);
 }
 
-.tile-fill {
+.tile-fill,
+.tile-almost,
+.tile-started {
   display: block;
   height: 100%;
   background: var(--accent);
+}
+
+.tile-almost {
+  opacity: 0.55;
+}
+
+.tile-started {
+  opacity: 0.28;
 }
 
 /* ---------- Players ---------- */
@@ -898,4 +944,58 @@ button.danger:disabled {
 .account-form input:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* ---------- Fact list ---------- */
+
+.facts-page .mastery {
+  margin: 0 0 12px;
+}
+
+.facts-page h2.subject {
+  margin: 20px 0 8px;
+}
+
+.fact-legend {
+  margin-bottom: 4px;
+}
+
+.fact-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fact-chip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 16px;
+}
+
+.fact-answer {
+  color: #5cf2b0;
+}
+
+.fact-dots {
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+.dot-on {
+  color: var(--accent);
+}
+
+.dot-off {
+  color: var(--muted);
+}
+
+.fact-ready {
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
 }

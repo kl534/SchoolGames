@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { AVATARS, createProgressStore, recordAnswer } from '../src/shared/progress';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  AVATARS,
+  createProgressStore,
+  LEARN_SPACING_MS,
+  recordAnswer,
+} from '../src/shared/progress';
 import { LEVELS, MY_LEVEL_ID, SOCIAL_STUDIES_LEVEL_ID } from '../src/shared/levels';
 import { devFacts } from '../src/shared/devfacts';
 import { gameUrl, parseGameParams, startGameSession } from '../src/shared/session';
@@ -287,7 +292,8 @@ describe('Social Studies level session', () => {
 
   it("saves answers under the fact's own topic and the social level count only", () => {
     const session = start('Social answerer');
-    const [fact] = session.chooseFacts();
+    // A round smaller than level 1, so no later level has to open for it.
+    const [fact] = session.chooseFacts(5);
     session.recordAnswer(fact, true);
     const data = saved();
     expect(data.facts['state-locations'][fact.id].correct).toBe(1);
@@ -343,5 +349,113 @@ describe('forced dev facts', () => {
     }
     const plain = startGameSession('plain', '?topic=state-capitals')!.chooseFacts(10);
     expect(plain).toHaveLength(10);
+  });
+});
+
+describe('step report', () => {
+  const HOUR = 60 * 60 * 1000;
+  const topic = TOPICS[0];
+  const fact = topic.facts[0];
+  const other = topic.facts[1];
+  const T0 = new Date(2026, 10, 8, 9, 0).getTime();
+
+  afterEach(() => vi.useRealTimers());
+
+  const start = (name: string, search = `?topic=${topic.id}`) => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(T0);
+    const store = createProgressStore();
+    store.setCurrentPlayer(store.addPlayer(name, AVATARS[0]).id);
+    const session = startGameSession('steps', search);
+    if (!session) throw new Error('topic not found');
+    return session;
+  };
+  const at = (ms: number) => vi.setSystemTime(ms);
+  const none = { movedUp: 0, learned: 0, waiting: 0 };
+
+  it('says a right answer on a new fact moved it up', () => {
+    const session = start('Step mover');
+    session.recordAnswer(fact, true);
+    expect(session.takeStepReport()).toEqual({ ...none, movedUp: 1 });
+  });
+
+  it('says a second right answer straight away was held back by the wait', () => {
+    const session = start('Step waiter');
+    session.recordAnswer(fact, true);
+    expect(session.takeStepReport()).toEqual({ ...none, movedUp: 1 });
+    at(T0 + 60_000);
+    session.recordAnswer(fact, true);
+    expect(session.takeStepReport()).toEqual({ ...none, waiting: 1 });
+  });
+
+  it('reports each fact once, from where it started the round to where it ended', () => {
+    const session = start('Step once');
+    session.recordAnswer(fact, true);
+    at(T0 + 1000);
+    session.recordAnswer(fact, true);
+    session.recordAnswer(other, true);
+    // fact: New to Started, one answer held back but it moved, so it is only "moved up".
+    expect(session.takeStepReport()).toEqual({ ...none, movedUp: 2 });
+  });
+
+  it('learns a fact on the third spaced answer', () => {
+    const session = start('Step learner');
+    session.recordAnswer(fact, true);
+    session.takeStepReport();
+    at(T0 + LEARN_SPACING_MS);
+    session.recordAnswer(fact, true);
+    expect(session.takeStepReport()).toEqual({ ...none, movedUp: 1 });
+    at(T0 + 2 * LEARN_SPACING_MS);
+    session.recordAnswer(fact, true);
+    expect(session.takeStepReport()).toEqual({ ...none, learned: 1 });
+  });
+
+  it('counts a fact that went New to Learned in one report as learned', () => {
+    const session = start('Step skipper');
+    for (let i = 0; i < 3; i++) {
+      at(T0 + i * LEARN_SPACING_MS);
+      session.recordAnswer(fact, true);
+    }
+    expect(session.takeStepReport()).toEqual({ ...none, learned: 1 });
+  });
+
+  it('resets after it is taken', () => {
+    const session = start('Step reset');
+    session.recordAnswer(fact, true);
+    session.takeStepReport();
+    expect(session.takeStepReport()).toEqual(none);
+  });
+
+  it('does not count a right retry after a miss as waiting', () => {
+    const session = start('Step retry');
+    session.recordAnswer(fact, true);
+    at(T0 + HOUR);
+    session.recordAnswer(fact, false);
+    session.recordAnswer(fact, true);
+    expect(session.takeStepReport()).toEqual(none);
+  });
+
+  it('works with nobody playing', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const store = createProgressStore();
+    store.setCurrentPlayer(null);
+    const session = startGameSession('steps', `?topic=${topic.id}`)!;
+    expect(session.player).toBeNull();
+    session.recordAnswer(fact, true);
+    expect(session.takeStepReport()).toEqual({ ...none, movedUp: 1 });
+  });
+
+  it('My Level opens the next level when the open ones have fewer ready facts than a round', () => {
+    // Social Studies level 1 has fewer than 10 facts, so a round of 10 needs level 2 as well.
+    const session = start('Step opener', `?topic=${SOCIAL_STUDIES_LEVEL_ID}`);
+    const store = createProgressStore();
+    const saved = () => store.load(store.currentPlayer()!.id);
+    expect(saved().pathLevelsOpen).toBeUndefined();
+    const facts = session.chooseFacts(10);
+    expect(facts).toHaveLength(10);
+    expect(saved().pathLevelsOpen).toEqual({ 'social-studies': 2 });
+    // A small round stays within what is open.
+    session.chooseFacts(5);
+    expect(saved().pathLevelsOpen).toEqual({ 'social-studies': 2 });
   });
 });

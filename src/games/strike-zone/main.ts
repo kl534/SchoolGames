@@ -713,6 +713,7 @@ function run(session: GameSession): void {
     session.recordScore(total);
     showResults({
       topicId: session.topic.id,
+      steps: session.takeStepReport(),
       correct: feed.correct,
       total: feed.answered,
       stars,

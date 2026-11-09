@@ -1181,6 +1181,7 @@ function run(session: GameSession): void {
     refresh();
     showResults({
       topicId: session.topic.id,
+      steps: session.takeStepReport(),
       correct: feed.correct,
       total: feed.answered,
       stars,

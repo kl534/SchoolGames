@@ -7,8 +7,17 @@ import {
   type LevelPath,
   type PathId,
 } from '../shared/levels';
-import { TOPICS, getTopic, groupBySubject, type Topic } from '../shared/topics';
-import { countMastered, type PlayerProgress } from '../shared/progress';
+import { TOPICS, getTopic, groupBySubject, type Fact, type Topic } from '../shared/topics';
+import {
+  STEP_NAMES,
+  countSteps,
+  learnStep,
+  readyAt,
+  isWaiting,
+  type LearnStep,
+  type PlayerProgress,
+  type StepCounts,
+} from '../shared/progress';
 
 /** How many choice ids `progress.recent` keeps (the current one + 3 shown as "Recently played"). */
 export const RECENT_MAX = 4;
@@ -69,26 +78,61 @@ export interface ChoiceInfo {
   short: string;
   /** Path: levelLabel(levelsOpen(progress, path), path). Topic: topic.description. */
   subtitle: string;
+  /** Learned facts; the same as `steps[3]`. */
   mastered: number;
+  /** Facts per step: [new, started, almost, learned]. */
+  steps: StepCounts;
   total: number;
 }
 
-function topicMastered(progress: PlayerProgress, topic: Topic): number {
-  return countMastered(
+function topicSteps(progress: PlayerProgress, topic: Topic): StepCounts {
+  return countSteps(
     progress,
     topic.id,
     topic.facts.map((f) => f.id),
   );
 }
 
+/** '12 / 40 learned · 5 almost · 8 started'; the almost/started parts only when above 0. */
+export function masteryText(steps: StepCounts, total: number): string {
+  const parts = [`${steps[3]} / ${total} learned`];
+  if (steps[2] > 0) parts.push(`${steps[2]} almost`);
+  if (steps[1] > 0) parts.push(`${steps[1]} started`);
+  return parts.join(' · ');
+}
+
+/** '7 times table, 3 of 10 learned, 2 almost, 3 started' (zero parts left out, as above). */
+export function masteryLabel(title: string, steps: StepCounts, total: number): string {
+  const parts = [title, `${steps[3]} of ${total} learned`];
+  if (steps[2] > 0) parts.push(`${steps[2]} almost`);
+  if (steps[1] > 0) parts.push(`${steps[1]} started`);
+  return parts.join(', ');
+}
+
+/** '🕒 9:40 pm', or '🕒 tomorrow 1:15 am' when readyAt is on a later local day than now. */
+export function readyLabel(readyAt: number, now: number): string {
+  const at = new Date(readyAt);
+  const time = at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+  const later = at.toDateString() !== new Date(now).toDateString();
+  return `🕒 ${later ? 'tomorrow ' : ''}${time}`;
+}
+
 export function pathChoiceInfo(progress: PlayerProgress, path: LevelPath): ChoiceInfo {
+  const steps = path.topics.reduce<StepCounts>(
+    (sum, t) => {
+      const counts = topicSteps(progress, t);
+      return [sum[0] + counts[0], sum[1] + counts[1], sum[2] + counts[2], sum[3] + counts[3]];
+    },
+    [0, 0, 0, 0],
+  );
   return {
     id: path.levelTopicId,
     kind: 'path',
     title: `My Level · ${path.title}`,
     short: path.title,
     subtitle: levelLabel(levelsOpen(progress, path), path),
-    mastered: path.topics.reduce((sum, t) => sum + topicMastered(progress, t), 0),
+    mastered: steps[3],
+    steps,
     total: path.topics.reduce((sum, t) => sum + t.facts.length, 0),
   };
 }
@@ -98,13 +142,15 @@ export function choiceInfo(progress: PlayerProgress, id: string): ChoiceInfo {
   if (path) return pathChoiceInfo(progress, path);
   const topic = getTopic(id);
   if (!topic) throw new Error(`Not a choice: ${id}`);
+  const steps = topicSteps(progress, topic);
   return {
     id,
     kind: 'topic',
     title: topic.title,
     short: topic.title,
     subtitle: topic.description,
-    mastered: topicMastered(progress, topic),
+    mastered: steps[3],
+    steps,
     total: topic.facts.length,
   };
 }
@@ -147,4 +193,63 @@ export function pickerSections(topics: Topic[] = TOPICS): PickerSection[] {
     section.tiles?.tiles.sort((a, b) => a.n - b.n);
     return section;
   });
+}
+
+export interface FactListItem {
+  fact: Fact;
+  step: LearnStep;
+  /** Set only while waiting at `now`. */
+  readyAt: number | null;
+}
+export interface FactListSection {
+  heading: string;
+  /** Set for a topic's step groups. */
+  step?: LearnStep;
+  items: FactListItem[];
+}
+
+/** The order a topic's step groups are listed in. */
+const STEP_ORDER: LearnStep[] = [3, 2, 1, 0];
+
+/**
+ * The fact list page's sections for a choice. A topic: its facts grouped by step (Learned, Almost,
+ * Started, New; empty groups left out). A path: its open levels newest first, each fact under the
+ * earliest level that has it.
+ */
+export function factListSections(
+  progress: PlayerProgress,
+  choiceId: string,
+  now: number,
+): FactListSection[] {
+  const item = (fact: Fact, topicId: string): FactListItem => {
+    const stat = progress.facts[topicId]?.[fact.id];
+    return {
+      fact,
+      step: learnStep(stat),
+      readyAt: isWaiting(stat, now) ? readyAt(stat) : null,
+    };
+  };
+  const path = pathForLevelTopic(choiceId);
+  if (path) {
+    const seen = new Set<Fact>();
+    const sections: FactListSection[] = [];
+    path.levels.slice(0, levelsOpen(progress, path)).forEach((level, i) => {
+      const items: FactListItem[] = [];
+      for (const { topic, fact } of level.facts) {
+        if (seen.has(fact)) continue;
+        seen.add(fact);
+        items.push(item(fact, topic.id));
+      }
+      if (items.length > 0) sections.push({ heading: levelLabel(i + 1, path), items });
+    });
+    return sections.reverse();
+  }
+  const topic = getTopic(choiceId);
+  if (!topic) throw new Error(`Not a choice: ${choiceId}`);
+  const all = topic.facts.map((fact) => item(fact, topic.id));
+  return STEP_ORDER.map((step) => ({
+    heading: STEP_NAMES[step],
+    step,
+    items: all.filter((i) => i.step === step),
+  })).filter((section) => section.items.length > 0);
 }

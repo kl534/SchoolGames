@@ -460,6 +460,7 @@ function run(session: GameSession): void {
     speak(scoreSpeech(round.correct, round.length));
     showResults({
       topicId: session.topic.id,
+      steps: session.takeStepReport(),
       correct: round.correct,
       total: round.length,
       stars,

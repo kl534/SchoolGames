@@ -736,6 +736,7 @@ function run(session: GameSession): void {
     const newHighScore = state.us > bestAtStart;
     showResults({
       topicId: session.topic.id,
+      steps: session.takeStepReport(),
       correct: feed.correct,
       total: feed.answered,
       stars,

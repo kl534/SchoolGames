@@ -2,18 +2,24 @@ import { preloadSpeech } from './audio';
 import {
   createProgressStore,
   emptyProgress,
+  isWaiting,
+  learnStep,
   recordAnswer,
   recordBest,
   recordHighScore,
   recordLadder,
+  stepReport,
   timerSecondsFor,
+  type LearnStep,
   type Player,
+  type StepReport,
 } from './progress';
 import {
   chooseLevelFacts,
   levelLabel,
   levelsOpen,
   myLevelTopic,
+  openForWork,
   pathForLevelTopic,
   setLevelsOpen,
   topicOfFact,
@@ -51,6 +57,12 @@ export interface GameSession {
    * on this page, a right answer does not count (the player was just shown it).
    */
   recordAnswer(fact: Fact, correct: boolean): void;
+  /**
+   * What the facts answered since the session started (or the last call) moved: facts that went up
+   * a step, facts now learned, and facts whose right answer was held back by the 6-hour wait.
+   * Resets the count, so call it once per round or run.
+   */
+  takeStepReport(): StepReport;
   /** Saves the round's stars; true when it's a new best. */
   recordStars(stars: number): boolean;
   /** The player's high score for this topic and game; 0 when there isn't one yet. */
@@ -93,6 +105,10 @@ export function startGameSession(
   const statTopicId = (fact: Fact) => (path ? topicOfFact(fact).id : topic.id);
   /** Facts missed on this page whose answer was shown and not yet asked again. */
   const awaitingRetry = new Set<string>();
+  /** The step each fact answered since the last `takeStepReport` started on. */
+  const roundStart = new Map<string, LearnStep>();
+  /** Facts that had a right answer held back by their wait since the last `takeStepReport`. */
+  const heldBack = new Set<string>();
 
   return {
     gameId,
@@ -100,8 +116,16 @@ export function startGameSession(
     player,
     // My Level reads the live progress, so a refill picks up levels opened since the last one.
     chooseFacts(count = KICKS_PER_ROUND) {
+      if (path) {
+        // Open the next level once the open ones run out of facts that can still earn credit.
+        const open = openForWork(progress, path, count, Date.now());
+        if (open !== levelsOpen(progress, path)) {
+          setLevelsOpen(progress, path, open);
+          save();
+        }
+      }
       let facts = path
-        ? chooseLevelFacts(progress, count, Math.random, path)
+        ? chooseLevelFacts(progress, count, Math.random, path, Date.now())
         : chooseRoundFacts(topic.facts, progress.facts[topic.id], count);
       const forced = devFacts(topic, search);
       if (forced.length > 0) {
@@ -124,9 +148,30 @@ export function startGameSession(
       const retry = awaitingRetry.has(key);
       if (correct) awaitingRetry.delete(key);
       else awaitingRetry.add(key);
-      recordAnswer(progress, statTopicId(fact), fact.id, correct, Date.now(), retry);
+      const now = Date.now();
+      const before = progress.facts[statTopicId(fact)]?.[fact.id];
+      if (!roundStart.has(key)) roundStart.set(key, learnStep(before));
+      if (correct && !retry && isWaiting(before, now)) heldBack.add(key);
+      recordAnswer(progress, statTopicId(fact), fact.id, correct, now, retry);
       if (path) setLevelsOpen(progress, path, levelsOpen(progress, path));
       save();
+    },
+    takeStepReport() {
+      const report = stepReport(
+        [...roundStart].map(([key, start]) => {
+          // Topic ids hold no '/', so the first one splits the key.
+          const slash = key.indexOf('/');
+          const stat = progress.facts[key.slice(0, slash)]?.[key.slice(slash + 1)];
+          return {
+            start,
+            end: learnStep(stat),
+            heldBack: heldBack.has(key),
+          };
+        }),
+      );
+      roundStart.clear();
+      heldBack.clear();
+      return report;
     },
     recordStars(stars) {
       const isBest = recordBest(progress, topic.id, gameId, stars);
