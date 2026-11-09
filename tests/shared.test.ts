@@ -78,6 +78,8 @@ describe('resultsSummary', () => {
       right: '7 out of 10 right',
       showStars: true,
       playAgainLabel: 'Play again ⚽',
+      steps: null,
+      waiting: null,
     });
   });
 
@@ -134,6 +136,47 @@ describe('resultsSummary', () => {
     expect(s.score).toBe('0');
     expect(s.highScore).toBeNull();
     expect(s.playAgainLabel).toBe('Fly again 🚀');
+  });
+});
+
+describe('resultsSummary steps and waiting lines', () => {
+  const base: ResultsOptions = {
+    topicId: 't',
+    correct: 7,
+    total: 10,
+    stars: 2,
+    newBest: false,
+    missed: [],
+    onPlayAgain: () => {},
+  };
+  const steps = (movedUp: number, learned: number, waiting: number) =>
+    resultsSummary({ ...base, steps: { movedUp, learned, waiting } });
+
+  it('has neither line without a report or when nothing moved', () => {
+    expect(resultsSummary(base).steps).toBeNull();
+    expect(resultsSummary(base).waiting).toBeNull();
+    expect(steps(0, 0, 0).steps).toBeNull();
+    expect(steps(0, 0, 0).waiting).toBeNull();
+  });
+
+  it('says how many facts moved up a step', () => {
+    expect(steps(1, 0, 0).steps).toBe('⬆ 1 fact moved up a step');
+    expect(steps(3, 0, 0).steps).toBe('⬆ 3 facts moved up a step');
+  });
+
+  it('says how many facts are learned', () => {
+    expect(steps(0, 1, 0).steps).toBe('⭐ 1 learned!');
+    expect(steps(0, 4, 0).steps).toBe('⭐ 4 learned!');
+  });
+
+  it('joins both, moved up first', () => {
+    expect(steps(3, 1, 0).steps).toBe('⬆ 3 facts moved up a step · ⭐ 1 learned!');
+  });
+
+  it('says how many right answers the wait held back', () => {
+    expect(steps(0, 0, 1).waiting).toBe('🕒 1 fact waiting: it counts again after 6 hours');
+    expect(steps(0, 0, 4).waiting).toBe('🕒 4 facts waiting: they count again after 6 hours');
+    expect(steps(0, 0, 4).steps).toBeNull();
   });
 });
 

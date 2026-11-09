@@ -878,6 +878,7 @@ function run(session: GameSession): void {
     const best = Math.max(session.highScore(), stored);
     showResults({
       topicId: session.topic.id,
+      steps: session.takeStepReport(),
       correct: feed.correct,
       total: feed.answered,
       stars,

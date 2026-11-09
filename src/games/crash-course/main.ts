@@ -982,6 +982,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     speak(newHighScore ? NEW_HIGH_SCORE_SPEECH : GREAT_RIDING_SPEECH);
     showResults({
       topicId: session.topic.id,
+      steps: session.takeStepReport(),
       correct: feed.correct,
       total: feed.answered,
       stars,
