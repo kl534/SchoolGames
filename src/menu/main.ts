@@ -4,9 +4,13 @@ import {
   AVATARS,
   MAX_NAME_LENGTH,
   createProgressStore,
+  type LearnStep,
   type Player,
   type PlayerProgress,
+  type StepCounts,
+  STEP_NAMES,
 } from '../shared/progress';
+import { statementParts, type Fact } from '../shared/topics';
 import { getPath, PATHS, pathForLevelTopic, type LevelPath } from '../shared/levels';
 import { gameUrl } from '../shared/session';
 import { topicMenuUrl, topicsUrl } from '../shared/ui';
@@ -32,12 +36,17 @@ import {
   PATH_EMOJI,
   choiceInfo,
   currentChoice,
+  factListSections,
   isChoice,
+  masteryLabel,
+  masteryText,
   pathChoiceInfo,
   pickerSections,
+  readyLabel,
   recentChoices,
   rememberChoice,
 } from './choices';
+import { demoStepsProgress } from './dev';
 import { el, errorLine, field, textButton } from './dom';
 
 const store = createProgressStore();
@@ -78,13 +87,31 @@ function header(
   return h;
 }
 
-function masteryBar(mastered: number, total: number): HTMLElement {
+/** Learned, almost and started shares of a bar, as widths in percent (the rest is empty). */
+function segmentWidths(steps: StepCounts, total: number): [number, number, number] {
+  const pct = (n: number) => (total ? (n / total) * 100 : 0);
+  return [pct(steps[3]), pct(steps[2]), pct(steps[1])];
+}
+
+/** Appends the three stacked segments (learned, almost, started) to a bar. */
+function addSegments(
+  bar: HTMLElement,
+  steps: StepCounts,
+  total: number,
+  classes: [string, string, string],
+): void {
+  segmentWidths(steps, total).forEach((width, i) => {
+    const segment = el('span', classes[i]);
+    segment.style.width = `${width}%`;
+    bar.appendChild(segment);
+  });
+}
+
+function masteryBar(steps: StepCounts, total: number): HTMLElement {
   const wrap = el('div', 'mastery');
   const bar = el('div', 'mastery-bar');
-  const fill = el('div', 'mastery-fill');
-  fill.style.width = `${total ? (mastered / total) * 100 : 0}%`;
-  bar.appendChild(fill);
-  wrap.append(bar, el('span', undefined, `${mastered} / ${total} facts learned`));
+  addSegments(bar, steps, total, ['mastery-fill', 'mastery-almost', 'mastery-started']);
+  wrap.append(bar, el('span', undefined, masteryText(steps, total)));
   return wrap;
 }
 
@@ -696,7 +723,7 @@ function renderPicker(
       el('span', 'path-emoji', PATH_EMOJI[p.id]),
       el('h3', undefined, p.title),
       el('p', undefined, info.subtitle),
-      masteryBar(info.mastered, info.total),
+      masteryBar(info.steps, info.total),
     );
     pathGrid.appendChild(row);
   }
@@ -715,17 +742,12 @@ function renderPicker(
       for (const { n, topic } of section.tiles.tiles) {
         const info = choiceInfo(progress, topic.id);
         const tile = choiceLink(player, topic.id, 'tile', current);
-        tile.setAttribute(
-          'aria-label',
-          `${topic.title}, ${info.mastered} of ${info.total} learned`,
-        );
+        tile.setAttribute('aria-label', masteryLabel(topic.title, info.steps, info.total));
         const done = info.total > 0 && info.mastered >= info.total;
         tile.append(el('span', 'tile-n', String(n)));
         if (done) tile.appendChild(el('span', 'tile-done', '✓'));
         const bar = el('span', 'tile-bar');
-        const fill = el('span', 'tile-fill');
-        fill.style.width = `${info.total ? (info.mastered / info.total) * 100 : 0}%`;
-        bar.appendChild(fill);
+        addSegments(bar, info.steps, info.total, ['tile-fill', 'tile-almost', 'tile-started']);
         tile.appendChild(bar);
         tiles.appendChild(tile);
       }
@@ -739,7 +761,7 @@ function renderPicker(
         row.append(
           el('h3', undefined, topic.title),
           el('p', undefined, topic.description),
-          masteryBar(info.mastered, info.total),
+          masteryBar(info.steps, info.total),
         );
         grid.appendChild(row);
       }
@@ -801,6 +823,13 @@ function gameCard(
 
 // ---------- Home ----------
 
+/** The 'See facts' pill under the Practicing card, lined up with it. */
+function factsLinkRow(): HTMLElement {
+  const row = el('div', 'facts-link-row');
+  row.appendChild(link(`${base}?facts`, 'facts-link', 'See facts ▸'));
+  return row;
+}
+
 function renderHome(
   root: HTMLElement,
   player: Player,
@@ -830,10 +859,73 @@ function renderHome(
     el('span', 'choice-label', 'PRACTICING'),
     top,
     el('p', 'choice-sub', info.subtitle),
-    masteryBar(info.mastered, info.total),
+    masteryBar(info.steps, info.total),
   );
 
-  root.replaceChildren(header(null, null, player), card, el('h2', 'subject', 'Pick a game'), grid);
+  root.replaceChildren(
+    header(null, null, player),
+    card,
+    factsLinkRow(),
+    el('h2', 'subject', 'Pick a game'),
+    grid,
+  );
+}
+
+// ---------- Fact list ----------
+
+const STEP_DOTS: Record<LearnStep, string> = { 0: '○○○', 1: '●○○', 2: '●●○', 3: '●●●' };
+
+/** ●●○ with the filled dots in the accent colour. */
+function factDots(step: LearnStep): HTMLElement {
+  const dots = el('span', 'fact-dots');
+  dots.setAttribute('aria-hidden', 'true');
+  for (let i = 0; i < 3; i++)
+    dots.appendChild(el('span', i < step ? 'dot-on' : 'dot-off', i < step ? '●' : '○'));
+  return dots;
+}
+
+function factChip(fact: Fact, step: LearnStep, readyAt: number | null, now: number): HTMLElement {
+  const chip = el('div', 'fact-chip');
+  const label = el('span', 'fact-label');
+  const parts = fact.visual?.blank ? statementParts(fact) : null;
+  if (parts) label.append(parts.before, el('span', 'fact-answer', parts.answer), parts.after);
+  else label.textContent = fact.statement;
+  chip.append(label, factDots(step));
+  if (readyAt !== null) chip.appendChild(el('span', 'fact-ready', readyLabel(readyAt, now)));
+  const stepName = STEP_NAMES[step];
+  chip.setAttribute(
+    'aria-label',
+    `${fact.statement}, ${stepName}${readyAt === null ? '' : `, counts again ${readyLabel(readyAt, now).slice(3)}`}`,
+  );
+  return chip;
+}
+
+function renderFacts(
+  root: HTMLElement,
+  player: Player,
+  progress: PlayerProgress,
+  choiceId: string,
+): void {
+  const now = Date.now();
+  const info = choiceInfo(progress, choiceId);
+  const main = el('main', 'picker facts-page');
+  main.append(
+    masteryBar(info.steps, info.total),
+    el('p', 'hint', "Right answers count once every 6 hours. 3 in a row and it's learned."),
+    el('p', 'hint fact-legend', '●●● Learned · ●●○ Almost · ●○○ Started · ○○○ New'),
+  );
+  for (const section of factListSections(progress, choiceId, now)) {
+    const heading =
+      section.step === undefined
+        ? section.heading
+        : `${section.heading} ${STEP_DOTS[section.step]}`;
+    const chips = el('div', 'fact-chips');
+    for (const item of section.items) {
+      chips.appendChild(factChip(item.fact, item.step, item.readyAt, now));
+    }
+    main.append(el('h2', 'subject', heading), chips);
+  }
+  root.replaceChildren(header(info.title, null, player, link(base, 'back-link', '← Back')), main);
 }
 
 function render(root: HTMLElement): void {
@@ -855,10 +947,25 @@ function render(root: HTMLElement): void {
     renderPlayers(root);
     return;
   }
+  if (import.meta.env.DEV && params.get('demo') === 'steps') {
+    // Dev: swap in the demo progress, then drop `demo` from the URL and carry on.
+    store.save(player.id, demoStepsProgress(Date.now()));
+    params.delete('demo');
+    const rest = params.toString();
+    history.replaceState(null, '', `${location.pathname}${rest ? `?${rest}` : ''}`);
+  }
   const progress = store.load(player.id);
   // `?path=` is an old link to a path; `?topic=` is where "Other games" and the picker land.
   const wanted = getPath(params.get('path'))?.levelTopicId ?? params.get('topic');
-  if (isChoice(wanted)) {
+  const factsChoice = params.get('facts');
+  if (params.has('facts')) {
+    renderFacts(
+      root,
+      player,
+      progress,
+      isChoice(factsChoice) ? factsChoice : currentChoice(progress),
+    );
+  } else if (isChoice(wanted)) {
     rememberChoice(progress, wanted);
     store.save(player.id, progress);
     history.replaceState(null, '', base);
