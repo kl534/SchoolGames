@@ -71,6 +71,38 @@ export function isMastered(stat: FactStat | undefined): boolean {
   return (stat?.learnStreak ?? 0) >= LEARN_STREAK;
 }
 
+/** How far a fact is toward learned: 0 New, 1 Started, 2 Almost, 3 Learned. */
+export type LearnStep = 0 | 1 | 2 | 3;
+export const STEP_NAMES: Record<LearnStep, string> = {
+  0: 'New',
+  1: 'Started',
+  2: 'Almost',
+  3: 'Learned',
+};
+/** Facts per step, indexed by step: [new, started, almost, learned]. */
+export type StepCounts = [number, number, number, number];
+
+/** min(stat.learnStreak ?? 0, LEARN_STREAK). Old saves without learnStreak are 0. */
+export function learnStep(stat: FactStat | undefined): LearnStep {
+  return Math.min(stat?.learnStreak ?? 0, LEARN_STREAK) as LearnStep;
+}
+
+/**
+ * When a Started/Almost fact's next right answer can count (`learnedAt` + `LEARN_SPACING_MS`);
+ * null for New, Learned or no `learnedAt`.
+ */
+export function readyAt(stat: FactStat | undefined): number | null {
+  const step = learnStep(stat);
+  if (step === 0 || step >= LEARN_STREAK || stat?.learnedAt === undefined) return null;
+  return stat.learnedAt + LEARN_SPACING_MS;
+}
+
+/** True while a Started/Almost fact is inside its wait: readyAt !== null && now < readyAt. */
+export function isWaiting(stat: FactStat | undefined, now: number): boolean {
+  const at = readyAt(stat);
+  return at !== null && now < at;
+}
+
 /** Seconds the player gets to answer a fact: 15 when new or just missed, then 10, then 5. */
 export function timerSecondsFor(stat: FactStat | undefined): number {
   const last = TIMER_SECONDS_BY_STREAK.length - 1;
@@ -162,6 +194,44 @@ export function countMastered(
 ): number {
   const stats = progress.facts[topicId] ?? {};
   return factIds.filter((id) => isMastered(stats[id])).length;
+}
+
+/** Counts the facts of a topic by step (missing stats are New). */
+export function countSteps(
+  progress: PlayerProgress,
+  topicId: string,
+  factIds: string[],
+): StepCounts {
+  const stats = progress.facts[topicId] ?? {};
+  const counts: StepCounts = [0, 0, 0, 0];
+  for (const id of factIds) counts[learnStep(stats[id])]++;
+  return counts;
+}
+
+/** What a round changed. Each fact counts once, by where it started and ended the round. */
+export interface StepReport {
+  /** Ended on Started or Almost, higher than it started. */
+  movedUp: number;
+  /** Ended Learned, started below it. */
+  learned: number;
+  /** Had a right answer held back by the wait and ended where it started, on Started or Almost. */
+  waiting: number;
+}
+
+export function stepReport(
+  entries: Iterable<{ start: LearnStep; end: LearnStep; heldBack: boolean }>,
+): StepReport {
+  const report: StepReport = { movedUp: 0, learned: 0, waiting: 0 };
+  for (const { start, end, heldBack } of entries) {
+    if (end === LEARN_STREAK) {
+      if (start < LEARN_STREAK) report.learned++;
+    } else if (end > start) {
+      report.movedUp++;
+    } else if (heldBack && end === start && end > 0) {
+      report.waiting++;
+    }
+  }
+  return report;
 }
 
 /** Topics that hold the times and divide facts with a number above 10 (see `migrateAboveTenTables`). */

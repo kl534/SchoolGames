@@ -15,18 +15,23 @@ import {
   levelLabel,
   levelPassed,
   levelsOpen,
+  type LevelPath,
   MY_LEVEL_ID,
   needsWork,
+  openForWork,
+  readyWork,
   REVIEW_SHARE,
   topicOfFact,
 } from '../src/shared/levels';
 import {
   emptyProgress,
   isMastered,
+  isWaiting,
   LEARN_SPACING_MS,
   LEVELS_VERSION,
   OLD_LEVEL_SPOTS,
   recordAnswer,
+  type FactStat,
   type PlayerProgress,
 } from '../src/shared/progress';
 import { SOCIAL_STUDIES_LEVELS } from '../src/shared/levels-social';
@@ -450,14 +455,14 @@ describe('chooseLevelFacts', () => {
     for (let level = 1; level <= LEVELS.length; level++) learn(progress, level);
     const missed = LEVELS[3].facts[0].fact;
     answer(progress, missed, false);
-    // It is the only fact needing work, so it fills the work slots (about 90% of them).
+    // It is the only fact needing work: it is in every round once (no repeats while there are
+    // learned facts to fill the rest with), so it is practiced ahead of all of them.
     const random = seededRandom(11);
-    let picks = 0;
     for (let i = 0; i < 100; i++) {
-      picks += chooseLevelFacts(progress, 10, random).filter((f) => f === missed).length;
+      const round = chooseLevelFacts(progress, 10, random, MATH_PATH, clock + LEARN_SPACING_MS);
+      expect(round).toHaveLength(10);
+      expect(round.filter((f) => f === missed)).toHaveLength(1);
     }
-    expect(picks).toBeGreaterThan(700);
-    expect(picks).toBeLessThan(1000);
   });
 
   it('still returns the full count when everything is learned', () => {
@@ -483,6 +488,143 @@ describe('chooseLevelFacts', () => {
     }
     expect(levelsOpen(progress)).toBe(90);
     expect(progress.levelsOpen).toBe(90);
+  });
+});
+
+describe('waiting facts', () => {
+  const NOW = 10 * LEARN_SPACING_MS;
+  const level1 = LEVELS[0].facts;
+  /** Math cut down to its first level, so no later level opens and adds ready facts. */
+  const ONE: LevelPath = { ...MATH_PATH, levels: [LEVELS[0]] };
+  const setStat = (
+    progress: PlayerProgress,
+    lf: (typeof level1)[number],
+    stat: Partial<FactStat>,
+  ) => {
+    (progress.facts[lf.topic.id] ??= {})[lf.fact.id] = {
+      correct: 1,
+      wrong: 0,
+      streak: 1,
+      lastSeen: NOW,
+      ...stat,
+    };
+  };
+  /** Started a minute ago: inside the wait. */
+  const makeWaiting = (progress: PlayerProgress, lf: (typeof level1)[number]) =>
+    setStat(progress, lf, { learnStreak: 1, learnedAt: NOW - 60_000 });
+  const makeLearned = (progress: PlayerProgress, lf: (typeof level1)[number]) =>
+    setStat(progress, lf, { learnStreak: 3, learnedAt: NOW - 100 * LEARN_SPACING_MS });
+
+  it('picks no waiting fact while ready work exists', () => {
+    const progress = emptyProgress();
+    const waiting = level1.slice(0, 30);
+    for (const lf of waiting) makeWaiting(progress, lf);
+    const waitingFacts = new Set(waiting.map((lf) => lf.fact));
+    const random = seededRandom(21);
+    for (let i = 0; i < 50; i++) {
+      for (const fact of chooseLevelFacts(progress, 10, random, ONE, NOW)) {
+        expect(waitingFacts.has(fact)).toBe(false);
+      }
+    }
+  });
+
+  it('uses every ready fact once, then waiting facts to fill, without repeats', () => {
+    const progress = emptyProgress();
+    // 6 ready (new) facts, the other 39 of level 1 waiting.
+    for (const lf of level1.slice(6)) makeWaiting(progress, lf);
+    const ready = new Set(level1.slice(0, 6).map((lf) => lf.fact));
+    const random = seededRandom(22);
+    for (let i = 0; i < 40; i++) {
+      const round = chooseLevelFacts(progress, 10, random, ONE, NOW);
+      expect(round).toHaveLength(10);
+      expect(new Set(round).size).toBe(10);
+      for (const fact of ready) expect(round).toContain(fact);
+    }
+  });
+
+  it('repeats facts only when every pool is used up', () => {
+    const progress = emptyProgress();
+    for (const lf of level1.slice(2)) makeLearned(progress, lf);
+    const round = chooseLevelFacts(progress, 10, seededRandom(23), ONE, NOW);
+    expect(round).toHaveLength(10);
+    const level2 = new Set(LEVELS[1].facts.map((lf) => lf.fact));
+    // The two new facts of level 1 come first; the rest is review or level 2 facts only.
+    const newOnes = level1.slice(0, 2).map((lf) => lf.fact);
+    for (const fact of newOnes) expect(round).toContain(fact);
+    expect(round.every((f) => level1.some((lf) => lf.fact === f) || level2.has(f))).toBe(true);
+  });
+
+  it('readyWork leaves out learned and waiting facts', () => {
+    const progress = emptyProgress();
+    makeLearned(progress, level1[0]);
+    makeWaiting(progress, level1[1]);
+    const ready = readyWork(progress, MATH_PATH, 1, NOW);
+    expect(ready).toHaveLength(level1.length - 2);
+    expect(ready).not.toContain(level1[0]);
+    expect(ready).not.toContain(level1[1]);
+    // The same fact is ready again once its wait is over.
+    expect(readyWork(progress, MATH_PATH, 1, NOW + LEARN_SPACING_MS)).toContain(level1[1]);
+  });
+
+  it('openForWork keeps the open count when a round has enough ready facts', () => {
+    expect(openForWork(emptyProgress(), MATH_PATH, 10, NOW)).toBe(1);
+    expect(openForWork(emptyProgress(), MATH_PATH, 45, NOW)).toBe(1);
+  });
+
+  it('openForWork opens levels until ready work reaches the round size', () => {
+    const progress = emptyProgress();
+    expect(openForWork(progress, MATH_PATH, 46, NOW)).toBe(2);
+    expect(openForWork(progress, MATH_PATH, 90, NOW)).toBe(2);
+    expect(openForWork(progress, MATH_PATH, 91, NOW)).toBe(3);
+    // Pure: nothing was saved.
+    expect(progress.levelsOpen).toBeUndefined();
+  });
+
+  it('openForWork never goes below levelsOpen or past the last level', () => {
+    const progress = emptyProgress();
+    progress.levelsOpen = 5;
+    expect(openForWork(progress, MATH_PATH, 1, NOW)).toBe(5);
+    expect(openForWork(progress, MATH_PATH, 1_000_000, NOW)).toBe(MATH_PATH.levels.length);
+  });
+
+  it('openForWork opens past waiting levels', () => {
+    const progress = emptyProgress();
+    for (const lf of level1) makeWaiting(progress, lf);
+    expect(levelsOpen(progress)).toBe(2);
+    // Level 1 is all waiting, so level 2 alone has to carry a round of 40.
+    expect(readyWork(progress, MATH_PATH, 1, NOW)).toHaveLength(0);
+    expect(openForWork(progress, MATH_PATH, 40, NOW)).toBe(2);
+    expect(openForWork(progress, MATH_PATH, 50, NOW)).toBe(3);
+  });
+
+  it('sweep: a round is always full and waiting facts only fill what ready ones cannot', () => {
+    const rng = seededRandom(77);
+    for (let run = 0; run < runs(300, 40); run++) {
+      const path: LevelPath = { ...MATH_PATH, levels: LEVELS.slice(0, 1 + Math.floor(rng() * 3)) };
+      const progress = emptyProgress();
+      const facts = pathFacts(path);
+      const readyShare = rng();
+      for (const lf of facts) {
+        if (rng() < readyShare) continue;
+        const roll = rng();
+        // Mostly waiting or learned, some Started facts that are ready again.
+        const learnStreak = roll < 0.2 ? 3 : 1 + Math.floor(rng() * 2);
+        setStat(progress, lf, { learnStreak, learnedAt: NOW - rng() * 2 * LEARN_SPACING_MS });
+      }
+      const count = 5 + Math.floor(rng() * 40);
+      const round = chooseLevelFacts(progress, count, rng, path, NOW);
+      expect(round).toHaveLength(count);
+      const open = levelsOpen(progress, path);
+      const statOf = (fact: unknown) => {
+        const lf = facts.find((x) => x.fact === fact)!;
+        return progress.facts[lf.topic.id]?.[lf.fact.id];
+      };
+      const readyAll = readyWork(progress, path, open, NOW);
+      if (round.some((f) => isWaiting(statOf(f), NOW))) {
+        // A waiting fact is only there because every ready fact that needs work was picked.
+        for (const lf of readyAll) expect(round).toContain(lf.fact);
+      }
+    }
   });
 });
 

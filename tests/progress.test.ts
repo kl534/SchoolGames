@@ -6,7 +6,15 @@ import {
   emptyProgress,
   factWeight,
   isMastered,
+  isWaiting,
   LEARN_SPACING_MS,
+  LEARN_STREAK,
+  learnStep,
+  readyAt,
+  countSteps,
+  stepReport,
+  STEP_NAMES,
+  type LearnStep,
   LEVELS_VERSION,
   migrateAboveTenTables,
   migrateMissingNumberLevels,
@@ -713,5 +721,96 @@ describe('account players', () => {
     const b = store.addPlayer('B', AVATARS[0]);
     store.clearPending([a.id], []);
     expect(store.pending().dirty).toEqual([b.id]);
+  });
+});
+
+describe('learning steps', () => {
+  const at = (learnStreak: number | undefined, learnedAt?: number): FactStat => ({
+    correct: 1,
+    wrong: 0,
+    streak: 1,
+    lastSeen: 1,
+    ...(learnStreak === undefined ? {} : { learnStreak }),
+    ...(learnedAt === undefined ? {} : { learnedAt }),
+  });
+
+  it('learnStep is the streak, capped at LEARN_STREAK; old saves are New', () => {
+    expect(learnStep(undefined)).toBe(0);
+    expect(learnStep(at(undefined))).toBe(0);
+    expect(learnStep(at(0))).toBe(0);
+    expect(learnStep(at(1))).toBe(1);
+    expect(learnStep(at(2))).toBe(2);
+    expect(learnStep(at(3))).toBe(3);
+    expect(learnStep(at(5))).toBe(LEARN_STREAK);
+    expect(STEP_NAMES).toEqual({ 0: 'New', 1: 'Started', 2: 'Almost', 3: 'Learned' });
+  });
+
+  it('readyAt is null for New, Learned and a fact without learnedAt', () => {
+    expect(readyAt(undefined)).toBeNull();
+    expect(readyAt(at(0, 100))).toBeNull();
+    expect(readyAt(at(3, 100))).toBeNull();
+    expect(readyAt(at(2))).toBeNull();
+    expect(readyAt(at(1, 100))).toBe(100 + LEARN_SPACING_MS);
+    expect(readyAt(at(2, 100))).toBe(100 + LEARN_SPACING_MS);
+  });
+
+  it('isWaiting is true until readyAt and false from it', () => {
+    const stat = at(1, 1000);
+    const ready = 1000 + LEARN_SPACING_MS;
+    expect(isWaiting(stat, ready - 1)).toBe(true);
+    expect(isWaiting(stat, ready)).toBe(false);
+    expect(isWaiting(at(3, 1000), 1001)).toBe(false);
+    expect(isWaiting(undefined, 0)).toBe(false);
+  });
+
+  it('countSteps sums to the fact count and treats missing stats as New', () => {
+    const p = emptyProgress();
+    p.facts.t = { a: at(1, 1), b: at(2, 1), c: at(3, 1), d: at(3, 1) };
+    const counts = countSteps(p, 't', ['a', 'b', 'c', 'd', 'e', 'f']);
+    expect(counts).toEqual([2, 1, 1, 2]);
+    expect(counts.reduce((a, b) => a + b, 0)).toBe(6);
+    expect(countSteps(p, 'missing', ['x', 'y'])).toEqual([2, 0, 0, 0]);
+    expect(countSteps(p, 't', ['c', 'd'])[3]).toBe(countMastered(p, 't', ['c', 'd']));
+  });
+
+  describe('stepReport', () => {
+    const entry = (start: LearnStep, end: LearnStep, heldBack = false) => ({
+      start,
+      end,
+      heldBack,
+    });
+    const report = (...entries: ReturnType<typeof entry>[]) => stepReport(entries);
+
+    it('counts a fact that went up to Started or Almost as moved up', () => {
+      expect(report(entry(0, 1))).toEqual({ movedUp: 1, learned: 0, waiting: 0 });
+      expect(report(entry(1, 2))).toEqual({ movedUp: 1, learned: 0, waiting: 0 });
+    });
+
+    it('counts a fact that ended Learned as learned, not moved up', () => {
+      expect(report(entry(2, 3))).toEqual({ movedUp: 0, learned: 1, waiting: 0 });
+      expect(report(entry(0, 3))).toEqual({ movedUp: 0, learned: 1, waiting: 0 });
+    });
+
+    it('says nothing about a fact that slipped back or stayed Learned', () => {
+      expect(report(entry(1, 0))).toEqual({ movedUp: 0, learned: 0, waiting: 0 });
+      expect(report(entry(3, 0))).toEqual({ movedUp: 0, learned: 0, waiting: 0 });
+      expect(report(entry(3, 3))).toEqual({ movedUp: 0, learned: 0, waiting: 0 });
+    });
+
+    it('counts a held back answer that left the fact where it was as waiting', () => {
+      expect(report(entry(1, 1, true))).toEqual({ movedUp: 0, learned: 0, waiting: 1 });
+      expect(report(entry(2, 2, true))).toEqual({ movedUp: 0, learned: 0, waiting: 1 });
+    });
+
+    it('ignores a held back fact that ended New, and does not count moved ones as waiting', () => {
+      expect(report(entry(1, 0, true))).toEqual({ movedUp: 0, learned: 0, waiting: 0 });
+      expect(report(entry(1, 2, true))).toEqual({ movedUp: 1, learned: 0, waiting: 0 });
+    });
+
+    it('adds the facts up', () => {
+      expect(report(entry(0, 1), entry(1, 2), entry(2, 3), entry(1, 1, true), entry(0, 0))).toEqual(
+        { movedUp: 2, learned: 1, waiting: 1 },
+      );
+    });
   });
 });
