@@ -1,7 +1,7 @@
 /**
  * Geometry for the scenery that `world.ts` recycles along the course: the helpers that paint and
  * merge shapes into one draw call, and the parts of the later worlds (Iceberg Bay, Volcano Island,
- * Shark Reef). Everything is flat-shaded cartoon primitives painted with vertex colours; each
+ * Shark Reef, Candy Cove). Everything is flat-shaded cartoon primitives painted with vertex colours; each
  * factory returns a fresh geometry that the world disposes.
  */
 import {
@@ -14,6 +14,7 @@ import {
   Matrix4,
   Quaternion,
   SphereGeometry,
+  TorusGeometry,
   Vector3,
   Color,
   type BufferGeometry,
@@ -342,5 +343,207 @@ export function makePirateShip(): BufferGeometry {
     parts.push(part(new BoxGeometry(3.0, h * 0.14, 0.08), 0xe9d9b0, 0, 1.4 + h * 0.2, z + 0.1));
   }
   parts.push(part(new BoxGeometry(1.5, 1.0, 0.06), 0x16161c, 0.8, 10.7, -1.6));
+  return merge(parts);
+}
+
+// ---------- Candy Cove ----------
+
+const PINK = 0xff8fc7;
+const ICING = 0xfff4fa;
+const SWIRL = [0xff5fa8, 0xffffff, 0x4fd6c4, 0xffd23f];
+
+/** A lollipop: a pale stick and a swirled disc standing on it, `h` tall, at (x, y, z). */
+function lollipopParts(
+  x: number,
+  y: number,
+  z: number,
+  h: number,
+  r: number,
+  tilt = 0,
+): BufferGeometry[] {
+  const top = y + h;
+  const parts: BufferGeometry[] = [
+    part(
+      new CylinderGeometry(0.1 * (r / 1.2), 0.12 * (r / 1.2), h, 6),
+      0xfff7f0,
+      x,
+      y + h / 2,
+      z,
+      0,
+      0,
+      tilt,
+    ),
+    part(new CylinderGeometry(r, r, 0.3 * (r / 1.2), 14), SWIRL[0], x, top, z, Math.PI / 2, 0, 0),
+    part(
+      new TorusGeometry(r * 0.62, 0.09 * (r / 1.2), 5, 14),
+      SWIRL[1],
+      x,
+      top,
+      z + 0.16 * (r / 1.2),
+    ),
+    part(
+      new TorusGeometry(r * 0.3, 0.09 * (r / 1.2), 5, 12),
+      SWIRL[2],
+      x,
+      top,
+      z + 0.16 * (r / 1.2),
+    ),
+  ];
+  return parts;
+}
+
+/** A gumdrop: a sugared dome of colour. */
+const gumdrop = (hex: number, x: number, y: number, z: number, r: number) =>
+  part(new SphereGeometry(r, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), hex, x, y, z);
+
+/**
+ * A candy island: a frosted cake mound (pink icing over sponge, with a white drip edge), two
+ * lollipop palms and a scatter of gumdrops.
+ */
+export function makeCandyIsland(): BufferGeometry {
+  const parts: BufferGeometry[] = [
+    part(new CylinderGeometry(5.6, 6.2, 1.3, 14), 0xf2c98f, 0, 0.0, 0),
+    part(new CylinderGeometry(5.5, 5.7, 0.55, 14), PINK, 0, 0.95, 0),
+    part(
+      new SphereGeometry(3.6, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+      PINK,
+      0,
+      1.2,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0.55,
+      1,
+    ),
+  ];
+  // The white icing drips over the pink rim.
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2;
+    const len = 0.5 + hash(i * 3.3) * 0.7;
+    parts.push(
+      part(
+        new SphereGeometry(0.42, 7, 5),
+        ICING,
+        Math.cos(a) * 5.55,
+        0.75 - len / 2,
+        Math.sin(a) * 5.55,
+        0,
+        0,
+        0,
+        1,
+        len * 1.6,
+        1,
+      ),
+    );
+  }
+  parts.push(...lollipopParts(-1.6, 1.6, 0.6, 4.6, 1.5, 0.08));
+  parts.push(...lollipopParts(1.8, 1.6, -0.8, 3.6, 1.2, -0.1));
+  const drops = [0xff5f5f, 0xffd23f, 0x4fd6c4, 0xb28dff];
+  for (let i = 0; i < 7; i++) {
+    const a = hash(i * 2.1) * Math.PI * 2;
+    const r = 2.4 + hash(i * 5.7) * 2.2;
+    parts.push(gumdrop(drops[i % 4], Math.cos(a) * r, 1.45, Math.sin(a) * r, 0.5 + hash(i) * 0.3));
+  }
+  return merge(parts);
+}
+
+/** A floating gumdrop buoy: a striped candy ring with a little flag (it bobs on the water). */
+export function makeGumdropBuoy(): BufferGeometry {
+  const parts: BufferGeometry[] = [];
+  const n = 8;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    parts.push(
+      part(
+        new SphereGeometry(0.55, 8, 6),
+        i % 2 ? 0xffffff : 0xff4f6f,
+        Math.cos(a) * 1.25,
+        0.25,
+        Math.sin(a) * 1.25,
+        0,
+        0,
+        0,
+        1,
+        0.9,
+        1,
+      ),
+    );
+  }
+  parts.push(part(new CylinderGeometry(0.06, 0.06, 2.6, 6), 0xfff7f0, 0, 1.5, 0));
+  parts.push(part(new BoxGeometry(0.06, 0.6, 1.0), 0x4fd6c4, 0, 2.5, 0.5));
+  return merge(parts);
+}
+
+/** The landmark: a tall swirl lollipop beside a candy-cane arch. */
+export function makeCandyTower(): BufferGeometry {
+  const parts: BufferGeometry[] = [...lollipopParts(0, 0, 0, 9, 3.4)];
+  // The candy-cane arch: two striped legs and a half ring across the top.
+  for (const side of [-1, 1]) {
+    for (let k = 0; k < 4; k++) {
+      parts.push(
+        part(
+          new CylinderGeometry(0.4, 0.4, 1.1, 8),
+          k % 2 ? 0xffffff : 0xff4f6f,
+          7 + side * 3,
+          0.55 + k * 1.1,
+          0.5,
+        ),
+      );
+    }
+  }
+  const segs = 9;
+  for (let i = 0; i <= segs; i++) {
+    const a = (i / segs) * Math.PI;
+    parts.push(
+      part(
+        new SphereGeometry(0.5, 7, 5),
+        i % 2 ? 0xffffff : 0xff4f6f,
+        7 + Math.cos(a) * 3,
+        4.4 + Math.sin(a) * 2.6,
+        0.5,
+      ),
+    );
+  }
+  return merge(parts);
+}
+
+/** A far strip of frosted layer-cake hills: pale sponge layers under pink and mint icing. */
+export function makeCakeHills(seed: number): BufferGeometry {
+  const parts: BufferGeometry[] = [];
+  const icings = [PINK, 0x9ff0dc, 0xffe08a];
+  let z = -29;
+  for (let i = 0; i < 6; i++) {
+    const r = 8 + hash(seed * 31 + i * 3.1) * 6;
+    const h = 12 + hash(seed * 17 + i * 5.3) * 14;
+    const x = hash(seed * 7 + i) * 8;
+    z += r * 0.8;
+    const layers = 3;
+    const lh = h / layers;
+    for (let k = 0; k < layers; k++) {
+      const rr = r * (1 - k * 0.22);
+      parts.push(
+        part(
+          new CylinderGeometry(rr * 0.9, rr, lh, 12),
+          k % 2 ? 0xf6dcae : 0xf2c98f,
+          x,
+          lh * (k + 0.5),
+          z,
+        ),
+      );
+      parts.push(
+        part(
+          new CylinderGeometry(rr * 0.92, rr * 0.92, 0.5, 12),
+          icings[(i + k) % 3],
+          x,
+          lh * (k + 1) - 0.1,
+          z,
+        ),
+      );
+    }
+    parts.push(part(new SphereGeometry(1.1, 8, 6), 0xff4f6f, x, h + 0.9, z));
+    z += r * 0.5;
+  }
   return merge(parts);
 }
