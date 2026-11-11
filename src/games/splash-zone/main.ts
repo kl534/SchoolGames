@@ -727,6 +727,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     setScoreHud();
     // Turbo to the launcher.
     phase = 'turbo';
+    coinIn = 0;
     sfx.rev();
     hud.speedLines(true);
   };
@@ -799,6 +800,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     if (m.passed >= MEGA_PIECES) hud.showBanner(MEGA_SPECS[m.id].title, '', 'hit');
     placeTarget(COURSE_GAP);
     phase = 'turbo';
+    coinIn = 0;
     sfx.rev();
     hud.speedLines(true);
   };
@@ -1297,7 +1299,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
   /** The side position the ski eases to: the coin it is about to ride through, else the middle. */
   const coinGoalX = () => {
     let goal = 0;
-    let best = 12;
+    let best = phase === 'turbo' ? 24 : 12;
     for (const coin of coins) {
       if (!coin.visible) continue;
       const ahead = skiZ - coin.position.z;
@@ -1332,10 +1334,10 @@ function run(session: GameSession, dev: DevOptions | null): void {
         );
       }
     }
-    if (collecting && clockRunning) {
+    if (collecting || (phase === 'riding' && clockRunning)) {
       coinIn -= delta;
       if (coinIn <= 0) {
-        coinIn = 2 + Math.random() * 2;
+        coinIn = collecting ? 0.5 : 2 + Math.random() * 2;
         spawnTrail();
       }
     }
@@ -1432,9 +1434,9 @@ function run(session: GameSession, dev: DevOptions | null): void {
     } else if (phase === 'ending') {
       // The last ski lies where it was wrecked.
     } else if (riding || phase === 'done') {
-      // The side position eases to the coin under it, and back to the middle.
-      const goalX = phase === 'riding' && clockRunning ? coinGoalX() : 0;
-      const nextX = easeToward(skiX, goalX, 4, delta);
+      // Before the answer the ski plods straight on; after it the turbo steers through the coins.
+      const goalX = phase === 'turbo' ? coinGoalX() : 0;
+      const nextX = easeToward(skiX, goalX, phase === 'turbo' ? 9 : 4, delta);
       const pose =
         phase === 'preview' || phase === 'countdown' || phase === 'done' ? 'wave' : 'ride';
       rideAt(nextX, skiZ, pose, delta, elapsed);
@@ -1442,7 +1444,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     }
 
     wakeEffects(delta);
-    updateCoins(delta, elapsed, phase === 'riding' || phase === 'turbo');
+    updateCoins(delta, elapsed, phase === 'turbo');
   };
 
   /**
