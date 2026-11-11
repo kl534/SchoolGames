@@ -79,7 +79,7 @@ describe('resultsSummary', () => {
       showStars: true,
       playAgainLabel: 'Play again ⚽',
       steps: null,
-      waiting: null,
+      review: null,
     });
   });
 
@@ -139,7 +139,7 @@ describe('resultsSummary', () => {
   });
 });
 
-describe('resultsSummary steps and waiting lines', () => {
+describe('resultsSummary steps and review lines', () => {
   const base: ResultsOptions = {
     topicId: 't',
     correct: 7,
@@ -149,14 +149,14 @@ describe('resultsSummary steps and waiting lines', () => {
     missed: [],
     onPlayAgain: () => {},
   };
-  const steps = (movedUp: number, learned: number, waiting: number) =>
-    resultsSummary({ ...base, steps: { movedUp, learned, waiting } });
+  const steps = (movedUp: number, learned: number, solid: number) =>
+    resultsSummary({ ...base, steps: { movedUp, learned, solid } });
 
   it('has neither line without a report or when nothing moved', () => {
     expect(resultsSummary(base).steps).toBeNull();
-    expect(resultsSummary(base).waiting).toBeNull();
+    expect(resultsSummary(base).review).toBeNull();
     expect(steps(0, 0, 0).steps).toBeNull();
-    expect(steps(0, 0, 0).waiting).toBeNull();
+    expect(steps(0, 0, 0).review).toBeNull();
   });
 
   it('says how many facts moved up a step', () => {
@@ -165,18 +165,26 @@ describe('resultsSummary steps and waiting lines', () => {
   });
 
   it('says how many facts are learned', () => {
-    expect(steps(0, 1, 0).steps).toBe('⭐ 1 learned!');
-    expect(steps(0, 4, 0).steps).toBe('⭐ 4 learned!');
+    expect(steps(0, 1, 0).steps).toBe('⭐ 1 fact learned');
+    expect(steps(0, 4, 0).steps).toBe('⭐ 4 facts learned');
   });
 
-  it('joins both, moved up first', () => {
-    expect(steps(3, 1, 0).steps).toBe('⬆ 3 facts moved up a step · ⭐ 1 learned!');
+  it('says how many facts are now solid', () => {
+    expect(steps(0, 0, 1).steps).toBe('✅ 1 fact now solid');
+    expect(steps(0, 0, 2).steps).toBe('✅ 2 facts now solid');
+    expect(steps(0, 0, 2).review).toBeNull();
   });
 
-  it('says how many right answers the wait held back', () => {
-    expect(steps(0, 0, 1).waiting).toBe('🕒 1 fact waiting: it counts again after 6 hours');
-    expect(steps(0, 0, 4).waiting).toBe('🕒 4 facts waiting: they count again after 6 hours');
-    expect(steps(0, 0, 4).steps).toBeNull();
+  it('joins them: moved up, learned, solid', () => {
+    expect(steps(3, 1, 2).steps).toBe(
+      '⬆ 3 facts moved up a step · ⭐ 1 fact learned · ✅ 2 facts now solid',
+    );
+  });
+
+  it('says how many facts to review in 6 hours, the same count as learned', () => {
+    expect(steps(0, 1, 0).review).toBe('🔁 1 to review in 6 hours');
+    expect(steps(2, 4, 1).review).toBe('🔁 4 to review in 6 hours');
+    expect(steps(3, 0, 0).review).toBeNull();
   });
 });
 

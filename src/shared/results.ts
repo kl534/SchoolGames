@@ -57,10 +57,10 @@ export interface ResultsSummary {
   /** Whether to show the stars (a game without a score). */
   showStars: boolean;
   playAgainLabel: string;
-  /** '⬆ 3 facts moved up a step · ⭐ 1 learned!', or null when no fact moved. */
+  /** '⬆ 3 facts moved up a step · ⭐ 1 fact learned · ✅ 2 facts now solid', or null when none moved. */
   steps: string | null;
-  /** '🕒 4 facts waiting: they count again after 6 hours', or null when none were held back. */
-  waiting: string | null;
+  /** '🔁 4 to review in 6 hours' (one per fact learned this round), or null when none were. */
+  review: string | null;
 }
 
 function stepsText(steps: StepReport | undefined): string | null {
@@ -69,16 +69,15 @@ function stepsText(steps: StepReport | undefined): string | null {
   if (steps.movedUp > 0) {
     parts.push(`⬆ ${steps.movedUp} ${steps.movedUp === 1 ? 'fact' : 'facts'} moved up a step`);
   }
-  if (steps.learned > 0) parts.push(`⭐ ${steps.learned} learned!`);
+  const facts = (n: number) => (n === 1 ? 'fact' : 'facts');
+  if (steps.learned > 0) parts.push(`⭐ ${steps.learned} ${facts(steps.learned)} learned`);
+  if (steps.solid > 0) parts.push(`✅ ${steps.solid} ${facts(steps.solid)} now solid`);
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 
-function waitingText(steps: StepReport | undefined): string | null {
-  const n = steps?.waiting ?? 0;
-  if (n <= 0) return null;
-  return n === 1
-    ? '🕒 1 fact waiting: it counts again after 6 hours'
-    : `🕒 ${n} facts waiting: they count again after 6 hours`;
+function reviewText(steps: StepReport | undefined): string | null {
+  const n = steps?.learned ?? 0;
+  return n > 0 ? `🔁 ${n} to review in 6 hours` : null;
 }
 
 /** What the results screen says, apart from the facts to practice. Pure, so it is easy to test. */
@@ -104,7 +103,7 @@ export function resultsSummary(options: ResultsOptions): ResultsSummary {
     showStars: !scored,
     playAgainLabel: options.playAgainLabel ?? 'Play again ⚽',
     steps: stepsText(options.steps),
-    waiting: waitingText(options.steps),
+    review: reviewText(options.steps),
   };
 }
 
@@ -179,10 +178,10 @@ export function showResults(options: ResultsOptions): { dispose(): void } {
     line.textContent = summary.steps;
     card.appendChild(line);
   }
-  if (summary.waiting) {
+  if (summary.review) {
     const line = document.createElement('p');
     line.className = 'sg-steps sg-muted';
-    line.textContent = summary.waiting;
+    line.textContent = summary.review;
     card.appendChild(line);
   }
 

@@ -1,4 +1,4 @@
-import { factWeight, type FactStat } from './progress';
+import { factWeight, reviewDue, type FactStat } from './progress';
 import { shuffle, weightedSample, type Random } from './random';
 import type { Fact } from './topics';
 
@@ -8,15 +8,18 @@ export const RETRY_GAP = 3;
 
 /**
  * Picks the facts for a round, favouring ones the player hasn't seen or often
- * misses. Small topics repeat facts so the round is always `count` long.
+ * misses; Learned facts due for review (see `reviewDue`) are twice as likely. Small topics
+ * repeat facts so the round is always `count` long.
  */
 export function chooseRoundFacts(
   facts: readonly Fact[],
   stats: Record<string, FactStat> = {},
   count: number = KICKS_PER_ROUND,
   random: Random = Math.random,
+  now: number = Date.now(),
 ): Fact[] {
-  const weight = (fact: Fact) => factWeight(stats[fact.id]);
+  const weight = (fact: Fact) =>
+    factWeight(stats[fact.id]) * (reviewDue(stats[fact.id], now) ? 2 : 1);
   const chosen: Fact[] = [];
   while (chosen.length < count && facts.length > 0) {
     chosen.push(...weightedSample(facts, weight, count - chosen.length, random));

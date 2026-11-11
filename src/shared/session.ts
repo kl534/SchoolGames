@@ -2,7 +2,6 @@ import { preloadSpeech } from './audio';
 import {
   createProgressStore,
   emptyProgress,
-  isWaiting,
   learnStep,
   recordAnswer,
   recordBest,
@@ -107,8 +106,6 @@ export function startGameSession(
   const awaitingRetry = new Set<string>();
   /** The step each fact answered since the last `takeStepReport` started on. */
   const roundStart = new Map<string, LearnStep>();
-  /** Facts that had a right answer held back by their wait since the last `takeStepReport`. */
-  const heldBack = new Set<string>();
 
   return {
     gameId,
@@ -117,8 +114,8 @@ export function startGameSession(
     // My Level reads the live progress, so a refill picks up levels opened since the last one.
     chooseFacts(count = KICKS_PER_ROUND) {
       if (path) {
-        // Open the next level once the open ones run out of facts that can still earn credit.
-        const open = openForWork(progress, path, count, Date.now());
+        // Open the next level once the open ones run out of facts that need work.
+        const open = openForWork(progress, path, count);
         if (open !== levelsOpen(progress, path)) {
           setLevelsOpen(progress, path, open);
           save();
@@ -151,7 +148,6 @@ export function startGameSession(
       const now = Date.now();
       const before = progress.facts[statTopicId(fact)]?.[fact.id];
       if (!roundStart.has(key)) roundStart.set(key, learnStep(before));
-      if (correct && !retry && isWaiting(before, now)) heldBack.add(key);
       recordAnswer(progress, statTopicId(fact), fact.id, correct, now, retry);
       if (path) setLevelsOpen(progress, path, levelsOpen(progress, path));
       save();
@@ -165,12 +161,10 @@ export function startGameSession(
           return {
             start,
             end: learnStep(stat),
-            heldBack: heldBack.has(key),
           };
         }),
       );
       roundStart.clear();
-      heldBack.clear();
       return report;
     },
     recordStars(stars) {

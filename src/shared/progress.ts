@@ -16,12 +16,17 @@ export interface FactStat {
   /** Timestamp (ms) of the last answer. */
   lastSeen: number;
   /**
-   * Right answers in a row that each came at least `LEARN_SPACING_MS` after the one before;
-   * reset by a wrong answer. Missing in progress saved before it existed.
+   * Right answers in a row, at any speed, capped at `LEARN_STREAK`; reset by a wrong answer.
+   * Missing in progress saved before it existed.
    */
   learnStreak?: number;
-  /** Timestamp (ms) of the last right answer that added to `learnStreak`. */
+  /**
+   * Timestamp (ms) of the answer that made the fact Learned, or of its last counted review;
+   * deleted by a wrong answer.
+   */
   learnedAt?: number;
+  /** Reviews counted since the fact was Learned, 0 to `SOLID_REVIEWS`; reset by a wrong answer. */
+  reviews?: number;
 }
 
 export interface PlayerProgress {
@@ -41,6 +46,8 @@ export interface PlayerProgress {
   pathLevelsOpen?: Record<string, number>;
   /** Which `SOCIAL_STUDIES_LEVELS` order `pathLevelsOpen['social-studies']` counts in; see `migrateSocialStudiesOrder`. */
   socialLevelsVersion?: number;
+  /** 2 once `migrateLearnNoWait` has run. */
+  learnVersion?: number;
   /** The home tab last used: a path id. */
   homePath?: string;
   /** Choice ids the menu was last set to, newest first; `recent[0]` is the home page's choice. See `src/menu/choices.ts`. */
@@ -51,10 +58,12 @@ export interface PlayerProgress {
 
 export const AVATARS = ['🦊', '🐼', '🐯', '🐸', '🐙', '🦄', '🐶', '🐱', '🐵', '🦁', '🐧', '🐢'];
 export const MAX_NAME_LENGTH = 20;
-/** A fact counts as learned once its `learnStreak` reaches this. */
+/** A fact is Learned once its `learnStreak` reaches this: right answers in a row, at any speed. */
 export const LEARN_STREAK = 3;
-/** Right answers closer together than this (6 hours) add to `learnStreak` only once. */
-export const LEARN_SPACING_MS = 6 * 60 * 60 * 1000;
+/** A Learned fact is Solid after this many reviews. */
+export const SOLID_REVIEWS = 2;
+/** A right answer at least this long (6 hours) after the last counted one is a review. */
+export const REVIEW_SPACING_MS = 6 * 60 * 60 * 1000;
 
 /**
  * Seconds to answer a fact, indexed by its current streak; longer streaks get less time.
@@ -66,41 +75,46 @@ export function emptyProgress(): PlayerProgress {
   return { facts: {}, best: {}, highScores: {} };
 }
 
-/** Learned: `LEARN_STREAK` right answers in a row, each at least 6 hours after the one before. */
-export function isMastered(stat: FactStat | undefined): boolean {
-  return (stat?.learnStreak ?? 0) >= LEARN_STREAK;
-}
-
-/** How far a fact is toward learned: 0 New, 1 Started, 2 Almost, 3 Learned. */
-export type LearnStep = 0 | 1 | 2 | 3;
+/** How far a fact is: 0 New, 1 Started, 2 Almost, 3 Learned, 4 Solid. */
+export type LearnStep = 0 | 1 | 2 | 3 | 4;
 export const STEP_NAMES: Record<LearnStep, string> = {
   0: 'New',
   1: 'Started',
   2: 'Almost',
   3: 'Learned',
+  4: 'Solid',
 };
-/** Facts per step, indexed by step: [new, started, almost, learned]. */
-export type StepCounts = [number, number, number, number];
+/** Facts per step, indexed by step: [new, started, almost, learned, solid]. */
+export type StepCounts = [number, number, number, number, number];
 
-/** min(stat.learnStreak ?? 0, LEARN_STREAK). Old saves without learnStreak are 0. */
+/** 4 when Learned with `SOLID_REVIEWS` reviews, 3 when Learned, else the streak (0 to 2). */
 export function learnStep(stat: FactStat | undefined): LearnStep {
-  return Math.min(stat?.learnStreak ?? 0, LEARN_STREAK) as LearnStep;
+  const streak = stat?.learnStreak ?? 0;
+  if (streak >= LEARN_STREAK) return (stat?.reviews ?? 0) >= SOLID_REVIEWS ? 4 : 3;
+  return Math.max(streak, 0) as LearnStep;
 }
 
-/**
- * When a Started/Almost fact's next right answer can count (`learnedAt` + `LEARN_SPACING_MS`);
- * null for New, Learned or no `learnedAt`.
- */
-export function readyAt(stat: FactStat | undefined): number | null {
-  const step = learnStep(stat);
-  if (step === 0 || step >= LEARN_STREAK || stat?.learnedAt === undefined) return null;
-  return stat.learnedAt + LEARN_SPACING_MS;
+/** Learned or Solid; needs no wait. */
+export function isLearned(stat: FactStat | undefined): boolean {
+  return learnStep(stat) >= 3;
 }
 
-/** True while a Started/Almost fact is inside its wait: readyAt !== null && now < readyAt. */
-export function isWaiting(stat: FactStat | undefined, now: number): boolean {
-  const at = readyAt(stat);
-  return at !== null && now < at;
+/** Learned and reviewed `SOLID_REVIEWS` times. */
+export function isSolid(stat: FactStat | undefined): boolean {
+  return learnStep(stat) === 4;
+}
+
+/** When a Learned fact's next right answer counts as a review; null otherwise. */
+export function reviewAt(stat: FactStat | undefined): number | null {
+  if (learnStep(stat) !== 3 || stat?.learnedAt === undefined) return null;
+  return stat.learnedAt + REVIEW_SPACING_MS;
+}
+
+/** True for a Learned fact whose review time has come (one with no `learnedAt` is due). */
+export function reviewDue(stat: FactStat | undefined, now: number): boolean {
+  if (learnStep(stat) !== 3) return false;
+  const at = reviewAt(stat);
+  return at === null || now >= at;
 }
 
 /** Seconds the player gets to answer a fact: 15 when new or just missed, then 10, then 5. */
@@ -116,7 +130,7 @@ export function timerSecondsFor(stat: FactStat | undefined): number {
 export function factWeight(stat: FactStat | undefined): number {
   if (!stat) return 2;
   const ratio = (1 + 2 * stat.wrong) / (1 + stat.correct);
-  const mastery = isMastered(stat) ? 0.5 : 1;
+  const mastery = isSolid(stat) ? 0.5 : 1;
   return Math.min(Math.max(ratio * mastery, 0.2), 6);
 }
 
@@ -137,14 +151,22 @@ export function recordAnswer(
   if (correct && !retry) {
     stat.correct++;
     stat.streak++;
-    if (stat.learnedAt === undefined || now - stat.learnedAt >= LEARN_SPACING_MS) {
+    const step = learnStep(stat);
+    if (step < 3) {
       stat.learnStreak = (stat.learnStreak ?? 0) + 1;
+      if (stat.learnStreak >= LEARN_STREAK) {
+        stat.learnedAt = now;
+        stat.reviews = 0;
+      }
+    } else if (step === 3 && reviewDue(stat, now)) {
+      stat.reviews = (stat.reviews ?? 0) + 1;
       stat.learnedAt = now;
     }
   } else if (!correct) {
     stat.wrong++;
     stat.streak = 0;
     stat.learnStreak = 0;
+    stat.reviews = 0;
     delete stat.learnedAt;
   }
   stat.lastSeen = now;
@@ -193,7 +215,7 @@ export function countMastered(
   factIds: string[],
 ): number {
   const stats = progress.facts[topicId] ?? {};
-  return factIds.filter((id) => isMastered(stats[id])).length;
+  return factIds.filter((id) => isLearned(stats[id])).length;
 }
 
 /** Counts the facts of a topic by step (missing stats are New). */
@@ -203,7 +225,7 @@ export function countSteps(
   factIds: string[],
 ): StepCounts {
   const stats = progress.facts[topicId] ?? {};
-  const counts: StepCounts = [0, 0, 0, 0];
+  const counts: StepCounts = [0, 0, 0, 0, 0];
   for (const id of factIds) counts[learnStep(stats[id])]++;
   return counts;
 }
@@ -214,21 +236,19 @@ export interface StepReport {
   movedUp: number;
   /** Ended Learned, started below it. */
   learned: number;
-  /** Had a right answer held back by the wait and ended where it started, on Started or Almost. */
-  waiting: number;
+  /** Ended Solid, started below it. */
+  solid: number;
 }
 
-export function stepReport(
-  entries: Iterable<{ start: LearnStep; end: LearnStep; heldBack: boolean }>,
-): StepReport {
-  const report: StepReport = { movedUp: 0, learned: 0, waiting: 0 };
-  for (const { start, end, heldBack } of entries) {
-    if (end === LEARN_STREAK) {
-      if (start < LEARN_STREAK) report.learned++;
+export function stepReport(entries: Iterable<{ start: LearnStep; end: LearnStep }>): StepReport {
+  const report: StepReport = { movedUp: 0, learned: 0, solid: 0 };
+  for (const { start, end } of entries) {
+    if (end === 4) {
+      if (start < 4) report.solid++;
+    } else if (end === 3) {
+      if (start < 3) report.learned++;
     } else if (end > start) {
       report.movedUp++;
-    } else if (heldBack && end === start && end > 0) {
-      report.waiting++;
     }
   }
   return report;
@@ -344,6 +364,28 @@ export function migrateSocialStudiesOrder(progress: PlayerProgress): boolean {
   return changed;
 }
 
+/** The learning rules `learnVersion` counts in. Version 2 dropped the wait and added reviews. */
+export const LEARN_VERSION = 2;
+
+/**
+ * A fact Learned the old way (3 right answers over 3 spaced days) becomes Solid. Only a stat with
+ * `learnStreak >= LEARN_STREAK` and no `reviews` changes; running it again changes nothing.
+ * Returns true when it changed something.
+ */
+export function migrateLearnNoWait(progress: PlayerProgress): boolean {
+  let changed = false;
+  for (const stats of Object.values(progress.facts)) {
+    for (const stat of Object.values(stats)) {
+      if ((stat.learnStreak ?? 0) >= LEARN_STREAK && stat.reviews === undefined) {
+        stat.reviews = SOLID_REVIEWS;
+        changed = true;
+      }
+    }
+  }
+  progress.learnVersion = LEARN_VERSION;
+  return changed;
+}
+
 /** Games whose id changed: old id -> new id. */
 const RENAMED_GAMES: Record<string, string> = { 'fairway-golf': 'fore' };
 
@@ -398,6 +440,7 @@ export function normalizeProgress(data: Partial<PlayerProgress>): PlayerProgress
     progress.socialLevelsVersion = data.socialLevelsVersion;
   }
   migrateSocialStudiesOrder(progress);
+  migrateLearnNoWait(progress);
   return progress;
 }
 

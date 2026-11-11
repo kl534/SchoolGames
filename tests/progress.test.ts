@@ -1,20 +1,25 @@
 import { describe, expect, it } from 'vitest';
+import { runs } from './helpers/full';
 import {
   AVATARS,
   countMastered,
   createProgressStore,
   emptyProgress,
   factWeight,
-  isMastered,
-  isWaiting,
-  LEARN_SPACING_MS,
+  isLearned,
+  isSolid,
+  REVIEW_SPACING_MS,
+  SOLID_REVIEWS,
+  reviewDue,
+  migrateLearnNoWait,
   LEARN_STREAK,
   learnStep,
-  readyAt,
+  reviewAt,
   countSteps,
   stepReport,
   STEP_NAMES,
   type LearnStep,
+  LEARN_VERSION,
   LEVELS_VERSION,
   migrateAboveTenTables,
   migrateMissingNumberLevels,
@@ -34,8 +39,6 @@ import { LEVELS, levelPassed, levelsOpen, topicOfFact, type LevelFact } from '..
 import { memoryStore } from '../src/shared/storage';
 
 describe('recordAnswer', () => {
-  const HOUR = 60 * 60 * 1000;
-
   it('tracks correct, wrong and streak', () => {
     const p = emptyProgress();
     recordAnswer(p, 't', 'f', true, 1);
@@ -45,49 +48,144 @@ describe('recordAnswer', () => {
       wrong: 0,
       streak: 2,
       lastSeen: 2,
-      learnStreak: 1,
-      learnedAt: 1,
+      learnStreak: 2,
     });
     recordAnswer(p, 't', 'f', false, 3);
-    expect(p.facts.t.f).toEqual({ correct: 2, wrong: 1, streak: 0, lastSeen: 3, learnStreak: 0 });
+    expect(p.facts.t.f).toEqual({
+      correct: 2,
+      wrong: 1,
+      streak: 0,
+      lastSeen: 3,
+      learnStreak: 0,
+      reviews: 0,
+    });
   });
 
   it('ignores a right retry, but counts a wrong one', () => {
     const p = emptyProgress();
     recordAnswer(p, 't', 'f', false, 1);
     recordAnswer(p, 't', 'f', true, 2, true);
-    expect(p.facts.t.f).toEqual({ correct: 0, wrong: 1, streak: 0, lastSeen: 2, learnStreak: 0 });
+    expect(p.facts.t.f).toEqual({
+      correct: 0,
+      wrong: 1,
+      streak: 0,
+      lastSeen: 2,
+      learnStreak: 0,
+      reviews: 0,
+    });
     recordAnswer(p, 't', 'f', false, 3, true);
     expect(p.facts.t.f).toMatchObject({ correct: 0, wrong: 2, streak: 0, lastSeen: 3 });
   });
 
-  it('learns a fact after 3 right answers in a row, each 6 hours apart', () => {
+  it('learns a fact after 3 right answers in a row, even a second apart', () => {
     const p = emptyProgress();
     recordAnswer(p, 't', 'f', true, 0);
-    recordAnswer(p, 't', 'f', true, 5 * HOUR);
-    recordAnswer(p, 't', 'f', true, 6 * HOUR);
+    recordAnswer(p, 't', 'f', true, 1000);
     expect(p.facts.t.f.learnStreak).toBe(2);
-    // Counted from the last right answer that added to the streak, not the last one seen.
-    recordAnswer(p, 't', 'f', true, 11 * HOUR);
-    expect(isMastered(p.facts.t.f)).toBe(false);
-    recordAnswer(p, 't', 'f', true, 12 * HOUR);
-    expect(isMastered(p.facts.t.f)).toBe(true);
+    expect(isLearned(p.facts.t.f)).toBe(false);
+    recordAnswer(p, 't', 'f', true, 2000);
+    expect(isLearned(p.facts.t.f)).toBe(true);
+    expect(p.facts.t.f).toMatchObject({ learnStreak: 3, learnedAt: 2000, reviews: 0 });
   });
 
-  it('starts the learning streak over after a miss', () => {
+  it('keeps a Learned fact Learned and changes only lastSeen on a right answer before 6 hours', () => {
     const p = emptyProgress();
-    for (let i = 0; i < 3; i++) recordAnswer(p, 't', 'f', true, i * LEARN_SPACING_MS);
-    expect(isMastered(p.facts.t.f)).toBe(true);
-    recordAnswer(p, 't', 'f', false, 3 * LEARN_SPACING_MS);
-    expect(isMastered(p.facts.t.f)).toBe(false);
-    // The first right answer after the miss counts at once, without waiting 6 hours.
-    recordAnswer(p, 't', 'f', true, 3 * LEARN_SPACING_MS + 1);
+    for (let i = 0; i < 3; i++) recordAnswer(p, 't', 'f', true, i);
+    const before = { ...p.facts.t.f };
+    recordAnswer(p, 't', 'f', true, REVIEW_SPACING_MS);
+    expect(p.facts.t.f).toEqual({
+      ...before,
+      correct: before.correct + 1,
+      streak: before.streak + 1,
+      lastSeen: REVIEW_SPACING_MS,
+    });
+  });
+
+  it('counts a review after 6 hours and makes the fact Solid on the second', () => {
+    const p = emptyProgress();
+    for (let i = 0; i < 3; i++) recordAnswer(p, 't', 'f', true, i);
+    const at1 = 2 + REVIEW_SPACING_MS;
+    recordAnswer(p, 't', 'f', true, at1);
+    expect(p.facts.t.f).toMatchObject({ reviews: 1, learnedAt: at1, learnStreak: 3 });
+    expect(isSolid(p.facts.t.f)).toBe(false);
+    // The wait starts again from the review.
+    recordAnswer(p, 't', 'f', true, at1 + REVIEW_SPACING_MS - 1);
+    expect(p.facts.t.f.reviews).toBe(1);
+    const at2 = at1 + REVIEW_SPACING_MS;
+    recordAnswer(p, 't', 'f', true, at2);
+    expect(p.facts.t.f).toMatchObject({ reviews: SOLID_REVIEWS, learnedAt: at2 });
+    expect(isSolid(p.facts.t.f)).toBe(true);
+    // Solid: nothing changes but lastSeen.
+    recordAnswer(p, 't', 'f', true, at2 + 10 * REVIEW_SPACING_MS);
+    expect(p.facts.t.f).toMatchObject({ reviews: 2, learnedAt: at2, learnStreak: 3 });
+  });
+
+  it('sends a fact back to New on a miss, whatever its step', () => {
+    for (const rights of [1, 2, 3, 4, 5]) {
+      const p = emptyProgress();
+      for (let i = 0; i < rights; i++) {
+        recordAnswer(p, 't', 'f', true, i * REVIEW_SPACING_MS);
+      }
+      // 4 rights: one review; 5: Solid.
+      expect(learnStep(p.facts.t.f)).toBe(Math.min(rights, 3) + (rights === 5 ? 1 : 0));
+      recordAnswer(p, 't', 'f', false, 10 * REVIEW_SPACING_MS);
+      expect(learnStep(p.facts.t.f)).toBe(0);
+      expect(p.facts.t.f.reviews).toBe(0);
+      expect('learnedAt' in p.facts.t.f).toBe(false);
+    }
+  });
+
+  it('starts the learning streak over after a miss, and the next right answer counts at once', () => {
+    const p = emptyProgress();
+    for (let i = 0; i < 3; i++) recordAnswer(p, 't', 'f', true, i);
+    recordAnswer(p, 't', 'f', false, 10);
+    expect(isLearned(p.facts.t.f)).toBe(false);
+    recordAnswer(p, 't', 'f', true, 11);
     expect(p.facts.t.f.learnStreak).toBe(1);
   });
 
-  it('never counts as learned from progress saved before the learning streak', () => {
-    expect(isMastered({ correct: 9, wrong: 0, streak: 9, lastSeen: 1 })).toBe(false);
+  it('changes only lastSeen on a right retry', () => {
+    const p = emptyProgress();
+    recordAnswer(p, 't', 'f', true, 0);
+    recordAnswer(p, 't', 'f', false, 1);
+    const before = { ...p.facts.t.f };
+    recordAnswer(p, 't', 'f', true, 2, true);
+    expect(p.facts.t.f).toEqual({ ...before, lastSeen: 2 });
   });
+
+  it('never counts as learned from progress saved before the learning streak', () => {
+    expect(isLearned({ correct: 9, wrong: 0, streak: 9, lastSeen: 1 })).toBe(false);
+  });
+
+  it('sweep: random answers keep the counters and steps inside the rules', () => {
+    let seed = 12345;
+    const rng = () => {
+      seed = (seed * 1664525 + 1013904223) % 4294967296;
+      return seed / 4294967296;
+    };
+    for (let run = 0; run < runs(300, 40); run++) {
+      const p = emptyProgress();
+      let now = 0;
+      for (let i = 0; i < 60; i++) {
+        now += rng() < 0.5 ? Math.floor(rng() * 5000) : Math.floor(rng() * 3 * REVIEW_SPACING_MS);
+        const wrong = rng() < 0.15;
+        recordAnswer(p, 't', 'f', !wrong, now, rng() < 0.1);
+        const stat = p.facts.t.f;
+        expect(stat.learnStreak ?? 0).toBeLessThanOrEqual(LEARN_STREAK);
+        expect(stat.reviews ?? 0).toBeLessThanOrEqual(SOLID_REVIEWS);
+        if (isSolid(stat)) expect(stat.learnedAt).toBeDefined();
+        if (isLearned(stat)) {
+          expect(stat.learnedAt).toBeDefined();
+          expect(stat.learnStreak).toBe(LEARN_STREAK);
+        } else {
+          expect(stat.reviews ?? 0).toBe(0);
+        }
+        expect(learnStep(stat)).toBeLessThanOrEqual(
+          Math.min(4, stat.correct, (stat.learnStreak ?? 0) + (stat.reviews ?? 0)),
+        );
+      }
+    }
+  }, 30000);
 });
 
 describe('factWeight', () => {
@@ -158,20 +256,19 @@ describe('recordHighScore', () => {
 });
 
 describe('countMastered', () => {
-  it('counts facts with 3 spaced right answers in a row', () => {
+  it('counts facts with 3 right answers in a row, Learned or Solid', () => {
     const p = emptyProgress();
-    const at = (i: number) => i * LEARN_SPACING_MS;
-    for (let i = 0; i < 3; i++) recordAnswer(p, 't', 'a', true, at(i));
-    // Right three times, but too close together.
-    for (let i = 0; i < 3; i++) recordAnswer(p, 't', 'b', true, i);
+    for (let i = 0; i < 3; i++) recordAnswer(p, 't', 'a', true, i);
+    // Only two in a row.
+    for (let i = 0; i < 2; i++) recordAnswer(p, 't', 'b', true, i);
     // A miss in the middle breaks the streak.
-    recordAnswer(p, 't', 'c', true, at(0));
-    recordAnswer(p, 't', 'c', false, at(1));
-    recordAnswer(p, 't', 'c', true, at(2));
-    recordAnswer(p, 't', 'c', true, at(3));
+    recordAnswer(p, 't', 'c', true, 0);
+    recordAnswer(p, 't', 'c', false, 1);
+    recordAnswer(p, 't', 'c', true, 2);
+    recordAnswer(p, 't', 'c', true, 3);
     // A miss before is fine.
-    recordAnswer(p, 't', 'd', false, at(0));
-    for (let i = 1; i <= 3; i++) recordAnswer(p, 't', 'd', true, at(i));
+    recordAnswer(p, 't', 'd', false, 0);
+    for (let i = 1; i <= 3; i++) recordAnswer(p, 't', 'd', true, i);
     expect(countMastered(p, 't', ['a', 'b', 'c', 'd', 'e'])).toBe(2);
   });
 });
@@ -189,6 +286,7 @@ describe('createProgressStore', () => {
       ...emptyProgress(),
       levelsVersion: LEVELS_VERSION,
       socialLevelsVersion: SOCIAL_LEVELS_VERSION,
+      learnVersion: LEARN_VERSION,
     };
     recordAnswer(progress, 't', 'f', true);
     store.save(ava.id, progress);
@@ -201,6 +299,7 @@ describe('createProgressStore', () => {
       ...emptyProgress(),
       levelsVersion: LEVELS_VERSION,
       socialLevelsVersion: SOCIAL_LEVELS_VERSION,
+      learnVersion: LEARN_VERSION,
     });
   });
 
@@ -255,6 +354,7 @@ describe('createProgressStore', () => {
       JSON.stringify({
         pathLevelsOpen: { 'social-studies': 3 },
         socialLevelsVersion: SOCIAL_LEVELS_VERSION,
+        learnVersion: LEARN_VERSION,
         homePath: 'social-studies',
       }),
     );
@@ -293,6 +393,7 @@ describe('createProgressStore', () => {
       ...emptyProgress(),
       levelsVersion: LEVELS_VERSION,
       socialLevelsVersion: SOCIAL_LEVELS_VERSION,
+      learnVersion: LEARN_VERSION,
     });
   });
 
@@ -453,7 +554,7 @@ describe('migrateAboveTenTables', () => {
       const p = emptyProgress();
       for (const lf of plainLevels.slice(0, levels).flatMap((l) => l.facts)) {
         for (let i = 0; i < 3; i++) {
-          recordAnswer(p, oldTopicId(lf), lf.fact.id, true, i * LEARN_SPACING_MS);
+          recordAnswer(p, oldTopicId(lf), lf.fact.id, true, i * REVIEW_SPACING_MS);
         }
       }
       return p;
@@ -471,7 +572,7 @@ describe('migrateAboveTenTables', () => {
       expect(loaded.levelsOpen).toBe(82);
       expect(levelsOpen(loaded)).toBeGreaterThanOrEqual(82);
       for (const lf of plainLevels.flatMap((l) => l.facts)) {
-        expect(isMastered(loaded.facts[topicOfFact(lf.fact).id]?.[lf.fact.id])).toBe(true);
+        expect(isLearned(loaded.facts[topicOfFact(lf.fact).id]?.[lf.fact.id])).toBe(true);
       }
     });
 
@@ -725,92 +826,132 @@ describe('account players', () => {
 });
 
 describe('learning steps', () => {
-  const at = (learnStreak: number | undefined, learnedAt?: number): FactStat => ({
+  const at = (learnStreak: number | undefined, learnedAt?: number, reviews?: number): FactStat => ({
     correct: 1,
     wrong: 0,
     streak: 1,
     lastSeen: 1,
     ...(learnStreak === undefined ? {} : { learnStreak }),
     ...(learnedAt === undefined ? {} : { learnedAt }),
+    ...(reviews === undefined ? {} : { reviews }),
   });
 
-  it('learnStep is the streak, capped at LEARN_STREAK; old saves are New', () => {
+  it('learnStep is the streak, 3 when Learned and 4 when Solid; old saves are New', () => {
     expect(learnStep(undefined)).toBe(0);
     expect(learnStep(at(undefined))).toBe(0);
     expect(learnStep(at(0))).toBe(0);
     expect(learnStep(at(1))).toBe(1);
     expect(learnStep(at(2))).toBe(2);
     expect(learnStep(at(3))).toBe(3);
+    expect(learnStep(at(3, 1, 1))).toBe(3);
+    expect(learnStep(at(3, 1, 2))).toBe(4);
     expect(learnStep(at(5))).toBe(LEARN_STREAK);
-    expect(STEP_NAMES).toEqual({ 0: 'New', 1: 'Started', 2: 'Almost', 3: 'Learned' });
+    expect(STEP_NAMES).toEqual({ 0: 'New', 1: 'Started', 2: 'Almost', 3: 'Learned', 4: 'Solid' });
   });
 
-  it('readyAt is null for New, Learned and a fact without learnedAt', () => {
-    expect(readyAt(undefined)).toBeNull();
-    expect(readyAt(at(0, 100))).toBeNull();
-    expect(readyAt(at(3, 100))).toBeNull();
-    expect(readyAt(at(2))).toBeNull();
-    expect(readyAt(at(1, 100))).toBe(100 + LEARN_SPACING_MS);
-    expect(readyAt(at(2, 100))).toBe(100 + LEARN_SPACING_MS);
+  it('isLearned is true for Learned and Solid, isSolid only for Solid', () => {
+    expect(isLearned(at(2))).toBe(false);
+    expect(isLearned(at(3))).toBe(true);
+    expect(isLearned(at(3, 1, 2))).toBe(true);
+    expect(isSolid(at(3))).toBe(false);
+    expect(isSolid(at(3, 1, 2))).toBe(true);
+    expect(isSolid(undefined)).toBe(false);
   });
 
-  it('isWaiting is true until readyAt and false from it', () => {
-    const stat = at(1, 1000);
-    const ready = 1000 + LEARN_SPACING_MS;
-    expect(isWaiting(stat, ready - 1)).toBe(true);
-    expect(isWaiting(stat, ready)).toBe(false);
-    expect(isWaiting(at(3, 1000), 1001)).toBe(false);
-    expect(isWaiting(undefined, 0)).toBe(false);
+  it('reviewAt is only for a Learned fact with learnedAt', () => {
+    expect(reviewAt(undefined)).toBeNull();
+    expect(reviewAt(at(2, 100))).toBeNull();
+    expect(reviewAt(at(3))).toBeNull();
+    expect(reviewAt(at(3, 100, 2))).toBeNull();
+    expect(reviewAt(at(3, 100, 0))).toBe(100 + REVIEW_SPACING_MS);
+  });
+
+  it('reviewDue is true from reviewAt, and for a Learned fact with no learnedAt', () => {
+    const stat = at(3, 1000, 0);
+    const due = 1000 + REVIEW_SPACING_MS;
+    expect(reviewDue(stat, due - 1)).toBe(false);
+    expect(reviewDue(stat, due)).toBe(true);
+    expect(reviewDue(at(3), 0)).toBe(true);
+    expect(reviewDue(at(2, 1), 1e15)).toBe(false);
+    expect(reviewDue(at(3, 1, 2), 1e15)).toBe(false);
+    expect(reviewDue(undefined, 0)).toBe(false);
   });
 
   it('countSteps sums to the fact count and treats missing stats as New', () => {
     const p = emptyProgress();
-    p.facts.t = { a: at(1, 1), b: at(2, 1), c: at(3, 1), d: at(3, 1) };
-    const counts = countSteps(p, 't', ['a', 'b', 'c', 'd', 'e', 'f']);
-    expect(counts).toEqual([2, 1, 1, 2]);
-    expect(counts.reduce((a, b) => a + b, 0)).toBe(6);
-    expect(countSteps(p, 'missing', ['x', 'y'])).toEqual([2, 0, 0, 0]);
-    expect(countSteps(p, 't', ['c', 'd'])[3]).toBe(countMastered(p, 't', ['c', 'd']));
+    p.facts.t = { a: at(1, 1), b: at(2, 1), c: at(3, 1, 0), d: at(3, 1, 0), s: at(3, 1, 2) };
+    const counts = countSteps(p, 't', ['a', 'b', 'c', 'd', 's', 'e', 'f']);
+    expect(counts).toEqual([2, 1, 1, 2, 1]);
+    expect(counts.reduce((a, b) => a + b, 0)).toBe(7);
+    expect(countSteps(p, 'missing', ['x', 'y'])).toEqual([2, 0, 0, 0, 0]);
+    expect(countSteps(p, 't', ['c', 'd', 's'])[3]).toBe(2);
+    expect(countMastered(p, 't', ['c', 'd', 's'])).toBe(3);
   });
 
   describe('stepReport', () => {
-    const entry = (start: LearnStep, end: LearnStep, heldBack = false) => ({
-      start,
-      end,
-      heldBack,
-    });
+    const entry = (start: LearnStep, end: LearnStep) => ({ start, end });
     const report = (...entries: ReturnType<typeof entry>[]) => stepReport(entries);
+    const none = { movedUp: 0, learned: 0, solid: 0 };
 
     it('counts a fact that went up to Started or Almost as moved up', () => {
-      expect(report(entry(0, 1))).toEqual({ movedUp: 1, learned: 0, waiting: 0 });
-      expect(report(entry(1, 2))).toEqual({ movedUp: 1, learned: 0, waiting: 0 });
+      expect(report(entry(0, 1))).toEqual({ ...none, movedUp: 1 });
+      expect(report(entry(1, 2))).toEqual({ ...none, movedUp: 1 });
+      expect(report(entry(0, 2))).toEqual({ ...none, movedUp: 1 });
     });
 
     it('counts a fact that ended Learned as learned, not moved up', () => {
-      expect(report(entry(2, 3))).toEqual({ movedUp: 0, learned: 1, waiting: 0 });
-      expect(report(entry(0, 3))).toEqual({ movedUp: 0, learned: 1, waiting: 0 });
+      expect(report(entry(2, 3))).toEqual({ ...none, learned: 1 });
+      expect(report(entry(0, 3))).toEqual({ ...none, learned: 1 });
+      expect(report(entry(3, 3))).toEqual(none);
     });
 
-    it('says nothing about a fact that slipped back or stayed Learned', () => {
-      expect(report(entry(1, 0))).toEqual({ movedUp: 0, learned: 0, waiting: 0 });
-      expect(report(entry(3, 0))).toEqual({ movedUp: 0, learned: 0, waiting: 0 });
-      expect(report(entry(3, 3))).toEqual({ movedUp: 0, learned: 0, waiting: 0 });
+    it('counts a fact that ended Solid as solid', () => {
+      expect(report(entry(3, 4))).toEqual({ ...none, solid: 1 });
+      expect(report(entry(0, 4))).toEqual({ ...none, solid: 1 });
+      expect(report(entry(4, 4))).toEqual(none);
     });
 
-    it('counts a held back answer that left the fact where it was as waiting', () => {
-      expect(report(entry(1, 1, true))).toEqual({ movedUp: 0, learned: 0, waiting: 1 });
-      expect(report(entry(2, 2, true))).toEqual({ movedUp: 0, learned: 0, waiting: 1 });
-    });
-
-    it('ignores a held back fact that ended New, and does not count moved ones as waiting', () => {
-      expect(report(entry(1, 0, true))).toEqual({ movedUp: 0, learned: 0, waiting: 0 });
-      expect(report(entry(1, 2, true))).toEqual({ movedUp: 1, learned: 0, waiting: 0 });
+    it('says nothing about a fact that slipped back', () => {
+      expect(report(entry(1, 0))).toEqual(none);
+      expect(report(entry(3, 0))).toEqual(none);
+      expect(report(entry(4, 0))).toEqual(none);
     });
 
     it('adds the facts up', () => {
-      expect(report(entry(0, 1), entry(1, 2), entry(2, 3), entry(1, 1, true), entry(0, 0))).toEqual(
-        { movedUp: 2, learned: 1, waiting: 1 },
-      );
+      expect(report(entry(0, 1), entry(1, 2), entry(2, 3), entry(3, 4), entry(0, 0))).toEqual({
+        movedUp: 2,
+        learned: 1,
+        solid: 1,
+      });
+    });
+  });
+
+  describe('migrateLearnNoWait', () => {
+    it('makes a fact Learned the old way Solid, leaves the others, and is idempotent', () => {
+      const p = emptyProgress();
+      p.facts.t = {
+        old: at(3, 5),
+        fresh: at(3, 5, 1),
+        almost: at(2, 5),
+        none: at(undefined),
+      };
+      expect(migrateLearnNoWait(p)).toBe(true);
+      expect(p.learnVersion).toBe(2);
+      expect(p.facts.t.old.reviews).toBe(SOLID_REVIEWS);
+      expect(p.facts.t.fresh.reviews).toBe(1);
+      expect(p.facts.t.almost.reviews).toBeUndefined();
+      expect(learnStep(p.facts.t.almost)).toBe(2);
+      expect(p.facts.t.none.reviews).toBeUndefined();
+      const copy = JSON.parse(JSON.stringify(p));
+      expect(migrateLearnNoWait(p)).toBe(false);
+      expect(p).toEqual(copy);
+    });
+
+    it('runs when a save is loaded', () => {
+      const raw = memoryStore();
+      const old = { ...emptyProgress(), facts: { t: { f: at(3, 5) } } };
+      raw.setItem('sg:progress:p1', JSON.stringify(old));
+      expect(learnStep(createProgressStore(raw).load('p1').facts.t.f)).toBe(4);
     });
   });
 });
