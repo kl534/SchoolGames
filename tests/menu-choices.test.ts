@@ -17,11 +17,11 @@ import { LEVELS, MATH_PATH, PATHS, levelLabel, levelsOpen } from '../src/shared/
 import { memoryStore } from '../src/shared/storage';
 import {
   AVATARS,
-  LEARN_SPACING_MS,
+  REVIEW_SPACING_MS,
+  reviewDue,
   countSteps,
   createProgressStore,
   emptyProgress,
-  isWaiting,
   learnStep,
   type StepCounts,
 } from '../src/shared/progress';
@@ -165,21 +165,24 @@ describe('remembering random choices', () => {
 
 describe('masteryText and masteryLabel', () => {
   it('says only the learned count when nothing else moved', () => {
-    expect(masteryText([40, 0, 0, 0], 40)).toBe('0 / 40 learned');
-    expect(masteryText([0, 0, 0, 12], 12)).toBe('12 / 12 learned');
-    expect(masteryLabel('7 times table', [10, 0, 0, 0], 10)).toBe('7 times table, 0 of 10 learned');
+    expect(masteryText([40, 0, 0, 0, 0], 40)).toBe('0 / 40 learned');
+    expect(masteryText([0, 0, 0, 12, 0], 12)).toBe('12 / 12 learned');
+    expect(masteryLabel('7 times table', [10, 0, 0, 0, 0], 10)).toBe(
+      '7 times table, 0 of 10 learned',
+    );
   });
 
-  it('adds almost and started when above zero', () => {
-    const steps: StepCounts = [25, 8, 5, 12];
-    expect(masteryText(steps, 50)).toBe('12 / 50 learned · 5 almost · 8 started');
-    expect(masteryText([30, 0, 5, 5], 40)).toBe('5 / 40 learned · 5 almost');
-    expect(masteryText([30, 5, 0, 5], 40)).toBe('5 / 40 learned · 5 started');
-    expect(masteryLabel('7 times table', [4, 3, 2, 1], 10)).toBe(
+  it('counts Learned and Solid together as learned, and says solid, almost and started when above zero', () => {
+    const steps: StepCounts = [20, 8, 5, 5, 7];
+    expect(masteryText(steps, 45)).toBe('12 / 45 learned · 7 solid · 5 almost · 8 started');
+    expect(masteryText([30, 0, 5, 5, 0], 40)).toBe('5 / 40 learned · 5 almost');
+    expect(masteryText([30, 5, 0, 5, 0], 40)).toBe('5 / 40 learned · 5 started');
+    expect(masteryText([30, 0, 0, 0, 10], 40)).toBe('10 / 40 learned · 10 solid');
+    expect(masteryLabel('7 times table', [4, 3, 2, 1, 0], 10)).toBe(
       '7 times table, 1 of 10 learned, 2 almost, 3 started',
     );
-    expect(masteryLabel('7 times table', [4, 0, 2, 4], 10)).toBe(
-      '7 times table, 4 of 10 learned, 2 almost',
+    expect(masteryLabel('7 times table', [2, 0, 2, 3, 3], 10)).toBe(
+      '7 times table, 6 of 10 learned, 3 solid, 2 almost',
     );
   });
 });
@@ -201,15 +204,17 @@ describe('choiceInfo steps', () => {
   const NOW = new Date(2026, 10, 8, 12, 0).getTime();
 
   it('counts a topic by step', () => {
-    const info = choiceInfo(demoStepsProgress(NOW), 'times-7');
-    expect(info.steps).toEqual([2, 3, 2, 3]);
-    expect(info.mastered).toBe(info.steps[3]);
+    const info = choiceInfo(demoStepsProgress(NOW), 'times-7', NOW);
+    expect(info.steps).toEqual([2, 2, 1, 3, 2]);
+    expect(info.mastered).toBe(info.steps[3] + info.steps[4]);
+    // 3x7 and 6x7 were learned 7 hours ago; 4x7 one hour ago.
+    expect(info.due).toBe(2);
     expect(info.steps.reduce((a, b) => a + b, 0)).toBe(info.total);
   });
 
   it('sums the steps of every topic of a path', () => {
     const progress = demoStepsProgress(NOW);
-    const info = choiceInfo(progress, 'my-level');
+    const info = choiceInfo(progress, 'my-level', NOW);
     const sum = MATH_PATH.topics.reduce<StepCounts>(
       (acc, t) => {
         const c = countSteps(
@@ -217,12 +222,13 @@ describe('choiceInfo steps', () => {
           t.id,
           t.facts.map((f) => f.id),
         );
-        return [acc[0] + c[0], acc[1] + c[1], acc[2] + c[2], acc[3] + c[3]];
+        return acc.map((n, i) => n + c[i]) as StepCounts;
       },
-      [0, 0, 0, 0],
+      [0, 0, 0, 0, 0],
     );
     expect(info.steps).toEqual(sum);
-    expect(info.mastered).toBe(sum[3]);
+    expect(info.mastered).toBe(sum[3] + sum[4]);
+    expect(info.due).toBeGreaterThan(0);
     expect(info.steps.reduce((a, b) => a + b, 0)).toBe(info.total);
   });
 });
@@ -230,15 +236,22 @@ describe('choiceInfo steps', () => {
 describe('factListSections', () => {
   const NOW = new Date(2026, 10, 8, 12, 0).getTime();
 
-  it('groups a topic by step: Learned, Almost, Started, New, in topic order', () => {
+  it('groups a topic by step: Solid, Learned, Almost, Started, New, in topic order', () => {
     const sections = factListSections(demoStepsProgress(NOW), 'times-7', NOW);
-    expect(sections.map((s) => s.heading)).toEqual(['Learned', 'Almost', 'Started', 'New']);
-    expect(sections.map((s) => s.step)).toEqual([3, 2, 1, 0]);
+    expect(sections.map((s) => s.heading)).toEqual([
+      'Solid',
+      'Learned',
+      'Almost',
+      'Started',
+      'New',
+    ]);
+    expect(sections.map((s) => s.step)).toEqual([4, 3, 2, 1, 0]);
     const ids = (i: number) => sections[i].items.map((x) => x.fact.id);
-    expect(ids(0)).toEqual(['1x7', '2x7', '3x7']);
-    expect(ids(1)).toEqual(['4x7', '8x7']);
-    expect(ids(2)).toEqual(['6x7', '7x7', '9x7']);
-    expect(ids(3)).toEqual(['5x7', '10x7']);
+    expect(ids(0)).toEqual(['1x7', '2x7']);
+    expect(ids(1)).toEqual(['3x7', '4x7', '6x7']);
+    expect(ids(2)).toEqual(['8x7']);
+    expect(ids(3)).toEqual(['7x7', '9x7']);
+    expect(ids(4)).toEqual(['5x7', '10x7']);
   });
 
   it('leaves empty groups out', () => {
@@ -246,22 +259,23 @@ describe('factListSections', () => {
     expect(factListSections(progress, 'times-7', NOW).map((s) => s.heading)).toEqual(['New']);
   });
 
-  it('gives readyAt only while a fact is waiting', () => {
+  it('gives reviewAt and due only to Learned facts', () => {
     const progress = demoStepsProgress(NOW);
     const items = factListSections(progress, 'times-7', NOW).flatMap((s) => s.items);
-    const at = (id: string) => items.find((i) => i.fact.id === id)!.readyAt;
-    expect(at('4x7')).toBe(NOW - 2 * 3_600_000 + LEARN_SPACING_MS);
-    expect(at('6x7')).not.toBeNull();
-    expect(at('7x7')).not.toBeNull();
-    expect(at('8x7')).toBeNull();
-    expect(at('9x7')).toBeNull();
-    expect(at('1x7')).toBeNull();
-    expect(at('5x7')).toBeNull();
-    // Later, the same facts are ready.
-    const later = factListSections(progress, 'times-7', NOW + LEARN_SPACING_MS)
+    const item = (id: string) => items.find((i) => i.fact.id === id)!;
+    expect(item('4x7').reviewAt).toBe(NOW - 3_600_000 + REVIEW_SPACING_MS);
+    expect(item('4x7').due).toBe(false);
+    expect(item('3x7').due).toBe(true);
+    expect(item('6x7').due).toBe(true);
+    for (const id of ['1x7', '7x7', '8x7', '9x7', '5x7']) {
+      expect(item(id).reviewAt).toBeNull();
+      expect(item(id).due).toBe(false);
+    }
+    // Later, every Learned fact is due.
+    const later = factListSections(progress, 'times-7', NOW + REVIEW_SPACING_MS)
       .flatMap((s) => s.items)
-      .filter((i) => i.readyAt !== null);
-    expect(later).toEqual([]);
+      .filter((i) => i.step === 3);
+    expect(later.every((i) => i.due)).toBe(true);
   });
 
   it('lists My Level newest level first, open levels only, no fact twice', () => {
@@ -291,17 +305,16 @@ describe('demoStepsProgress', () => {
   const NOW = new Date(2026, 10, 8, 12, 0).getTime();
   const progress = demoStepsProgress(NOW);
 
-  it('has a times-7 fact at every step, some of them waiting', () => {
+  it('has a times-7 fact at every step, Learned ones due and not due', () => {
     const stats = progress.facts['times-7'];
     const steps = new Set(
       TOPICS.find((t) => t.id === 'times-7')!.facts.map((f) => learnStep(stats[f.id])),
     );
-    expect(steps).toEqual(new Set([0, 1, 2, 3]));
-    expect(isWaiting(stats['4x7'], NOW)).toBe(true);
-    expect(isWaiting(stats['6x7'], NOW)).toBe(true);
-    expect(isWaiting(stats['7x7'], NOW)).toBe(true);
-    expect(isWaiting(stats['8x7'], NOW)).toBe(false);
-    expect(isWaiting(stats['9x7'], NOW)).toBe(false);
+    expect(steps).toEqual(new Set([0, 1, 2, 3, 4]));
+    expect(reviewDue(stats['3x7'], NOW)).toBe(true);
+    expect(reviewDue(stats['4x7'], NOW)).toBe(false);
+    expect(reviewDue(stats['6x7'], NOW)).toBe(true);
+    expect(reviewDue(stats['1x7'], NOW)).toBe(false);
     expect(progress.recent).toEqual(['times-7']);
   });
 
@@ -317,10 +330,14 @@ describe('demoStepsProgress', () => {
     const steps = new Set(
       all.map(({ topic, fact }) => learnStep(progress.facts[topic.id]?.[fact.id])),
     );
-    expect(steps).toEqual(new Set([0, 1, 2, 3]));
-    const waiting = all.filter(({ topic, fact }) =>
-      isWaiting(progress.facts[topic.id]?.[fact.id], NOW),
+    expect(steps).toEqual(new Set([0, 1, 2, 3, 4]));
+    const learned = all.filter(
+      ({ topic, fact }) => learnStep(progress.facts[topic.id]?.[fact.id]) === 3,
     );
-    expect(waiting.length).toBeGreaterThan(0);
+    const due = learned.filter(({ topic, fact }) =>
+      reviewDue(progress.facts[topic.id]?.[fact.id], NOW),
+    );
+    expect(due.length).toBeGreaterThan(0);
+    expect(due.length).toBeLessThan(learned.length);
   });
 });

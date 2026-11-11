@@ -215,11 +215,17 @@ h2.subject {
   overflow: hidden;
 }
 
+.mastery-solid,
 .mastery-fill,
 .mastery-almost,
 .mastery-started {
   height: 100%;
   background: var(--accent);
+}
+
+.mastery-solid,
+.tile-solid {
+  background: #1f8a5b;
 }
 
 .mastery-almost {
@@ -527,6 +533,7 @@ h3.pick-subject {
   background: rgba(255, 255, 255, 0.1);
 }
 
+.tile-solid,
 .tile-fill,
 .tile-almost,
 .tile-started {
@@ -991,6 +998,17 @@ button.danger:disabled {
 }
 
 .dot-off {
+  color: var(--muted);
+}
+
+.fact-solid {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.card-review {
+  margin-top: 6px;
+  font-size: 13px;
   color: var(--muted);
 }
 

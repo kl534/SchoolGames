@@ -10,7 +10,7 @@ import {
   type StepCounts,
   STEP_NAMES,
 } from '../shared/progress';
-import { statementParts, type Fact } from '../shared/topics';
+import { statementParts } from '../shared/topics';
 import { getPath, PATHS, pathForLevelTopic, type LevelPath } from '../shared/levels';
 import { gameUrl } from '../shared/session';
 import { topicMenuUrl, topicsUrl } from '../shared/ui';
@@ -41,6 +41,8 @@ import {
   masteryLabel,
   masteryText,
   pathChoiceInfo,
+  type ChoiceInfo,
+  type FactListItem,
   pickerSections,
   readyLabel,
   recentChoices,
@@ -87,18 +89,18 @@ function header(
   return h;
 }
 
-/** Learned, almost and started shares of a bar, as widths in percent (the rest is empty). */
-function segmentWidths(steps: StepCounts, total: number): [number, number, number] {
+/** Solid, learned, almost and started shares of a bar, as widths in percent (the rest is empty). */
+function segmentWidths(steps: StepCounts, total: number): [number, number, number, number] {
   const pct = (n: number) => (total ? (n / total) * 100 : 0);
-  return [pct(steps[3]), pct(steps[2]), pct(steps[1])];
+  return [pct(steps[4]), pct(steps[3]), pct(steps[2]), pct(steps[1])];
 }
 
-/** Appends the three stacked segments (learned, almost, started) to a bar. */
+/** Appends the four stacked segments (solid, learned, almost, started) to a bar. */
 function addSegments(
   bar: HTMLElement,
   steps: StepCounts,
   total: number,
-  classes: [string, string, string],
+  classes: [string, string, string, string],
 ): void {
   segmentWidths(steps, total).forEach((width, i) => {
     const segment = el('span', classes[i]);
@@ -107,11 +109,18 @@ function addSegments(
   });
 }
 
-function masteryBar(steps: StepCounts, total: number): HTMLElement {
+function masteryBar(info: Pick<ChoiceInfo, 'steps' | 'total' | 'due'>): HTMLElement {
+  const { steps, total } = info;
   const wrap = el('div', 'mastery');
   const bar = el('div', 'mastery-bar');
-  addSegments(bar, steps, total, ['mastery-fill', 'mastery-almost', 'mastery-started']);
+  addSegments(bar, steps, total, [
+    'mastery-solid',
+    'mastery-fill',
+    'mastery-almost',
+    'mastery-started',
+  ]);
   wrap.append(bar, el('span', undefined, masteryText(steps, total)));
+  if (info.due > 0) wrap.appendChild(el('span', 'card-review', `🔁 ${info.due} to review`));
   return wrap;
 }
 
@@ -723,7 +732,7 @@ function renderPicker(
       el('span', 'path-emoji', PATH_EMOJI[p.id]),
       el('h3', undefined, p.title),
       el('p', undefined, info.subtitle),
-      masteryBar(info.steps, info.total),
+      masteryBar(info),
     );
     pathGrid.appendChild(row);
   }
@@ -747,7 +756,12 @@ function renderPicker(
         tile.append(el('span', 'tile-n', String(n)));
         if (done) tile.appendChild(el('span', 'tile-done', '✓'));
         const bar = el('span', 'tile-bar');
-        addSegments(bar, info.steps, info.total, ['tile-fill', 'tile-almost', 'tile-started']);
+        addSegments(bar, info.steps, info.total, [
+          'tile-solid',
+          'tile-fill',
+          'tile-almost',
+          'tile-started',
+        ]);
         tile.appendChild(bar);
         tiles.appendChild(tile);
       }
@@ -761,7 +775,7 @@ function renderPicker(
         row.append(
           el('h3', undefined, topic.title),
           el('p', undefined, topic.description),
-          masteryBar(info.steps, info.total),
+          masteryBar(info),
         );
         grid.appendChild(row);
       }
@@ -859,7 +873,7 @@ function renderHome(
     el('span', 'choice-label', 'PRACTICING'),
     top,
     el('p', 'choice-sub', info.subtitle),
-    masteryBar(info.steps, info.total),
+    masteryBar(info),
   );
 
   root.replaceChildren(
@@ -873,9 +887,15 @@ function renderHome(
 
 // ---------- Fact list ----------
 
-const STEP_DOTS: Record<LearnStep, string> = { 0: '○○○', 1: '●○○', 2: '●●○', 3: '●●●' };
+const STEP_DOTS: Record<LearnStep, string> = {
+  0: '○○○',
+  1: '●○○',
+  2: '●●○',
+  3: '●●●',
+  4: '●●●',
+};
 
-/** ●●○ with the filled dots in the accent colour. */
+/** ●●○ with the filled dots in the accent colour (Learned and Solid have all three). */
 function factDots(step: LearnStep): HTMLElement {
   const dots = el('span', 'fact-dots');
   dots.setAttribute('aria-hidden', 'true');
@@ -884,19 +904,23 @@ function factDots(step: LearnStep): HTMLElement {
   return dots;
 }
 
-function factChip(fact: Fact, step: LearnStep, readyAt: number | null, now: number): HTMLElement {
+function factChip(item: FactListItem, now: number): HTMLElement {
+  const { fact, step } = item;
   const chip = el('div', 'fact-chip');
   const label = el('span', 'fact-label');
   const parts = fact.visual?.blank ? statementParts(fact) : null;
   if (parts) label.append(parts.before, el('span', 'fact-answer', parts.answer), parts.after);
   else label.textContent = fact.statement;
   chip.append(label, factDots(step));
-  if (readyAt !== null) chip.appendChild(el('span', 'fact-ready', readyLabel(readyAt, now)));
-  const stepName = STEP_NAMES[step];
-  chip.setAttribute(
-    'aria-label',
-    `${fact.statement}, ${stepName}${readyAt === null ? '' : `, counts again ${readyLabel(readyAt, now).slice(3)}`}`,
-  );
+  let note = '';
+  if (step === 3) {
+    const when = item.due || item.reviewAt === null ? '🔁 now' : readyLabel(item.reviewAt, now);
+    chip.appendChild(el('span', 'fact-ready', when));
+    note = item.due || item.reviewAt === null ? ', review due' : `, review ${when.slice(3)}`;
+  } else if (step === 4) {
+    chip.appendChild(el('span', 'fact-solid', '✓'));
+  }
+  chip.setAttribute('aria-label', `${fact.statement}, ${STEP_NAMES[step]}${note}`);
   return chip;
 }
 
@@ -910,9 +934,17 @@ function renderFacts(
   const info = choiceInfo(progress, choiceId);
   const main = el('main', 'picker facts-page');
   main.append(
-    masteryBar(info.steps, info.total),
-    el('p', 'hint', "Right answers count once every 6 hours. 3 in a row and it's learned."),
-    el('p', 'hint fact-legend', '●●● Learned · ●●○ Almost · ●○○ Started · ○○○ New'),
+    masteryBar(info),
+    el(
+      'p',
+      'hint',
+      "3 right in a row and it's learned. Answer it again after 6 hours, twice, and it's solid.",
+    ),
+    el(
+      'p',
+      'hint fact-legend',
+      '●●● Solid ✓ · ●●● Learned 🔁 · ●●○ Almost · ●○○ Started · ○○○ New',
+    ),
   );
   for (const section of factListSections(progress, choiceId, now)) {
     const heading =
@@ -921,7 +953,7 @@ function renderFacts(
         : `${section.heading} ${STEP_DOTS[section.step]}`;
     const chips = el('div', 'fact-chips');
     for (const item of section.items) {
-      chips.appendChild(factChip(item.fact, item.step, item.readyAt, now));
+      chips.appendChild(factChip(item, now));
     }
     main.append(el('h2', 'subject', heading), chips);
   }
