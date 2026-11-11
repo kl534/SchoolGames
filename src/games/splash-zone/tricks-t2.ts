@@ -466,7 +466,7 @@ export const SUGAR_SPIN: TrickDefs = { clear: sugarSpinClear, fail: sugarSpinFai
 
 /** Where the dino tail stands (sideways of the line the ski flies) and how high its base sits. */
 const TAIL_SIDE = 1.5;
-const TAIL_BASE = 0.2;
+const TAIL_BASE = 0;
 
 const tailWhipClear = (() => {
   const L = launch('kicker', 1.7, 2.6);

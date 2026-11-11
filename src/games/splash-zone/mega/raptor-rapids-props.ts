@@ -44,12 +44,12 @@ function blob(
 }
 
 /** A pair of eyes and a dark pupil on a head facing -z (towards the skier is +z is behind). */
-function eyes(kit: Kit, head: Object3D, x: number, y: number, z: number, r: number) {
+function eyes(kit: Kit, head: Object3D, x: number, y: number, z: number, r: number, dir = -1) {
   const white = kit.lit(0xffffff, 0.3);
   const dark = kit.lit(0x1d2a1d, 0.3);
   for (const side of [-1, 1]) {
     blob(kit, head, white, r, side * x, y, z);
-    blob(kit, head, dark, r * 0.55, side * (x + r * 0.15), y, z - r * 0.7);
+    blob(kit, head, dark, r * 0.55, side * (x + r * 0.15), y, z + dir * r * 0.7);
   }
 }
 
@@ -157,7 +157,7 @@ function buildStego(kit: Kit): MegaBuilt {
   // The back, from the neck to the tail, and the head at the water's edge at the near end.
   blob(kit, group, green, 1, 0, 0.5, -17.5, 2.2, 1.5, 9);
   blob(kit, group, green, 1.0, 0, 0.5, -(STEGO.foot - 1.2), 1.1, 0.9, 1.4);
-  eyes(kit, group, 0.55, 1.0, -(STEGO.foot - 2.0), 0.18);
+  eyes(kit, group, 0.55, 1.0, -(STEGO.foot - 2.0), 0.18, 1);
   // The tail trails off with two pairs of spikes.
   const tail = new Group();
   tail.position.set(0, 0.8, -26.5);
@@ -242,12 +242,12 @@ function buildRex(kit: Kit): MegaBuilt {
   const head = new Group();
   head.position.set(0, REX.hinge.y, -REX.hinge.d);
   group.add(head);
-  blob(kit, head, skin, 2.0, 0, 0.6, 1.1, 1.05, 1.0, 1.0);
-  eyes(kit, head, 1.05, 1.9, -0.3, 0.32);
+  blob(kit, head, skin, 2.0, 0, 0.6, -1.1, 1.05, 1.0, 1.0);
+  eyes(kit, head, 1.05, 1.9, -0.4, 0.32, 1);
   const jaw = (up: boolean) => {
     const g = new Group();
     head.add(g);
-    kit.box(2.2, 1.0, REX.jawLength, up ? skin : belly, g, 0, up ? 0.5 : -0.5, -REX.jawLength / 2);
+    kit.box(2.2, 1.0, REX.jawLength, up ? skin : belly, g, 0, up ? 0.5 : -0.5, REX.jawLength / 2);
     kit.box(
       1.8,
       0.35,
@@ -256,7 +256,7 @@ function buildRex(kit: Kit): MegaBuilt {
       g,
       0,
       up ? -0.15 : 0.15,
-      -REX.jawLength / 2 - 0.2,
+      REX.jawLength / 2 - 0.2,
     );
     for (let i = 0; i < 5; i++) {
       for (const side of [-1, 1]) {
@@ -266,7 +266,7 @@ function buildRex(kit: Kit): MegaBuilt {
           g,
           side * 0.95,
           up ? -0.55 : 0.55,
-          -1.2 - i * 1.15,
+          1.2 + i * 1.15,
         );
         tooth.rotation.x = up ? Math.PI : 0;
       }
@@ -276,9 +276,9 @@ function buildRex(kit: Kit): MegaBuilt {
   const upper = jaw(true);
   const lower = jaw(false);
   const pose = (open: number, time: number) => {
-    // Jaws open: rotated about the hinge (x axis); the tips point towards -z (the skier).
-    upper.rotation.x = -REX.upperOpen * open;
-    lower.rotation.x = REX.lowerOpen * open;
+    // Jaws open: rotated about the hinge (x axis); the tips point towards +z (the skier).
+    upper.rotation.x = REX.upperOpen * open;
+    lower.rotation.x = -REX.lowerOpen * open;
     head.rotation.z = 0.02 * Math.sin(time * 1.5);
     body.scale.y = 1 + 0.02 * Math.sin(time * 1.9);
   };

@@ -203,7 +203,7 @@ export interface Tail extends Prop {
 }
 
 const TAIL_SEGMENTS = 5;
-const TAIL_HEIGHT = 3.2;
+const TAIL_HEIGHT = 4.4;
 
 /** A curved green dino tail of tapered cylinders with a row of cream spikes, its base at y = 0. */
 export function createTail(): Tail {
@@ -221,8 +221,8 @@ export function createTail(): Tail {
     joint.position.y = i === 0 ? 0 : segLen;
     parent.add(joint);
     joints.push(joint);
-    const r0 = 0.5 - 0.085 * i;
-    const r1 = 0.5 - 0.085 * (i + 1) + 0.02;
+    const r0 = 0.7 - 0.11 * i;
+    const r1 = 0.7 - 0.11 * (i + 1) + 0.02;
     b.add(new CylinderGeometry(r1, r0, segLen, 10, 1), green, joint, 0, segLen / 2, 0);
     const spike = b.add(new ConeGeometry(0.17 - 0.02 * i, 0.5 - 0.05 * i, 4), cream, joint);
     spike.position.set(0, segLen * 0.55, -r0 - 0.05);
@@ -238,10 +238,10 @@ export function createTail(): Tail {
       body.position.y = -TAIL_HEIGHT * (1 - up);
       body.visible = up > 0.001;
       // Leans across the ski as it swings, with a curl that follows through along the tail.
-      joints.forEach((joint, i) => {
-        joint.rotation.z = (swing * 0.2 + 0.16) * (i === 0 ? 1.4 : 1);
+      joints.forEach((joint) => {
+        joint.rotation.z = 0.05 + 0.04 * swing;
       });
-      body.rotation.z = -0.35 - 0.55 * swing;
+      body.rotation.z = 0.05 + 0.4 * swing;
     },
     dispose() {
       b.dispose();
@@ -263,7 +263,12 @@ export function createEgg(): Egg {
   const object = new Group();
   const body = new Group();
   object.add(body);
-  const shell = new MeshStandardMaterial({ color: 0xf6ecc8, roughness: 0.7, side: DoubleSide });
+  const shell = new MeshStandardMaterial({
+    color: 0xfff4d0,
+    emissive: 0x4a4222,
+    roughness: 0.7,
+    side: DoubleSide,
+  });
   const cream = b.std(0xf6ecc8, 0.7);
   const speck = b.std(0x4f9a4a, 0.8);
   const green = b.std(0x6cc25a, 0.7);
