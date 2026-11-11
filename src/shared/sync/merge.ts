@@ -71,6 +71,8 @@ export function mergeProgress(a: PlayerProgress, b: PlayerProgress): PlayerProgr
   if (levelsVersion !== undefined) out.levelsVersion = levelsVersion;
   const socialLevelsVersion = maxOptional(a.socialLevelsVersion, b.socialLevelsVersion);
   if (socialLevelsVersion !== undefined) out.socialLevelsVersion = socialLevelsVersion;
+  const learnVersion = maxOptional(a.learnVersion, b.learnVersion);
+  if (learnVersion !== undefined) out.learnVersion = learnVersion;
   if (a.pathLevelsOpen || b.pathLevelsOpen) {
     out.pathLevelsOpen = maxFlat(a.pathLevelsOpen, b.pathLevelsOpen);
   }
