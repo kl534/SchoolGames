@@ -22,6 +22,7 @@ import { buildGeyserBlastProps } from './geyser-blast-props';
 import { buildHarbourHavocProps } from './harbour-havoc-props';
 import { buildJawsSomeJumpProps } from './jaws-some-jump-props';
 import { buildPenguinParadeProps } from './penguin-parade-props';
+import { buildRaptorRapidsProps } from './raptor-rapids-props';
 import { buildSweetToothRushProps } from './sweet-tooth-rush-props';
 import { MEGA_SPECS, megaLength, megaLocate, megaOffsets } from './mega';
 import type { MegaBuilt } from './props-kit';
@@ -36,6 +37,7 @@ export interface MegaCourse extends Placed {
 
 const BUILDERS: Record<MegaId, (kit: Kit) => [MegaBuilt, MegaBuilt, MegaBuilt]> = {
   'whale-of-a-time': buildWhaleProps,
+  'raptor-rapids': buildRaptorRapidsProps,
   'harbour-havoc': buildHarbourHavocProps,
   'penguin-parade': buildPenguinParadeProps,
   'geyser-blast': buildGeyserBlastProps,

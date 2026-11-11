@@ -26,6 +26,7 @@ import { GEYSER_BLAST } from './geyser-blast';
 import { HARBOUR_HAVOC } from './harbour-havoc';
 import { JAWS_SOME_JUMP } from './jaws-some-jump';
 import { PENGUIN_PARADE } from './penguin-parade';
+import { RAPTOR_RAPIDS } from './raptor-rapids';
 import { SWEET_TOOTH_RUSH } from './sweet-tooth-rush';
 import { WHALE_OF_A_TIME } from './whale-of-a-time';
 
@@ -52,6 +53,7 @@ export interface MegaSpec {
 
 export const MEGA_SPECS: Record<MegaId, MegaSpec> = {
   'whale-of-a-time': WHALE_OF_A_TIME,
+  'raptor-rapids': RAPTOR_RAPIDS,
   'harbour-havoc': HARBOUR_HAVOC,
   'penguin-parade': PENGUIN_PARADE,
   'geyser-blast': GEYSER_BLAST,

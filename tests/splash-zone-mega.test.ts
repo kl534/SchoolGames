@@ -117,6 +117,20 @@ import {
   bearY,
   bellySquash,
 } from '../src/games/splash-zone/mega/sweet-tooth-rush';
+import {
+  NECK,
+  REX,
+  STEGO,
+  T_CHOMP,
+  T_CLIP,
+  T_CREST,
+  T_HEAD,
+  T_PLATE,
+  T_SNEEZE,
+  neckY,
+  rexRampY,
+  stegoRampY,
+} from '../src/games/splash-zone/mega/raptor-rapids';
 import { runs } from './helpers/full';
 
 const PASSED: Passed[] = [0, 1, 2, 3];
@@ -124,6 +138,7 @@ const PASSED: Passed[] = [0, 1, 2, 3];
 /** The worlds in the order the run visits them: id, name and the Mega each one holds. */
 const WORLDS: [WorldId, string, MegaId][] = [
   ['lagoon', 'Lagoon', 'whale-of-a-time'],
+  ['dino', 'Dino Lagoon', 'raptor-rapids'],
   ['harbour', 'Harbour City', 'harbour-havoc'],
   ['iceberg', 'Iceberg Bay', 'penguin-parade'],
   ['volcano', 'Volcano Island', 'geyser-blast'],
@@ -159,7 +174,17 @@ describe('worlds and the Mega count', () => {
   });
 
   it('visits the worlds in order and loops round', () => {
-    expect(WORLD_ORDER).toEqual(['lagoon', 'harbour', 'iceberg', 'volcano', 'reef', 'candy']);
+    expect(WORLD_ORDER).toEqual([
+      'lagoon',
+      'dino',
+      'harbour',
+      'iceberg',
+      'volcano',
+      'reef',
+      'candy',
+    ]);
+    expect(nextWorld('lagoon')).toBe('dino');
+    expect(nextWorld('dino')).toBe('harbour');
     expect(WORLD_ORDER).toEqual(WORLDS.map(([id]) => id));
     expect(nextWorld('reef')).toBe('candy');
     expect(nextWorld('candy')).toBe('lagoon');
@@ -181,6 +206,16 @@ describe('worlds and the Mega count', () => {
       expect(PALETTES[world]).toBeDefined();
       expect(MEGA_SPECS[WORLD_MEGA[world]]).toBeDefined();
     }
+    expect(PALETTES.dino).toMatchObject({
+      skyTop: 0xe6d56a,
+      skyBottom: 0xfff2c4,
+      water: 0x2f8f78,
+      sand: 0xc9a86a,
+      fog: 0xf1e4a8,
+      fogNear: 85,
+      fogFar: 210,
+      light: { sky: 0xfff0c0, ground: 0x3f7a58, sun: 0xffe39a, sunPower: 2.1 },
+    });
     expect(PALETTES.harbour).toMatchObject({ skyTop: 0x7ab8e8, water: 0x2a8fb0 });
     expect(PALETTES.iceberg).toMatchObject({
       skyTop: 0xbfe6ff,
@@ -1299,6 +1334,119 @@ describe('Sweet Tooth Rush specifics', () => {
       megaFrame(id, passed, t, f);
       for (const n of numbers(f)) expect(Number.isFinite(n)).toBe(true);
       expect(f.cloud.visible).toBe(false);
+    }
+  });
+});
+
+// ---------- Raptor Rapids ----------
+
+describe('Raptor Rapids specifics', () => {
+  const id = 'raptor-rapids';
+  const [, c2, c3] = megaOffsets(id);
+
+  it('climbs the bowed neck to its crest and slides down to the head', () => {
+    expect(neckY(NECK.top)).toBeCloseTo(NECK.topY, 6);
+    expect(NECK.top - NECK.foot).toBeGreaterThanOrEqual(8);
+    expect(neckY(NECK.head)).toBeCloseTo(NECK.headY, 6);
+    const crest = frameAt(id, 3, T_CREST);
+    expect(crest.ski.y).toBeCloseTo(NECK.topY, 1);
+    const head = frameAt(id, 3, T_HEAD);
+    expect(head.ski.d).toBeCloseTo(NECK.head, 6);
+    expect(megaEvents(id, 3).some((e) => e.type === 'spray' && Math.abs(e.d - NECK.head) < 1)).toBe(
+      true,
+    );
+  });
+
+  it('goes up too slowly, sneezes and is flicked off the side', () => {
+    const before = frameAt(id, 0, T_SNEEZE);
+    expect(before.ski.d).toBeLessThan(NECK.top);
+    expect(before.ski.d).toBeGreaterThan(NECK.foot + 4);
+    const end = frameAt(id, 0, megaDuration(id, 0));
+    expect(Math.abs(end.ski.s)).toBeGreaterThan(4);
+    expect(end.rider).toMatchObject({ mode: 'free', pose: 'float', face: 'soaked' });
+    const events = megaEvents(id, 0);
+    expect(events.filter((e) => e.type === 'spray').length).toBeGreaterThanOrEqual(2);
+    expect(events.some((e) => e.type === 'bigSplash')).toBe(true);
+  });
+
+  it('hops from plate to plate with a boing and spray on each, then spins off the tail', () => {
+    expect(STEGO.plates).toHaveLength(3);
+    expect(stegoRampY(STEGO.back)).toBeCloseTo(STEGO.backY, 6);
+    const seg2 = megaSegments(id, 3)[1];
+    STEGO.plates.forEach((p, i) => {
+      const f = frameAt(id, 3, seg2.start + T_PLATE[i]);
+      expect(f.ski.y).toBeCloseTo(p.y, 1);
+      const events = megaEvents(id, 3).filter(
+        (e) => Math.abs(e.at - (seg2.start + T_PLATE[i])) < 1e-6,
+      );
+      expect(events.some((e) => e.type === 'sfx:boing')).toBe(true);
+      expect(events.some((e) => e.type === 'spray')).toBe(true);
+    });
+    let spin = 0;
+    for (let t = seg2.start; t < seg2.start + seg2.duration; t += DT) {
+      const f = frameAt(id, 3, t);
+      if (f.ski.d > c2 + STEGO.plates[2].d) spin = Math.max(spin, f.ski.yaw);
+    }
+    expect(spin).toBeCloseTo(TAU, 1);
+  });
+
+  it('clips the second plate, bonks and drops beside the plates', () => {
+    const seg = megaSegments(id, 1)[1];
+    const clip = frameAt(id, 1, seg.start + T_CLIP);
+    expect(clip.ski.d - c2).toBeCloseTo(STEGO.clipD, 0);
+    const end = frameAt(id, 1, megaDuration(id, 1));
+    expect(Math.abs(end.ski.s)).toBeGreaterThan(2);
+    expect(end.ski.d - c2).toBeLessThan(STEGO.plates[1].d);
+    const events = megaEvents(id, 1).filter((e) => e.at >= seg.start);
+    expect(events.some((e) => e.type === 'stars')).toBe(true);
+    expect(events.some((e) => e.type === 'splash')).toBe(true);
+    expect(events.some((e) => e.type === 'drips')).toBe(true);
+  });
+
+  it('flies over the open jaws and does a double backflip into fireworks', () => {
+    expect(rexRampY(REX.lip)).toBeCloseTo(REX.lipY, 6);
+    const tip = REX.hinge.y + Math.sin(REX.upperOpen) * REX.jawLength;
+    const tipD = REX.hinge.d - Math.cos(REX.upperOpen) * REX.jawLength;
+    const seg = megaSegments(id, 3)[2];
+    let turn = 0;
+    for (let t = seg.start; t <= seg.start + seg.duration; t += DT) {
+      const f = frameAt(id, 3, t);
+      turn = Math.max(turn, f.ski.pitch / TAU);
+      // Over the jaws: clear of the upper jaw's tip and everything behind it.
+      if (f.ski.d - c3 > tipD && f.ski.d - c3 < REX.hinge.d && f.ski.y > 0.5) {
+        expect(f.ski.y, `ski over the jaws at ${t}`).toBeGreaterThan(tip + 1);
+      }
+    }
+    expect(turn).toBeCloseTo(2, 1);
+    const events = megaEvents(id, 3);
+    expect(events.some((e) => e.type === 'fireworks')).toBe(true);
+    expect(megaRate(id, 3, seg.start + seg.duration * 0.5)).toBeLessThan(1);
+  });
+
+  it('is caught by the snapping jaws and spat out into a big splash', () => {
+    const seg = megaSegments(id, 2)[2];
+    const caught = frameAt(id, 2, seg.start + T_CHOMP + 0.1);
+    expect(caught.ski.d - c3).toBeCloseTo(REX.mouthD, 0);
+    const end = frameAt(id, 2, megaDuration(id, 2));
+    expect(end.ski.d - c3).toBeGreaterThan(REX.mouthD + 8);
+    expect(end.rider).toMatchObject({ mode: 'free', pose: 'float', face: 'soaked' });
+    expect(megaEvents(id, 2).filter((e) => e.type === 'bigSplash').length).toBeGreaterThanOrEqual(
+      1,
+    );
+  });
+
+  it('gives finite frames at random moments of every stunt', () => {
+    let seed = 11;
+    const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const f = createFrame();
+    for (let i = 0; i < runs(2000, 300); i++) {
+      const passed = PASSED[Math.floor(random() * 4)];
+      const t = random() * megaDuration(id, passed) * 1.05;
+      megaFrame(id, passed, t, f);
+      for (const n of numbers(f)) expect(Number.isFinite(n)).toBe(true);
+      expect(f.cloud.visible).toBe(false);
+      expect(f.tail.visible).toBe(false);
+      expect(f.egg.visible).toBe(false);
     }
   });
 });
