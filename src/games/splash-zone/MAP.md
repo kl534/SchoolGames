@@ -32,7 +32,7 @@ A jet-ski trick game seen from a chase camera: each answer sends the ski off a l
 - `launchers.ts`: the wave, kicker and mega ramp meshes (`createLauncherPool`)
 - `water.ts`: the heaving water plane and the V-shaped foam wake (`createWater`)
 - `world.ts`: sky dome, fog, sun and the scenery recycled along the course; one set of islands, boats, a landmark and far strips per world (`createWorld`, `PALETTES`, `WorldTheme`)
-- `scenery.ts`: the scenery shapes: `part`/`merge` helpers and the geometry of Iceberg Bay, Volcano Island and Shark Reef
+- `scenery.ts`: the scenery shapes: `part`/`merge` helpers and the geometry of Iceberg Bay, Volcano Island, Shark Reef and Candy Cove
 - `effects.ts`: spray, splashes, bubbles, drips, confetti, fireworks as one pooled `Points` (`createEffects`, `MAX_PARTICLES`)
 - `hud.ts`: question panel, wake strip, jet skis, score, tier meter, Mega pips, banner, comic words, the wave wipe and the world title (`createHud`)
 - `kit.ts`: prop-building helpers that remember what to dispose (`Kit`, `ribbon`)

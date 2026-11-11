@@ -490,6 +490,11 @@ describe('parseDev', () => {
     expect(parseDev('?world=iceberg').world).toBe('iceberg');
     expect(parseDev('?world=volcano').world).toBe('volcano');
     expect(parseDev('?world=reef').world).toBe('reef');
+    expect(parseDev('?world=candy').world).toBe('candy');
+    expect(parseDev('?lab=sweet-tooth-rush:3&at=9').lab).toEqual({
+      mega: 'sweet-tooth-rush',
+      passed: 3,
+    });
     expect(parseDev('?lab=jaws-some-jump:1&at=4').lab).toEqual({
       mega: 'jaws-some-jump',
       passed: 1,
