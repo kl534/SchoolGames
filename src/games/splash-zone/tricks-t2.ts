@@ -475,13 +475,13 @@ const tailWhipClear = (() => {
   flight(L, swat, at);
   const tailD = at.d;
   const rise = track([
-    [L.tLip - 0.6, 0],
+    [L.tLip - 0.45, 0],
     [L.tLip - 0.05, 1, 'o'],
     [swat + 0.45, 1],
     [swat + 0.9, 0, 'i'],
   ]);
   const swing = track([
-    [L.tLip - 0.6, -1],
+    [L.tLip - 0.45, -1],
     [swat - 0.1, -1],
     [swat + 0.2, 1, 'o'],
     [swat + 0.9, 0.6],
