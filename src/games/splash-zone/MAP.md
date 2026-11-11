@@ -1,6 +1,6 @@
 # Splash Zone map
 
-A jet-ski trick game seen from a chase camera: each answer sends the ski off a launcher (a wave, a kicker ramp or a mega ramp, by the player's streak tier) and the trick either comes off or goes spectacularly wrong. The clock is the distance to the launcher. Three jet skis, endless run. Each world (Lagoon, Harbour City, Iceberg Bay, Volcano Island, Shark Reef, then round again) has seven normal turns and then its own Mega Stunt: three questions through checkpoint buoy gates, then one long course (Whale of a Time, Harbour Havoc, Penguin Parade, Geyser Blast, Jaws-Some Jump) that clears as many elements as were right and wipes out on the next. After the Mega a blue wave wipes the screen and the next world appears with its name.
+A jet-ski trick game seen from a chase camera: each answer sends the ski off a launcher (a wave, a kicker ramp or a mega ramp, by the player's streak tier) and the trick either comes off or goes spectacularly wrong. The clock is the distance to the launcher. Three jet skis, endless run. Each world (Lagoon, Harbour City, Iceberg Bay, Volcano Island, Shark Reef, Candy Cove, then round again) has seven normal turns and then its own Mega Stunt: three questions through checkpoint buoy gates, then one long course (Whale of a Time, Harbour Havoc, Penguin Parade, Geyser Blast, Jaws-Some Jump, Sweet Tooth Rush) that clears as many elements as were right and wipes out on the next. After the Mega a blue wave wipes the screen and the next world appears with its name.
 
 ## Files
 
@@ -19,12 +19,14 @@ A jet-ski trick game seen from a chase camera: each answer sends the ski off a l
 - `mega/penguin-parade.ts`: Iceberg Bay Mega: penguin floe hop, iceberg chute, ice arch spin and the ice cube wipeout (`PENGUIN_PARADE`, `FLOE`, `BERG`, `ARCH`, `BUMP`, `SKID`, `FREEZE`)
 - `mega/geyser-blast.ts`: Volcano Island Mega: lava-rock arch leap, weaving coconut-boulders, steam geyser double corkscrew and the soot, bonk and parachute wipeouts (`GEYSER_BLAST`, `LAVA`, `BOULDERS`, `GEYSER`, `SOOT`, `BONK`, `CHUTE`)
 - `mega/jaws-some-jump.ts`: Shark Reef Mega: the sunglasses shark jump and fetch, the giant wave's curl and tumble, the pirate ship's plank, sail holes and double backflip (`JAWS_SOME_JUMP`, `SHARK`, `FETCH`, `WAVE`, `TUMBLE`, `SHIP`, `TANGLE`, `sharkPose`, `sharkMouth`, `waveLevel`)
+- `mega/sweet-tooth-rush.ts`: Candy Cove Mega: gummy bear belly boing, donut hole dash, sundae double backflip and the belly flop, glazed and meltdown wipeouts (`SWEET_TOOTH_RUSH`, `BEAR`, `DONUT`, `SUNDAE`, `FLOP`, `GLAZE`, `MELT`, `bellySquash`)
 - `mega/props-kit.ts`: what the course props are built from (`MegaBuilt`, `profile`)
 - `mega/whale-of-a-time-props.ts`: Whale of a Time meshes (`buildWhaleProps`, `tailAngle`, `spoutLevel`)
 - `mega/harbour-havoc-props.ts`: Harbour Havoc meshes (`buildHarbourHavocProps`)
 - `mega/penguin-parade-props.ts`: Penguin Parade meshes: penguins, floe, iceberg, snow bank, arch, the ice cube (`buildPenguinParadeProps`)
 - `mega/geyser-blast-props.ts`: Geyser Blast meshes: lava arch with soot puffs, falling coconut-boulders, the steam jet and the seaweed parachute (`buildGeyserBlastProps`, `geyserLevel`)
 - `mega/jaws-some-jump-props.ts`: Jaws-Some Jump meshes: the shark, the translucent wave, the pirate ship with holed sails and crew, the sail bundle (`buildJawsSomeJumpProps`)
+- `mega/sweet-tooth-rush-props.ts`: Sweet Tooth Rush meshes: the squashing gummy bear, the sprinkled donut, the waffle-cone ramp, glass sundae, cherry and cream splash (`buildSweetToothRushProps`)
 - `mega/mega-props.ts`: the Mega courses and the checkpoint buoy gates as three.js objects (`createMegaCoursePool`, `createGate`)
 - `jetski.ts`: the jet ski and the lifeguard's rescue boat (`createJetSki`, `createRescueBoat`)
 - `rider.ts`: the kid rider's rig, life vest, faces (happy, scared, dizzy, soaked, sooty) and poses (`createRider`, `POSES`)
@@ -45,8 +47,8 @@ A jet-ski trick game seen from a chase camera: each answer sends the ski off a l
 - `?streak=6`: start the run with this streak (0 to 20). `?skis=1`: start with 1 to 3 jet skis.
 - `?lab=<trickId>:<clear|fail>`: trick lab, loops one animation with its camera swing and the HUD hidden except the comic word. `?lab=respawn` loops the lifeguard boat.
 - `&at=<seconds>` freezes the lab at that time (effects and props included).
-- `?lab=<megaId>:<0-3>`: the same lab for a Mega course (`whale-of-a-time`, `harbour-havoc`, `penguin-parade`, `geyser-blast`, `jaws-some-jump`) with that many questions right: it clears that many elements and wipes out on the next (3 = the finale). `&at=` freezes it. Times to look at: whale-of-a-time:3 finale at `at=9`, :0 palm tangle `at=2.8`, :2 fizzle `at=8.6`; harbour-havoc:3 finale `at=9.7`, :0 lifeboat `at=3.7`, :1 crab pots `at=5.7`, :2 bridge drop `at=9`; penguin-parade:3 finale `at=9.2`, :0 penguin bump `at=1.95`, :1 snow bank `at=6`, :2 ice cube `at=9.8`; geyser-blast:3 finale `at=9.8`, :0 soot `at=2.1`, :1 boulder bonk `at=5.6`, :2 parachute `at=10.5`; jaws-some-jump:3 finale `at=9.5`, :0 shark fetch `at=1.7`, :1 wave tumble `at=5.4`, :2 tangled sails `at=8.7`.
-- `?world=<lagoon|harbour|iceberg|volcano|reef>`: start the run in that world. `?mega=1`: the first turn is this world's Mega Stunt (banner, three gate questions, the course, then the wipe and the next world).
+- `?lab=<megaId>:<0-3>`: the same lab for a Mega course (`whale-of-a-time`, `harbour-havoc`, `penguin-parade`, `geyser-blast`, `jaws-some-jump`, `sweet-tooth-rush`) with that many questions right: it clears that many elements and wipes out on the next (3 = the finale). `&at=` freezes it. Times to look at: whale-of-a-time:3 finale at `at=9`, :0 palm tangle `at=2.8`, :2 fizzle `at=8.6`; harbour-havoc:3 finale `at=9.7`, :0 lifeboat `at=3.7`, :1 crab pots `at=5.7`, :2 bridge drop `at=9`; penguin-parade:3 finale `at=9.2`, :0 penguin bump `at=1.95`, :1 snow bank `at=6`, :2 ice cube `at=9.8`; geyser-blast:3 finale `at=9.8`, :0 soot `at=2.1`, :1 boulder bonk `at=5.6`, :2 parachute `at=10.5`; jaws-some-jump:3 finale `at=9.5`, :0 shark fetch `at=1.7`, :1 wave tumble `at=5.4`, :2 tangled sails `at=8.7`; sweet-tooth-rush:3 bear boing `at=1.5`, donut `at=5.5`, sundae over the glass `at=9.6`, :0 belly flop `at=2.0`, :1 glazed `at=5.9`, :2 meltdown `at=10.3`.
+- `?world=<lagoon|harbour|iceberg|volcano|reef|candy>`: start the run in that world. `?mega=1`: the first turn is this world's Mega Stunt (banner, three gate questions, the course, then the wipe and the next world).
 - Example: `npm run shots -- "splash-zone?lab=backflip:clear&at=1.3" "splash-zone?lab=submarine:fail&at=3.5" "splash-zone?lab=respawn&at=0.9" --sizes 844x390`
 
 ## Where changes go
