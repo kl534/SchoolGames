@@ -10,7 +10,7 @@
  *   word. `?lab=respawn` loops the lifeguard boat. `&at=<seconds>` freezes it at that stunt time.
  * - `?lab=<megaId>:<0-3>` the same lab for a Mega course, with that many questions right (it
  *   clears that many elements and wipes out on the next); `&at=` freezes it likewise.
- * - `?world=<id>` start the run in that world (`lagoon`, `harbour`, `iceberg`, `volcano`, `reef`, `candy`).
+ * - `?world=<id>` start the run in that world (`lagoon`, `dino`, `harbour`, `iceberg`, `volcano`, `reef`, `candy`).
  * - `?mega=1` the first turn is this world's Mega Stunt.
  */
 import {
