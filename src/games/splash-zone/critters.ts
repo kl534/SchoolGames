@@ -161,7 +161,7 @@ export interface Cloud extends Prop {
   pose(scale: number): void;
 }
 
-/** A cloud of candy floss, about 4 wide and 1.2 tall, its flat top at y = 0. */
+/** A cloud of candy floss, about 6 wide and 1.8 tall, its flat top at y = 0. */
 export function createCloud(): Cloud {
   const b = builder();
   const object = new Group();
@@ -184,7 +184,7 @@ export function createCloud(): Cloud {
     object,
     update() {},
     pose(scale) {
-      body.scale.setScalar(Math.max(scale, 0.001));
+      body.scale.setScalar(1.5 * Math.max(scale, 0.001));
     },
     dispose() {
       b.dispose();
