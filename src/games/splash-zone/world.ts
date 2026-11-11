@@ -5,7 +5,8 @@
  * City is concrete docks with skyline towers and containers, tugboats, cranes and a skyline beyond,
  * with the same cheering pier. Iceberg Bay has icebergs, ice floes with penguins and snowy peaks;
  * Volcano Island dark sand islands, palms and a smoking volcano; Shark Reef coral rocks, circling
- * shark fins, a moored pirate ship and a low sunset sun. All procedural; nothing to load.
+ * shark fins, a moored pirate ship and a low sunset sun; Candy Cove frosted cake islands with
+ * lollipop palms, gumdrop buoys, a lollipop tower and layer-cake hills. All procedural; nothing to load.
  */
 import {
   AmbientLight,
@@ -107,6 +108,16 @@ export const PALETTES: Record<WorldTheme, WorldPalette> = {
     fogNear: 85,
     fogFar: 210,
     light: { sky: 0xffd9c0, ground: 0x3a7a96, sun: 0xff9e6b, sunPower: 2.3 },
+  },
+  candy: {
+    skyTop: 0xff9fd8,
+    skyBottom: 0xc9fff0,
+    water: 0x39b8ff,
+    sand: 0xffd1e8,
+    fog: 0xffd9f0,
+    fogNear: 85,
+    fogFar: 200,
+    light: { sky: 0xffe3f6, ground: 0x5fb3e6, sun: 0xfff1d6, sunPower: 2.0 },
   },
 };
 
@@ -480,6 +491,14 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
           boat: track(scenery.makeSharkFin()),
           landmark: track(scenery.makePirateShip()),
           strips: [] as BufferGeometry[],
+          palms: false,
+        };
+      case 'candy':
+        return {
+          island: track(scenery.makeCandyIsland()),
+          boat: track(scenery.makeGumdropBuoy()),
+          landmark: track(scenery.makeCandyTower()),
+          strips: [track(scenery.makeCakeHills(1)), track(scenery.makeCakeHills(2))],
           palms: false,
         };
       case 'volcano':

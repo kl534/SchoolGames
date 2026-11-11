@@ -26,6 +26,7 @@ import { GEYSER_BLAST } from './geyser-blast';
 import { HARBOUR_HAVOC } from './harbour-havoc';
 import { JAWS_SOME_JUMP } from './jaws-some-jump';
 import { PENGUIN_PARADE } from './penguin-parade';
+import { SWEET_TOOTH_RUSH } from './sweet-tooth-rush';
 import { WHALE_OF_A_TIME } from './whale-of-a-time';
 
 /** One big element of a course, in element-local coordinates (`d` = 0 at its entry line). */
@@ -55,6 +56,7 @@ export const MEGA_SPECS: Record<MegaId, MegaSpec> = {
   'penguin-parade': PENGUIN_PARADE,
   'geyser-blast': GEYSER_BLAST,
   'jaws-some-jump': JAWS_SOME_JUMP,
+  'sweet-tooth-rush': SWEET_TOOTH_RUSH,
 };
 
 const specOf = (id: MegaId) => MEGA_SPECS[id];

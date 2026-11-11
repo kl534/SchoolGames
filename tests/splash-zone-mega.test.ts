@@ -105,6 +105,19 @@ import {
   bergY,
   floeY,
 } from '../src/games/splash-zone/mega/penguin-parade';
+import {
+  BEAR,
+  DONUT,
+  GLAZE,
+  MELT,
+  SUNDAE,
+  T_BOING,
+  T_LOW,
+  T_MELT,
+  bearY,
+  bellySquash,
+} from '../src/games/splash-zone/mega/sweet-tooth-rush';
+import { runs } from './helpers/full';
 
 const PASSED: Passed[] = [0, 1, 2, 3];
 
@@ -115,6 +128,7 @@ const WORLDS: [WorldId, string, MegaId][] = [
   ['iceberg', 'Iceberg Bay', 'penguin-parade'],
   ['volcano', 'Volcano Island', 'geyser-blast'],
   ['reef', 'Shark Reef', 'jaws-some-jump'],
+  ['candy', 'Candy Cove', 'sweet-tooth-rush'],
 ];
 const FPS = 60;
 const DT = 1 / FPS;
@@ -145,9 +159,10 @@ describe('worlds and the Mega count', () => {
   });
 
   it('visits the worlds in order and loops round', () => {
-    expect(WORLD_ORDER).toEqual(['lagoon', 'harbour', 'iceberg', 'volcano', 'reef']);
+    expect(WORLD_ORDER).toEqual(['lagoon', 'harbour', 'iceberg', 'volcano', 'reef', 'candy']);
     expect(WORLD_ORDER).toEqual(WORLDS.map(([id]) => id));
-    expect(nextWorld('reef')).toBe('lagoon');
+    expect(nextWorld('reef')).toBe('candy');
+    expect(nextWorld('candy')).toBe('lagoon');
     WORLDS.forEach(([id], i) => expect(nextWorld(id)).toBe(WORLDS[(i + 1) % WORLDS.length][0]));
     expect(nextWorld(WORLDS[WORLDS.length - 1][0])).toBe('lagoon');
     let world: WorldId = 'lagoon';
@@ -181,6 +196,11 @@ describe('worlds and the Mega count', () => {
       skyTop: 0xff7a59,
       skyBottom: 0xffd1a1,
       water: 0x1f8fb8,
+    });
+    expect(PALETTES.candy).toMatchObject({
+      skyTop: 0xff9fd8,
+      skyBottom: 0xc9fff0,
+      water: 0x39b8ff,
     });
     // Every world looks different at a glance: its own sky and its own water.
     const palettes = WORLD_ORDER.map((w) => PALETTES[w]);
@@ -1171,6 +1191,115 @@ describe('Jaws-Some Jump specifics', () => {
     const end = frameAt(id, 2, megaDuration(id, 2));
     expect(end.rider).toMatchObject({ mode: 'free', pose: 'float' });
     expect(end.ski.y).toBeLessThan(0.6);
+  });
+});
+
+// ---------- Sweet Tooth Rush ----------
+
+describe('Sweet Tooth Rush specifics', () => {
+  const id = 'sweet-tooth-rush';
+  const [, c2, c3] = megaOffsets(id);
+
+  it('squashes the gummy belly under the ski and boings it about 5 u up and 14 u on', () => {
+    expect(bellySquash(0, T_BOING)).toBe(1);
+    expect(bellySquash(T_BOING, T_BOING)).toBeCloseTo(0.7, 6);
+    expect(bellySquash(T_BOING + 1, T_BOING)).toBeCloseTo(1, 6);
+    expect(bearY(BEAR.top)).toBeCloseTo(BEAR.topY, 6);
+    let peak = 0;
+    for (let t = T_BOING; t < 3; t += DT) peak = Math.max(peak, frameAt(id, 3, t).ski.y);
+    expect(peak - BEAR.topY).toBeGreaterThan(4);
+    expect(peak - BEAR.topY).toBeLessThan(6);
+    expect(BEAR.land - BEAR.top).toBeGreaterThanOrEqual(13);
+    const boing = megaEvents(id, 3).find((e) => e.type === 'sfx:boing');
+    expect(boing?.at).toBeCloseTo(T_BOING, 6);
+  });
+
+  it('hits the belly low, is boinged back off it and flips into the syrup behind', () => {
+    const hit = frameAt(id, 0, T_LOW);
+    expect(hit.ski.d).toBeCloseTo(BEAR.lowHit, 6);
+    expect(hit.ski.y).toBeLessThan(BEAR.topY);
+    const end = frameAt(id, 0, megaDuration(id, 0));
+    expect(end.ski.d).toBeLessThan(BEAR.lowHit - 4);
+    expect(end.rider).toMatchObject({ mode: 'free', pose: 'float', face: 'soaked' });
+    const events = megaEvents(id, 0);
+    expect(events.some((e) => e.type === 'bigSplash')).toBe(true);
+  });
+
+  it('flies through the hole of the donut, clear of the icing, with sprinkles', () => {
+    expect(DONUT.outer).toBe(4.5);
+    expect(DONUT.hole).toBe(2.2);
+    expect(DONUT.cy).toBe(4.5);
+    let seen = false;
+    for (let t = megaSegments(id, 3)[1].start; t < megaSegments(id, 3)[2].start; t += DT) {
+      const f = frameAt(id, 3, t);
+      if (Math.abs(f.ski.d - c2 - DONUT.d) < 0.6) {
+        seen = true;
+        // The ski and the rider sitting up on it fit inside the hole.
+        expect(Math.abs(f.ski.y - DONUT.cy) + 1.3).toBeLessThan(DONUT.hole);
+      }
+    }
+    expect(seen).toBe(true);
+    const start = megaSegments(id, 3)[1].start;
+    const confetti = megaEvents(id, 3).filter(
+      (e) => e.type === 'confetti' && e.at >= start && e.at < megaSegments(id, 3)[2].start,
+    );
+    expect(confetti.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it('clips the icing, bounces off the ring and drops, throwing the rider aside', () => {
+    const start = megaSegments(id, 1)[1].start;
+    const hit = frameAt(id, 1, start + GLAZE.at);
+    expect(hit.ski.d - c2).toBeCloseTo(DONUT.clipD, 0);
+    expect(hit.ski.y).toBeLessThan(DONUT.cy - DONUT.hole);
+    const end = frameAt(id, 1, megaDuration(id, 1));
+    expect(end.ski.d - c2).toBeLessThan(DONUT.clipD);
+    expect(Math.abs(end.rider.s)).toBeGreaterThan(DONUT.hole);
+    const events = megaEvents(id, 1).filter((e) => e.at >= start);
+    expect(events.some((e) => e.type === 'drips')).toBe(true);
+    expect(events.some((e) => e.type === 'splash')).toBe(true);
+  });
+
+  it('does a double backflip over the glass sundae and cherry with fireworks on landing', () => {
+    const start = megaSegments(id, 3)[2].start;
+    for (let t = start; t < megaDuration(id, 3); t += DT) {
+      const f = frameAt(id, 3, t);
+      if (Math.abs(f.ski.d - c3 - SUNDAE.d) < SUNDAE.radius) {
+        expect(f.ski.y).toBeGreaterThan(SUNDAE.cherryY + 1.5);
+      }
+    }
+    expect(frameAt(id, 3, megaDuration(id, 3)).ski.pitch).toBeCloseTo(2 * TAU, 6);
+    const fireworks = megaEvents(id, 3).filter((e) => e.type === 'fireworks');
+    expect(fireworks).toHaveLength(1);
+    expect(fireworks[0].d - c3).toBeGreaterThan(SUNDAE.d);
+  });
+
+  it('clips the cherry, plunges into the whipped cream and ends in a big splash', () => {
+    const start = megaSegments(id, 2)[2].start;
+    const hit = frameAt(id, 2, start + T_MELT);
+    expect(hit.ski.d - c3).toBeCloseTo(MELT.hitD, 6);
+    expect(hit.ski.y).toBeGreaterThan(SUNDAE.creamY - 0.5);
+    expect(hit.ski.y).toBeLessThan(SUNDAE.cherryY + 0.5);
+    const big = megaEvents(id, 2).filter((e) => e.type === 'bigSplash' && e.at >= start);
+    expect(big.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('lets off fireworks in the finale only', () => {
+    for (const passed of PASSED) {
+      expect(megaEvents(id, passed).some((e) => e.type === 'fireworks')).toBe(passed === 3);
+    }
+  });
+
+  it('gives finite frames at random moments of every stunt', () => {
+    let seed = 7;
+    const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const f = createFrame();
+    for (let i = 0; i < runs(2000, 300); i++) {
+      const passed = PASSED[Math.floor(random() * 4)];
+      const t = random() * megaDuration(id, passed);
+      megaFrame(id, passed, t, f);
+      for (const n of numbers(f)) expect(Number.isFinite(n)).toBe(true);
+      expect(f.cloud.visible).toBe(false);
+    }
   });
 });
 
