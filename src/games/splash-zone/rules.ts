@@ -8,11 +8,13 @@ export type TrickId =
   | 'backflip'
   | 'barrel-roll'
   | 'helicopter'
-  | 'sugar-spin' // tier 2
+  | 'sugar-spin'
+  | 'tail-whip' // tier 2
   | 'double-backflip'
   | 'submarine'
   | 'corkscrew'
-  | 'cotton-candy-cloud'; // tier 3
+  | 'cotton-candy-cloud'
+  | 'egg-hatch'; // tier 3
 
 /** In tier order: the order `nextTrick` picks among them. */
 export const TRICK_IDS: readonly TrickId[] = [
@@ -24,10 +26,12 @@ export const TRICK_IDS: readonly TrickId[] = [
   'barrel-roll',
   'helicopter',
   'sugar-spin',
+  'tail-whip',
   'double-backflip',
   'submarine',
   'corkscrew',
   'cotton-candy-cloud',
+  'egg-hatch',
 ];
 
 export type Tier = 1 | 2 | 3;
@@ -41,10 +45,12 @@ export const TRICK_TIER: Record<TrickId, Tier> = {
   'barrel-roll': 2,
   helicopter: 2,
   'sugar-spin': 2,
+  'tail-whip': 2,
   'double-backflip': 3,
   submarine: 3,
   corkscrew: 3,
   'cotton-candy-cloud': 3,
+  'egg-hatch': 3,
 };
 
 export const TRICK_NAMES: Record<TrickId, string> = {
@@ -56,10 +62,12 @@ export const TRICK_NAMES: Record<TrickId, string> = {
   'barrel-roll': 'Barrel Roll',
   helicopter: 'Helicopter',
   'sugar-spin': 'Sugar Spin',
+  'tail-whip': 'Tail Whip',
   'double-backflip': 'Double Backflip',
   submarine: 'Submarine',
   corkscrew: 'Corkscrew 720',
   'cotton-candy-cloud': 'Cotton Candy Cloud',
+  'egg-hatch': 'Egg Hatch',
 };
 
 export type LauncherKind = 'wave' | 'kicker' | 'mega-ramp';
@@ -216,9 +224,10 @@ export function coinSide(i: number, n: number, sign: number): number {
 // ---------- Worlds and Mega Stunts ----------
 
 /** The worlds, in the order the run visits them (and then round again). */
-export type WorldId = 'lagoon' | 'harbour' | 'iceberg' | 'volcano' | 'reef' | 'candy';
+export type WorldId = 'lagoon' | 'dino' | 'harbour' | 'iceberg' | 'volcano' | 'reef' | 'candy';
 export const WORLD_ORDER: readonly WorldId[] = [
   'lagoon',
+  'dino',
   'harbour',
   'iceberg',
   'volcano',
@@ -228,6 +237,7 @@ export const WORLD_ORDER: readonly WorldId[] = [
 
 export const WORLD_NAMES: Record<WorldId, string> = {
   lagoon: 'Lagoon',
+  dino: 'Dino Lagoon',
   harbour: 'Harbour City',
   iceberg: 'Iceberg Bay',
   volcano: 'Volcano Island',
@@ -241,6 +251,7 @@ export const NORMALS_PER_WORLD = 7;
 /** The Mega courses, one per world. */
 export type MegaId =
   | 'whale-of-a-time'
+  | 'raptor-rapids'
   | 'harbour-havoc'
   | 'penguin-parade'
   | 'geyser-blast'
@@ -248,6 +259,7 @@ export type MegaId =
   | 'sweet-tooth-rush';
 export const MEGA_IDS: readonly MegaId[] = [
   'whale-of-a-time',
+  'raptor-rapids',
   'harbour-havoc',
   'penguin-parade',
   'geyser-blast',
@@ -257,6 +269,7 @@ export const MEGA_IDS: readonly MegaId[] = [
 
 export const WORLD_MEGA: Record<WorldId, MegaId> = {
   lagoon: 'whale-of-a-time',
+  dino: 'raptor-rapids',
   harbour: 'harbour-havoc',
   iceberg: 'penguin-parade',
   volcano: 'geyser-blast',

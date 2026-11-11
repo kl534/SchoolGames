@@ -6,7 +6,9 @@
  * with the same cheering pier. Iceberg Bay has icebergs, ice floes with penguins and snowy peaks;
  * Volcano Island dark sand islands, palms and a smoking volcano; Shark Reef coral rocks, circling
  * shark fins, a moored pirate ship and a low sunset sun; Candy Cove frosted cake islands with
- * lollipop palms, gumdrop buoys, a lollipop tower and layer-cake hills. All procedural; nothing to load.
+ * lollipop palms, gumdrop buoys, a lollipop tower and layer-cake hills; Dino Lagoon fern islands
+ * with dino eggs, a long-neck's back in the water, a tall Brachiosaurus and jungle hills with
+ * smoking mini-volcanoes. All procedural; nothing to load.
  */
 import {
   AmbientLight,
@@ -69,6 +71,16 @@ export const PALETTES: Record<WorldTheme, WorldPalette> = {
     fog: 0xbfefff,
     fogNear: 90,
     fogFar: 200,
+  },
+  dino: {
+    skyTop: 0xe6d56a,
+    skyBottom: 0xfff2c4,
+    water: 0x2f8f78,
+    sand: 0xc9a86a,
+    fog: 0xf1e4a8,
+    fogNear: 85,
+    fogFar: 210,
+    light: { sky: 0xfff0c0, ground: 0x3f7a58, sun: 0xffe39a, sunPower: 2.1 },
   },
   harbour: {
     skyTop: 0x7ab8e8,
@@ -491,6 +503,14 @@ export function createWorld(scene: Scene, theme: WorldTheme): World {
           boat: track(scenery.makeSharkFin()),
           landmark: track(scenery.makePirateShip()),
           strips: [] as BufferGeometry[],
+          palms: false,
+        };
+      case 'dino':
+        return {
+          island: track(scenery.makeFernIsland()),
+          boat: track(scenery.makeDinoBackRidge()),
+          landmark: track(scenery.makeBrachioTower()),
+          strips: [track(scenery.makeJungleHills(1)), track(scenery.makeJungleHills(2))],
           palms: false,
         };
       case 'candy':

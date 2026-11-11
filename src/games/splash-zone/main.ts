@@ -15,7 +15,7 @@ import { createTimers } from '../../shared/timers';
 import { answerOptions, promptSpeech, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
 import { swell } from './anim';
-import { createCloud, createDolphin, type Dolphin } from './critters';
+import { createCloud, createDolphin, createEgg, createTail, type Dolphin } from './critters';
 import { devOptions, type DevOptions, type Lab } from './dev';
 import { createEffects, type EffectKind } from './effects';
 import { createHud } from './hud';
@@ -247,6 +247,10 @@ function run(session: GameSession, dev: DevOptions | null): void {
 
   const cloud = createCloud();
   scene.add(cloud.object);
+  const tail = createTail();
+  scene.add(tail.object);
+  const egg = createEgg();
+  scene.add(egg.object);
 
   // Coins in trails.
   const coinMaterial = new MeshStandardMaterial({
@@ -478,6 +482,16 @@ function run(session: GameSession, dev: DevOptions | null): void {
     if (f.cloud.visible) {
       cloud.object.position.set(f.cloud.s, f.cloud.y, entryZ - f.cloud.d);
       cloud.pose(f.cloud.scale);
+    }
+    tail.object.visible = f.tail.visible;
+    if (f.tail.visible) {
+      tail.object.position.set(f.tail.s, f.tail.y, entryZ - f.tail.d);
+      tail.pose(f.tail.rise, f.tail.swing);
+    }
+    egg.object.visible = f.egg.visible;
+    if (f.egg.visible) {
+      egg.object.position.set(f.egg.s, f.egg.y, entryZ - f.egg.d);
+      egg.pose(f.egg.scale, f.egg.crack, f.egg.hatch, f.egg.shut);
     }
     // The camera follows the ski, or the middle of the ski and a rider thrown clear of it.
     const target = focusOf(f);
@@ -1590,6 +1604,8 @@ function run(session: GameSession, dev: DevOptions | null): void {
     rider.setProps(false, false);
     dolphins.forEach((d) => (d.object.visible = false));
     cloud.object.visible = false;
+    tail.object.visible = false;
+    egg.object.visible = false;
     boat.object.visible = false;
     skis[1].object.visible = false;
     activeIndex = 0;
@@ -1779,6 +1795,8 @@ function run(session: GameSession, dev: DevOptions | null): void {
     boat.dispose();
     dolphins.forEach((d) => d.dispose());
     cloud.dispose();
+    tail.dispose();
+    egg.dispose();
     launchers.dispose();
     megaPool.dispose();
     gates.forEach((gate) => gate.dispose());

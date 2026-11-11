@@ -84,6 +84,7 @@ export function launcherIcon(kind: Goal): Node {
   if (kind === 'harbour-havoc') return document.createTextNode('🌉');
   if (kind === 'penguin-parade') return document.createTextNode('🐧');
   if (kind === 'sweet-tooth-rush') return document.createTextNode('🍭');
+  if (kind === 'raptor-rapids') return document.createTextNode('🦖');
   if (kind === 'geyser-blast') return document.createTextNode('🌋');
   if (kind === 'jaws-some-jump') return document.createTextNode('🦈');
   const { svg, add } = svgIcon('0 0 26 26');

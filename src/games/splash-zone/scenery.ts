@@ -1,7 +1,7 @@
 /**
  * Geometry for the scenery that `world.ts` recycles along the course: the helpers that paint and
  * merge shapes into one draw call, and the parts of the later worlds (Iceberg Bay, Volcano Island,
- * Shark Reef, Candy Cove). Everything is flat-shaded cartoon primitives painted with vertex colours; each
+ * Shark Reef, Candy Cove, Dino Lagoon). Everything is flat-shaded cartoon primitives painted with vertex colours; each
  * factory returns a fresh geometry that the world disposes.
  */
 import {
@@ -543,6 +543,291 @@ export function makeCakeHills(seed: number): BufferGeometry {
       );
     }
     parts.push(part(new SphereGeometry(1.1, 8, 6), 0xff4f6f, x, h + 0.9, z));
+    z += r * 0.5;
+  }
+  return merge(parts);
+}
+
+// ---------- Dino Lagoon ----------
+
+const FERN = [0x3f8f3a, 0x58a845, 0x2f7a3a];
+const MOSS = 0x4f8f45;
+const DINO_GREEN = 0x5fa85a;
+const DINO_BELLY = 0xb7d078;
+const SPIKE = 0xf3e6b8;
+
+/** A giant fern: a fan of drooping flat fronds round a short stem. */
+function fernParts(x: number, y: number, z: number, scale: number, seed: number): BufferGeometry[] {
+  const parts: BufferGeometry[] = [];
+  const n = 7;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + seed;
+    const len = (2.6 + hash(seed * 9 + i) * 0.8) * scale;
+    const tilt = 1.0 + hash(seed * 5 + i * 1.7) * 0.25;
+    parts.push(
+      part(
+        new ConeGeometry(0.34 * scale, len, 4),
+        FERN[i % FERN.length],
+        x + Math.sin(a) * len * 0.3,
+        y + len * 0.35,
+        z + Math.cos(a) * len * 0.3,
+        Math.cos(a) * tilt,
+        0,
+        -Math.sin(a) * tilt,
+        1,
+        1,
+        0.35,
+      ),
+    );
+  }
+  return parts;
+}
+
+/** A cycad: a stubby scaly trunk with a crown of long fronds. */
+function cycadParts(x: number, z: number, height: number): BufferGeometry[] {
+  const parts: BufferGeometry[] = [
+    part(new CylinderGeometry(0.3, 0.45, height, 7), 0x7a5a38, x, 1.0 + height / 2, z),
+  ];
+  const n = 8;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    parts.push(
+      part(
+        new ConeGeometry(0.28, 3.2, 4),
+        FERN[i % FERN.length],
+        x + Math.sin(a) * 1.0,
+        1.0 + height + 0.3,
+        z + Math.cos(a) * 1.0,
+        Math.cos(a) * 1.15,
+        0,
+        -Math.sin(a) * 1.15,
+        1,
+        1,
+        0.3,
+      ),
+    );
+  }
+  return parts;
+}
+
+/** A mossy sand-and-rock mound with giant ferns, a cycad and a few round dino eggs. */
+export function makeFernIsland(): BufferGeometry {
+  const parts: BufferGeometry[] = [
+    part(new CylinderGeometry(5.4, 6.2, 1.3, 12), 0xc9a86a, 0, 0, 0),
+    part(
+      new SphereGeometry(4.4, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+      MOSS,
+      0,
+      0.6,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0.5,
+      1,
+    ),
+    part(new IcosahedronGeometry(1.5, 0), 0x8a8478, 3.6, 0.9, 1.2, 0.3, 0.5, 0, 1, 0.8, 1),
+    part(new IcosahedronGeometry(1.0, 0), 0x77736a, -3.8, 0.8, -1.6, 0.1, 0.2, 0, 1, 0.8, 1),
+  ];
+  parts.push(...fernParts(-1.8, 1.0, 1.4, 1.3, 1));
+  parts.push(...fernParts(2.0, 1.0, -1.2, 1.1, 2));
+  parts.push(...fernParts(0.4, 1.0, 3.0, 0.9, 3));
+  parts.push(...cycadParts(0.0, -1.0, 2.2));
+  const eggs = [
+    [-0.4, 3.4],
+    [0.5, 3.8],
+    [-3.0, -2.6],
+  ];
+  eggs.forEach(([x, z], i) => {
+    parts.push(
+      part(
+        new SphereGeometry(0.5, 10, 8),
+        i === 2 ? 0xe9dcae : 0xf6ecc8,
+        x,
+        1.5,
+        z,
+        0,
+        0,
+        0,
+        1,
+        1.25,
+        1,
+      ),
+    );
+    parts.push(part(new SphereGeometry(0.1, 6, 5), 0x4f9a4a, x + 0.35, 1.7, z + 0.2));
+  });
+  return merge(parts);
+}
+
+/** A long-neck dinosaur's humped back and cream spikes just breaking the water. */
+export function makeDinoBackRidge(): BufferGeometry {
+  const parts: BufferGeometry[] = [];
+  const humps: [number, number, number][] = [
+    [-2.4, 0.9, 1.5],
+    [0.2, 1.2, 1.9],
+    [2.8, 0.8, 1.4],
+  ];
+  for (const [z, h, r] of humps) {
+    parts.push(
+      part(new SphereGeometry(r, 10, 8), DINO_GREEN, 0, -0.5, z, 0, 0, 0, 0.9, h / r + 0.1, 1.2),
+    );
+    for (let k = -1; k <= 1; k++) {
+      parts.push(
+        part(new ConeGeometry(0.28, 0.8, 4), SPIKE, 0, h + 0.3, z + k * 0.7, 0, 0, 0, 0.5, 1, 1),
+      );
+    }
+  }
+  // The tail trails off behind and the neck dips in front.
+  parts.push(
+    part(new ConeGeometry(0.8, 4.2, 8), DINO_GREEN, 0, -0.1, 6.3, Math.PI / 2 + 0.1, 0, 0),
+  );
+  parts.push(
+    part(
+      new CylinderGeometry(0.5, 0.8, 3.4, 8),
+      DINO_GREEN,
+      0,
+      0.2,
+      -5.2,
+      Math.PI / 2 - 0.35,
+      0,
+      0,
+    ),
+  );
+  return merge(parts);
+}
+
+/** The landmark: a tall Brachiosaurus standing in the shallows, a long neck up and a small head. */
+export function makeBrachioTower(): BufferGeometry {
+  const parts: BufferGeometry[] = [];
+  // Four thick legs in the water, then the barrel body, belly and tail.
+  for (const [x, z] of [
+    [-1.6, -2.4],
+    [1.6, -2.4],
+    [-1.6, 2.4],
+    [1.6, 2.4],
+  ]) {
+    parts.push(part(new CylinderGeometry(0.85, 1.05, 5.5, 8), DINO_GREEN, x, 2.2, z));
+  }
+  parts.push(part(new SphereGeometry(3.2, 12, 9), DINO_GREEN, 0, 6.2, 0, 0, 0, 0, 1, 0.85, 1.55));
+  parts.push(part(new SphereGeometry(2.6, 10, 8), DINO_BELLY, 0, 5.3, 0, 0, 0, 0, 1, 0.8, 1.5));
+  parts.push(part(new ConeGeometry(1.5, 8, 8), DINO_GREEN, 0, 5.6, 8.2, Math.PI / 2 + 0.15, 0, 0));
+  // The neck: a chain of overlapping spheres leaning forward as it climbs to about 21 u.
+  const links = 13;
+  for (let i = 0; i <= links; i++) {
+    const u = i / links;
+    const y = 7.0 + 12.6 * u;
+    const z = -3.2 - 3.8 * Math.sin(u * 1.4) ** 2;
+    parts.push(
+      part(
+        new SphereGeometry(1.45 - 0.75 * u, 9, 7),
+        i % 3 === 2 ? DINO_BELLY : DINO_GREEN,
+        0,
+        y,
+        z,
+      ),
+    );
+  }
+  const topZ = -3.2 - 3.8 * Math.sin(1.4) ** 2;
+  parts.push(
+    part(new SphereGeometry(0.95, 10, 8), DINO_GREEN, 0, 20.3, topZ - 0.4, 0, 0, 0, 1, 0.85, 1.2),
+  );
+  parts.push(part(new SphereGeometry(0.1, 6, 5), 0x1d2a1d, -0.55, 20.6, topZ - 1.2));
+  parts.push(part(new SphereGeometry(0.1, 6, 5), 0x1d2a1d, 0.55, 20.6, topZ - 1.2));
+  // Cream spots along the back.
+  for (let i = 0; i < 6; i++) {
+    parts.push(
+      part(
+        new SphereGeometry(0.45, 6, 5),
+        SPIKE,
+        (i % 2 ? 1 : -1) * 1.1,
+        8.1 - Math.abs(i - 2.5) * 0.15,
+        -3.2 + i * 1.2,
+        0,
+        0,
+        0,
+        1,
+        0.5,
+        1,
+      ),
+    );
+  }
+  return merge(parts);
+}
+
+/**
+ * A far strip of rounded green jungle hills with fern clumps and, now and then, a pair of small
+ * smoking volcano cones.
+ */
+export function makeJungleHills(seed: number): BufferGeometry {
+  const parts: BufferGeometry[] = [];
+  const greens = [0x4f9a45, 0x5fae4f, 0x3f8a42];
+  let z = -29;
+  for (let i = 0; i < 6; i++) {
+    const r = 8 + hash(seed * 31 + i * 3.1) * 6;
+    const h = 9 + hash(seed * 17 + i * 5.3) * 9;
+    const x = hash(seed * 7 + i) * 8;
+    z += r * 0.8;
+    if ((i + seed) % 3 === 2) {
+      // A pair of mini volcano cones with a puff of smoke each.
+      for (const side of [-1, 1]) {
+        const cz = z + side * r * 0.5;
+        parts.push(part(new ConeGeometry(r * 0.5, h * 1.05, 8), 0x5a4a46, x, (h * 1.05) / 2, cz));
+        parts.push(part(new ConeGeometry(r * 0.12, h * 0.2, 8), 0xff8a3a, x, h * 1.0, cz));
+        parts.push(
+          part(
+            new SphereGeometry(1.5, 7, 5),
+            0x9a9290,
+            x,
+            h * 1.05 + 1.8,
+            cz,
+            0,
+            0,
+            0,
+            1.2,
+            0.9,
+            1.2,
+          ),
+        );
+        parts.push(
+          part(
+            new SphereGeometry(1.1, 7, 5),
+            0xb4aeab,
+            x + 0.6,
+            h * 1.05 + 3.6,
+            cz,
+            0,
+            0,
+            0,
+            1.2,
+            0.9,
+            1.2,
+          ),
+        );
+      }
+    } else {
+      parts.push(
+        part(
+          new SphereGeometry(r, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+          greens[i % 3],
+          x,
+          0,
+          z,
+          0,
+          0,
+          0,
+          1,
+          h / r,
+          1,
+        ),
+      );
+      for (let k = 0; k < 3; k++) {
+        const a = hash(seed * 3 + i * 7 + k) * Math.PI * 2;
+        parts.push(
+          ...fernParts(x + Math.cos(a) * r * 0.4, h * 0.72, z + Math.sin(a) * r * 0.4, 1.4, i + k),
+        );
+      }
+    }
     z += r * 0.5;
   }
   return merge(parts);
