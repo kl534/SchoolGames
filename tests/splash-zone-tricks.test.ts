@@ -42,6 +42,8 @@ const TURNS: Partial<Record<TrickId, { axis: 'pitch' | 'roll' | 'yaw'; turns: nu
   'spray-spin': { axis: 'yaw', turns: 1 },
   'sugar-spin': { axis: 'yaw', turns: 1 },
   'cotton-candy-cloud': { axis: 'yaw', turns: 1 },
+  'tail-whip': { axis: 'yaw', turns: 1 },
+  'egg-hatch': { axis: 'pitch', turns: 1 },
 };
 
 /** Tier 3 clears slow down at the top; two wipeouts have a big moment of their own. */
@@ -50,6 +52,7 @@ const SLOW_MOMENTS = new Set([
   'submarine:clear',
   'corkscrew:clear',
   'cotton-candy-cloud:clear',
+  'egg-hatch:clear',
   'double-backflip:fail',
   'corkscrew:fail',
 ]);
@@ -69,10 +72,10 @@ function riderNumbers(f: Frame): number[] {
 
 const turnsOff = (angle: number) => Math.abs(angle - TAU * Math.round(angle / TAU));
 
-describe('there are 24 animations', () => {
+describe('there are 28 animations', () => {
   it('covers every trick and both outcomes', () => {
-    expect(TRICK_IDS).toHaveLength(12);
-    expect(cases).toHaveLength(24);
+    expect(TRICK_IDS).toHaveLength(14);
+    expect(cases).toHaveLength(28);
   });
 
   it('names and words', () => {
@@ -81,6 +84,8 @@ describe('there are 24 animations', () => {
       const clear =
         id === 'cotton-candy-cloud' ? 'COTTON CLOUD!' : `${TRICK_NAMES[id].toUpperCase()}!`;
       expect(trickWord(id, 'clear')).toBe(clear);
+      if (id === 'tail-whip') expect(trickWord(id, 'fail')).toBe('WHIFF!');
+      if (id === 'egg-hatch') expect(trickWord(id, 'fail')).toBe('CRACKED UP!');
       expect(trickWord(id, 'fail')).toMatch(/^[A-Z -]+!$/);
       expect(trickWord(id, 'fail')).not.toBe(trickWord(id, 'clear'));
     }
@@ -128,6 +133,8 @@ describe.each(cases)('%s %s', (id, outcome) => {
     expect(f.rider).toMatchObject({ mode: 'seated', pose: 'ride', face: 'happy' });
     expect(f.dolphins.every((d) => !d.visible)).toBe(true);
     expect(f.cloud.visible).toBe(false);
+    expect(f.tail.visible).toBe(false);
+    expect(f.egg.visible).toBe(false);
   });
 
   it('never jumps between samples', () => {
@@ -192,6 +199,52 @@ describe.each(cases)('%s %s', (id, outcome) => {
       expect(Number.isFinite(f.cloud.d + f.cloud.y + f.cloud.s + f.cloud.scale)).toBe(true);
     }
   });
+
+  it('only shows the tail in Tail Whip, which ends without it', () => {
+    const shown = frames.filter((f) => f.tail.visible);
+    if (id !== 'tail-whip') {
+      expect(shown).toHaveLength(0);
+      return;
+    }
+    expect(shown.length).toBeGreaterThan(10);
+    expect(frames[frames.length - 1].tail.visible).toBe(false);
+    for (const f of frames) {
+      expect(f.tail.rise).toBeGreaterThanOrEqual(0);
+      expect(f.tail.rise).toBeLessThanOrEqual(1);
+      expect(Math.abs(f.tail.swing)).toBeLessThanOrEqual(1);
+      expect(Number.isFinite(f.tail.d + f.tail.y + f.tail.s)).toBe(true);
+    }
+  });
+
+  it('only shows the egg in Egg Hatch, which ends without it', () => {
+    const shown = frames.filter((f) => f.egg.visible);
+    if (id !== 'egg-hatch') {
+      expect(shown).toHaveLength(0);
+      return;
+    }
+    expect(shown.length).toBeGreaterThan(10);
+    expect(frames[frames.length - 1].egg.visible).toBe(false);
+    for (const f of frames) {
+      for (const n of [f.egg.scale, f.egg.crack, f.egg.hatch, f.egg.shut]) {
+        expect(n).toBeGreaterThanOrEqual(0);
+        expect(n).toBeLessThanOrEqual(1);
+      }
+    }
+    for (const f of shown) {
+      expect(f.ski.y).toBeGreaterThanOrEqual(spec.floorY);
+      expect(Number.isFinite(f.egg.d + f.egg.y + f.egg.s)).toBe(true);
+    }
+    if (outcome === 'fail') expect(Math.max(...frames.map((f) => f.egg.shut))).toBeCloseTo(1, 6);
+    else expect(Math.max(...frames.map((f) => f.egg.hatch))).toBeCloseTo(1, 6);
+  });
+
+  if (id === 'tail-whip') {
+    it('spins a full yaw on a clear and flips over sideways on a fail', () => {
+      const end = frames[frames.length - 1].ski;
+      if (outcome === 'clear') expect(Math.abs(end.yaw - TAU)).toBeLessThan(0.05);
+      else expect(Math.abs(end.roll - Math.PI)).toBeLessThan(0.2);
+    });
+  }
 
   if (id === 'sugar-spin') {
     it('spins a full turn on a clear and lands sideways on a fail', () => {
@@ -357,6 +410,22 @@ describe('the cloud frame', () => {
   });
 });
 
+describe('the tail and egg frames', () => {
+  it('start and reset invisible', () => {
+    const f = createFrame();
+    const tail = { d: 0, y: -5, s: 0, rise: 0, swing: 0, visible: false };
+    const egg = { d: 0, y: -5, s: 0, scale: 0, crack: 0, hatch: 0, shut: 0, visible: false };
+    expect(f.tail).toEqual(tail);
+    expect(f.egg).toEqual(egg);
+    f.tail.visible = f.egg.visible = true;
+    f.tail.rise = f.egg.scale = f.egg.shut = 1;
+    f.tail.d = f.egg.d = 20;
+    resetFrame(f);
+    expect(f.tail).toEqual(tail);
+    expect(f.egg).toEqual(egg);
+  });
+});
+
 describe('random times in every animation', () => {
   it('always give finite frames', () => {
     let seed = 12345;
@@ -369,6 +438,10 @@ describe('random times in every animation', () => {
         for (const v of [...skiNumbers(f), ...riderNumbers(f)])
           expect(Number.isFinite(v)).toBe(true);
         expect(Number.isFinite(f.cloud.d + f.cloud.y + f.cloud.scale)).toBe(true);
+        expect(Number.isFinite(f.tail.d + f.tail.y + f.tail.rise + f.tail.swing)).toBe(true);
+        expect(Number.isFinite(f.egg.d + f.egg.y + f.egg.scale + f.egg.crack + f.egg.hatch)).toBe(
+          true,
+        );
       }
     }
   });

@@ -28,8 +28,8 @@ import {
 } from './anim';
 import type { Framing } from './layout';
 import { TRICK_IDS, TRICK_TIER, type LauncherKind, type Outcome, type TrickId } from './rules';
-import { BACKFLIP, BARREL_ROLL, HELICOPTER, SUGAR_SPIN } from './tricks-t2';
-import { CORKSCREW, COTTON_CANDY_CLOUD, DOUBLE_BACKFLIP, SUBMARINE } from './tricks-t3';
+import { BACKFLIP, BARREL_ROLL, HELICOPTER, SUGAR_SPIN, TAIL_WHIP } from './tricks-t2';
+import { CORKSCREW, COTTON_CANDY_CLOUD, DOUBLE_BACKFLIP, EGG_HATCH, SUBMARINE } from './tricks-t3';
 import { SPRAY_SPIN, SUPERMAN, TAIL_STAND, WAVE_HOP, type TrickDefs } from './tricks-t1';
 
 export {
@@ -68,10 +68,12 @@ const TABLE: Record<TrickId, TrickDefs> = {
   'barrel-roll': BARREL_ROLL,
   helicopter: HELICOPTER,
   'sugar-spin': SUGAR_SPIN,
+  'tail-whip': TAIL_WHIP,
   'double-backflip': DOUBLE_BACKFLIP,
   submarine: SUBMARINE,
   corkscrew: CORKSCREW,
   'cotton-candy-cloud': COTTON_CANDY_CLOUD,
+  'egg-hatch': EGG_HATCH,
 };
 
 const FLOOR_Y: Record<TrickId, number> = {
@@ -83,10 +85,12 @@ const FLOOR_Y: Record<TrickId, number> = {
   'barrel-roll': -1,
   helicopter: -1,
   'sugar-spin': -1,
+  'tail-whip': -1,
   'double-backflip': -1.4,
   submarine: -2.2,
   corkscrew: -2.2,
   'cotton-candy-cloud': -2.2,
+  'egg-hatch': -2.2,
 };
 
 export const TRICK_SPECS = Object.fromEntries(

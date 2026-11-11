@@ -151,11 +151,39 @@ export interface CloudFrame {
   visible: boolean;
 }
 
+export interface TailFrame {
+  d: number;
+  y: number;
+  s: number;
+  /** 0 = hidden under the water, 1 = fully up (about 3 u tall). */
+  rise: number;
+  /** Swat swing, -1 (back) to 1 (forward past the ski). */
+  swing: number;
+  visible: boolean;
+}
+
+export interface EggFrame {
+  d: number;
+  y: number;
+  s: number;
+  /** 0..1 size. */
+  scale: number;
+  /** 0..1 crack lines and wobble. */
+  crack: number;
+  /** 0..1 the baby dino popping out of the top. */
+  hatch: number;
+  /** 0..1 the two shell halves closing on the ski (fail). */
+  shut: number;
+  visible: boolean;
+}
+
 export interface Frame {
   ski: SkiFrame;
   rider: RiderFrame;
   dolphins: [DolphinFrame, DolphinFrame];
   cloud: CloudFrame;
+  tail: TailFrame;
+  egg: EggFrame;
 }
 
 /** Where a seated rider's hips are in the ski's own space: up from the waterline and back from the middle. */
@@ -184,6 +212,8 @@ export function createFrame(): Frame {
       { d: 0, y: -5, s: 0, phase: 0, visible: false },
     ],
     cloud: { d: 0, y: -5, s: 0, scale: 0, visible: false },
+    tail: { d: 0, y: -5, s: 0, rise: 0, swing: 0, visible: false },
+    egg: { d: 0, y: -5, s: 0, scale: 0, crack: 0, hatch: 0, shut: 0, visible: false },
   };
 }
 
@@ -208,6 +238,14 @@ export function resetFrame(f: Frame): Frame {
   c.d = c.s = c.scale = 0;
   c.y = -5;
   c.visible = false;
+  const tl = f.tail;
+  tl.d = tl.s = tl.rise = tl.swing = 0;
+  tl.y = -5;
+  tl.visible = false;
+  const e = f.egg;
+  e.d = e.s = e.scale = e.crack = e.hatch = e.shut = 0;
+  e.y = -5;
+  e.visible = false;
   return f;
 }
 

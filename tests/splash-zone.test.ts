@@ -96,12 +96,12 @@ describe('tier', () => {
 });
 
 describe('nextTrick', () => {
-  it('has twelve tricks, four to a tier', () => {
-    expect(TRICK_IDS).toHaveLength(12);
+  it('has fourteen tricks, 4, 5 and 5 to a tier', () => {
+    expect(TRICK_IDS).toHaveLength(14);
     for (const [tier, count] of [
       [1, 4],
-      [2, 4],
-      [3, 4],
+      [2, 5],
+      [3, 5],
     ] as const) {
       expect(TRICK_IDS.filter((id) => TRICK_TIER[id] === tier)).toHaveLength(count);
     }
@@ -127,16 +127,16 @@ describe('nextTrick', () => {
   it('works with a previous trick from another tier: the whole tier is allowed', () => {
     const seen = new Set<TrickId>();
     for (let i = 0; i < 100; i++) seen.add(nextTrick(2, 'wave-hop', i / 100));
-    expect(seen.size).toBe(4);
+    expect(seen.size).toBe(5);
   });
 
   it('picks by index in TRICK_IDS order and survives odd randoms', () => {
     expect(nextTrick(1, null, 0)).toBe('wave-hop');
     expect(nextTrick(1, null, 0.99)).toBe('tail-stand');
     expect(nextTrick(1, 'wave-hop', 0)).toBe('spray-spin');
-    expect(nextTrick(3, null, 1)).toBe('cotton-candy-cloud');
+    expect(nextTrick(3, null, 1)).toBe('egg-hatch');
     expect(nextTrick(3, null, -1)).toBe('double-backflip');
-    expect(nextTrick(3, 'corkscrew', 5)).toBe('cotton-candy-cloud');
+    expect(nextTrick(3, 'corkscrew', 5)).toBe('egg-hatch');
   });
 });
 
@@ -491,6 +491,8 @@ describe('parseDev', () => {
     expect(parseDev('?world=volcano').world).toBe('volcano');
     expect(parseDev('?world=reef').world).toBe('reef');
     expect(parseDev('?world=candy').world).toBe('candy');
+    expect(parseDev('?world=dino').world).toBe('dino');
+    expect(parseDev('?tricks=tail-whip,egg-hatch').tricks).toEqual(['tail-whip', 'egg-hatch']);
     expect(parseDev('?lab=sweet-tooth-rush:3&at=9').lab).toEqual({
       mega: 'sweet-tooth-rush',
       passed: 3,

@@ -1,6 +1,6 @@
 /**
- * Tier 3 tricks, off the mega ramp: Double Backflip, Submarine, Corkscrew 720 and Cotton Candy
- * Cloud, each with the version where it goes wrong. The clears slow right down at their big moment. Every builder
+ * Tier 3 tricks, off the mega ramp: Double Backflip, Submarine, Corkscrew 720, Cotton Candy
+ * Cloud and Egg Hatch, each with the version where it goes wrong. The clears slow right down at their big moment. Every builder
  * returns a `Def` (see `anim.ts`).
  */
 import {
@@ -25,6 +25,7 @@ import {
   type Frame,
   type PoseName,
 } from './anim';
+import { flipEase } from './mega/anim';
 import type { TrickDefs } from './tricks-t1';
 
 const FLOAT_Y = -0.3;
@@ -635,3 +636,216 @@ const cottonCloudFail: Def = (() => {
 })();
 
 export const COTTON_CANDY_CLOUD: TrickDefs = { clear: cottonCloudClear, fail: cottonCloudFail };
+
+// ---------- Egg Hatch ----------
+
+/** The egg's spot (d, and the y of its top) and the flight that reaches it. */
+const EGG_D = 24;
+const EGG_Y = 3;
+const EGG_FLY = 1.1;
+/** Seconds the egg shudders and cracks under the ski, and the flip that follows. */
+const EGG_CRACK = 0.5;
+const EGG_FLIP = 1.0;
+const EGG_BOOST = 2.2;
+const EGG_LAND_D = EGG_D + 6;
+/** The egg grows under the ski as it tops its arc. */
+const EGG_FADE_IN: [number, number] = [0.3, EGG_FLY - 0.1];
+
+const eggLaunch = () => launch('mega-ramp', EGG_FLY, 2.0, EGG_D);
+
+/** The ski from the foot of the ramp to the egg, true while it is still flying. */
+function eggFlight(L: ReturnType<typeof eggLaunch>, t: number, f: Frame): boolean {
+  const k = f.ski;
+  if (t > L.tLand) return false;
+  if (t <= L.tLip) {
+    k.d = (L.lipD * Math.max(t, 0)) / L.tLip;
+    k.y = surfaceY('mega-ramp', k.d);
+    k.wet = true;
+  } else {
+    const u = airU(L, t);
+    k.d = lerp(L.lipD, EGG_D, u);
+    k.y = arc(L.lipY, EGG_Y, L.lipY + 2.0, u);
+    k.wet = false;
+  }
+  k.pitch = basePitch(L, t);
+  return true;
+}
+
+const showEgg = (
+  f: Frame,
+  y: number,
+  scale: number,
+  crack: number,
+  hatch: number,
+  shut: number,
+) => {
+  const e = f.egg;
+  e.d = EGG_D;
+  e.y = y;
+  e.s = 0;
+  e.scale = scale;
+  e.crack = crack;
+  e.hatch = hatch;
+  e.shut = shut;
+  e.visible = scale > 0.001;
+};
+
+const eggGrow = (L: ReturnType<typeof eggLaunch>, t: number) =>
+  prog(t, L.tLip + EGG_FADE_IN[0], L.tLip + EGG_FADE_IN[1], 'o');
+
+const eggHatchClear: Def = (() => {
+  const L = eggLaunch();
+  const hit = L.tLand;
+  const kick = hit + EGG_CRACK;
+  const tDown = kick + EGG_FLIP;
+  const end = tDown + OUT_TIME;
+  const skiAt = (t: number, f: Frame) => {
+    const k = f.ski;
+    if (eggFlight(L, t, f)) return;
+    if (t < kick) {
+      // Sitting on the shuddering egg.
+      k.d = EGG_D;
+      k.y = EGG_Y - 0.1 * prog(t, hit, hit + 0.15, 'o') + 0.04 * Math.sin((t - hit) * 40);
+      k.pitch = 0.05 * Math.sin((t - hit) * 30);
+      k.wet = false;
+    } else if (t < tDown) {
+      // Kicked up by the baby dino: one backflip and down to the water.
+      const u = (t - kick) / EGG_FLIP;
+      k.d = lerp(EGG_D, EGG_LAND_D, u);
+      k.y = arc(EGG_Y - 0.1, 0, EGG_Y - 0.1 + EGG_BOOST, u);
+      k.pitch = TAU * flipEase(u);
+      k.wet = false;
+    } else {
+      k.d = EGG_LAND_D + OUT_SPEED * (t - tDown);
+      k.y = 0;
+      k.pitch = TAU;
+      k.wet = true;
+    }
+  };
+  const poseAt = (t: number): PoseName => {
+    if (t <= L.tLip) return 'ride';
+    if (t < kick) return 'armsUp';
+    if (t < tDown - 0.25) return 'tuck';
+    return t < tDown + 0.5 ? 'fistPump' : 'ride';
+  };
+  return {
+    duration: end,
+    length: EGG_LAND_D + OUT_SPEED * OUT_TIME,
+    word: 'EGG HATCH!',
+    slow: [kick + 0.3],
+    at: (t, f) => {
+      skiAt(t, f);
+      f.rider.pose = poseAt(t);
+      f.rider.face = 'happy';
+      const grow = t < hit ? eggGrow(L, t) : 1 - prog(t, kick + 0.5, kick + 0.9, 'o');
+      showEgg(f, EGG_Y, grow, prog(t, hit, kick, 'o'), prog(t, kick - 0.05, kick + 0.25, 'o'), 0);
+    },
+    events: (ski) => [
+      [L.tLip - 0.2, 'sfx:whoosh', L.lipD - 2, L.lipY],
+      [L.tLip, 'spray', L.lipD, L.lipY],
+      [L.tLip, 'sfx:boing', L.lipD, L.lipY],
+      [hit, 'sfx:bump', EGG_D, EGG_Y],
+      [hit + 0.25, 'confetti', EGG_D, EGG_Y + 0.3],
+      [kick, 'confetti', EGG_D, EGG_Y + 0.6],
+      [kick, 'sfx:boing', EGG_D, EGG_Y],
+      [kick + 0.05, 'word', EGG_D, EGG_Y + 3.4, 0],
+      [kick + 0.1, 'sfx:whoosh', EGG_D, EGG_Y],
+      [tDown, 'splash', ski(tDown).d, 0],
+      [tDown, 'sfx:splash', ski(tDown).d, 0],
+      [tDown + 0.2, 'cheer', EGG_LAND_D + 2, 1],
+      [tDown + 0.2, 'confetti', EGG_LAND_D + 3, 1.5],
+    ],
+  };
+})();
+
+const eggHatchFail: Def = (() => {
+  const L = eggLaunch();
+  const hit = L.tLand;
+  const crackAt = hit - 0.55;
+  const fallStart = hit + 0.4;
+  const tSplash = fallStart + 0.7;
+  const popUp = 0.5;
+  const end = tSplash + popUp + 1.0;
+  const dropD = EGG_D + 1.5;
+  const eggY = track([
+    [fallStart, EGG_Y],
+    [tSplash, 0.4, 'i'],
+    [tSplash + 0.6, -2.4, 'o'],
+  ]);
+  const inside = track([
+    [hit, 0],
+    [hit + 0.2, 1],
+  ]);
+  const skiAt = (t: number, f: Frame) => {
+    const k = f.ski;
+    if (eggFlight(L, t, f)) return;
+    if (t < tSplash) {
+      // Dropped inside the shut egg, which tips and falls with it.
+      k.d = EGG_D;
+      k.y = eggY(t) - 1.0 * inside(t);
+      k.roll = 0.5 * prog(t, fallStart, tSplash, 'i');
+      k.pitch = 0;
+      k.wet = false;
+    } else {
+      // The egg sinks away and the ski bobs back up, tipped on its side.
+      k.d = EGG_D + 0.8 * prog(t, tSplash, tSplash + 0.8, 'o');
+      k.y = lerp(eggY(tSplash) - 1.0, 0.05, prog(t, tSplash, tSplash + 0.6, 'o'));
+      k.roll = 0.5;
+      k.wet = t > tSplash + 0.4;
+    }
+  };
+  const s0 = seatAtTime(skiAt, tSplash);
+  const riderAt = (t: number, f: Frame) => {
+    if (t > L.tLip + 0.15 && t < tSplash) f.rider.pose = 'tuck';
+    if (t < tSplash) return;
+    const w = prog(t, tSplash, tSplash + 0.4, 'q');
+    const rise = prog(t, tSplash + 0.4, tSplash + 0.4 + popUp, 'o');
+    setFree(
+      f,
+      lerp(s0.d, dropD, w),
+      lerp(lerp(s0.y, -0.6, w), FLOAT_Y, rise),
+      1.2 * w,
+      0,
+      lerp(0, Math.PI, rise),
+      0,
+      t < tSplash + 0.5 ? 'flail' : 'float',
+      t < tSplash + 0.5 ? 'scared' : 'soaked',
+    );
+  };
+  return {
+    duration: end,
+    word: 'CRACKED UP!',
+    at: (t, f) => {
+      skiAt(t, f);
+      riderAt(t, f);
+      const grow = t < hit ? eggGrow(L, t) : 1 - prog(t, tSplash + 0.4, tSplash + 0.6, 'o');
+      showEgg(
+        f,
+        t < fallStart ? EGG_Y : eggY(t),
+        grow,
+        prog(t, crackAt, crackAt + 0.3, 'o'),
+        0,
+        prog(t, hit - 0.3, hit + 0.15, 'io'),
+      );
+      // The rider is hidden inside the shell until the splash.
+      if (t >= hit + 0.15 && t < tSplash) f.rider.visible = true;
+    },
+    events: (ski, rider) => [
+      [L.tLip - 0.2, 'sfx:whoosh', L.lipD - 2, L.lipY],
+      [L.tLip, 'spray', L.lipD, L.lipY],
+      [L.tLip, 'sfx:boing', L.lipD, L.lipY],
+      [crackAt + 0.1, 'confetti', EGG_D, EGG_Y + 0.4],
+      [hit, 'sfx:bump', EGG_D, EGG_Y],
+      [fallStart, 'sfx:slideWhistle', EGG_D, EGG_Y - 0.5],
+      [tSplash, 'bigSplash', EGG_D, 0.2],
+      [tSplash, 'sfx:splash', EGG_D, 0],
+      [tSplash, 'groan', EGG_D, 1],
+      [tSplash + 0.05, 'word', EGG_D, 3],
+      ...trail(tSplash + 0.1, tSplash + 0.5, 0.15, 'bubbles', rider, 0.3),
+      [tSplash + 0.4, 'splash', ski(tSplash + 0.4).d, 0],
+      [tSplash + 0.6, 'drips', rider(tSplash + 0.6).d, 0.6, rider(tSplash + 0.6).s],
+    ],
+  };
+})();
+
+export const EGG_HATCH: TrickDefs = { clear: eggHatchClear, fail: eggHatchFail };

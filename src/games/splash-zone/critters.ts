@@ -1,10 +1,12 @@
 /**
- * The water's creatures and the gag props: a dolphin to leap alongside the Submarine, seaweed that
+ * The water's creatures and the gag props: a dolphin to leap alongside the Submarine, a dino tail and egg, seaweed that
  * hangs off the helmet and a little orange fish held in the rider's mouth.
  */
 import {
   BoxGeometry,
   ConeGeometry,
+  CylinderGeometry,
+  DoubleSide,
   Group,
   Mesh,
   MeshBasicMaterial,
@@ -187,6 +189,187 @@ export function createCloud(): Cloud {
       body.scale.setScalar(1.5 * Math.max(scale, 0.001));
     },
     dispose() {
+      b.dispose();
+      object.removeFromParent();
+    },
+  };
+}
+
+// ---------- Dino tail ----------
+
+export interface Tail extends Prop {
+  /** `rise` 0 (under the water) to 1 (up, about 3 tall); `swing` -1 (back) to 1 (across the ski). */
+  pose(rise: number, swing: number): void;
+}
+
+const TAIL_SEGMENTS = 5;
+const TAIL_HEIGHT = 3.2;
+
+/** A curved green dino tail of tapered cylinders with a row of cream spikes, its base at y = 0. */
+export function createTail(): Tail {
+  const b = builder();
+  const object = new Group();
+  const body = new Group();
+  object.add(body);
+  const green = b.std(0x4fa84a, 0.8);
+  const cream = b.std(0xf3e6b8, 0.7);
+  const segLen = TAIL_HEIGHT / TAIL_SEGMENTS;
+  const joints: Group[] = [];
+  let parent: Group = body;
+  for (let i = 0; i < TAIL_SEGMENTS; i++) {
+    const joint = new Group();
+    joint.position.y = i === 0 ? 0 : segLen;
+    parent.add(joint);
+    joints.push(joint);
+    const r0 = 0.5 - 0.085 * i;
+    const r1 = 0.5 - 0.085 * (i + 1) + 0.02;
+    b.add(new CylinderGeometry(r1, r0, segLen, 10, 1), green, joint, 0, segLen / 2, 0);
+    const spike = b.add(new ConeGeometry(0.17 - 0.02 * i, 0.5 - 0.05 * i, 4), cream, joint);
+    spike.position.set(0, segLen * 0.55, -r0 - 0.05);
+    spike.rotation.x = -0.9;
+    parent = joint;
+  }
+  object.visible = false;
+  return {
+    object,
+    update() {},
+    pose(rise, swing) {
+      const up = Math.min(Math.max(rise, 0), 1);
+      body.position.y = -TAIL_HEIGHT * (1 - up);
+      body.visible = up > 0.001;
+      // Leans across the ski as it swings, with a curl that follows through along the tail.
+      joints.forEach((joint, i) => {
+        joint.rotation.z = (swing * 0.2 + 0.16) * (i === 0 ? 1.4 : 1);
+      });
+      body.rotation.z = -0.35 - 0.55 * swing;
+    },
+    dispose() {
+      b.dispose();
+      object.removeFromParent();
+    },
+  };
+}
+
+// ---------- Dino egg ----------
+
+export interface Egg extends Prop {
+  /** Size 0..1, the crack and wobble 0..1, the baby dino popping out 0..1, the shell shutting 0..1. */
+  pose(scale: number, crack: number, hatch: number, shut: number): void;
+}
+
+/** A giant cream egg with green speckles, 2.4 tall, its top at y = 0 (a baby dino hatches from it). */
+export function createEgg(): Egg {
+  const b = builder();
+  const object = new Group();
+  const body = new Group();
+  object.add(body);
+  const shell = new MeshStandardMaterial({ color: 0xf6ecc8, roughness: 0.7, side: DoubleSide });
+  const cream = b.std(0xf6ecc8, 0.7);
+  const speck = b.std(0x4f9a4a, 0.8);
+  const green = b.std(0x6cc25a, 0.7);
+  const dark = b.basic(0x1d2a1d);
+  const white = b.basic(0xffffff);
+  const crackMat = b.basic(0x5a4a2a);
+  // The lower shell, and the top as two halves hinged at the rim.
+  b.add(
+    new SphereGeometry(1, 20, 14, 0, Math.PI * 2, 1.1, Math.PI - 1.1),
+    shell,
+    body,
+    0,
+    -1.2,
+    0,
+    1,
+    1.2,
+    1,
+  );
+  const halves: Group[] = [];
+  for (const side of [-1, 1]) {
+    const hinge = new Group();
+    hinge.position.set(side * 0.78, -0.55, 0);
+    body.add(hinge);
+    halves.push(hinge);
+    const g = new SphereGeometry(
+      1,
+      16,
+      10,
+      side > 0 ? Math.PI / 2 : -Math.PI / 2,
+      Math.PI,
+      0,
+      1.15,
+    );
+    b.add(g, shell, hinge, -side * 0.78, -0.65, 0, 1, 1.2, 1);
+  }
+  // Speckles on the lower shell.
+  for (let i = 0; i < 14; i++) {
+    const a = i * 2.4;
+    const y = -0.5 - 1.4 * ((i * 0.37) % 1);
+    const r = Math.sqrt(Math.max(1 - ((y + 1.2) / 1.2) ** 2, 0.05));
+    b.add(
+      new SphereGeometry(0.11, 8, 6),
+      speck,
+      body,
+      Math.sin(a) * r * 1.0,
+      y,
+      Math.cos(a) * r * 1.0,
+      1,
+      0.7,
+      1,
+    );
+  }
+  // A zig-zag crack round the middle.
+  const crackGroup = new Group();
+  body.add(crackGroup);
+  const cracks: Mesh[] = [];
+  const parts = 12;
+  for (let i = 0; i < parts; i++) {
+    const a = (i / parts) * Math.PI * 2;
+    const y = -0.8 + (i % 2 ? 0.16 : -0.16);
+    const seg = b.add(
+      new BoxGeometry(0.1, 0.34, 0.05),
+      crackMat,
+      crackGroup,
+      Math.sin(a) * 1.02,
+      y,
+      Math.cos(a) * 1.02,
+    );
+    seg.rotation.y = a;
+    seg.rotation.z = i % 2 ? 0.7 : -0.7;
+    cracks.push(seg);
+  }
+  // The baby dino: a green head with eyes and a snout, rising from the top.
+  const baby = new Group();
+  body.add(baby);
+  b.add(new SphereGeometry(0.55, 16, 12), green, baby, 0, 0, 0, 1, 0.9, 1);
+  b.add(new SphereGeometry(0.28, 12, 10), green, baby, 0, -0.1, -0.5, 1, 0.8, 1.1);
+  for (const side of [-1, 1]) {
+    b.add(new SphereGeometry(0.14, 10, 8), white, baby, side * 0.3, 0.18, -0.4);
+    b.add(new SphereGeometry(0.07, 8, 6), dark, baby, side * 0.33, 0.18, -0.52);
+  }
+  const bump = b.add(new ConeGeometry(0.12, 0.3, 4), cream, baby, 0, 0.5, 0.05);
+  bump.rotation.x = -0.2;
+  object.visible = false;
+  return {
+    object,
+    update() {},
+    pose(scale, crack, hatch, shut) {
+      object.scale.setScalar(Math.max(scale, 0.001));
+      const c = Math.min(Math.max(crack, 0), 1);
+      const h = Math.min(Math.max(hatch, 0), 1);
+      const closed = Math.min(Math.max(shut, 0), 1);
+      // Ajar from the crack, wide open for the hatchling, closed again when shut.
+      const open = Math.max(h, 0.45 * c * (1 - closed));
+      halves[0].rotation.z = open * 0.85;
+      halves[1].rotation.z = -open * 0.85;
+      crackGroup.visible = c > 0.05 && h < 0.5;
+      cracks.forEach((seg, i) =>
+        seg.scale.set(1, Math.min(Math.max(c * 1.4 - (i / parts) * 0.4, 0), 1), 1),
+      );
+      body.rotation.z = Math.sin(c * 60) * 0.08 * c * (1 - h);
+      baby.visible = h > 0.01;
+      baby.position.set(0, -1.1 + 1.4 * h, 0);
+    },
+    dispose() {
+      shell.dispose();
       b.dispose();
       object.removeFromParent();
     },
