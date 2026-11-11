@@ -2,6 +2,7 @@ import { PerspectiveCamera, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import {
   autoAnswer,
+  devGrabby,
   devOver,
   devSit,
   devWinDance,
@@ -31,6 +32,13 @@ import {
   cheer,
   DIVE_TOTAL,
   dive,
+  FLINCH_TOTAL,
+  flinch,
+  grabby,
+  readyFrame,
+  GRABBY_CATCH,
+  GRABBY_RELEASE,
+  GRABBY_TOTAL,
   runFrame,
   smash,
   SMASH_CONTACT,
@@ -46,6 +54,10 @@ import {
   CHAMPION_RUNG,
   coinToss,
   goesOverTheWall,
+  GRABBY_CHANCE,
+  GRABBY_SPEECH,
+  isGrabby,
+  WORDS,
   COOKING_RUN,
   isCooking,
   isMatchPoint,
@@ -95,6 +107,7 @@ import {
   type Vec,
 } from '../src/games/hitting-handballs/shots';
 import { VOICE_LINES } from '../src/games/hitting-handballs/voice';
+import { HOME } from '../src/games/hitting-handballs/kids';
 import { runs } from './helpers/full';
 
 describe('hitting handballs judging', () => {
@@ -226,7 +239,7 @@ describe('hitting handballs calls', () => {
 
   it('records every line once', () => {
     expect(new Set(VOICE_LINES).size).toBe(VOICE_LINES.length);
-    expect(VOICE_LINES).toHaveLength(126 + 5 + 7);
+    expect(VOICE_LINES).toHaveLength(126 + 5 + 8);
     for (const pair of PAIRS) expect(VOICE_LINES).toContain(pair.intro);
     for (const line of [
       'Play ball!',
@@ -748,5 +761,130 @@ describe('hitting handballs over the wall', () => {
     expect(devSit('?sit=2')).toBe(1);
     expect(devSit('?sit=3')).toBeNull();
     expect(devSit('')).toBeNull();
+  });
+});
+
+describe('hitting handballs grabby', () => {
+  it('isGrabby is true below the chance and false at it', () => {
+    expect(isGrabby(0.125)).toBe(false);
+    expect(isGrabby(0.124)).toBe(true);
+    expect(isGrabby(0)).toBe(true);
+    const n = 10000;
+    let count = 0;
+    for (let i = 0; i < n; i++) if (isGrabby(i / n)) count++;
+    expect(Math.abs(count / n - GRABBY_CHANCE)).toBeLessThanOrEqual(0.001);
+  });
+
+  it('has its word and its yell, recorded once', () => {
+    expect(WORDS.grabby).toBe('GRABBY!');
+    expect(GRABBY_SPEECH).toBe('Grabby!');
+    expect(VOICE_LINES.filter((l) => l === GRABBY_SPEECH)).toHaveLength(1);
+  });
+
+  it('the grab reads as catch, wind-up and throw', () => {
+    expect(GRABBY_CATCH).toBeLessThan(GRABBY_RELEASE);
+    expect(GRABBY_RELEASE).toBeLessThan(GRABBY_TOTAL);
+    const at = grabby(GRABBY_CATCH);
+    expect(at.hit?.raise).toBeGreaterThan(1);
+    expect(at.off?.raise).toBeGreaterThan(1);
+    expect(grabby(0.7).hit?.raise).toBeLessThan(0);
+    expect(grabby(0.95).hit?.raise).toBeGreaterThan(1.5);
+    for (let i = 0; i <= 40; i++) {
+      const f = grabby((i / 40) * GRABBY_TOTAL);
+      for (const v of [
+        f.lean,
+        f.twist,
+        f.lift,
+        ...Object.values(f.hit ?? {}),
+        ...Object.values(f.off ?? {}),
+      ])
+        expect(Number.isFinite(v ?? 0)).toBe(true);
+    }
+  });
+
+  it('the flinch is finite and ends at the ready pose', () => {
+    for (let i = 0; i <= 20; i++) {
+      const f = flinch((i / 20) * FLINCH_TOTAL);
+      for (const v of [f.headPitch, ...Object.values(f.hit ?? {}), ...Object.values(f.off ?? {})])
+        expect(Number.isFinite(v ?? 0)).toBe(true);
+    }
+    const end = flinch(FLINCH_TOTAL);
+    const ready = readyFrame();
+    expect(end.headPitch).toBeCloseTo(ready.headPitch, 6);
+    expect(end.hit?.raise).toBeCloseTo(ready.hit.raise, 6);
+    expect(end.off?.bend).toBeCloseTo(ready.off.bend, 6);
+  });
+
+  const check = (hand: Vec, ours: Vec) => {
+    const shot = planShot('smash', hand, ours, WINNER_WALL_Y, true);
+    expect(shot.duration).toBeGreaterThan(0);
+    let t = 0;
+    for (const s of shot.segments.slice(0, -1)) {
+      t += s.duration;
+      const a = ballAt(shot, t - 1e-9);
+      const b = ballAt(shot, t + 1e-9);
+      expect(Math.abs(a.x - b.x)).toBeLessThan(1e-6);
+      expect(Math.abs(a.y - b.y)).toBeLessThan(1e-6);
+      expect(Math.abs(a.z - b.z)).toBeLessThan(1e-6);
+    }
+    const found = contacts(shot);
+    const wall = found.findIndex((c) => c.what === 'wall');
+    const floor = found.findIndex((c) => c.what === 'floor');
+    expect(wall).toBeGreaterThanOrEqual(0);
+    expect(floor).toBeGreaterThanOrEqual(0);
+    expect(floor).toBeLessThan(wall);
+    const pass = timeAtX(shot, ours.x);
+    expect(pass).not.toBeNull();
+    expect(pass as number).toBeGreaterThan(found[wall].t);
+    expect(ballAt(shot, shot.duration).x).toBeGreaterThanOrEqual(PAST.x - 1e-6);
+    let low = Infinity;
+    let zLow = Infinity;
+    let zHigh = -Infinity;
+    for (let u = 0; u <= shot.duration; u += 0.02) {
+      const p = ballAt(shot, u);
+      low = Math.min(low, p.y);
+      zLow = Math.min(zLow, p.z);
+      zHigh = Math.max(zHigh, p.z);
+    }
+    expect(low).toBeGreaterThanOrEqual(BALL_R - 1e-6);
+    expect(zLow).toBeGreaterThanOrEqual(LANE.min - 1e-6);
+    expect(zHigh).toBeLessThanOrEqual(LANE.max + 1e-6);
+  };
+
+  it('the throw bounces, hits the wall, passes our kid and runs off, from every rival spot', () => {
+    for (const rival of HOME.them) {
+      for (const us of HOME.us) {
+        for (let spot = -2.2; spot <= 2.8 + 1e-9; spot += 0.2) {
+          const hand = { x: spot - 0.5, y: 1, z: rival.z };
+          const ours = { x: us.x - 0.5, y: 1, z: us.z };
+          check(hand, ours);
+        }
+      }
+    }
+  });
+
+  it('the throw works for random spots', () => {
+    for (let i = 0; i < runs(500, 80); i++) {
+      const rival = HOME.them[i % 2];
+      const us = HOME.us[(i >> 1) % 2];
+      const hand = {
+        x: contactSpot(rival.x, Math.random()) - 0.5,
+        y: 0.8 + Math.random() * 0.4,
+        z: rival.z,
+      };
+      const ours = {
+        x: contactSpot(us.x, Math.random()) - 0.5,
+        y: 0.8 + Math.random() * 0.4,
+        z: us.z,
+      };
+      check(hand, ours);
+    }
+  });
+
+  it('?grabby=on|off', () => {
+    expect(devGrabby('?grabby=on')).toBe(true);
+    expect(devGrabby('?grabby=off')).toBe(false);
+    expect(devGrabby('?grabby=maybe')).toBeNull();
+    expect(devGrabby('')).toBeNull();
   });
 });

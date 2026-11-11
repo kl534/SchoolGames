@@ -35,6 +35,12 @@ export const SMASH_CONTACT = 0.2;
 export const WHIFF_TOTAL = 0.9;
 export const BONK_TOTAL = 0.8;
 export const DIVE_TOTAL = 0.7;
+export const GRABBY_TOTAL = 1.1;
+/** The hands close on the ball. */
+export const GRABBY_CATCH = 0.2;
+/** The ball leaves the hand. */
+export const GRABBY_RELEASE = 0.85;
+export const FLINCH_TOTAL = 0.6;
 
 const limb = (raise = 0, out = 0, bend = 0): Limb => ({ raise, out, bend });
 
@@ -269,6 +275,86 @@ export const cheer: Move = (t) => ({
   hit: limb(2.8, 0.3, 0.2),
   off: limb(2.8, 0.3, 0.2),
 });
+
+/** A rival grabs the ball out of the air with both hands, winds up and throws it hard. */
+export const grabby: Move = (t) => ({
+  hit: limb(
+    track(t, [
+      [0, 0.5],
+      [GRABBY_CATCH, 1.3],
+      [0.55, 0.8],
+      [0.7, -0.6],
+      [0.85, -0.6],
+      [0.95, 1.9],
+      [GRABBY_TOTAL, 0.5],
+    ]),
+    track(t, [
+      [0, 0.15],
+      [GRABBY_CATCH, 0.2],
+      [0.55, 0.15],
+      [GRABBY_TOTAL, 0.15],
+    ]),
+    track(t, [
+      [0, 1.1],
+      [GRABBY_CATCH, 0.4],
+      [0.55, 1.5],
+      [0.85, 0.7],
+      [0.95, 0.2],
+      [GRABBY_TOTAL, 1.1],
+    ]),
+  ),
+  off: limb(
+    track(t, [
+      [0, 0.3],
+      [GRABBY_CATCH, 1.3],
+      [0.55, 0.8],
+      [0.85, 0.7],
+      [GRABBY_TOTAL, 0.3],
+    ]),
+    0.3,
+    track(t, [
+      [0, 0.9],
+      [GRABBY_CATCH, 0.4],
+      [0.55, 1.5],
+      [0.85, 1.2],
+      [GRABBY_TOTAL, 0.9],
+    ]),
+  ),
+  twist: track(t, [
+    [0, 0],
+    [0.55, 0],
+    [0.7, -0.4],
+    [0.85, -0.4],
+    [0.95, 0.4],
+    [GRABBY_TOTAL, 0],
+  ]),
+  lean: track(t, [
+    [0, 0.1],
+    [GRABBY_CATCH, 0.3],
+    [0.55, -0.1],
+    [0.85, -0.2],
+    [0.95, 0.3],
+    [GRABBY_TOTAL, 0.1],
+  ]),
+  lift: track(t, [
+    [0, 0],
+    [GRABBY_CATCH, 0],
+    [0.4, -0.08],
+    [0.55, -0.08],
+    [0.7, 0],
+  ]),
+});
+
+/** Our kid, startled as the ball is thrown past: head back, both arms up a little, then eases back. */
+export const flinch: Move = (t) => {
+  const k = t < 0.15 ? smooth(t / 0.15) : smooth(1 - (t - 0.3) / (FLINCH_TOTAL - 0.3));
+  const hold = t < 0.3 ? Math.min(k, 1) : k;
+  return {
+    headPitch: -0.35 * hold,
+    hit: limb(0.5 + 0.4 * hold, 0.15 + 0.15 * hold, 1.1 - 0.5 * hold),
+    off: limb(0.3 + 0.6 * hold, 0.3, 0.9 - 0.4 * hold),
+  };
+};
 
 /** The watching kids slump. */
 export const slump: Move = () => ({

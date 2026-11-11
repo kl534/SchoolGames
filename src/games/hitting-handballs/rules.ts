@@ -233,6 +233,7 @@ export const WORDS = {
   winner: 'WINNER!',
   whiff: 'WHIFF!',
   bonk: 'BONK!',
+  grabby: 'GRABBY!',
 } as const;
 
 /** The line on the results screen (written only, not spoken). */
@@ -283,3 +284,14 @@ export function goesOverTheWall(random: number, standing: number, matchOver: boo
 
 /** The spoken yell when the ball clears the wall. */
 export const OVER_THE_WALL_SPEECH = 'Over the wall!!!';
+
+/** Share of wrong answers (and time-outs) that are a grabby instead of a whiff. */
+export const GRABBY_CHANCE = 1 / 8;
+
+/** Does this wrong answer end in a grabby? `random` is 0..1. */
+export function isGrabby(random: number): boolean {
+  return random < GRABBY_CHANCE;
+}
+
+/** The spoken yell at the grab. */
+export const GRABBY_SPEECH = 'Grabby!';

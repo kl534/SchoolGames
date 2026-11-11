@@ -205,7 +205,8 @@ function tryShot(from: Vec, to: Vec, h: number, vy: number): Flown | null {
  * `wallY`, back out (bouncing once if it needs to) to the receiver's hand at `to`. Every part is
  * a real projectile under one gravity, with the court and the wall taking some speed off. The
  * launch speed is fitted so the ball meets the hand; a smash is hit much harder. With `miss` it
- * flies on past the receiver, bouncing, until it is off the right side at `PAST.x`.
+ * flies on past the receiver, bouncing, until it is off the right side at `PAST.x`. A rival's
+ * grabby throw is `planShot('smash', hand, ourPoint, WINNER_WALL_Y, true)`.
  */
 export function planShot(
   kind: 'normal' | 'smash',
