@@ -1,6 +1,6 @@
 /**
  * Dev-only lab for the results screen (not part of the build). Query: `moved=<n>`, `learned=<n>`
- * and `waiting=<n>` (the step report, each 0 by default), `stars=<0..3>` (default 3).
+ * and `solid=<n>` (the step report, each 0 by default), `stars=<0..3>` (default 3).
  */
 import { showResults } from '../results';
 import { mathFact } from '../topics/math';
@@ -17,6 +17,6 @@ showResults({
   newBest: false,
   missed: [mathFact('multiply', 6, 7), mathFact('multiply', 8, 7), mathFact('multiply', 9, 7)],
   playerName: 'Shots',
-  steps: { movedUp: count('moved'), learned: count('learned'), waiting: count('waiting') },
+  steps: { movedUp: count('moved'), learned: count('learned'), solid: count('solid') },
   onPlayAgain: () => {},
 });

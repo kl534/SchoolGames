@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   AVATARS,
   createProgressStore,
-  LEARN_SPACING_MS,
+  REVIEW_SPACING_MS,
   recordAnswer,
 } from '../src/shared/progress';
 import { LEVELS, MY_LEVEL_ID, SOCIAL_STUDIES_LEVEL_ID } from '../src/shared/levels';
@@ -371,21 +371,12 @@ describe('step report', () => {
     return session;
   };
   const at = (ms: number) => vi.setSystemTime(ms);
-  const none = { movedUp: 0, learned: 0, waiting: 0 };
+  const none = { movedUp: 0, learned: 0, solid: 0 };
 
   it('says a right answer on a new fact moved it up', () => {
     const session = start('Step mover');
     session.recordAnswer(fact, true);
     expect(session.takeStepReport()).toEqual({ ...none, movedUp: 1 });
-  });
-
-  it('says a second right answer straight away was held back by the wait', () => {
-    const session = start('Step waiter');
-    session.recordAnswer(fact, true);
-    expect(session.takeStepReport()).toEqual({ ...none, movedUp: 1 });
-    at(T0 + 60_000);
-    session.recordAnswer(fact, true);
-    expect(session.takeStepReport()).toEqual({ ...none, waiting: 1 });
   });
 
   it('reports each fact once, from where it started the round to where it ended', () => {
@@ -394,18 +385,18 @@ describe('step report', () => {
     at(T0 + 1000);
     session.recordAnswer(fact, true);
     session.recordAnswer(other, true);
-    // fact: New to Started, one answer held back but it moved, so it is only "moved up".
+    // fact: New to Almost, other: New to Started.
     expect(session.takeStepReport()).toEqual({ ...none, movedUp: 2 });
   });
 
-  it('learns a fact on the third spaced answer', () => {
+  it('learns a fact on the third right answer, straight away', () => {
     const session = start('Step learner');
     session.recordAnswer(fact, true);
     session.takeStepReport();
-    at(T0 + LEARN_SPACING_MS);
+    at(T0 + 60_000);
     session.recordAnswer(fact, true);
     expect(session.takeStepReport()).toEqual({ ...none, movedUp: 1 });
-    at(T0 + 2 * LEARN_SPACING_MS);
+    at(T0 + 120_000);
     session.recordAnswer(fact, true);
     expect(session.takeStepReport()).toEqual({ ...none, learned: 1 });
   });
@@ -413,10 +404,22 @@ describe('step report', () => {
   it('counts a fact that went New to Learned in one report as learned', () => {
     const session = start('Step skipper');
     for (let i = 0; i < 3; i++) {
-      at(T0 + i * LEARN_SPACING_MS);
+      at(T0 + i * 1000);
       session.recordAnswer(fact, true);
     }
     expect(session.takeStepReport()).toEqual({ ...none, learned: 1 });
+  });
+
+  it('makes a fact solid on its second review, 6 hours apart', () => {
+    const session = start('Step solid');
+    for (let i = 0; i < 3; i++) session.recordAnswer(fact, true);
+    session.takeStepReport();
+    at(T0 + REVIEW_SPACING_MS);
+    session.recordAnswer(fact, true);
+    expect(session.takeStepReport()).toEqual(none);
+    at(T0 + 2 * REVIEW_SPACING_MS);
+    session.recordAnswer(fact, true);
+    expect(session.takeStepReport()).toEqual({ ...none, solid: 1 });
   });
 
   it('resets after it is taken', () => {
@@ -426,7 +429,7 @@ describe('step report', () => {
     expect(session.takeStepReport()).toEqual(none);
   });
 
-  it('does not count a right retry after a miss as waiting', () => {
+  it('does not count a right retry after a miss', () => {
     const session = start('Step retry');
     session.recordAnswer(fact, true);
     at(T0 + HOUR);

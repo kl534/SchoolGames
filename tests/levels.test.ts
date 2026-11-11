@@ -25,9 +25,9 @@ import {
 } from '../src/shared/levels';
 import {
   emptyProgress,
-  isMastered,
-  isWaiting,
-  LEARN_SPACING_MS,
+  isLearned,
+  REVIEW_SPACING_MS,
+  reviewDue,
   LEVELS_VERSION,
   OLD_LEVEL_SPOTS,
   recordAnswer,
@@ -43,12 +43,12 @@ import { stateLocations } from '../src/shared/topics/locations';
 import { countryLocations } from '../src/shared/topics/world';
 import { MATH_TOPICS, missingTwin } from '../src/shared/topics/math';
 
-/** A fake clock: every answer comes 6 hours after the one before, so each right one counts. */
+/** A fake clock: every answer comes a minute after the one before. */
 let clock = 0;
 
 /** Answers a fact the way a game does: under its own topic, then updates the open levels. */
 function answer(progress: PlayerProgress, fact: Parameters<typeof topicOfFact>[0], ok: boolean) {
-  clock += LEARN_SPACING_MS;
+  clock += 60_000;
   recordAnswer(progress, topicOfFact(fact).id, fact.id, ok, clock);
   progress.levelsOpen = levelsOpen(progress);
 }
@@ -400,10 +400,10 @@ describe('needsWork', () => {
     expect(needsWork(undefined)).toBe(true);
     for (let i = 0; i < 3; i++) answer(progress, fact, true);
     const stat = progress.facts[topicOfFact(fact).id][fact.id];
-    expect(isMastered(stat)).toBe(true);
+    expect(isLearned(stat)).toBe(true);
     expect(needsWork(stat)).toBe(false);
     answer(progress, fact, false);
-    expect(isMastered(stat)).toBe(false);
+    expect(isLearned(stat)).toBe(false);
     expect(needsWork(stat)).toBe(true);
   });
 });
@@ -441,7 +441,7 @@ describe('chooseLevelFacts', () => {
     let reviews = 0;
     let total = 0;
     for (let i = 0; i < 400; i++) {
-      for (const fact of chooseLevelFacts(progress, 10, random)) {
+      for (const fact of chooseLevelFacts(progress, 10, random, MATH_PATH, clock)) {
         total++;
         if (learned.has(fact)) reviews++;
       }
@@ -459,7 +459,7 @@ describe('chooseLevelFacts', () => {
     // learned facts to fill the rest with), so it is practiced ahead of all of them.
     const random = seededRandom(11);
     for (let i = 0; i < 100; i++) {
-      const round = chooseLevelFacts(progress, 10, random, MATH_PATH, clock + LEARN_SPACING_MS);
+      const round = chooseLevelFacts(progress, 10, random, MATH_PATH, clock);
       expect(round).toHaveLength(10);
       expect(round.filter((f) => f === missed)).toHaveLength(1);
     }
@@ -479,7 +479,7 @@ describe('chooseLevelFacts', () => {
     const learned = () =>
       MATH_TOPICS.flatMap((t) => t.facts.map((f) => progress.facts[t.id]?.[f.id]));
     let answered = 0;
-    while (!learned().every((stat) => isMastered(stat))) {
+    while (!learned().every((stat) => isLearned(stat))) {
       for (const fact of chooseLevelFacts(progress, 10, random)) {
         answer(progress, fact, true);
         answered++;
@@ -491,10 +491,10 @@ describe('chooseLevelFacts', () => {
   });
 });
 
-describe('waiting facts', () => {
-  const NOW = 10 * LEARN_SPACING_MS;
+describe('review pools and work', () => {
+  const NOW = 10 * REVIEW_SPACING_MS;
   const level1 = LEVELS[0].facts;
-  /** Math cut down to its first level, so no later level opens and adds ready facts. */
+  /** Math cut down to its first level, so no later level opens and adds work. */
   const ONE: LevelPath = { ...MATH_PATH, levels: [LEVELS[0]] };
   const setStat = (
     progress: PlayerProgress,
@@ -509,73 +509,121 @@ describe('waiting facts', () => {
       ...stat,
     };
   };
-  /** Started a minute ago: inside the wait. */
-  const makeWaiting = (progress: PlayerProgress, lf: (typeof level1)[number]) =>
-    setStat(progress, lf, { learnStreak: 1, learnedAt: NOW - 60_000 });
-  const makeLearned = (progress: PlayerProgress, lf: (typeof level1)[number]) =>
-    setStat(progress, lf, { learnStreak: 3, learnedAt: NOW - 100 * LEARN_SPACING_MS });
+  /** Learned 7 hours ago: due for review. */
+  const makeDue = (progress: PlayerProgress, lf: (typeof level1)[number]) =>
+    setStat(progress, lf, { learnStreak: 3, reviews: 0, learnedAt: NOW - 7 * 3_600_000 });
+  /** Learned a minute ago: not due. */
+  const makeFresh = (progress: PlayerProgress, lf: (typeof level1)[number]) =>
+    setStat(progress, lf, { learnStreak: 3, reviews: 0, learnedAt: NOW - 60_000 });
+  const makeSolid = (progress: PlayerProgress, lf: (typeof level1)[number]) =>
+    setStat(progress, lf, { learnStreak: 3, reviews: 2, learnedAt: NOW - 100 * REVIEW_SPACING_MS });
+  const statOf = (progress: PlayerProgress, path: LevelPath, fact: unknown) => {
+    const lf = pathFacts(path).find((x) => x.fact === fact)!;
+    return progress.facts[lf.topic.id]?.[lf.fact.id];
+  };
 
-  it('picks no waiting fact while ready work exists', () => {
+  it('puts due facts first, up to a third of the round', () => {
     const progress = emptyProgress();
-    const waiting = level1.slice(0, 30);
-    for (const lf of waiting) makeWaiting(progress, lf);
-    const waitingFacts = new Set(waiting.map((lf) => lf.fact));
+    for (const lf of level1.slice(0, 30)) makeDue(progress, lf);
+    const due = new Set(level1.slice(0, 30).map((lf) => lf.fact));
     const random = seededRandom(21);
     for (let i = 0; i < 50; i++) {
-      for (const fact of chooseLevelFacts(progress, 10, random, ONE, NOW)) {
-        expect(waitingFacts.has(fact)).toBe(false);
-      }
+      const round = chooseLevelFacts(progress, 10, random, ONE, NOW);
+      expect(round).toHaveLength(10);
+      expect(round.filter((f) => due.has(f))).toHaveLength(4);
     }
   });
 
-  it('uses every ready fact once, then waiting facts to fill, without repeats', () => {
+  it('takes fewer slots when fewer facts are due', () => {
     const progress = emptyProgress();
-    // 6 ready (new) facts, the other 39 of level 1 waiting.
-    for (const lf of level1.slice(6)) makeWaiting(progress, lf);
-    const ready = new Set(level1.slice(0, 6).map((lf) => lf.fact));
-    const random = seededRandom(22);
-    for (let i = 0; i < 40; i++) {
-      const round = chooseLevelFacts(progress, 10, random, ONE, NOW);
-      expect(round).toHaveLength(10);
-      expect(new Set(round).size).toBe(10);
-      for (const fact of ready) expect(round).toContain(fact);
+    for (const lf of level1.slice(0, 2)) makeDue(progress, lf);
+    const due = new Set(level1.slice(0, 2).map((lf) => lf.fact));
+    const round = chooseLevelFacts(progress, 10, seededRandom(5), ONE, NOW);
+    expect(round.filter((f) => due.has(f))).toHaveLength(2);
+  });
+
+  it('gives all the slots to due facts, then solid ones, when no work is left', () => {
+    const progress = emptyProgress();
+    level1.forEach((lf, i) => (i < 4 ? makeDue(progress, lf) : makeSolid(progress, lf)));
+    const due = level1.slice(0, 4).map((lf) => lf.fact);
+    const round = chooseLevelFacts(progress, 10, seededRandom(6), ONE, NOW);
+    expect(round).toHaveLength(10);
+    for (const fact of due) expect(round).toContain(fact);
+    expect(new Set(round).size).toBe(10);
+  });
+
+  it('leaves a Learned fact that is not due out of the due slots', () => {
+    const progress = emptyProgress();
+    for (const lf of level1) makeFresh(progress, lf);
+    for (const f of chooseLevelFacts(progress, 10, seededRandom(7), ONE, NOW)) {
+      expect(reviewDue(statOf(progress, ONE, f), NOW)).toBe(false);
     }
+  });
+
+  it('still returns count facts when everything is Solid', () => {
+    const progress = emptyProgress();
+    for (const lf of level1) makeSolid(progress, lf);
+    expect(chooseLevelFacts(progress, 10, seededRandom(8), ONE, NOW)).toHaveLength(10);
+    expect(chooseLevelFacts(progress, 100, seededRandom(8), ONE, NOW)).toHaveLength(100);
   });
 
   it('repeats facts only when every pool is used up', () => {
     const progress = emptyProgress();
-    for (const lf of level1.slice(2)) makeLearned(progress, lf);
+    for (const lf of level1.slice(2)) makeSolid(progress, lf);
     const round = chooseLevelFacts(progress, 10, seededRandom(23), ONE, NOW);
     expect(round).toHaveLength(10);
-    const level2 = new Set(LEVELS[1].facts.map((lf) => lf.fact));
-    // The two new facts of level 1 come first; the rest is review or level 2 facts only.
-    const newOnes = level1.slice(0, 2).map((lf) => lf.fact);
-    for (const fact of newOnes) expect(round).toContain(fact);
-    expect(round.every((f) => level1.some((lf) => lf.fact === f) || level2.has(f))).toBe(true);
+    expect(new Set(round).size).toBe(10);
+    for (const lf of level1.slice(0, 2)) expect(round).toContain(lf.fact);
   });
 
-  it('readyWork leaves out learned and waiting facts', () => {
+  it('readyWork counts the open facts that are not Learned yet', () => {
     const progress = emptyProgress();
-    makeLearned(progress, level1[0]);
-    makeWaiting(progress, level1[1]);
-    const ready = readyWork(progress, MATH_PATH, 1, NOW);
+    makeDue(progress, level1[0]);
+    makeSolid(progress, level1[1]);
+    setStat(progress, level1[2], { learnStreak: 2 });
+    const ready = readyWork(progress, MATH_PATH, 1);
     expect(ready).toHaveLength(level1.length - 2);
     expect(ready).not.toContain(level1[0]);
     expect(ready).not.toContain(level1[1]);
-    // The same fact is ready again once its wait is over.
-    expect(readyWork(progress, MATH_PATH, 1, NOW + LEARN_SPACING_MS)).toContain(level1[1]);
+    expect(ready).toContain(level1[2]);
   });
 
-  it('openForWork keeps the open count when a round has enough ready facts', () => {
-    expect(openForWork(emptyProgress(), MATH_PATH, 10, NOW)).toBe(1);
-    expect(openForWork(emptyProgress(), MATH_PATH, 45, NOW)).toBe(1);
-  });
-
-  it('openForWork opens levels until ready work reaches the round size', () => {
+  it('opens the next level for a new player who answers a whole level right 3 times', () => {
     const progress = emptyProgress();
-    expect(openForWork(progress, MATH_PATH, 46, NOW)).toBe(2);
-    expect(openForWork(progress, MATH_PATH, 90, NOW)).toBe(2);
-    expect(openForWork(progress, MATH_PATH, 91, NOW)).toBe(3);
+    const random = seededRandom(31);
+    expect(levelsOpen(progress)).toBe(1);
+    let guard = 0;
+    while (readyWork(progress, MATH_PATH, 1).length > 0 && guard++ < 1000) {
+      for (const fact of chooseLevelFacts(progress, 10, random)) answer(progress, fact, true);
+    }
+    expect(readyWork(progress, MATH_PATH, 1)).toHaveLength(0);
+    // Right answers opened levels as the player went (80% right opens the next one).
+    expect(levelsOpen(progress)).toBeGreaterThanOrEqual(2);
+    expect(openForWork(progress, MATH_PATH, 10)).toBeGreaterThanOrEqual(2);
+  });
+
+  it('does not bring a Learned fact back into the work slots', () => {
+    const progress = emptyProgress();
+    const random = seededRandom(32);
+    const learned = level1[0].fact;
+    for (let i = 0; i < 3; i++) answer(progress, learned, true);
+    for (let i = 0; i < 30; i++) {
+      const round = chooseLevelFacts(progress, 10, random, ONE, clock);
+      // Learned and not due: only the occasional review slot can pick it.
+      expect(round.filter((f) => f === learned).length).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('openForWork keeps the open count when a round has enough facts that need work', () => {
+    expect(openForWork(emptyProgress(), MATH_PATH, 10)).toBe(1);
+    expect(openForWork(emptyProgress(), MATH_PATH, 45)).toBe(1);
+  });
+
+  it('openForWork opens levels until work reaches the round size', () => {
+    const progress = emptyProgress();
+    expect(openForWork(progress, MATH_PATH, 46)).toBe(2);
+    expect(openForWork(progress, MATH_PATH, 90)).toBe(2);
+    expect(openForWork(progress, MATH_PATH, 91)).toBe(3);
     // Pure: nothing was saved.
     expect(progress.levelsOpen).toBeUndefined();
   });
@@ -583,47 +631,37 @@ describe('waiting facts', () => {
   it('openForWork never goes below levelsOpen or past the last level', () => {
     const progress = emptyProgress();
     progress.levelsOpen = 5;
-    expect(openForWork(progress, MATH_PATH, 1, NOW)).toBe(5);
-    expect(openForWork(progress, MATH_PATH, 1_000_000, NOW)).toBe(MATH_PATH.levels.length);
+    expect(openForWork(progress, MATH_PATH, 1)).toBe(5);
+    expect(openForWork(progress, MATH_PATH, 1_000_000)).toBe(MATH_PATH.levels.length);
   });
 
-  it('openForWork opens past waiting levels', () => {
-    const progress = emptyProgress();
-    for (const lf of level1) makeWaiting(progress, lf);
-    expect(levelsOpen(progress)).toBe(2);
-    // Level 1 is all waiting, so level 2 alone has to carry a round of 40.
-    expect(readyWork(progress, MATH_PATH, 1, NOW)).toHaveLength(0);
-    expect(openForWork(progress, MATH_PATH, 40, NOW)).toBe(2);
-    expect(openForWork(progress, MATH_PATH, 50, NOW)).toBe(3);
-  });
-
-  it('sweep: a round is always full and waiting facts only fill what ready ones cannot', () => {
+  it('sweep: a round is always full, in the open levels, with due facts first', () => {
     const rng = seededRandom(77);
     for (let run = 0; run < runs(300, 40); run++) {
       const path: LevelPath = { ...MATH_PATH, levels: LEVELS.slice(0, 1 + Math.floor(rng() * 3)) };
       const progress = emptyProgress();
       const facts = pathFacts(path);
-      const readyShare = rng();
+      const untouched = rng();
       for (const lf of facts) {
-        if (rng() < readyShare) continue;
+        if (rng() < untouched) continue;
         const roll = rng();
-        // Mostly waiting or learned, some Started facts that are ready again.
-        const learnStreak = roll < 0.2 ? 3 : 1 + Math.floor(rng() * 2);
-        setStat(progress, lf, { learnStreak, learnedAt: NOW - rng() * 2 * LEARN_SPACING_MS });
+        if (roll < 0.25) makeDue(progress, lf);
+        else if (roll < 0.5) makeFresh(progress, lf);
+        else if (roll < 0.75) makeSolid(progress, lf);
+        else setStat(progress, lf, { learnStreak: 1 + Math.floor(rng() * 2) });
       }
       const count = 5 + Math.floor(rng() * 40);
       const round = chooseLevelFacts(progress, count, rng, path, NOW);
       expect(round).toHaveLength(count);
-      const open = levelsOpen(progress, path);
-      const statOf = (fact: unknown) => {
-        const lf = facts.find((x) => x.fact === fact)!;
-        return progress.facts[lf.topic.id]?.[lf.fact.id];
-      };
-      const readyAll = readyWork(progress, path, open, NOW);
-      if (round.some((f) => isWaiting(statOf(f), NOW))) {
-        // A waiting fact is only there because every ready fact that needs work was picked.
-        for (const lf of readyAll) expect(round).toContain(lf.fact);
-      }
+      const open = new Set(
+        path.levels.slice(0, levelsOpen(progress, path)).flatMap((l) => l.facts.map((x) => x.fact)),
+      );
+      for (const f of round) expect(open.has(f)).toBe(true);
+      const dueAll = facts.filter(
+        (lf) => open.has(lf.fact) && reviewDue(statOf(progress, path, lf.fact), NOW),
+      );
+      const inRound = dueAll.filter((lf) => round.includes(lf.fact)).length;
+      expect(inRound).toBeGreaterThanOrEqual(Math.min(dueAll.length, Math.ceil(count / 3)));
     }
   });
 });
@@ -636,7 +674,7 @@ describe('Social Studies path', () => {
 
   /** Answers a social studies fact the way a game does. */
   const answerSocial = (progress: PlayerProgress, fact: (typeof stateCapitals.facts)[number]) => {
-    clock += LEARN_SPACING_MS;
+    clock += REVIEW_SPACING_MS;
     recordAnswer(progress, stateLocations.id, fact.id, true, clock);
   };
 
@@ -775,12 +813,12 @@ describe('Social Studies path', () => {
     for (const { fact } of SOCIAL_STUDIES_LEVELS[4].facts) answerSocial(p, fact);
     expect(levelsOpen(p, path)).toBe(6);
     for (const { fact } of SOCIAL_STUDIES_LEVELS[11].facts) {
-      clock += LEARN_SPACING_MS;
+      clock += REVIEW_SPACING_MS;
       recordAnswer(p, countryLocations.id, fact.id, true, clock);
     }
     expect(levelsOpen(p, path)).toBe(13);
     for (const { fact } of SOCIAL_STUDIES_LEVELS[16].facts) {
-      clock += LEARN_SPACING_MS;
+      clock += REVIEW_SPACING_MS;
       recordAnswer(p, stateCapitals.id, fact.id, true, clock);
     }
     expect(levelsOpen(p, path)).toBe(17);
