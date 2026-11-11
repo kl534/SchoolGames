@@ -154,6 +154,45 @@ export function createFish(): Prop {
   };
 }
 
+// ---------- Cotton candy cloud ----------
+
+export interface Cloud extends Prop {
+  /** Sizes the cloud: 0 is nothing, 1 is full size. */
+  pose(scale: number): void;
+}
+
+/** A cloud of candy floss, about 6 wide and 1.8 tall, its flat top at y = 0. */
+export function createCloud(): Cloud {
+  const b = builder();
+  const object = new Group();
+  const body = new Group();
+  object.add(body);
+  const pink = b.std(0xff9fd0, 0.9);
+  const white = b.std(0xfff0f8, 0.9);
+  const puffs: [number, number, number, number, boolean][] = [
+    [0, -0.6, 0, 1.0, false],
+    [-1.2, -0.75, 0.1, 0.8, true],
+    [1.2, -0.75, -0.1, 0.8, true],
+    [0.5, -0.4, 0.5, 0.7, true],
+    [-0.5, -0.45, -0.5, 0.7, false],
+  ];
+  for (const [x, y, z, r, light] of puffs) {
+    b.add(new SphereGeometry(r, 14, 10), light ? white : pink, body, x, y, z, 1, 0.75, 1);
+  }
+  object.visible = false;
+  return {
+    object,
+    update() {},
+    pose(scale) {
+      body.scale.setScalar(1.5 * Math.max(scale, 0.001));
+    },
+    dispose() {
+      b.dispose();
+      object.removeFromParent();
+    },
+  };
+}
+
 // ---------- Dolphin ----------
 
 export interface Dolphin extends Prop {

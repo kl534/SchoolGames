@@ -142,10 +142,20 @@ export interface DolphinFrame {
   visible: boolean;
 }
 
+export interface CloudFrame {
+  d: number;
+  y: number;
+  s: number;
+  /** 0 (not there) to 1 (full size). */
+  scale: number;
+  visible: boolean;
+}
+
 export interface Frame {
   ski: SkiFrame;
   rider: RiderFrame;
   dolphins: [DolphinFrame, DolphinFrame];
+  cloud: CloudFrame;
 }
 
 /** Where a seated rider's hips are in the ski's own space: up from the waterline and back from the middle. */
@@ -173,6 +183,7 @@ export function createFrame(): Frame {
       { d: 0, y: -5, s: 0, phase: 0, visible: false },
       { d: 0, y: -5, s: 0, phase: 0, visible: false },
     ],
+    cloud: { d: 0, y: -5, s: 0, scale: 0, visible: false },
   };
 }
 
@@ -193,6 +204,10 @@ export function resetFrame(f: Frame): Frame {
     dolphin.y = -5;
     dolphin.visible = false;
   }
+  const c = f.cloud;
+  c.d = c.s = c.scale = 0;
+  c.y = -5;
+  c.visible = false;
   return f;
 }
 

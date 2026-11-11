@@ -8,10 +8,10 @@ A jet-ski trick game seen from a chase camera: each answer sends the ski off a l
 - `rules.ts`: pure scoring, tiers, jet skis, approach and turbo maths, coin trails, spoken lines, worlds and the Mega count (`TRICK_IDS`, `tierFor`, `nextTrick`, `hitPoints`, `approach`, `coinSide`, `WORLD_ORDER`, `nextWorld`, `startsMega`, `NORMALS_PER_WORLD`, `MegaId`, `Passed`, `MEGA_BONUS`)
 - `layout.ts`: camera poses and screen fitting (`playBand`, `bandShift`, `fovFor`, `chasePose`, `stuntPose`, `stuntDistance`, `blendCam`); the stunt camera is a 70-degree three-quarter side view, its distance set per trick from `trickFraming` (and, in a Mega course, per element from `megaFramingAt`: it frames the element being ridden, looks towards its middle via `megaLookBias`, and keeps the next element in frame)
 - `anim.ts`: the animation toolkit (`track`, `prog`, `arc`, `swell`), the `Frame` type, launcher geometry (`LAUNCHERS`, `surfaceY`) and the shared run-up/arc/landing (`launch`, `clearDef`)
-- `tricks.ts`: the ten tricks and ten wipeouts as one registry and sampler, plus the lifeguard respawn (`trickFrame`, `trickEvents`, `trickRate`, `TRICK_SPECS`, `respawnFrame`)
+- `tricks.ts`: the twelve tricks and twelve wipeouts as one registry and sampler, plus the lifeguard respawn (`trickFrame`, `trickEvents`, `trickRate`, `TRICK_SPECS`, `respawnFrame`)
 - `tricks-t1.ts`: tier 1 off the wave: Wave Hop, Spray Spin, Superman, Tail Stand
-- `tricks-t2.ts`: tier 2 off the kicker: Backflip, Barrel Roll, Helicopter
-- `tricks-t3.ts`: tier 3 off the mega ramp: Double Backflip, Submarine, Corkscrew 720
+- `tricks-t2.ts`: tier 2 off the kicker: Backflip, Barrel Roll, Helicopter, Sugar Spin (a yaw spin with a confetti ribbon; fails sideways)
+- `tricks-t3.ts`: tier 3 off the mega ramp: Double Backflip, Submarine, Corkscrew 720, Cotton Candy Cloud (bounces twice on a candy-floss cloud, `Frame.cloud`; fails when the cloud melts)
 - `mega/mega.ts`: the Mega courses as authored animations and the frame lookup (`MEGA_SPECS`, `megaFrame`, `megaEvents`, `megaRate`, `megaFramingAt`, `megaLookBias`, `megaSegments`)
 - `mega/anim.ts`: pure helpers for the course animations: routes, heading, flip easing (`route`, `flipEase`, `slopeAt`)
 - `mega/whale-of-a-time.ts`: Lagoon Mega: palm sandbar island, whale bounce, spout and triple backflip (`WHALE_OF_A_TIME`, `SANDBAR`, `WHALE`, `SPOUT`)
@@ -28,7 +28,7 @@ A jet-ski trick game seen from a chase camera: each answer sends the ski off a l
 - `mega/mega-props.ts`: the Mega courses and the checkpoint buoy gates as three.js objects (`createMegaCoursePool`, `createGate`)
 - `jetski.ts`: the jet ski and the lifeguard's rescue boat (`createJetSki`, `createRescueBoat`)
 - `rider.ts`: the kid rider's rig, life vest, faces (happy, scared, dizzy, soaked, sooty) and poses (`createRider`, `POSES`)
-- `critters.ts`: the dolphin and the seaweed and fish gag props (`createDolphin`, `createSeaweed`, `createFish`)
+- `critters.ts`: the dolphin, the cotton candy cloud and the seaweed and fish gag props (`createDolphin`, `createCloud`, `createSeaweed`, `createFish`)
 - `launchers.ts`: the wave, kicker and mega ramp meshes (`createLauncherPool`)
 - `water.ts`: the heaving water plane and the V-shaped foam wake (`createWater`)
 - `world.ts`: sky dome, fog, sun and the scenery recycled along the course; one set of islands, boats, a landmark and far strips per world (`createWorld`, `PALETTES`, `WorldTheme`)
@@ -62,5 +62,5 @@ A jet-ski trick game seen from a chase camera: each answer sends the ski off a l
 ## Tests
 
 - `tests/splash-zone.test.ts` (rules, layout probe, dev hooks, voice)
-- `tests/splash-zone-tricks.test.ts` (all 20 animations and the respawn)
+- `tests/splash-zone-tricks.test.ts` (all 24 animations and the respawn)
 - `tests/splash-zone-mega.test.ts` (worlds, every Mega course with 0 to 3 right, the course props and gates, the stunt camera over every course and screen size)

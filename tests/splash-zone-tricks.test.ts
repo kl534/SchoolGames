@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { seatOf, surfaceY, swell } from '../src/games/splash-zone/anim';
+import { runs } from './helpers/full';
+import { resetFrame, seatOf, surfaceY, swell } from '../src/games/splash-zone/anim';
 import {
   TRICK_IDS,
   TRICK_NAMES,
@@ -39,6 +40,8 @@ const TURNS: Partial<Record<TrickId, { axis: 'pitch' | 'roll' | 'yaw'; turns: nu
   corkscrew: { axis: 'roll', turns: 2 },
   helicopter: { axis: 'yaw', turns: 2 },
   'spray-spin': { axis: 'yaw', turns: 1 },
+  'sugar-spin': { axis: 'yaw', turns: 1 },
+  'cotton-candy-cloud': { axis: 'yaw', turns: 1 },
 };
 
 /** Tier 3 clears slow down at the top; two wipeouts have a big moment of their own. */
@@ -46,6 +49,7 @@ const SLOW_MOMENTS = new Set([
   'double-backflip:clear',
   'submarine:clear',
   'corkscrew:clear',
+  'cotton-candy-cloud:clear',
   'double-backflip:fail',
   'corkscrew:fail',
 ]);
@@ -65,15 +69,18 @@ function riderNumbers(f: Frame): number[] {
 
 const turnsOff = (angle: number) => Math.abs(angle - TAU * Math.round(angle / TAU));
 
-describe('there are 20 animations', () => {
+describe('there are 24 animations', () => {
   it('covers every trick and both outcomes', () => {
-    expect(TRICK_IDS).toHaveLength(10);
-    expect(cases).toHaveLength(20);
+    expect(TRICK_IDS).toHaveLength(12);
+    expect(cases).toHaveLength(24);
   });
 
   it('names and words', () => {
     for (const id of TRICK_IDS) {
-      expect(trickWord(id, 'clear')).toBe(`${TRICK_NAMES[id].toUpperCase()}!`);
+      // Cotton Candy Cloud shouts a shorter word than its name.
+      const clear =
+        id === 'cotton-candy-cloud' ? 'COTTON CLOUD!' : `${TRICK_NAMES[id].toUpperCase()}!`;
+      expect(trickWord(id, 'clear')).toBe(clear);
       expect(trickWord(id, 'fail')).toMatch(/^[A-Z -]+!$/);
       expect(trickWord(id, 'fail')).not.toBe(trickWord(id, 'clear'));
     }
@@ -120,6 +127,7 @@ describe.each(cases)('%s %s', (id, outcome) => {
     expect(f.ski.visible).toBe(true);
     expect(f.rider).toMatchObject({ mode: 'seated', pose: 'ride', face: 'happy' });
     expect(f.dolphins.every((d) => !d.visible)).toBe(true);
+    expect(f.cloud.visible).toBe(false);
   });
 
   it('never jumps between samples', () => {
@@ -160,6 +168,38 @@ describe.each(cases)('%s %s', (id, outcome) => {
     const seen = frames.some((f) => f.dolphins.some((d) => d.visible));
     expect(seen).toBe(id === 'submarine' && outcome === 'clear');
   });
+
+  it('only shows the cloud in Cotton Candy Cloud, which ends without it', () => {
+    const shown = frames.filter((f) => f.cloud.visible);
+    if (id !== 'cotton-candy-cloud') {
+      expect(shown).toHaveLength(0);
+      return;
+    }
+    expect(shown.length).toBeGreaterThan(10);
+    expect(frames[frames.length - 1].cloud.visible).toBe(false);
+    const scales = frames.map((f) => f.cloud.scale);
+    expect(Math.max(...scales)).toBeCloseTo(1, 6);
+    expect(Math.min(...scales)).toBeGreaterThanOrEqual(0);
+    // Up to full size, then down to nothing: one rise and one fall.
+    const top = scales.indexOf(1);
+    for (let i = 1; i <= top; i++) expect(scales[i]).toBeGreaterThanOrEqual(scales[i - 1] - 1e-9);
+    const last = scales.lastIndexOf(1);
+    for (let i = last + 1; i < scales.length; i++) {
+      expect(scales[i]).toBeLessThanOrEqual(scales[i - 1] + 1e-9);
+    }
+    for (const f of shown) {
+      expect(f.ski.y).toBeGreaterThanOrEqual(spec.floorY);
+      expect(Number.isFinite(f.cloud.d + f.cloud.y + f.cloud.s + f.cloud.scale)).toBe(true);
+    }
+  });
+
+  if (id === 'sugar-spin') {
+    it('spins a full turn on a clear and lands sideways on a fail', () => {
+      const yaw = frames[frames.length - 1].ski.yaw;
+      if (outcome === 'clear') expect(Math.abs(yaw - TAU)).toBeLessThan(0.05);
+      else expect(Math.abs(yaw - Math.PI / 2)).toBeLessThan(0.2);
+    });
+  }
 
   if (outcome === 'clear') {
     it('lands and rides on at its length, level, seated', () => {
@@ -302,5 +342,34 @@ describe('the chop of the water', () => {
       }
     }
     expect(swell(1, 2, 0)).not.toBeCloseTo(swell(1, 2, 1), 4);
+  });
+});
+
+describe('the cloud frame', () => {
+  it('starts and resets invisible', () => {
+    const f = createFrame();
+    expect(f.cloud).toEqual({ d: 0, y: -5, s: 0, scale: 0, visible: false });
+    f.cloud.visible = true;
+    f.cloud.scale = 1;
+    f.cloud.d = 20;
+    resetFrame(f);
+    expect(f.cloud).toEqual({ d: 0, y: -5, s: 0, scale: 0, visible: false });
+  });
+});
+
+describe('random times in every animation', () => {
+  it('always give finite frames', () => {
+    let seed = 12345;
+    const random = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
+    const n = runs(400, 100);
+    for (const [id, outcome] of cases) {
+      const duration = trickDuration(id, outcome);
+      for (let i = 0; i < n; i++) {
+        const f = trickFrame(id, outcome, random() * duration * 1.1, createFrame());
+        for (const v of [...skiNumbers(f), ...riderNumbers(f)])
+          expect(Number.isFinite(v)).toBe(true);
+        expect(Number.isFinite(f.cloud.d + f.cloud.y + f.cloud.scale)).toBe(true);
+      }
+    }
   });
 });
