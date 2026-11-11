@@ -16,6 +16,7 @@
  * - `?win=dance`: skip the intro and start the win ending at once, holding the dance for ever
  *   (no results, nothing saved).
  * - `?over=on|off`: `on` makes every legal smash go over the wall, `off` stops it ever happening.
+ * - `?grabby=on|off`: `on` makes every wrong answer a grabby, `off` never.
  * - `?sit=1|2`: start with that rival (1 front, 2 back) sitting for the first point.
  * - `?at=<s>`: freeze the scene `s` seconds after that first answer; the HUD stays.
  */
@@ -123,4 +124,11 @@ export function devSit(search: string = location.search): 0 | 1 | null {
   if (!import.meta.env.DEV) return null;
   const n = whole(query(search).get('sit'), 1, 2);
   return n === null ? null : ((n - 1) as 0 | 1);
+}
+
+/** `?grabby=on|off` in a dev build: force every wrong answer to be a grabby, or never. */
+export function devGrabby(search: string = location.search): boolean | null {
+  if (!import.meta.env.DEV) return null;
+  const grabby = query(search).get('grabby');
+  return grabby === 'on' ? true : grabby === 'off' ? false : null;
 }

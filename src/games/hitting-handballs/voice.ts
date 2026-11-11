@@ -3,6 +3,7 @@ import {
   allScoreCalls,
   CHAMPION_SPEECH,
   COOKING_SPEECH,
+  GRABBY_SPEECH,
   MATCH_POINT_SPEECH,
   OVER_THE_WALL_SPEECH,
   PAIRS,
@@ -19,6 +20,7 @@ export const VOICE_LINES: string[] = [
   CHAMPION_SPEECH,
   COOKING_SPEECH,
   OVER_THE_WALL_SPEECH,
+  GRABBY_SPEECH,
   ...allScoreCalls(),
   ...PAIRS.map((pair) => pair.intro),
 ];

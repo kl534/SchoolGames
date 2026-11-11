@@ -18,6 +18,7 @@ import { createBall } from './ball';
 import { buildCourt } from './court';
 import {
   autoAnswer,
+  devGrabby,
   devOver,
   devSit,
   devWinDance,
@@ -38,6 +39,12 @@ import { CAM_FOV, CAM_Y, fitCamera, LOOK_X, LOOK_Y, playBand, type PlayBand } fr
 import {
   bonk,
   BONK_TOTAL,
+  flinch,
+  FLINCH_TOTAL,
+  grabby,
+  GRABBY_CATCH,
+  GRABBY_RELEASE,
+  GRABBY_TOTAL,
   smash,
   SMASH_CONTACT,
   SMASH_TOTAL,
@@ -54,7 +61,9 @@ import {
   COOKING_SPEECH,
   coinToss,
   goesOverTheWall,
+  GRABBY_SPEECH,
   isCooking,
+  isGrabby,
   isMatchPoint,
   matchStars,
   MATCH_POINT_SPEECH,
@@ -452,6 +461,12 @@ function run(session: GameSession): void {
     /** The rival slams it into the court and it goes over the wall; `onGone` when the ball is gone and the yell is over. */
     over?: boolean;
     onGone?: () => void;
+    /**
+     * The rival grabs the ball out of the air and throws it hard back past our kid `ours`, who
+     * stands at `at`. `part` is called three times: the yell is over, the throw has landed and the
+     * ball is gone.
+     */
+    grab?: { ours: Kid; at: Vec; part: () => void };
     /** A serve: the ball is bounced once first, and this kid swings. */
     server?: Kid;
   }
@@ -531,6 +546,26 @@ function run(session: GameSession): void {
         o.receiver.walkTo(Math.min(chase + 1, 3.4));
       });
       f.onEnd = () => rollOff(ballAt(shot, shot.duration), miss.onGone);
+    } else if (o.grab) {
+      const grab = o.grab;
+      const receiver = o.receiver;
+      const sendTurn = turn;
+      pin(f, Math.max(f.duration - GRABBY_CATCH, 0), () => receiver.play(grabby, GRABBY_TOTAL));
+      f.onEnd = () => {
+        if (turn !== sendTurn) return;
+        sfx.slap(0.6);
+        popWord(WORDS.grabby, { x: to.x, y: to.y + 0.4, z: to.z });
+        sayThen(GRABBY_SPEECH, grab.part);
+        shake.start(0.1, 0.03);
+        // The ball sits in both hands while the rival winds up.
+        const hold = newFlight(GRABBY_RELEASE - GRABBY_CATCH, () => to);
+        hold.onEnd = () => {
+          if (turn !== sendTurn) return;
+          throwBack(to, grab);
+        };
+        fly(hold);
+        ball.setSpin(0);
+      };
     } else {
       pin(f, f.duration - SWING_CONTACT, () => o.receiver.play(swing, SWING_TOTAL));
       f.onEnd = () => {
@@ -540,6 +575,29 @@ function run(session: GameSession): void {
     }
     fly(f);
     return f;
+  };
+
+  /** The rival lets go: a hard bounce-and-wall shot past our kid, who flinches as it goes by. */
+  const throwBack = (from: Vec, grab: { ours: Kid; at: Vec; part: () => void }) => {
+    const sendTurn = turn;
+    const shot = planShot('smash', from, grab.at, WINNER_WALL_Y, true);
+    const g = newFlight(shot.duration, (t) => ballAt(shot, t));
+    pin(g, 0, () => sfx.slap(1));
+    for (const c of contacts(shot).slice(0, 4)) {
+      pin(g, c.t, () => (c.what === 'wall' ? sfx.thud() : sfx.bump()));
+    }
+    const flinchAt = Math.max((timeAtX(shot, grab.at.x) ?? shot.duration) - 0.15, 0);
+    pin(g, flinchAt, () => {
+      grab.ours.play(flinch, FLINCH_TOTAL);
+      sfx.aww();
+      court.kids.slump(1.5);
+    });
+    g.onEnd = () => {
+      if (turn !== sendTurn) return;
+      grab.part();
+      rollOff(ballAt(shot, shot.duration), grab.part);
+    };
+    fly(g);
   };
 
   // ---------- Match flow ----------
@@ -772,7 +830,8 @@ function run(session: GameSession): void {
     incoming = null;
 
     if (out.result === 'whiff') {
-      whiff(kid, f, index, current);
+      if (devGrabby() ?? isGrabby(Math.random())) grabbyThrow(kid, f, index, current, to);
+      else whiff(kid, f, index, current);
       return;
     }
     scoreboard.setPips(match.streak);
@@ -835,6 +894,41 @@ function run(session: GameSession): void {
     });
   };
 
+  /** The green answer and the tap that goes on after a wrong answer or a time-out. */
+  const revealGreen = (index: number, current: Fact) => {
+    phase = 'tap';
+    showHud(true, true);
+    buttons[options.indexOf(current.answer)]?.classList.add('right');
+    tapFlow.reveal(buttons, options, current, {
+      chosen: index >= 0 ? options[index] : undefined,
+      avoid: [scoreboard.root, hud],
+      problem: current.prompt,
+    });
+  };
+
+  /**
+   * A wrong answer the rival grabs: our kid hits a normal return, the rival catches it with both
+   * hands and throws it hard back past our kid. Their point, then the green answer as for a whiff.
+   */
+  const grabbyThrow = (kid: Kid, f: Flight, index: number, current: Fact, to: Vec) => {
+    const thisTurn = turn;
+    const rival = themKids[nextTarget('them')];
+    // The yell, the throw landing and the ball being gone.
+    let pending = 3;
+    const part = () => {
+      if (turn !== thisTurn || --pending > 0) return;
+      revealGreen(index, current);
+    };
+    f.held = false;
+    f.holdAt = null;
+    pin(f, Math.max(f.t, f.duration - SWING_CONTACT), () => kid.play(swing, SWING_TOTAL));
+    f.onEnd = () => {
+      if (turn !== thisTurn) return;
+      sfx.slap(0.8);
+      send({ from: to, receiver: rival, grab: { ours: kid, at: to, part } });
+    };
+  };
+
   /** A wrong answer or a time-out: the ball gets past (or bonks the head) and the green answer waits. */
   const whiff = (kid: Kid, f: Flight, index: number, current: Fact) => {
     const thisTurn = turn;
@@ -843,14 +937,7 @@ function run(session: GameSession): void {
     let pending = 2;
     const part = () => {
       if (turn !== thisTurn || --pending > 0) return;
-      phase = 'tap';
-      showHud(true, true);
-      buttons[options.indexOf(current.answer)]?.classList.add('right');
-      tapFlow.reveal(buttons, options, current, {
-        chosen: index >= 0 ? options[index] : undefined,
-        avoid: [scoreboard.root, hud],
-        problem: current.prompt,
-      });
+      revealGreen(index, current);
     };
     const head = kid.bodyPoint(0.93);
     if (bonked) {
