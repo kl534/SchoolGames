@@ -7,10 +7,12 @@ export type TrickId =
   | 'tail-stand' // tier 1
   | 'backflip'
   | 'barrel-roll'
-  | 'helicopter' // tier 2
+  | 'helicopter'
+  | 'sugar-spin' // tier 2
   | 'double-backflip'
   | 'submarine'
-  | 'corkscrew'; // tier 3
+  | 'corkscrew'
+  | 'cotton-candy-cloud'; // tier 3
 
 /** In tier order: the order `nextTrick` picks among them. */
 export const TRICK_IDS: readonly TrickId[] = [
@@ -21,9 +23,11 @@ export const TRICK_IDS: readonly TrickId[] = [
   'backflip',
   'barrel-roll',
   'helicopter',
+  'sugar-spin',
   'double-backflip',
   'submarine',
   'corkscrew',
+  'cotton-candy-cloud',
 ];
 
 export type Tier = 1 | 2 | 3;
@@ -36,9 +40,11 @@ export const TRICK_TIER: Record<TrickId, Tier> = {
   backflip: 2,
   'barrel-roll': 2,
   helicopter: 2,
+  'sugar-spin': 2,
   'double-backflip': 3,
   submarine: 3,
   corkscrew: 3,
+  'cotton-candy-cloud': 3,
 };
 
 export const TRICK_NAMES: Record<TrickId, string> = {
@@ -49,9 +55,11 @@ export const TRICK_NAMES: Record<TrickId, string> = {
   backflip: 'Backflip',
   'barrel-roll': 'Barrel Roll',
   helicopter: 'Helicopter',
+  'sugar-spin': 'Sugar Spin',
   'double-backflip': 'Double Backflip',
   submarine: 'Submarine',
   corkscrew: 'Corkscrew 720',
+  'cotton-candy-cloud': 'Cotton Candy Cloud',
 };
 
 export type LauncherKind = 'wave' | 'kicker' | 'mega-ramp';

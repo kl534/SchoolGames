@@ -1,6 +1,6 @@
 /**
- * Tier 3 tricks, off the mega ramp: Double Backflip, Submarine and Corkscrew 720, each with the
- * version where it goes wrong. All three slow right down at their big moment. Every builder
+ * Tier 3 tricks, off the mega ramp: Double Backflip, Submarine, Corkscrew 720 and Cotton Candy
+ * Cloud, each with the version where it goes wrong. The clears slow right down at their big moment. Every builder
  * returns a `Def` (see `anim.ts`).
  */
 import {
@@ -442,3 +442,196 @@ const corkscrewFail: Def = (() => {
 export const DOUBLE_BACKFLIP: TrickDefs = { clear: doubleBackflipClear, fail: doubleBackflipFail };
 export const SUBMARINE: TrickDefs = { clear: submarineClear, fail: submarineFail };
 export const CORKSCREW: TrickDefs = { clear: corkscrewClear, fail: corkscrewFail };
+
+// ---------- Cotton Candy Cloud ----------
+
+/** The cloud's spot (d, and the y of its top) and the flight that reaches it. */
+const CLOUD_D = 24;
+const CLOUD_Y = 3;
+const CLOUD_FLY = 1.1;
+const BOUNCE = 0.45;
+const BOUNCE_HEIGHTS = [1.6, 0.8] as const;
+/** The cloud grows under the ski as it tops its arc. */
+const CLOUD_FADE_IN: [number, number] = [0.35, CLOUD_FLY - 0.1];
+
+const cloudLaunch = () => launch('mega-ramp', CLOUD_FLY, 2.0, CLOUD_D);
+
+/** The ski from the foot of the ramp to the cloud (d, y, pitch), true while it is still flying. */
+function cloudFlight(L: ReturnType<typeof cloudLaunch>, t: number, f: Frame): boolean {
+  const k = f.ski;
+  if (t > L.tLand) return false;
+  if (t <= L.tLip) {
+    k.d = (L.lipD * Math.max(t, 0)) / L.tLip;
+    k.y = surfaceY('mega-ramp', k.d);
+    k.wet = true;
+  } else {
+    const u = airU(L, t);
+    k.d = lerp(L.lipD, CLOUD_D, u);
+    k.y = arc(L.lipY, CLOUD_Y, L.lipY + 2.0, u);
+    k.wet = false;
+  }
+  k.pitch = basePitch(L, t);
+  return true;
+}
+
+const showCloud = (f: Frame, scale: number) => {
+  const c = f.cloud;
+  c.d = CLOUD_D;
+  c.y = CLOUD_Y;
+  c.s = 0;
+  c.scale = scale;
+  c.visible = scale > 0.001;
+};
+
+const cloudGrow = (L: ReturnType<typeof cloudLaunch>, t: number) =>
+  prog(t, L.tLip + CLOUD_FADE_IN[0], L.tLip + CLOUD_FADE_IN[1], 'o');
+
+const cottonCloudClear: Def = (() => {
+  const L = cloudLaunch();
+  const hit = L.tLand;
+  const b1 = hit + BOUNCE;
+  const b2 = b1 + BOUNCE;
+  const drift = 2.4;
+  const fall = 0.7;
+  const tDown = b2 + fall;
+  const landD = CLOUD_D + drift + 4;
+  const end = tDown + OUT_TIME;
+  const onCloud = (t: number) => CLOUD_D + (drift * (t - hit)) / (2 * BOUNCE);
+  const skiAt = (t: number, f: Frame) => {
+    const k = f.ski;
+    if (cloudFlight(L, t, f)) return;
+    if (t < b2) {
+      // Two bounces on the cloud, each lower than the last.
+      const first = t < b1;
+      const u = (t - (first ? hit : b1)) / BOUNCE;
+      k.d = onCloud(t);
+      k.y = CLOUD_Y + BOUNCE_HEIGHTS[first ? 0 : 1] * 4 * u * (1 - u);
+      k.pitch = 0.12 * Math.sin(Math.PI * u * 2);
+      k.wet = false;
+    } else if (t < tDown) {
+      // The cloud is gone: down to the water in one spin.
+      const w = (t - b2) / fall;
+      k.d = lerp(CLOUD_D + drift, landD, w);
+      k.y = CLOUD_Y * (1 - w * w);
+      k.yaw = TAU * prog(w, 0.05, 0.95, 'io');
+      k.pitch = 0.1 * Math.sin(Math.PI * w);
+      k.wet = false;
+    } else {
+      k.d = landD + OUT_SPEED * (t - tDown);
+      k.y = 0;
+      k.pitch = 0;
+      k.yaw = TAU;
+      k.wet = true;
+    }
+  };
+  const poseAt = (t: number): PoseName => {
+    if (t <= L.tLip) return 'ride';
+    if (t < b2) return 'armsUp';
+    return t < tDown + 0.5 ? 'fistPump' : 'ride';
+  };
+  return {
+    duration: end,
+    length: landD + OUT_SPEED * OUT_TIME,
+    word: 'COTTON CLOUD!',
+    slow: [b1],
+    at: (t, f) => {
+      skiAt(t, f);
+      f.rider.pose = poseAt(t);
+      f.rider.face = 'happy';
+      showCloud(f, t < b2 ? cloudGrow(L, t) : 1 - prog(t, b2, b2 + 0.3, 'o'));
+    },
+    events: (ski) => [
+      [L.tLip - 0.2, 'sfx:whoosh', L.lipD - 2, L.lipY],
+      [L.tLip, 'spray', L.lipD, L.lipY],
+      [L.tLip, 'sfx:boing', L.lipD, L.lipY],
+      [hit, 'sfx:boing', CLOUD_D, CLOUD_Y],
+      [hit, 'spray', CLOUD_D, CLOUD_Y],
+      [b1, 'sfx:boing', ski(b1).d, CLOUD_Y],
+      [b1, 'spray', ski(b1).d, CLOUD_Y],
+      [b1, 'word', ski(b1).d, CLOUD_Y + 2.4, 0],
+      [b2, 'spray', CLOUD_D + drift, CLOUD_Y],
+      [b2, 'confetti', CLOUD_D + drift, CLOUD_Y + 0.5],
+      [b2 + 0.1, 'sfx:whoosh', CLOUD_D + drift, CLOUD_Y],
+      [tDown, 'splash', landD, 0],
+      [tDown, 'sfx:splash', landD, 0],
+      [tDown + 0.2, 'cheer', landD + 2, 1],
+      [tDown + 0.2, 'confetti', landD + 3, 1.5],
+    ],
+  };
+})();
+
+const cottonCloudFail: Def = (() => {
+  const L = cloudLaunch();
+  const hit = L.tLand;
+  const melt = 0.6;
+  const enter = hit + 0.9;
+  const popUp = 0.5;
+  const end = enter + popUp + 1.0;
+  const dropD = CLOUD_D + 1.2;
+  const skiY = track([
+    [hit, CLOUD_Y],
+    [hit + 0.25, CLOUD_Y - 0.1, 'o'],
+    [enter, -0.2, 'i'],
+    [enter + 0.6, 0.05, 'o'],
+  ]);
+  const skiAt = (t: number, f: Frame) => {
+    const k = f.ski;
+    if (cloudFlight(L, t, f)) return;
+    k.d = CLOUD_D + 2.5 * prog(t, hit, enter + 0.6, 'o');
+    k.y = skiY(t);
+    // The ski tips over as the cloud goes from under it.
+    k.pitch = -0.5 * prog(t, hit + 0.3, enter, 'io');
+    k.roll = Math.PI * prog(t, hit + 0.3, enter + 0.5, 'io');
+    k.wet = t > enter + 0.3;
+  };
+  const s0 = seatAtTime(skiAt, hit + 0.2);
+  const fallTime = enter - (hit + 0.2);
+  const riderAt = (t: number, f: Frame) => {
+    if (t > L.tLip + 0.15 && t < hit + 0.2) f.rider.pose = 'tuck';
+    if (t < hit + 0.2) return;
+    const w = clamp01((t - (hit + 0.2)) / fallTime);
+    const rise = prog(t, enter, enter + popUp, 'o');
+    setFree(
+      f,
+      lerp(s0.d, dropD, prog(w, 0, 1, 'q')),
+      lerp(lerp(s0.y, -0.9, w * w), FLOAT_Y, rise),
+      1.0 * rise,
+      0,
+      lerp(0, Math.PI, rise),
+      0,
+      t < enter + 0.1 ? 'flail' : 'float',
+      t < enter + 0.1 ? 'scared' : 'soaked',
+    );
+  };
+  return {
+    duration: end,
+    word: 'MELTDOWN!',
+    at: (t, f) => {
+      skiAt(t, f);
+      riderAt(t, f);
+      // The cloud melts away under the ski.
+      showCloud(f, t < hit ? cloudGrow(L, t) : 1 - prog(t, hit + 0.1, hit + 0.1 + melt, 'l'));
+    },
+    events: (ski, rider) => [
+      [L.tLip - 0.2, 'sfx:whoosh', L.lipD - 2, L.lipY],
+      [L.tLip, 'spray', L.lipD, L.lipY],
+      [L.tLip, 'sfx:boing', L.lipD, L.lipY],
+      [hit, 'sfx:bump', CLOUD_D, CLOUD_Y],
+      ...trail(hit + 0.1, hit + 0.1 + melt, 0.12, 'drips', () => ({
+        d: CLOUD_D,
+        y: CLOUD_Y - 0.4,
+        s: 0,
+      })),
+      [hit + 0.4, 'sfx:slideWhistle', dropD, CLOUD_Y - 0.5],
+      [enter, 'bigSplash', dropD, 0.2],
+      [enter, 'sfx:splash', dropD, 0],
+      [enter, 'groan', dropD, 1],
+      [enter + 0.05, 'word', dropD, 3],
+      ...trail(enter + 0.1, enter + 0.4, 0.15, 'bubbles', rider, 0.3),
+      [enter + 0.3, 'splash', ski(enter + 0.3).d, 0],
+      [enter + 0.5, 'drips', rider(enter + 0.5).d, 0.6, rider(enter + 0.5).s],
+    ],
+  };
+})();
+
+export const COTTON_CANDY_CLOUD: TrickDefs = { clear: cottonCloudClear, fail: cottonCloudFail };

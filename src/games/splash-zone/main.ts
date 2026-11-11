@@ -15,7 +15,7 @@ import { createTimers } from '../../shared/timers';
 import { answerOptions, promptSpeech, type Fact } from '../../shared/topics';
 import { createBackButton, createMuteButton, createPauseOverlay, menuUrl } from '../../shared/ui';
 import { swell } from './anim';
-import { createDolphin, type Dolphin } from './critters';
+import { createCloud, createDolphin, type Dolphin } from './critters';
 import { devOptions, type DevOptions, type Lab } from './dev';
 import { createEffects, type EffectKind } from './effects';
 import { createHud } from './hud';
@@ -245,6 +245,9 @@ function run(session: GameSession, dev: DevOptions | null): void {
     scene.add(d.object);
   }
 
+  const cloud = createCloud();
+  scene.add(cloud.object);
+
   // Coins in trails.
   const coinMaterial = new MeshStandardMaterial({
     color: 0xffd43b,
@@ -471,6 +474,11 @@ function run(session: GameSession, dev: DevOptions | null): void {
       dolphin.object.position.set(d.s, d.y, entryZ - d.d);
       dolphin.pose(d.phase);
     });
+    cloud.object.visible = f.cloud.visible;
+    if (f.cloud.visible) {
+      cloud.object.position.set(f.cloud.s, f.cloud.y, entryZ - f.cloud.d);
+      cloud.pose(f.cloud.scale);
+    }
     // The camera follows the ski, or the middle of the ski and a rider thrown clear of it.
     const target = focusOf(f);
     focus.set(target.s, target.y, entryZ - target.d);
@@ -1581,6 +1589,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     rider.setMode('seated', active().seat, scene);
     rider.setProps(false, false);
     dolphins.forEach((d) => (d.object.visible = false));
+    cloud.object.visible = false;
     boat.object.visible = false;
     skis[1].object.visible = false;
     activeIndex = 0;
@@ -1769,6 +1778,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     for (const ski of skis) ski.dispose();
     boat.dispose();
     dolphins.forEach((d) => d.dispose());
+    cloud.dispose();
     launchers.dispose();
     megaPool.dispose();
     gates.forEach((gate) => gate.dispose());

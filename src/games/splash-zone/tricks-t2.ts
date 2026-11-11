@@ -1,5 +1,5 @@
 /**
- * Tier 2 tricks, off the kicker ramp: Backflip, Barrel Roll and Helicopter, each with the version
+ * Tier 2 tricks, off the kicker ramp: Backflip, Barrel Roll, Helicopter and Sugar Spin, each with the version
  * where it goes wrong. Every builder returns a `Def` (see `anim.ts`).
  */
 import {
@@ -362,3 +362,102 @@ const helicopterFail: Def = (() => {
 export const BACKFLIP: TrickDefs = { clear: backflipClear, fail: backflipFail };
 export const BARREL_ROLL: TrickDefs = { clear: barrelRollClear, fail: barrelRollFail };
 export const HELICOPTER: TrickDefs = { clear: helicopterClear, fail: helicopterFail };
+
+// ---------- Sugar Spin ----------
+
+const sugarSpinClear = clearDef({
+  launcher: 'kicker',
+  air: 1.7,
+  peak: 2.8,
+  word: 'SUGAR SPIN!',
+  yaw: (u) => TAU * prog(u, 0.1, 0.9, 'io'),
+  pose: (t, L) => {
+    if (t <= L.tLip) return 'ride';
+    return t < L.tLand + 0.4 ? 'fistPump' : 'ride';
+  },
+  // The rainbow sprinkle ribbon from the lip to the landing, and a burst where it comes down.
+  extra: (L, ski) => [
+    ...trail(L.tLip, L.tLand, 0.08, 'confetti', ski),
+    [L.tLand, 'confetti', L.land, 1],
+    [L.tLand + 0.05, 'confetti', L.land + 1, 1.5],
+  ],
+});
+
+const sugarSpinFail: Def = (() => {
+  const L = launch('kicker', 1.7, 2.8);
+  const hit = L.tLand;
+  const out = { d: 0, y: 0 };
+  const sideways = Math.PI / 2;
+  const drift = track([
+    [hit, L.land],
+    [hit + 1.0, L.land + 2.0, 'o'],
+  ]);
+  const bob = track([
+    [hit, 0],
+    [hit + 0.2, -0.25, 'o'],
+    [hit + 0.8, 0.1],
+  ]);
+  const skiAt = (t: number, f: Frame) => {
+    const k = f.ski;
+    flight(L, t, out);
+    const u = airU(L, t);
+    k.pitch = basePitch(L, t);
+    // The spin stalls half way round and the ski comes down sideways.
+    k.yaw = lerp(Math.PI * prog(u, 0.1, 0.5, 'o'), sideways, prog(u, 0.5, 1, 'io'));
+    if (t < hit) {
+      k.d = out.d;
+      k.y = out.y;
+      k.wet = t <= L.tLip;
+    } else {
+      k.d = drift(t);
+      k.y = bob(t);
+      k.wet = true;
+    }
+  };
+  const s0 = seatAtTime(skiAt, hit);
+  const slap = 0.4;
+  const sitUp = hit + 0.9;
+  const end = sitUp + 1.2;
+  const riderAt = (t: number, f: Frame) => {
+    if (t < hit) {
+      if (t > L.tLip + 0.2) f.rider.pose = 'flail';
+      return;
+    }
+    const u = prog(t, hit, hit + slap, 'o');
+    const up = prog(t, sitUp, sitUp + 0.5, 'o');
+    setFree(
+      f,
+      lerp(s0.d, L.land + 1.5, u),
+      lerp(lerp(s0.y, FLAT_Y, u), FLOAT_Y, up),
+      1.8 * u,
+      0,
+      lerp(0, Math.PI, up),
+      0,
+      t < sitUp ? 'flail' : 'float',
+      t < sitUp ? 'scared' : 'soaked',
+    );
+  };
+  return {
+    duration: end,
+    word: 'STICKY LANDING!',
+    at: (t, f) => {
+      skiAt(t, f);
+      riderAt(t, f);
+    },
+    events: (ski, rider) => [
+      [L.tLip - 0.2, 'sfx:whoosh', L.lipD - 2, L.lipY],
+      [L.tLip, 'spray', L.lipD, L.lipY],
+      [L.tLip, 'sfx:boing', L.lipD, L.lipY],
+      ...trail(L.tLip, L.tLip + 0.5, 0.08, 'confetti', ski),
+      [hit, 'splash', L.land, 0],
+      [hit, 'bigSplash', L.land, 0.3, 1.0],
+      [hit, 'sfx:splash', L.land, 0],
+      [hit, 'groan', L.land, 1],
+      [hit + 0.05, 'word', L.land, 3],
+      ...trail(hit + 0.1, sitUp - 0.1, 0.15, 'bubbles', rider, 0.3),
+      [sitUp + 0.2, 'drips', L.land + 1.5, 0.6, 1.8],
+    ],
+  };
+})();
+
+export const SUGAR_SPIN: TrickDefs = { clear: sugarSpinClear, fail: sugarSpinFail };
