@@ -1,5 +1,5 @@
 /**
- * The ten obstacles, built from bright painted primitives. Each one's group has its origin at
+ * The 13 obstacles, built from bright painted primitives. Each one's group has its origin at
  * the entry line on the road. `update(outcome, variant, t)` poses the props for any moment of any
  * stunt (the same timeline the bike follows), `ambient(time)` keeps the idle bits moving, and
  * `reset()` puts everything back for the next ride.
@@ -26,9 +26,16 @@ import {
 import { Kit, lerp, ribbon, ribbonMaterial, smooth, type Placed } from './kit';
 import type { ObstacleKind, Outcome, Variant } from './rules';
 import {
+  BALL_COUNT,
+  ballAt,
+  BARREL_COUNT,
+  barrelAt,
   BRIDGE_FROM,
   BRIDGE_PLANKS,
   BRIDGE_TO,
+  CANNON,
+  cannonKicker,
+  cannonRecoil,
   CANYON_FLOOR,
   CRATE_COUNT,
   coasterSurface,
@@ -36,6 +43,7 @@ import {
   createFrame,
   fly,
   halfpipeSurface,
+  HAY,
   HP_CXL,
   HP_CXR,
   HP_DECK_L0,
@@ -55,6 +63,8 @@ import {
   PG_ICE_FROM,
   PG_ICE_TO,
   PG_LANE_Z,
+  PIT_FROM,
+  PIT_TO,
   plankAt,
   POOL_FLOOR,
   POOL_FROM,
@@ -70,10 +80,18 @@ import {
   SEESAW_TILT,
   SEESAW_TO,
   seesawAngle,
+  slideSurface,
+  SLIDE_END,
+  SLIDE_START,
+  SLIDE_TOP,
   SPECS,
   stuntBeats,
   stuntFrame,
   TAU,
+  trampolineDip,
+  TRAMP_W,
+  TRAMP_X,
+  TRAMP_Y,
   WATER_Y,
   WR_L,
   WR_PX,
@@ -1238,6 +1256,233 @@ function buildWrecker(kit: Kit): Built {
   };
 }
 
+// ---------- Cannon wall ----------
+
+function buildCannon(kit: Kit): Built {
+  const group = new Group();
+  kit.mesh(ribbon(cannonKicker, 0, 3, 0.5, 0, 1.5, RED, WHITE), ribbonMaterial(kit), group);
+  const wood = kit.lit(WOOD, 0.8);
+  const woodDark = kit.lit(0x6b4220, 0.9);
+  const lid = kit.lit(0xe0b274, 0.8);
+  const iron = kit.lit(0x2b3140, 0.45);
+  // The wall of barrels, on their sides so the round ends face the camera.
+  const barrels: Group[] = [];
+  for (let i = 0; i < BARREL_COUNT; i++) {
+    const roll = new Group();
+    const body = new Group();
+    body.rotation.x = Math.PI / 2;
+    roll.add(body);
+    const side = new CylinderGeometry(0.45, 0.45, 1.3, 16);
+    kit.geometries.push(side);
+    body.add(new Mesh(side, [wood, lid, lid]));
+    for (const dy of [-0.4, 0.4]) {
+      kit.mesh(new CylinderGeometry(0.47, 0.47, 0.1, 16), woodDark, body, 0, dy, 0);
+    }
+    group.add(roll);
+    barrels.push(roll);
+  }
+  // The cannon on its red cart, behind the lane.
+  const cart = new Group();
+  cart.position.set(CANNON.x, 0, CANNON.z);
+  group.add(cart);
+  kit.box(1.9, 0.45, 1, kit.lit(RED, 0.5), cart, 0, 0.62, 0);
+  for (const dx of [-0.6, 0.6]) {
+    for (const dz of [-0.55, 0.55]) {
+      const wheel = kit.mesh(new CylinderGeometry(0.38, 0.38, 0.14, 14), iron, cart, dx, 0.38, dz);
+      wheel.rotation.x = Math.PI / 2;
+    }
+  }
+  const tube = new Group();
+  tube.position.set(0, CANNON.pivotY, 0);
+  tube.rotation.z = CANNON.angle;
+  cart.add(tube);
+  const bore = kit.mesh(new CylinderGeometry(0.36, 0.44, CANNON.length, 16), iron, tube);
+  bore.rotation.z = -Math.PI / 2;
+  const mouth = kit.mesh(new CylinderGeometry(0.46, 0.46, 0.16, 16), kit.lit(0x4a5370, 0.4), tube);
+  mouth.rotation.z = -Math.PI / 2;
+  mouth.position.x = CANNON.length / 2;
+  // The hay the rider lands in.
+  const hay = kit.lit(0xe8c85a, 0.9);
+  const strap = kit.lit(0x9a6a3a, 0.9);
+  const bales: [number, number][] = [
+    [HAY.from + 0.4, 0.28],
+    [HAY.from + 1.2, 0.28],
+    [HAY.from + 0.8, 0.84],
+  ];
+  for (const [x, y] of bales) {
+    kit.box(0.8, 0.55, 0.8, hay, group, x, y, HAY.z);
+    kit.box(0.06, 0.57, 0.82, strap, group, x - 0.15, y, HAY.z);
+    kit.box(0.06, 0.57, 0.82, strap, group, x + 0.15, y, HAY.z);
+  }
+  const apply = (outcome: Outcome, variant: Variant, t: number) => {
+    for (let i = 0; i < BARREL_COUNT; i++) {
+      barrelAt(outcome, variant, i, t, piece);
+      barrels[i].position.set(piece.x, piece.y, 0);
+      barrels[i].rotation.z = piece.rot;
+    }
+    const kick = cannonRecoil(outcome, variant, t);
+    bore.position.x = -0.35 * kick;
+    mouth.position.x = CANNON.length / 2 - 0.35 * kick;
+    cart.position.x = CANNON.x - 0.12 * kick;
+  };
+  return {
+    group,
+    update: apply,
+    ambient() {},
+    reset() {
+      apply('clear', 0, 0);
+    },
+  };
+}
+
+// ---------- Giant slide ----------
+
+function buildSlide(kit: Kit): Built {
+  const group = new Group();
+  const rib = ribbonMaterial(kit);
+  // The stair-ramp up, with its steps drawn on the side.
+  kit.mesh(ribbon(slideSurface, 1, 6, 0.5, 0, 1.5, 0x6f93e8, 0x8fb4ff), rib, group);
+  const stepColor = kit.lit(0x2b4a99, 0.7);
+  for (let k = 0; k < 6; k++) {
+    const x = 1.7 + k * 0.8;
+    kit.box(0.7, 0.1, 0.06, stepColor, group, x, slideSurface(x) - 0.2, 1.52);
+  }
+  // The platform with two posts and a flag.
+  const yellow = kit.lit(0xffd43b, 0.5);
+  kit.mesh(ribbon(slideSurface, 6, SLIDE_START, 0.6, 0, 1.5, 0xffd43b, 0xffc21a), rib, group);
+  for (const z of [-1.3, 1.3]) {
+    kit.box(0.16, 1.2, 0.16, yellow, group, 6.2, SLIDE_TOP + 0.6, z);
+  }
+  kit.box(0.14, 0.14, 2.6, yellow, group, 6.2, SLIDE_TOP + 1.2, 0);
+  kit.box(0.06, 0.6, 0.06, kit.lit(0x8791a8, 0.5), group, 6.2, SLIDE_TOP + 1.5, -1.3);
+  kit.box(0.6, 0.3, 0.04, kit.lit(RED, 0.6), group, 6.5, SLIDE_TOP + 1.65, -1.3);
+  // The slide itself, red and yellow with side rails.
+  kit.mesh(ribbon(slideSurface, SLIDE_START, SLIDE_END, 0.45, 0, 1.1, RED, 0xffd43b), rib, group);
+  for (const z of [-1.1, 1.1]) {
+    const top = (x: number) => slideSurface(x) + 0.35;
+    kit.mesh(
+      ribbon(top, SLIDE_START, SLIDE_END, 0.45, slideSurface, 0.06, WHITE, WHITE, z),
+      rib,
+      group,
+    );
+  }
+  // The ball pit: a blue bin (its walls only behind the lane), filler balls and the live ones.
+  const blue = kit.lit(BLUE, 0.5);
+  const pitMid = (PIT_FROM + PIT_TO) / 2;
+  kit.box(PIT_TO - PIT_FROM + 0.4, 1.1, 0.15, blue, group, pitMid, 0.55, -1.9);
+  for (const x of [PIT_FROM - 0.1, PIT_TO + 0.1]) {
+    kit.box(0.15, 1.1, 1.5, blue, group, x, 0.55, -1.15);
+  }
+  const colors = [0xe8403a, 0xffd43b, 0x4cc46a, 0x3aa0ff, 0xff8fd0].map((c) => kit.lit(c, 0.35));
+  const ballGeometry = new SphereGeometry(0.3, 12, 10);
+  kit.geometries.push(ballGeometry);
+  let filler = 0;
+  for (let x = PIT_FROM + 0.3; x < PIT_TO; x += 0.5) {
+    for (let z = -1.5; z <= 1.5; z += 0.6) {
+      const ball = new Mesh(ballGeometry, colors[filler++ % colors.length]);
+      ball.position.set(x + ((filler * 7) % 3) * 0.05, 0.55 + ((filler * 5) % 4) * 0.05, z);
+      group.add(ball);
+    }
+  }
+  const balls: Mesh[] = [];
+  for (let i = 0; i < BALL_COUNT; i++) {
+    const ball = new Mesh(ballGeometry, colors[(i * 2) % colors.length]);
+    group.add(ball);
+    balls.push(ball);
+  }
+  const apply = (outcome: Outcome, variant: Variant, t: number) => {
+    for (let i = 0; i < BALL_COUNT; i++) {
+      ballAt(outcome, variant, i, t, piece);
+      balls[i].position.set(piece.x, piece.y, ((i * 7) % 5) * 0.5 - 1);
+      balls[i].rotation.z = piece.rot;
+    }
+  };
+  return {
+    group,
+    update: apply,
+    ambient() {},
+    reset() {
+      apply('clear', 0, 0);
+    },
+  };
+}
+
+// ---------- Trampoline park ----------
+
+function buildTrampolines(kit: Kit): Built {
+  const group = new Group();
+  const red = kit.lit(RED, 0.6);
+  const white = kit.lit(WHITE, 0.6);
+  const steel = kit.lit(0x8791a8, 0.5);
+  const sheetMaterial = kit.lit(0x2f7cf0, 0.45);
+  const sheets: Mesh[] = [];
+  for (const cx of TRAMP_X) {
+    const tramp = new Group();
+    tramp.position.set(cx, 0, 0);
+    group.add(tramp);
+    for (const sx of [-1.15, 1.15]) {
+      for (const sz of [-0.9, 0.9]) {
+        kit.box(0.12, TRAMP_Y - 0.15, 0.12, steel, tramp, sx, 0.28, sz);
+      }
+    }
+    // The padded rim, in red and white segments.
+    for (let k = 0; k < 4; k++) {
+      const x = -0.975 + k * 0.65;
+      const m = k % 2 ? white : red;
+      kit.box(0.65, 0.18, 0.24, m, tramp, x, TRAMP_Y - 0.17, 1.0);
+      kit.box(0.65, 0.18, 0.24, m, tramp, x, TRAMP_Y - 0.17, -1.0);
+    }
+    for (const sx of [-1.19, 1.19]) {
+      kit.box(0.24, 0.24, 0.8, red, tramp, sx, TRAMP_Y - 0.1, 0.5);
+      kit.box(0.24, 0.24, 0.8, white, tramp, sx, TRAMP_Y - 0.1, -0.5);
+    }
+    sheets.push(kit.box(TRAMP_W - 0.3, 0.07, 1.8, sheetMaterial, tramp, 0, TRAMP_Y - 0.04, 0));
+  }
+  // Two tall striped poles with a line of bunting between them.
+  const POLE_H = 6.4;
+  for (const x of [2.5, 15.5]) {
+    for (let k = 0; k < 8; k++) {
+      const piece = new CylinderGeometry(0.14, 0.14, POLE_H / 8, 10);
+      kit.mesh(piece, k % 2 ? white : red, group, x, (POLE_H / 8) * (k + 0.5), -1.1);
+    }
+    kit.mesh(new SphereGeometry(0.22, 10, 8), kit.lit(GOLD, 0.4), group, x, POLE_H + 0.1, -1.1);
+  }
+  const line = new CatmullRomCurve3([
+    new Vector3(2.5, POLE_H, -1.1),
+    new Vector3(6, POLE_H - 0.55, -1.1),
+    new Vector3(9, POLE_H - 0.75, -1.1),
+    new Vector3(12, POLE_H - 0.55, -1.1),
+    new Vector3(15.5, POLE_H, -1.1),
+  ]);
+  kit.mesh(new TubeGeometry(line, 24, 0.03, 4), steel, group);
+  const flagColors = [RED, 0xffd43b, 0x4cc46a, 0x3aa0ff, 0xff8fd0].map((c) => kit.lit(c, 0.6));
+  const flags: Mesh[] = [];
+  for (let i = 0; i < 14; i++) {
+    const p = line.getPoint((i + 0.5) / 14);
+    const flag = kit.mesh(new ConeGeometry(0.2, 0.45, 3), flagColors[i % flagColors.length], group);
+    flag.position.set(p.x, p.y - 0.25, p.z);
+    flag.rotation.x = Math.PI;
+    flags.push(flag);
+  }
+  const apply = (outcome: Outcome, variant: Variant, t: number) => {
+    for (let i = 0; i < sheets.length; i++) {
+      sheets[i].position.y = TRAMP_Y - 0.04 - trampolineDip(outcome, variant, i, t);
+    }
+  };
+  return {
+    group,
+    update: apply,
+    ambient(time) {
+      for (let i = 0; i < flags.length; i++) {
+        flags[i].rotation.z = 0.18 * Math.sin(time * 2.2 + i * 0.8);
+      }
+    },
+    reset() {
+      apply('clear', 0, 0);
+    },
+  };
+}
+
 const BUILDERS: Record<ObstacleKind, (kit: Kit) => Built> = {
   loop: buildLoop,
   ramp: buildRamp,
@@ -1249,6 +1494,9 @@ const BUILDERS: Record<ObstacleKind, (kit: Kit) => Built> = {
   halfpipe: buildHalfpipe,
   penguins: buildPenguins,
   wrecker: buildWrecker,
+  cannon: buildCannon,
+  slide: buildSlide,
+  trampolines: buildTrampolines,
 };
 
 const CUTS: Record<ObstacleKind, readonly [number, number] | null> = {
@@ -1262,6 +1510,9 @@ const CUTS: Record<ObstacleKind, readonly [number, number] | null> = {
   halfpipe: null,
   penguins: null,
   wrecker: null,
+  cannon: null,
+  slide: null,
+  trampolines: null,
 };
 
 export function createObstacle(kind: ObstacleKind): Obstacle {

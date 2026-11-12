@@ -1,5 +1,5 @@
 /**
- * The 40 stunts as authored animations: keyframe tracks in obstacle-local coordinates (x = 0 at
+ * The 52 stunts as authored animations: keyframe tracks in obstacle-local coordinates (x = 0 at
  * the obstacle's entry line, y up, the road's top surface at y = 0). Pure data and maths, no
  * three.js and no DOM, so the sampler is easy to test and the stunt lab can play any moment of
  * any stunt. `stuntFrame(kind, outcome, variant, t)` says where the bike and the rider are.
@@ -127,6 +127,9 @@ export const SPECS: Record<ObstacleKind, StuntSpec> = {
   halfpipe: { kind: 'halfpipe', length: 18, floorY: 0, height: 5.6 },
   penguins: { kind: 'penguins', length: 16, floorY: 0, height: 3.0 },
   wrecker: { kind: 'wrecker', length: 18, floorY: 0, height: 5.5 },
+  cannon: { kind: 'cannon', length: 16, floorY: 0, height: 4.6 },
+  slide: { kind: 'slide', length: 20, floorY: 0, height: 5.6 },
+  trampolines: { kind: 'trampolines', length: 18, floorY: 0, height: 6.6 },
 };
 
 // ---------- Keyframes and easing ----------
@@ -3647,6 +3650,1055 @@ const wreckerCrash1: Def = (() => {
   };
 })();
 
+// ----- Cannon wall -----
+
+export const cannonKicker: Surface = (x) => (x <= 0 ? 0 : x <= 3 ? kicker(x, 0.9, 3) : 0);
+export const BARREL_COUNT = 8;
+/** The wall is 2 barrels wide and 4 high (barrels on their sides); barrel `i` has this centre. */
+export const barrelHome = (i: number): Pos => ({
+  x: 8 + (i % 2) * 1.1,
+  y: 0.5 + Math.floor(i / 2) * 0.9,
+});
+/** The cannon on its red cart, behind the lane: its pivot and how its tube points. */
+export const CANNON = { x: 5.2, z: -1, pivotY: 0.95, angle: (35 * Math.PI) / 180, length: 1.5 };
+const MUZZLE: Pos = {
+  x: CANNON.x + CANNON.length * Math.cos(CANNON.angle),
+  y: CANNON.pivotY + CANNON.length * Math.sin(CANNON.angle),
+};
+/** The hay bales: from x = 13 to 14.5, a little behind the lane. */
+export const HAY = { from: 13, to: 14.5, z: -0.7 };
+const CN_X0 = 2.2; // the bike's middle when its front wheel reaches the lip
+const CN_WALL_X = 8.55;
+const cnLaunch = (() => {
+  const f = createFrame();
+  ride(f, cannonKicker, CN_X0);
+  return { x: f.bike.x, y: f.bike.y, pitch: f.bike.pitch };
+})();
+
+function cannonClear(variant: Variant): Def {
+  const flip = variant === 1;
+  const duration = flip ? 2.4 : 2.2;
+  const tLip = 0.25;
+  const tLand = flip ? 1.35 : 1.25;
+  const xLand = 12.5;
+  const endPitch = -0.25;
+  const base = flip ? -TAU : 0;
+  const tPass = lerp(tLip, tLand, (CN_WALL_X - cnLaunch.x) / (xLand - cnLaunch.x));
+  const midX = track([
+    [0, 0],
+    [tLip, CN_X0, 'l'],
+  ]);
+  const xm = track([
+    [tLand, xLand],
+    [duration, 16, 'l'],
+  ]);
+  const squash = track([
+    [tLand, 1],
+    [tLand + 0.08, 0.88],
+    [tLand + 0.4, 1, 'o'],
+  ]);
+  const pose = flip
+    ? steps<PoseName>([
+        [0, 'ride'],
+        [0.4, 'duck'],
+        [tPass - 0.1, 'armsUp'],
+        [tLand + 0.4, 'ride'],
+      ])
+    : steps<PoseName>([
+        [0, 'ride'],
+        [0.45, 'armsUp'],
+        [tLand + 0.25, 'ride'],
+      ]);
+  const at = (t: number, f: Frame) => {
+    if (t < tLip) {
+      ride(f, cannonKicker, midX(t), settleAt(t));
+    } else if (t < tLand) {
+      const u = (t - tLip) / (tLand - tLip);
+      f.bike.x = lerp(cnLaunch.x, xLand, u);
+      f.bike.y = arc(cnLaunch.y, BIKE_Y, 5.2, u);
+      f.bike.pitch = flip
+        ? lerp(cnLaunch.pitch, -TAU, prog(u, 0.08, 0.6)) + endPitch * prog(u, 0.6, 1, 'l')
+        : lerp(cnLaunch.pitch, endPitch, EASE.io(u));
+      f.bike.grounded = false;
+    } else {
+      f.bike.x = xm(t);
+      f.bike.pitch = base + endPitch * (1 - prog(t, tLand, tLand + 0.15, 'o'));
+      f.bike.squash = squash(t);
+    }
+    f.rider.pose = pose(t);
+  };
+  return {
+    duration,
+    word: flip ? 'BARREL ROLL!' : 'KABOOM!',
+    beats: { pass: tPass, fire: tPass, land: tLand },
+    at,
+    events: () => {
+      const fired: Ev[] = flip
+        ? [
+            [tLand, 'confetti', xLand, 1.5],
+            [tLand + 0.2, 'confetti', xLand + 0.6, 2],
+          ]
+        : [
+            [tPass, 'confetti', MUZZLE.x + 0.6, MUZZLE.y + 0.4],
+            [tPass + 0.1, 'confetti', MUZZLE.x + 1.2, MUZZLE.y + 1],
+          ];
+      return [
+        [tPass, 'word', CN_WALL_X, 4.8],
+        [tPass, 'sfx:boom', MUZZLE.x, MUZZLE.y],
+        [tPass, 'smoke', MUZZLE.x + 0.3, MUZZLE.y + 0.2],
+        ...fired,
+        [tLand, 'dust', xLand, 0.1],
+        [duration * 0.7, 'cheer', 13, 2],
+      ];
+    },
+  };
+}
+const cannonClear0 = cannonClear(0);
+const cannonClear1 = cannonClear(1);
+
+const cannonCrash0: Def = (() => {
+  const duration = 3.4;
+  const tLip = 0.25;
+  const tHit = 0.7;
+  const hit = { x: 6.4, y: 3.1 };
+  const tFall = 1.2;
+  const tSit = 1.45;
+  const sit = { x: 6.2, y: 0.2 };
+  const midX = track([
+    [0, 0],
+    [tLip, CN_X0, 'l'],
+  ]);
+  const hip = (() => {
+    const h = hipOf(hit.x, hit.y, 0.5);
+    return { x: h.x, y: h.y };
+  })();
+  const bikeX = track([
+    [tHit, hit.x],
+    [tFall, 4.9, 'o'],
+  ]);
+  const bikeY = track([
+    [tHit, hit.y],
+    [tFall, 0.34, 'i'],
+  ]);
+  const at = (t: number, f: Frame) => {
+    if (t < tLip) {
+      ride(f, cannonKicker, midX(t), settleAt(t));
+    } else if (t < tHit) {
+      const u = (t - tLip) / (tHit - tLip);
+      f.bike.x = lerp(cnLaunch.x, hit.x, u);
+      f.bike.y = arc(cnLaunch.y, hit.y, 3.4, u);
+      f.bike.pitch = lerp(cnLaunch.pitch, 0.5, u);
+      f.bike.grounded = false;
+    } else {
+      f.bike.x = bikeX(t);
+      f.bike.y = bikeY(t);
+      f.bike.pitch = lerp(0.5, 0, prog(t, tHit, tFall, 'o'));
+      f.bike.roll = 1.5 * prog(t, tHit + 0.1, tFall);
+      f.bike.grounded = t >= tFall;
+      f.bike.squash = t < tHit + 0.1 ? 0.8 : lerp(0.8, 0.95, prog(t, tHit + 0.1, 1.3, 'o'));
+    }
+    if (t >= tHit - 0.15) f.rider.face = 'scared';
+    if (t >= tHit) {
+      if (t < tSit) {
+        const u = prog(t, tHit, tSit, 'l');
+        setFree(
+          f,
+          lerp(hip.x, sit.x, u),
+          arc(hip.y, sit.y, hip.y + 0.7, u),
+          lerp(0.5, -TAU, EASE.io(u)),
+          'flail',
+          'scared',
+        );
+      } else {
+        setFree(f, sit.x, sit.y, -TAU, 'sit', 'dizzy');
+      }
+    }
+  };
+  return {
+    duration,
+    word: 'TIMBER!',
+    beats: { hit: tHit, fall: tFall, sit: tSit },
+    at,
+    events: () => [
+      [tHit, 'word', 8.4, 4.4],
+      [tHit, 'groan', hit.x, hit.y],
+      [tHit, 'sfx:crash', 7.6, 3.2],
+      [tHit, 'debris', 7.7, 3.3],
+      [tHit + 0.06, 'debris', 8.3, 3.8],
+      [tHit + 0.8, 'sfx:bump', 10.6, 0.5],
+      [tHit + 0.8, 'dust', 10.8, 0.3],
+      [tSit, 'dust', sit.x, 0.2],
+      [2.0, 'stars', sit.x, 1.8],
+    ],
+  };
+})();
+
+const cannonCrash1: Def = (() => {
+  const duration = 3.6;
+  const tLip = 0.25;
+  const tHit = 0.65;
+  const tFire = 1.0;
+  const tLand = 2.15;
+  const tDown = 0.5;
+  const stopX = 4.3;
+  const hay = { x: 13.8, y: 0.75 };
+  const midX = track([
+    [0, 0],
+    [tLip, CN_X0, 'l'],
+  ]);
+  const rollX = track([
+    [tDown, 3.4],
+    [tHit, stopX, 'l'],
+  ]);
+  // The bike drifts towards the cart as it goes.
+  const zm = track([
+    [tLip, 0],
+    [tHit, CANNON.z],
+  ]);
+  // The nose pops up at the cart, hangs, then rocks down.
+  const nose = track([
+    [tHit, 0],
+    [tHit + 0.12, 0.55, 'o'],
+    [1.5, 0.55],
+    [1.75, 0, 'i'],
+    [1.9, 0.1, 'o'],
+    [2.05, 0],
+  ]);
+  const seat0 = (() => {
+    const h = hipOf(stopX, BIKE_Y, 0);
+    return { x: h.x, y: h.y };
+  })();
+  const at = (t: number, f: Frame) => {
+    if (t < tLip) {
+      ride(f, cannonKicker, midX(t), settleAt(t));
+    } else if (t < tDown) {
+      // A short hop off the kicker.
+      const u = (t - tLip) / (tDown - tLip);
+      f.bike.x = lerp(cnLaunch.x, 3.4, u);
+      f.bike.y = arc(cnLaunch.y, BIKE_Y, 1.5, u);
+      f.bike.pitch = lerp(cnLaunch.pitch, 0, EASE.o(u));
+      f.bike.grounded = false;
+    } else if (t < tHit) {
+      ride(f, flatRoad, rollX(t));
+    }
+    if (t >= tLip) f.bike.z = zm(t);
+    if (t >= tHit) {
+      rearRide(f, flatRoad, stopX - REAR, nose(t));
+      f.bike.z = CANNON.z;
+      f.bike.grounded = nose(t) < 0.05;
+      f.bike.squash = t < tHit + 0.1 ? 0.8 : lerp(0.8, 1, prog(t, tHit + 0.1, tHit + 0.4, 'o'));
+    }
+    if (t >= tHit - 0.12) f.rider.face = 'scared';
+    if (t >= tHit) {
+      if (t < tFire) {
+        const u = prog(t, tHit, tFire, 'l');
+        setFree(
+          f,
+          lerp(seat0.x, MUZZLE.x, u),
+          arc(seat0.y, MUZZLE.y, 2.5, u),
+          lerp(0, -1, u),
+          'flail',
+          'scared',
+        );
+      } else if (t < tLand) {
+        const u = prog(t, tFire, tLand, 'l');
+        setFree(
+          f,
+          lerp(MUZZLE.x, hay.x, u),
+          arc(MUZZLE.y, hay.y, 5, u),
+          lerp(-1, -TAU, EASE.io(u)),
+          'flail',
+          'scared',
+        );
+      } else {
+        setFree(f, hay.x, hay.y, -TAU, 'sit', 'dizzy');
+      }
+    }
+  };
+  return {
+    duration,
+    word: 'CANNONBALL!',
+    beats: { hit: tHit, fire: tFire, land: tLand },
+    at,
+    events: () => [
+      [tHit, 'sfx:bump', stopX + 1, 1],
+      [tHit, 'dust', stopX + 0.8, 0.2],
+      [tFire, 'word', 7, 3.4],
+      [tFire, 'sfx:boom', MUZZLE.x, MUZZLE.y],
+      [tFire, 'flame', MUZZLE.x + 0.3, MUZZLE.y + 0.2],
+      [tFire + 0.05, 'smoke', MUZZLE.x + 0.4, MUZZLE.y + 0.4],
+      [tFire + 0.2, 'smoke', MUZZLE.x + 0.9, MUZZLE.y + 0.8],
+      [tLand, 'groan', hay.x, hay.y],
+      [tLand, 'sfx:bump', hay.x, hay.y],
+      [tLand, 'dust', hay.x, hay.y + 0.2, 0xe8c85a],
+      [tLand + 0.3, 'stars', hay.x, 2.3],
+    ],
+  };
+})();
+
+/** Barrel `i` of the wall at time `t`: home, or (TIMBER!) tumbling off the top over the far side. */
+export function barrelAt(
+  outcome: Outcome,
+  variant: Variant,
+  i: number,
+  t: number,
+  out: Piece = { x: 0, y: 0, rot: 0, scale: 1, visible: true },
+): Piece {
+  const h = barrelHome(i);
+  out.x = h.x;
+  out.y = h.y;
+  out.rot = 0;
+  out.scale = 1;
+  out.visible = true;
+  if (outcome !== 'crash' || variant !== 0 || i < 2) return out;
+  const row = Math.floor(i / 2);
+  const col = i % 2;
+  const dt = t - def('cannon', outcome, variant).beats.hit - 0.05 * (3 - row);
+  if (dt <= 0) return out;
+  const vx = i === 7 ? 4.2 : 1.8 + col * 0.9 + (row - 1) * 0.5;
+  const vy = 2 + (3 - row) * 0.9 + col * 0.6;
+  const spin = (col ? 1 : -1) * (3 + (i % 3) * 1.5);
+  return fly(h.x, h.y, vx, vy, 0, spin, 0.45, dt, out);
+}
+
+/** How far the cannon kicks back, 0 to 1: out in 0.15 s, home in 0.4 s after the shot. */
+export function cannonRecoil(outcome: Outcome, variant: Variant, t: number): number {
+  const fire = def('cannon', outcome, variant).beats.fire as number | undefined;
+  if (fire === undefined) return 0;
+  const dt = t - fire;
+  if (dt <= 0 || dt >= 0.55) return 0;
+  return dt < 0.15 ? smooth(dt / 0.15) : 1 - smooth((dt - 0.15) / 0.4);
+}
+
+// ----- Giant slide -----
+
+export const SLIDE_TOP = 4.2;
+export const PIT_Y = 0.9;
+export const SLIDE_START = 7.2;
+export const SLIDE_END = 13.5;
+export const PIT_FROM = 14;
+export const PIT_TO = 18;
+export const BALL_COUNT = 14;
+
+/** The stair-ramp up, the platform, the slide down and the ball pit (ridden on top of the balls). */
+export function slideSurface(x: number): number {
+  if (x <= 1) return 0;
+  if (x <= 6) {
+    const v = (x - 1) / 5;
+    return SLIDE_TOP * (0.7 * v + 0.3 * v * v);
+  }
+  if (x <= SLIDE_START) return SLIDE_TOP;
+  if (x <= SLIDE_END) {
+    const v = (x - SLIDE_START) / (SLIDE_END - SLIDE_START);
+    return SLIDE_TOP - (SLIDE_TOP - PIT_Y) * (1 - (1 - v) ** 2.2);
+  }
+  return x <= PIT_TO ? PIT_Y : 0;
+}
+
+const slopeAt = (x: number) => Math.atan2(slideSurface(x + 0.25) - slideSurface(x - 0.25), 0.5);
+/** The bike's frame origin while it sits sunk in the balls. */
+const PIT_BIKE_Y = BIKE_Y + 0.5;
+const SL_SLIDE_X = 13.3; // the bike's middle at the slide's lip
+const slEdge = (() => {
+  const f = createFrame();
+  ride(f, slideSurface, SL_SLIDE_X);
+  return { x: f.bike.x, y: f.bike.y, pitch: f.bike.pitch };
+})();
+
+/** Up the ramp, over the platform and down the slide: the bike's middle by time. */
+const slRideX = track([
+  [0, 0],
+  [0.95, 6.2, 'l'],
+  [1.25, 7.7, 'l'],
+  [2.05, SL_SLIDE_X, 'i'],
+]);
+
+const slideClear0: Def = (() => {
+  const duration = 3.2;
+  const tEnd = 2.05;
+  const tSplash = 2.45;
+  const xIn = 15;
+  const xm = track([
+    [tSplash, xIn],
+    [2.95, 18.2, 'l'],
+    [duration, 20, 'l'],
+  ]);
+  const at = (t: number, f: Frame) => {
+    if (t < tEnd) {
+      ride(f, slideSurface, slRideX(t), settleAt(t));
+    } else if (t < tSplash) {
+      const u = (t - tEnd) / (tSplash - tEnd);
+      f.bike.x = lerp(slEdge.x, xIn, u);
+      f.bike.y = arc(slEdge.y, PIT_BIKE_Y, 1.6, u);
+      f.bike.pitch = lerp(slEdge.pitch, 0.1, EASE.io(u));
+      f.bike.grounded = false;
+    } else {
+      f.bike.x = xm(t);
+      f.bike.y =
+        lerp(PIT_BIKE_Y, BIKE_Y, prog(t, 2.9, 3.1)) -
+        0.25 * Math.sin(Math.PI * prog(t, tSplash, tSplash + 0.35, 'l'));
+      f.bike.pitch = 0.1 * (1 - prog(t, tSplash, tSplash + 0.3));
+      f.bike.grounded = false;
+    }
+    if (t > 1.45 && t < 2.9) f.rider.pose = 'armsUp';
+  };
+  return {
+    duration,
+    word: 'WHEEEE!',
+    beats: { top: 1.25, end: tEnd, splash: tSplash },
+    at,
+    events: () => [
+      [1.4, 'word', 8, 5.8],
+      [0.95, 'sfx:whoosh', 5, 3.5],
+      [tEnd, 'sfx:slideWhistle', SL_SLIDE_X, 2],
+      [tSplash, 'sfx:boing', xIn, 1.2],
+      [tSplash, 'confetti', xIn + 0.3, 1.6],
+      [tSplash + 0.1, 'confetti', xIn + 1, 1.8],
+      [duration * 0.7, 'cheer', 16, 2],
+    ],
+  };
+})();
+
+const slideClear1: Def = (() => {
+  const duration = 3.4;
+  const tEnd = 2.05;
+  const tSplash = 2.8;
+  const xIn = 15.6;
+  const wheelie = track([
+    [0, 0],
+    [0.3, 0],
+    [0.55, 0.55, 'o'],
+    [0.75, 0.55],
+    [1.0, 0],
+  ]);
+  const xm = track([
+    [tSplash, xIn],
+    [3.1, 18.2, 'l'],
+    [duration, 20, 'l'],
+  ]);
+  const pose = steps<PoseName>([
+    [0, 'ride'],
+    [0.5, 'wheelie'],
+    [1.0, 'ride'],
+    [tEnd + 0.15, 'armsUp'],
+    [3.0, 'ride'],
+  ]);
+  const at = (t: number, f: Frame) => {
+    if (t < tEnd) {
+      rideW(f, slideSurface, slRideX(t), wheelie(t));
+    } else if (t < tSplash) {
+      const u = (t - tEnd) / (tSplash - tEnd);
+      f.bike.x = lerp(slEdge.x, xIn, u);
+      f.bike.y = arc(slEdge.y, PIT_BIKE_Y, 3.4, u);
+      // A full backflip off the end of the slide.
+      f.bike.pitch = lerp(slEdge.pitch, TAU, EASE.io(u));
+      f.bike.grounded = false;
+    } else {
+      f.bike.x = xm(t);
+      f.bike.y =
+        lerp(PIT_BIKE_Y, BIKE_Y, prog(t, 3.1, 3.3)) -
+        0.25 * Math.sin(Math.PI * prog(t, tSplash, tSplash + 0.35, 'l'));
+      f.bike.pitch = TAU;
+      f.bike.grounded = false;
+    }
+    f.rider.pose = pose(t);
+  };
+  return {
+    duration,
+    word: 'SLIDE-TASTIC!',
+    beats: { top: 1.25, end: tEnd, splash: tSplash },
+    at,
+    events: () => [
+      [tEnd + 0.1, 'word', 14, 4.6],
+      [0.6, 'sfx:whoosh', 3, 2],
+      [tEnd, 'sfx:slideWhistle', SL_SLIDE_X, 2],
+      [tSplash, 'sfx:boing', xIn, 1.2],
+      [tSplash, 'confetti', xIn + 0.3, 1.6],
+      [tSplash + 0.1, 'confetti', xIn + 1, 1.8],
+      [duration * 0.7, 'cheer', 16, 2],
+    ],
+  };
+})();
+
+const slideCrash0: Def = (() => {
+  const duration = 3.8;
+  const tWobble = 1.15;
+  const tSlip = 1.5;
+  const tLandR = 1.8;
+  const tOut = 2.45;
+  const tIn = 2.7;
+  const xRide = track([
+    [0, 0],
+    [0.95, 6.2, 'l'],
+    [tWobble, 7.0, 'l'],
+    [tSlip, 7.5, 'l'],
+  ]);
+  const wob = (t: number) =>
+    0.2 * prog(t, tWobble, tSlip, 'l') * Math.sin(22 * (t - tWobble)) * (t < tSlip ? 1 : 0);
+  const edge = (() => {
+    const f = createFrame();
+    ride(f, slideSurface, xRide(tSlip));
+    return { x: f.bike.x, y: f.bike.y, pitch: f.bike.pitch + wob(tSlip - 1e-6) };
+  })();
+  const hip = (() => {
+    const h = hipOf(edge.x, edge.y, edge.pitch);
+    return { x: h.x, y: h.y };
+  })();
+  const sitX = 15.2;
+  const sitY = PIT_Y + 0.15;
+  const tumble = track([
+    [tSlip, edge.x],
+    [tIn, 16.6, 'l'],
+  ]);
+  const landX = 8.5;
+  const riderX = track([
+    [tLandR, landX],
+    [tOut, 13.3, 'i'],
+  ]);
+  const slideRot = (x: number) => 0.9 * slopeAt(x);
+  const rotOut = slideRot(13.3);
+  const at = (t: number, f: Frame) => {
+    if (t < tSlip) {
+      ride(f, slideSurface, xRide(t), settleAt(t));
+      f.bike.pitch += wob(t);
+      f.bike.roll = 0.5 * wob(t);
+    } else {
+      const x = tumble(t);
+      const hh = lerp(
+        lerp(0.75, 1, prog(t, tSlip, tSlip + 0.3)),
+        0.35,
+        prog(t, tIn - 0.25, tIn, 'i'),
+      );
+      f.bike.x = x;
+      f.bike.y = lerp(edge.y, slideSurface(x) + hh, prog(t, tSlip, tSlip + 0.3, 'o'));
+      f.bike.pitch = lerp(edge.pitch, -2.5 * Math.PI, prog(t, tSlip, tIn, 'l'));
+      f.bike.grounded = false;
+    }
+    if (t > tWobble && t < tSlip) f.rider.pose = 'balance';
+    if (t >= tWobble - 0.1) f.rider.face = 'scared';
+    if (t >= tSlip) {
+      if (t < tLandR) {
+        const u = prog(t, tSlip, tLandR, 'l');
+        setFree(
+          f,
+          lerp(hip.x, landX, u),
+          arc(hip.y, slideSurface(landX) + 0.22, hip.y + 1.2, u),
+          lerp(edge.pitch, slideRot(landX), EASE.io(u)),
+          'flail',
+          'scared',
+        );
+      } else if (t < tOut) {
+        const x = riderX(t);
+        setFree(f, x, slideSurface(x) + 0.22, slideRot(x), 'sit', 'scared');
+      } else if (t < tIn) {
+        const u = prog(t, tOut, tIn, 'l');
+        setFree(
+          f,
+          lerp(13.3, sitX, u),
+          arc(slideSurface(13.3) + 0.22, sitY, 1.9, u),
+          lerp(rotOut, 0, u),
+          'flail',
+          'scared',
+        );
+      } else {
+        setFree(f, sitX, sitY, 0, 'sit', 'dizzy');
+      }
+    }
+  };
+  return {
+    duration,
+    word: 'BUM SLIDE!',
+    beats: { wobble: tWobble, slip: tSlip, land: tLandR, splash: tIn - 0.05 },
+    at,
+    events: () => [
+      [tWobble + 0.1, 'sweat', 7, 5.4],
+      [tSlip, 'word', 8, 5.8],
+      [tSlip + 0.1, 'sfx:slideWhistle', 8.5, 3.4],
+      [tLandR, 'sfx:bump', landX, 3],
+      [tIn - 0.05, 'sfx:splat', sitX, 1.2],
+      [tIn - 0.05, 'groan', sitX, 1.2],
+      [tIn, 'confetti', sitX + 0.3, 1.6],
+      [tIn + 0.25, 'stars', sitX, 2.4],
+    ],
+  };
+})();
+
+const slideCrash1: Def = (() => {
+  const duration = 3.0;
+  const tFree = 0.95;
+  const tFlop = 1.15;
+  const tLandR = 1.55;
+  const tSlid = 2.0;
+  const xRide = track([
+    [0, 0],
+    [0.35, 2.4, 'l'],
+    [tFlop, 4.1, 'o'],
+  ]);
+  const nose = track([
+    [0, 0],
+    [0.3, 0],
+    [0.6, 0.55, 'o'],
+    [tFree, 1.2],
+    [tFlop, 1.9, 'i'],
+  ]);
+  const poseAt = (t: number) => {
+    const f = createFrame();
+    rideW(f, slideSurface, xRide(t), nose(t));
+    return { x: f.bike.x, y: f.bike.y, pitch: f.bike.pitch };
+  };
+  const flop = poseAt(tFlop);
+  const free = poseAt(tFree);
+  const hip = (() => {
+    const h = hipOf(free.x, free.y, free.pitch);
+    return { x: h.x, y: h.y };
+  })();
+  const sitX = 3;
+  const sitY = slideSurface(sitX) + 0.25;
+  const backX = track([
+    [tFlop, flop.x],
+    [tSlid, 1.5, 'o'],
+  ]);
+  const at = (t: number, f: Frame) => {
+    if (t < tFlop) {
+      rideW(f, slideSurface, xRide(t), nose(t));
+      f.bike.grounded = nose(t) < 0.2;
+    } else {
+      // Over on its back, the bike slides down the stairs.
+      const k = prog(t, tFlop, tFlop + 0.35);
+      const x = backX(t);
+      f.bike.x = x;
+      f.bike.y = lerp(flop.y, slideSurface(x) + 0.55, k);
+      f.bike.pitch = lerp(flop.pitch, Math.PI + slopeAt(x), k);
+      f.bike.grounded = false;
+    }
+    if (t > 0.45 && t < tFree) f.rider.pose = 'wheelie';
+    if (t >= tFree - 0.2) f.rider.face = 'scared';
+    if (t >= tFree) {
+      if (t < tLandR) {
+        const u = prog(t, tFree, tLandR, 'l');
+        setFree(
+          f,
+          lerp(hip.x, sitX, u),
+          arc(hip.y, sitY, Math.max(hip.y, sitY) + 0.7, u),
+          lerp(free.pitch, TAU + 0.9 * slopeAt(sitX), EASE.io(u)),
+          'flail',
+          'scared',
+        );
+      } else {
+        setFree(f, sitX, sitY, TAU + 0.9 * slopeAt(sitX), 'sit', 'dizzy');
+      }
+    }
+  };
+  return {
+    duration,
+    word: 'WHEELIE FAIL!',
+    beats: { free: tFree, flop: tFlop, land: tLandR },
+    at,
+    events: (bike) => [
+      [tFlop - 0.1, 'word', 3.8, 4.6],
+      [tFlop + 0.2, 'sfx:bump', 3, 2],
+      ...trail(tFlop + 0.25, tSlid, 0.15, 'dust', bike, -0.3),
+      [tLandR, 'poof', sitX, sitY + 0.3],
+      [tLandR, 'groan', sitX, sitY],
+      [tSlid, 'sfx:bump', 1.5, 0.6],
+      [tSlid + 0.2, 'stars', sitX, sitY + 1.3],
+    ],
+  };
+})();
+
+/** Ball `i` of the pit at time `t`: resting, or popped up by whatever lands in the pit. */
+export function ballAt(
+  outcome: Outcome,
+  variant: Variant,
+  i: number,
+  t: number,
+  out: Piece = { x: 0, y: 0, rot: 0, scale: 1, visible: true },
+): Piece {
+  const x = 14.3 + (i % 7) * 0.55;
+  const y = PIT_Y + 0.1 + 0.3 * Math.floor(i / 7);
+  out.x = x;
+  out.y = y;
+  out.rot = 0;
+  out.scale = 1;
+  out.visible = true;
+  const splash = def('slide', outcome, variant).beats.splash as number | undefined;
+  if (splash === undefined) return out;
+  const dt = t - splash - 0.02 * (i % 5);
+  if (dt <= 0) return out;
+  const vx = (((i * 37) % 9) - 4) * 0.5;
+  const vy = 3 + (i % 5) * 0.75;
+  fly(x, y, vx, vy, 0, (i % 2 ? 1 : -1) * 3, y, dt, out, 12);
+  out.x = lerp(out.x, x, prog(dt, 0.9, 1.5));
+  return out;
+}
+
+// ----- Trampoline park -----
+
+export const TRAMP_X = [4.5, 9, 13.5] as const;
+export const TRAMP_W = 2.6;
+/** Where the top of a trampoline's sheet rests. */
+export const TRAMP_Y = 0.7;
+const DECK = TRAMP_Y + BIKE_Y; // the bike's frame origin standing on a sheet
+const SINK = 0.45;
+const SINK_T = 0.12;
+const RECOVER_T = 0.3;
+const TR_X0 = 2.2;
+const TR_LIP = 0.25;
+
+/** One hop through the air, from (x0, y0) at t0 to (x1, y1) at t1, topping out at `peak`. */
+interface Hop {
+  t0: number;
+  t1: number;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  peak: number;
+}
+
+/**
+ * Hops from trampoline to trampoline: in the air along each hop, and between one hop's landing
+ * and the next one's take-off the sheet is pressed down. False once `t` is past the last landing.
+ */
+function playHops(
+  f: Frame,
+  hops: readonly Hop[],
+  t: number,
+  hopPitch: (i: number, u: number) => number,
+  sinkPitch: (i: number, u: number) => number,
+): boolean {
+  for (let i = 0; i < hops.length; i++) {
+    const h = hops[i];
+    if (t >= h.t0 && t < h.t1) {
+      const u = (t - h.t0) / (h.t1 - h.t0);
+      f.bike.x = lerp(h.x0, h.x1, u);
+      f.bike.y = arc(h.y0, h.y1, h.peak, u);
+      f.bike.pitch = hopPitch(i, u);
+      f.bike.grounded = false;
+      return true;
+    }
+    const next = hops[i + 1];
+    if (next && t >= h.t1 && t < next.t0) {
+      const u = (t - h.t1) / (next.t0 - h.t1);
+      f.bike.x = h.x1;
+      f.bike.y = h.y1 - SINK * smooth(u);
+      f.bike.pitch = sinkPitch(i, u);
+      f.bike.grounded = false;
+      return true;
+    }
+  }
+  return false;
+}
+
+/** The nose-up-then-down pitch of an ordinary bounce; the first hop eases out of the ride. */
+const bouncePitch = (i: number, u: number) =>
+  lerp(0.18, -0.18, EASE.io(u)) * (i === 0 ? Math.min(1, u / 0.15) : 1);
+const sinkLevel = (_i: number, u: number) => lerp(-0.18, 0.18, smooth(u));
+
+function trampolinesClear(variant: Variant): Def {
+  const flip = variant === 1;
+  const b = [0.85, 1.6, 2.4] as const;
+  const tLand = flip ? 3.35 : 3.2;
+  const duration = tLand + 0.3;
+  const xLand = 17;
+  const low = DECK - SINK;
+  const hops: Hop[] = [
+    { t0: TR_LIP, t1: b[0], x0: TR_X0, y0: BIKE_Y, x1: TRAMP_X[0], y1: DECK, peak: 3.5 },
+    { t0: b[0] + SINK_T, t1: b[1], x0: TRAMP_X[0], y0: low, x1: TRAMP_X[1], y1: DECK, peak: 4.2 },
+    { t0: b[1] + SINK_T, t1: b[2], x0: TRAMP_X[1], y0: low, x1: TRAMP_X[2], y1: DECK, peak: 5.2 },
+    {
+      t0: b[2] + SINK_T,
+      t1: tLand,
+      x0: TRAMP_X[2],
+      y0: low,
+      x1: xLand,
+      y1: BIKE_Y,
+      peak: flip ? 5.3 : 4.8,
+    },
+  ];
+  const midX = track([
+    [0, 0],
+    [TR_LIP, TR_X0, 'l'],
+  ]);
+  const xm = track([
+    [tLand, xLand],
+    [duration, 18, 'l'],
+  ]);
+  const squash = track([
+    [tLand, 1],
+    [tLand + 0.08, 0.88],
+    [tLand + 0.4, 1, 'o'],
+  ]);
+  const pose = steps<PoseName>(
+    flip
+      ? [
+          [0, 'ride'],
+          [b[1] + SINK_T, 'duck'],
+          [tLand - 0.25, 'armsUp'],
+          [tLand + 0.3, 'ride'],
+        ]
+      : [
+          [0, 'ride'],
+          [b[2] + SINK_T, 'armsUp'],
+          [tLand + 0.3, 'ride'],
+        ],
+  );
+  const at = (t: number, f: Frame) => {
+    if (t < TR_LIP) {
+      ride(f, flatRoad, midX(t), settleAt(t));
+    } else if (
+      !playHops(
+        f,
+        hops,
+        t,
+        (i, u) => (flip && i === 3 ? lerp(0.18, -TAU, EASE.io(u)) : bouncePitch(i, u)),
+        sinkLevel,
+      )
+    ) {
+      f.bike.x = xm(t);
+      f.bike.pitch =
+        (flip ? -TAU : 0) + (flip ? 0 : -0.18) * (1 - prog(t, tLand, tLand + 0.15, 'o'));
+      f.bike.squash = squash(t);
+    }
+    f.rider.pose = pose(t);
+  };
+  const landing: Ev[] = flip
+    ? [
+        [tLand, 'confetti', xLand, 1.5],
+        [tLand + 0.2, 'confetti', xLand + 0.6, 2],
+      ]
+    : [];
+  return {
+    duration,
+    word: flip ? 'SKY HIGH!' : 'BOING BOING!',
+    beats: { b1: b[0], b2: b[1], b3: b[2], land: tLand },
+    at,
+    events: () => [
+      [b[0], 'sfx:boing', TRAMP_X[0], TRAMP_Y],
+      [b[1], 'word', TRAMP_X[1], 3.4],
+      [b[1], 'sfx:boing', TRAMP_X[1], TRAMP_Y],
+      [b[2], 'sfx:boing', TRAMP_X[2], TRAMP_Y],
+      [tLand, 'dust', xLand, 0.1],
+      ...landing,
+      [duration * 0.7, 'cheer', 17, 2],
+    ],
+  };
+}
+const trampolinesClear0 = trampolinesClear(0);
+const trampolinesClear1 = trampolinesClear(1);
+
+const trampolinesCrash0: Def = (() => {
+  const duration = 3.8;
+  const b = [0.8, 1.5] as const;
+  const tBack = b[1] + SINK_T;
+  const tSplat = 2.1;
+  const tThud = 2.3;
+  const tSlide = 2.45;
+  const tSit = 2.7;
+  const low = DECK - SINK;
+  const nose = -0.95;
+  const bikeEnd = { x: 5, y: TRAMP_Y + 0.34 };
+  const riderOn = { x: 4, y: TRAMP_Y + 0.28 };
+  const hops: Hop[] = [
+    { t0: TR_LIP, t1: b[0], x0: TR_X0, y0: BIKE_Y, x1: TRAMP_X[0], y1: DECK, peak: 3.5 },
+    { t0: b[0] + SINK_T, t1: b[1], x0: TRAMP_X[0], y0: low, x1: TRAMP_X[1], y1: DECK, peak: 4.2 },
+    { t0: tBack, t1: tThud, x0: TRAMP_X[1], y0: low, x1: bikeEnd.x, y1: bikeEnd.y, peak: 3.8 },
+  ];
+  const midX = track([
+    [0, 0],
+    [TR_LIP, TR_X0, 'l'],
+  ]);
+  const hip = (() => {
+    const h = hipOf(TRAMP_X[1], low, nose);
+    return { x: h.x, y: h.y };
+  })();
+  const at = (t: number, f: Frame) => {
+    if (t < TR_LIP) {
+      ride(f, flatRoad, midX(t), settleAt(t));
+    } else if (
+      !playHops(
+        f,
+        hops,
+        t,
+        (i, u) =>
+          i === 1
+            ? lerp(0.18, nose, EASE.io(u))
+            : i === 2
+              ? lerp(nose, TAU, EASE.io(u))
+              : bouncePitch(i, u),
+        (i, u) => (i === 1 ? nose : sinkLevel(i, u)),
+      )
+    ) {
+      f.bike.x = bikeEnd.x;
+      f.bike.y = bikeEnd.y + 0.4 * Math.sin(Math.PI * prog(t, tThud, tThud + 0.35, 'l'));
+      f.bike.pitch = TAU;
+      f.bike.grounded = false;
+    }
+    if (t >= tBack) f.bike.roll = 1.5 * prog(t, tBack + 0.35, tThud);
+    if (t >= b[1] - 0.15) f.rider.face = 'scared';
+    if (t >= tBack) {
+      if (t < tSplat) {
+        const u = prog(t, tBack, tSplat, 'l');
+        setFree(
+          f,
+          lerp(hip.x, riderOn.x, u),
+          arc(hip.y, riderOn.y, 4.6, u),
+          lerp(nose, -Math.PI / 2, EASE.io(u)),
+          'flail',
+          'scared',
+        );
+      } else if (t < tSlide) {
+        const u = prog(t, tSplat, tSlide, 'o');
+        setFree(f, lerp(riderOn.x, 3.1, u), riderOn.y, -Math.PI / 2, 'splat', 'scared');
+      } else if (t < tSit) {
+        const u = prog(t, tSlide, tSit, 'l');
+        setFree(
+          f,
+          lerp(3.1, 2.6, u),
+          arc(riderOn.y, 0.2, riderOn.y + 0.4, u),
+          lerp(-Math.PI / 2, 0, u),
+          'flail',
+          'scared',
+        );
+      } else {
+        setFree(f, 2.6, 0.2, 0, 'sit', 'dizzy');
+      }
+    }
+  };
+  return {
+    duration,
+    word: 'BOUNCE BACK!',
+    beats: { b1: b[0], b2: b[1], splat: tSplat, thud: tThud },
+    at,
+    events: () => [
+      [b[0], 'sfx:boing', TRAMP_X[0], TRAMP_Y],
+      [b[1], 'sfx:bump', TRAMP_X[1], TRAMP_Y],
+      [tBack, 'word', TRAMP_X[1], 3.2],
+      [tSplat, 'groan', riderOn.x, riderOn.y],
+      [tSplat, 'sfx:splat', riderOn.x, riderOn.y],
+      [tThud, 'sfx:bump', bikeEnd.x, bikeEnd.y],
+      [tThud, 'dust', bikeEnd.x, bikeEnd.y],
+      [tSit, 'stars', 2.6, 1.8],
+    ],
+  };
+})();
+
+const trampolinesCrash1: Def = (() => {
+  const duration = 4.0;
+  const b = [0.75, 1.4] as const;
+  const tFling = b[1] + SINK_T;
+  const tRoad = 2.5;
+  const r = [2.15, 2.57, 2.84, 2.99] as const;
+  const low = DECK - SINK;
+  const sitY = TRAMP_Y + 0.22;
+  const xOut = 16.4;
+  const hops: Hop[] = [
+    { t0: TR_LIP, t1: b[0], x0: TR_X0, y0: BIKE_Y, x1: TRAMP_X[0], y1: DECK, peak: 3.5 },
+    { t0: b[0] + SINK_T, t1: b[1], x0: TRAMP_X[0], y0: low, x1: TRAMP_X[1], y1: DECK, peak: 4.2 },
+    { t0: tFling, t1: tRoad, x0: TRAMP_X[1], y0: low, x1: xOut, y1: BIKE_Y, peak: 5 },
+  ];
+  const midX = track([
+    [0, 0],
+    [TR_LIP, TR_X0, 'l'],
+  ]);
+  const hip = (() => {
+    const h = hipOf(TRAMP_X[1], low, 0.18);
+    return { x: h.x, y: h.y };
+  })();
+  const legs = [
+    { t0: r[0], t1: r[1], peak: sitY + 3 },
+    { t0: r[1], t1: r[2], peak: sitY + 1.6 },
+    { t0: r[2], t1: r[3], peak: sitY + 0.6 },
+  ];
+  const at = (t: number, f: Frame) => {
+    if (t < TR_LIP) {
+      ride(f, flatRoad, midX(t), settleAt(t));
+    } else if (
+      !playHops(
+        f,
+        hops,
+        t,
+        (i, u) => (i === 2 ? lerp(0.18, -0.2, EASE.io(u)) : bouncePitch(i, u)),
+        sinkLevel,
+      )
+    ) {
+      // The bike lands, tips over and slides to a stop.
+      const k = prog(t, tRoad, tRoad + 0.45);
+      f.bike.x = lerp(xOut, 17.4, EASE.o(k));
+      f.bike.y = lerp(BIKE_Y, 0.34, k);
+      f.bike.pitch = -0.2 * (1 - k);
+      f.bike.roll = 1.5 * k;
+      f.bike.grounded = false;
+    }
+    if (t >= b[1] - 0.15) f.rider.face = 'scared';
+    if (t >= tFling) {
+      if (t < r[0]) {
+        const u = prog(t, tFling, r[0], 'l');
+        setFree(
+          f,
+          lerp(hip.x, TRAMP_X[2], u),
+          arc(hip.y, sitY, 5.4, u),
+          lerp(0.18, -TAU, EASE.io(u)),
+          'flail',
+          'scared',
+        );
+      } else if (t < r[3]) {
+        const leg = legs.find((l) => t < l.t1) ?? legs[2];
+        const u = prog(t, leg.t0, leg.t1, 'l');
+        setFree(f, TRAMP_X[2], arc(sitY, sitY, leg.peak, u), -TAU, 'flail', 'scared');
+      } else {
+        setFree(f, TRAMP_X[2], sitY, -TAU, 'sit', 'dizzy');
+      }
+    }
+  };
+  return {
+    duration,
+    word: 'FLUNG!',
+    beats: { b1: b[0], b2: b[1], fling: tFling, r1: r[0], r2: r[1], r3: r[2], r4: r[3] },
+    at,
+    events: () => [
+      [b[0], 'sfx:boing', TRAMP_X[0], TRAMP_Y],
+      [tFling, 'word', TRAMP_X[1], 4.2],
+      [tFling, 'sfx:boing', TRAMP_X[1], TRAMP_Y],
+      [tFling + 0.1, 'sfx:whoosh', 10, 3],
+      [r[0], 'sfx:boing', TRAMP_X[2], TRAMP_Y],
+      [r[1], 'sfx:boing', TRAMP_X[2], TRAMP_Y],
+      [r[2], 'sfx:boing', TRAMP_X[2], TRAMP_Y],
+      [tRoad, 'sfx:bump', xOut, 0.3],
+      [tRoad, 'dust', xOut, 0.1],
+      [r[3], 'groan', TRAMP_X[2], sitY],
+      [r[3] - 0.01, 'stars', TRAMP_X[2], sitY + 1.3],
+    ],
+  };
+})();
+
+/** Which beats land on which trampoline in each stunt, and how hard (a rider is lighter). */
+const DIP_BEATS: Record<string, readonly (readonly string[])[]> = {
+  clear: [['b1'], ['b2'], ['b3']],
+  crash0: [['b1', 'splat', 'thud'], ['b2'], []],
+  crash1: [['b1'], ['b2'], ['r1', 'r2', 'r3', 'r4']],
+};
+const DIP_WEIGHT: Record<string, number> = { r1: 0.8, r2: 0.6, r3: 0.4, r4: 0.25 };
+
+/** How far trampoline `i`'s sheet is pushed down (0 to 0.45): 0.12 s down, 0.3 s back, a small sag. */
+export function trampolineDip(outcome: Outcome, variant: Variant, i: number, t: number): number {
+  const beats = def('trampolines', outcome, variant).beats;
+  const keys = DIP_BEATS[outcome === 'clear' ? 'clear' : `crash${variant}`][i] ?? [];
+  let dip = 0;
+  for (const key of keys) {
+    const dt = t - beats[key];
+    if (dt <= 0 || dt >= SINK_T + RECOVER_T) continue;
+    const w = DIP_WEIGHT[key] ?? 1;
+    if (dt < SINK_T) {
+      dip = Math.max(dip, 0.45 * w * smooth(dt / SINK_T));
+    } else {
+      const s = (dt - SINK_T) / RECOVER_T;
+      dip = Math.max(dip, w * (0.45 * (1 - smooth(s)) + 0.04 * Math.sin(Math.PI * s)));
+    }
+  }
+  return Math.min(Math.max(dip, 0), 0.5);
+}
+
 // ---------- The table and the public API ----------
 
 const TABLE: Table = {
@@ -3660,6 +4712,12 @@ const TABLE: Table = {
   halfpipe: { clear: [halfpipeClear0, halfpipeClear1], crash: [halfpipeCrash0, halfpipeCrash1] },
   penguins: { clear: [penguinsClear0, penguinsClear1], crash: [penguinsCrash0, penguinsCrash1] },
   wrecker: { clear: [wreckerClear0, wreckerClear1], crash: [wreckerCrash0, wreckerCrash1] },
+  cannon: { clear: [cannonClear0, cannonClear1], crash: [cannonCrash0, cannonCrash1] },
+  slide: { clear: [slideClear0, slideClear1], crash: [slideCrash0, slideCrash1] },
+  trampolines: {
+    clear: [trampolinesClear0, trampolinesClear1],
+    crash: [trampolinesCrash0, trampolinesCrash1],
+  },
 };
 
 const def = (kind: ObstacleKind, outcome: Outcome, variant: Variant): Def =>
