@@ -15,6 +15,7 @@ import {
   type Pos,
   type StuntEvent,
 } from '../stunts';
+import { ICE_SLIDE } from './ice-slide';
 import { INFERNO_DROP } from './inferno-drop';
 import { SKY_CIRCUS } from './sky-circus';
 import { TRIPLE_LOOP } from './triple-loop';
@@ -54,6 +55,7 @@ export const MEGA_SPECS: Record<MegaId, MegaSpec> = {
   'sky-circus': SKY_CIRCUS,
   'volcano-rush': VOLCANO_RUSH,
   'inferno-drop': INFERNO_DROP,
+  'ice-slide': ICE_SLIDE,
 };
 
 const specOf = (id: MegaId) => MEGA_SPECS[id];

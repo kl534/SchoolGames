@@ -17,6 +17,16 @@ import {
 } from '../src/games/crash-course/mega/mega';
 import { pchip } from '../src/games/crash-course/mega/anim';
 import {
+  BANK,
+  iceBlockAt,
+  iceSurface,
+  iglooSurface,
+  RINK_FROM,
+  SNOW_HAT,
+  snowPieceAt,
+} from '../src/games/crash-course/mega/ice-slide';
+import { runs } from './helpers/full';
+import {
   CUSHION,
   FOAM_FROM,
   FOAM_TO,
@@ -110,12 +120,16 @@ describe.each(MEGA_IDS)('the %s course', (id) => {
     expect(megaCuts(id)).toEqual(expected);
   });
 
-  it('keeps the elements getting bigger (the Triple Loop: smaller)', () => {
-    const heights = spec.elements.map((e) => e.height);
-    const sorted = [...heights].sort((x, y) => x - y);
-    const descending = ['triple-loop', 'inferno-drop'].includes(id);
-    expect(heights).toEqual(descending ? sorted.reverse() : sorted);
-  });
+  // Ice Slide has no order: its tall snowman wall is in the middle.
+  it.skipIf(id === 'ice-slide')(
+    'keeps the elements getting bigger (the Triple Loop: smaller)',
+    () => {
+      const heights = spec.elements.map((e) => e.height);
+      const sorted = [...heights].sort((x, y) => x - y);
+      const descending = ['triple-loop', 'inferno-drop'].includes(id);
+      expect(heights).toEqual(descending ? sorted.reverse() : sorted);
+    },
+  );
 });
 
 describe('the courses', () => {
@@ -722,5 +736,127 @@ describe('Inferno Drop specifics', () => {
     expect(offsets).toEqual([0, 26, 35]);
     expect(startOf(3, 2)).toBeGreaterThan(0);
     expect(T_END).toBeGreaterThan(T_LIP);
+  });
+});
+
+describe('Ice Slide specifics', () => {
+  const id = 'ice-slide';
+  const spec = MEGA_SPECS[id];
+  const [ramp, wall, igloo] = spec.elements;
+
+  it('has the three elements in order, all under the Mega height limit', () => {
+    expect(spec.elements.map((e) => e.name)).toEqual(['Ice Ramp', 'Snowman Wall', 'Igloo Jump']);
+    expect(spec.elements.map((e) => e.length)).toEqual([24, 22, 28]);
+    for (const e of spec.elements) expect(e.height).toBeLessThanOrEqual(MEGA_MAX_H);
+    expect(spec.emoji).toBe('🧊');
+    expect(spec.airborne).toBeUndefined();
+    expect(spec.rise).toBeUndefined();
+  });
+
+  it.each([
+    ['iceSurface', iceSurface, ramp.length],
+    ['iglooSurface', iglooSurface, igloo.length],
+  ])('%s is 0 at both ends and has no jump over 0.5 between steps of 0.05', (_, surface, end) => {
+    expect(surface(0)).toBe(0);
+    expect(surface(end)).toBe(0);
+    for (let x = 0; x < end; x += 0.05) {
+      expect(Math.abs(surface(x + 0.05) - surface(x))).toBeLessThan(0.5);
+    }
+  });
+
+  it('keeps the bike and rider under the Mega limit in every stunt', () => {
+    for (const passed of PASSED) {
+      const total = megaDuration(id, passed);
+      for (let t = 0; t <= total; t += 1 / FPS) {
+        const f = megaFrame(id, passed, t);
+        expect(f.bike.y).toBeLessThanOrEqual(4.6 + 1e-6);
+        if (f.rider.mode === 'free') expect(f.rider.y).toBeLessThanOrEqual(5.2);
+      }
+    }
+  });
+
+  it('slows down once in each cleared element and in a crash', () => {
+    for (const e of spec.elements) {
+      expect(e.clear.slow).toHaveLength(1);
+      expect(e.crash.slow).toHaveLength(1);
+    }
+  });
+
+  it('ends the ramp crash in the snowbank, the rider sitting clear of the bike', () => {
+    const end = megaFrame(id, 0, megaDuration(id, 0));
+    expect(Math.abs(end.bike.x - 19.6)).toBeLessThan(0.1);
+    expect(end.bike.x).toBeGreaterThan(BANK.x - BANK.halfW);
+    expect(Math.abs(end.bike.roll - Math.PI / 2)).toBeLessThan(0.01);
+    expect(end.rider).toMatchObject({ mode: 'free', pose: 'sit', face: 'dizzy' });
+    expect(end.rider.x).toBeLessThan(end.bike.x - 0.8);
+  });
+
+  it('ends the wall crash with the rider clear of the giant and its head as a hat', () => {
+    const end = megaFrame(id, 1, megaDuration(id, 1));
+    const rider = end.rider.x - megaOffsets(id)[1];
+    expect(end.rider).toMatchObject({ mode: 'free', pose: 'sit', face: 'dizzy' });
+    expect(rider).toBeLessThan(17 - 1.4);
+    expect(rider).toBeCloseTo(SNOW_HAT.x, 5);
+    const head = snowPieceAt('crash', 8, wall.crash.duration);
+    expect(head.x).toBeCloseTo(SNOW_HAT.x, 5);
+    expect(head.y).toBeCloseTo(SNOW_HAT.y, 5);
+    // The giant's two lower balls never move.
+    for (const i of [6, 7]) {
+      const rest = snowPieceAt('crash', i, 0);
+      const late = snowPieceAt('crash', i, wall.crash.duration);
+      expect([late.x, late.y]).toEqual([rest.x, rest.y]);
+    }
+  });
+
+  it('ends the igloo crash on the rink, the bike on its side and the block beside the rider', () => {
+    const end = megaFrame(id, 2, megaDuration(id, 2));
+    const x = end.bike.x - megaOffsets(id)[2];
+    expect(x).toBeGreaterThan(RINK_FROM);
+    expect(Math.abs(end.bike.roll - Math.PI / 2)).toBeLessThan(0.01);
+    expect(end.rider).toMatchObject({ mode: 'free', pose: 'sit', face: 'dizzy' });
+    const block = iceBlockAt('crash', igloo.crash.duration);
+    expect(Math.abs(block.x - (end.rider.x - megaOffsets(id)[2]))).toBeLessThan(1.5);
+    expect(iceBlockAt('clear', igloo.clear.duration).y).toBeGreaterThan(3);
+  });
+
+  it('flies the clear over the igloo, well above its dome', () => {
+    const start = megaSegments(id, 3)[2].start;
+    const off = megaOffsets(id)[2];
+    let top = 0;
+    for (let t = 0; t <= igloo.clear.duration; t += 1 / FPS) {
+      const f = megaFrame(id, 3, start + t);
+      top = Math.max(top, f.bike.y);
+      if (Math.abs(f.bike.x - off - 12) < 2) expect(f.bike.y).toBeGreaterThan(3.2 + 0.7);
+    }
+    expect(top).toBeGreaterThan(4.2);
+  });
+
+  it('keeps every snowball finite, on or above the road, whatever the time', () => {
+    const rand = (() => {
+      let seed = 7;
+      return () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    })();
+    for (let n = 0; n < runs(5000, 800); n++) {
+      const outcome = rand() < 0.5 ? 'clear' : 'crash';
+      const i = Math.floor(rand() * 9);
+      const t = -1 + rand() * 7;
+      const p = snowPieceAt(outcome, i, t);
+      for (const v of [p.x, p.y, p.rot, p.scale]) expect(Number.isFinite(v)).toBe(true);
+      expect(p.y).toBeGreaterThanOrEqual(p.scale - 1e-6);
+      expect(p.scale).toBeGreaterThan(0);
+    }
+  });
+
+  it('knocks each cleared snowman off its spot once the bike arrives', () => {
+    const beats = wall.clear.beats;
+    for (const [s, hit] of [beats.hit1, beats.hit2, beats.hit3].entries()) {
+      for (const k of [0, 1, 2]) {
+        const i = s * 3 + k;
+        const home = snowPieceAt('clear', i, 0);
+        expect(snowPieceAt('clear', i, hit - 0.05)).toMatchObject({ x: home.x, y: home.y });
+        const later = snowPieceAt('clear', i, hit + 1);
+        expect(later.x).toBeGreaterThan(home.x + 0.5);
+      }
+    }
   });
 });
