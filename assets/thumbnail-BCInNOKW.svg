@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" font-family="system-ui, sans-serif" font-weight="900">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4a97e0"/>
+      <stop offset="1" stop-color="#d6ecfb"/>
+    </linearGradient>
+    <radialGradient id="ball" cx=".35" cy=".3" r=".8">
+      <stop offset="0" stop-color="#fff"/>
+      <stop offset="1" stop-color="#cfd4dc"/>
+    </radialGradient>
+    <radialGradient id="flash" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#fff" stop-opacity=".95"/>
+      <stop offset="1" stop-color="#ffe066" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="crowd" width="10" height="8" patternUnits="userSpaceOnUse">
+      <rect width="10" height="8" fill="#3a3f55"/>
+      <rect x="1" y="2" width="3" height="3" fill="#ff6b6b"/>
+      <rect x="6" y="1" width="3" height="3" fill="#ffd93d"/>
+      <rect x="4" y="5" width="3" height="3" fill="#4d96ff"/>
+    </pattern>
+  </defs>
+
+  <rect width="640" height="360" fill="url(#sky)"/>
+
+  <!-- Scoreboard above the stands -->
+  <rect x="250" y="12" width="140" height="62" rx="4" fill="#12432b" stroke="#e8f5ea" stroke-width="3"/>
+  <text x="320" y="38" text-anchor="middle" font-size="18" fill="#ffe066">BATTER UP</text>
+  <text x="320" y="62" text-anchor="middle" font-size="18" fill="#fff">3 – 1</text>
+
+  <!-- Stands, wall and grass -->
+  <rect y="86" width="640" height="52" fill="url(#crowd)"/>
+  <rect y="132" width="640" height="14" fill="#1d5f3d"/>
+  <rect y="132" width="640" height="3" fill="#ffd23f"/>
+  <rect y="146" width="640" height="214" fill="#358f43"/>
+  <path d="M0 160H640V176H0Z M0 206H640V230H0Z" fill="#3d9a4b"/>
+
+  <!-- Dirt diamond and the foul lines -->
+  <path d="M320 164 590 300 320 360 50 300Z" fill="#c48f5e"/>
+  <path d="M320 186 500 292 320 350 140 292Z" fill="#3b9649"/>
+  <ellipse cx="320" cy="238" rx="38" ry="12" fill="#c48f5e"/>
+  <path d="M320 340 40 190M320 340 600 190" stroke="#fff" stroke-opacity=".8" stroke-width="4" fill="none"/>
+  <path d="M296 330H344L350 342 320 352 290 342Z" fill="#fff"/>
+  <rect x="150" y="280" width="16" height="16" fill="#fff" transform="rotate(45 158 288)"/>
+  <rect x="474" y="280" width="16" height="16" fill="#fff" transform="rotate(45 482 288)"/>
+
+  <!-- Pitcher on the mound -->
+  <g>
+    <ellipse cx="320" cy="212" rx="14" ry="4" fill="#000" fill-opacity=".25"/>
+    <rect x="311" y="190" width="18" height="20" rx="5" fill="#f3f4f8"/>
+    <rect x="312" y="206" width="6" height="12" rx="2" fill="#aab3c4"/>
+    <rect x="322" y="206" width="6" height="12" rx="2" fill="#aab3c4"/>
+    <path d="M314 194 306 174M326 194 336 176" stroke="#f3f4f8" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="320" cy="182" r="9" fill="#c68642"/>
+    <path d="M311 181a9 8 0 0 1 18 0Z" fill="#1c2f6b"/>
+  </g>
+
+  <!-- Catcher and umpire -->
+  <g>
+    <circle cx="300" cy="300" r="15" fill="#23262e"/>
+    <rect x="283" y="311" width="34" height="26" rx="10" fill="#1c2f6b"/>
+    <circle cx="283" cy="318" r="9" fill="#6b3a18"/>
+    <circle cx="378" cy="292" r="13" fill="#f1b48a"/>
+    <path d="M365 290a13 12 0 0 1 26 0Z" fill="#14161b"/>
+    <rect x="362" y="304" width="32" height="40" rx="10" fill="#23262e"/>
+  </g>
+
+  <!-- Batter, from behind, mid-swing -->
+  <g transform="translate(176 230)">
+    <ellipse cx="6" cy="108" rx="30" ry="7" fill="#000" fill-opacity=".25"/>
+    <rect x="-8" y="62" width="12" height="42" rx="5" fill="#f4f4f6"/>
+    <rect x="12" y="62" width="12" height="42" rx="5" fill="#f4f4f6"/>
+    <rect x="-18" y="18" width="52" height="54" rx="18" fill="#e8453c"/>
+    <circle cx="8" cy="2" r="22" fill="#f1b48a"/>
+    <path d="M-15 0a23 21 0 0 1 46 0c0 6-6 8-8 8H-7c-3 0-8-2-8-8Z" fill="#b02a24"/>
+    <rect x="-20" y="2" width="12" height="16" rx="4" fill="#b02a24"/>
+    <path d="M26 36 100 -6" stroke="#d9a35c" stroke-width="10" stroke-linecap="round"/>
+    <path d="M10 44 28 34" stroke="#e8453c" stroke-width="12" stroke-linecap="round"/>
+  </g>
+
+  <!-- The hit: a flash and the ball flying off -->
+  <circle cx="288" cy="226" r="34" fill="url(#flash)"/>
+  <path d="M288 226 440 120" stroke="#fff" stroke-opacity=".5" stroke-width="5" stroke-linecap="round" stroke-dasharray="2 12"/>
+  <circle cx="448" cy="112" r="15" fill="url(#ball)" stroke="#d8262b" stroke-width="1.5"/>
+  <path d="M440 104q8 8 2 18M455 103q-6 9 0 17" stroke="#d8262b" stroke-width="2" fill="none" stroke-linecap="round"/>
+
+  <!-- Callout -->
+  <g transform="translate(470 296) rotate(-6)">
+    <rect x="-106" y="-26" width="212" height="52" rx="16" fill="#781421" fill-opacity=".92" stroke="#ffd23f" stroke-width="3"/>
+    <text x="0" y="12" text-anchor="middle" font-size="32" fill="#ffe066">HOME RUN!</text>
+  </g>
+</svg>
