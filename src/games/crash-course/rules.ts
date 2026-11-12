@@ -10,7 +10,10 @@ export type ObstacleKind =
   | 'coaster'
   | 'halfpipe'
   | 'penguins'
-  | 'wrecker';
+  | 'wrecker'
+  | 'cannon'
+  | 'slide'
+  | 'trampolines';
 export const OBSTACLE_KINDS: readonly ObstacleKind[] = [
   'loop',
   'ramp',
@@ -22,6 +25,9 @@ export const OBSTACLE_KINDS: readonly ObstacleKind[] = [
   'halfpipe',
   'penguins',
   'wrecker',
+  'cannon',
+  'slide',
+  'trampolines',
 ];
 export type Outcome = 'clear' | 'crash';
 export type Variant = 0 | 1;
