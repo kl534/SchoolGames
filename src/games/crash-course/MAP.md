@@ -1,6 +1,6 @@
 # Crash Course map
 
-A stunt-bike side view: each answer sends the bike at an obstacle (13 kinds, each with a clear and a crash version) and every 8th is a Mega Stunt course of three big elements.
+A stunt-bike side view: each answer sends the bike at an obstacle (13 kinds, each with a clear and a crash version) and every 8th is a Mega Stunt course of three big elements (5 courses).
 
 ## Files
 
@@ -28,11 +28,13 @@ A stunt-bike side view: each answer sends the bike at an obstacle (13 kinds, eac
 - `mega/volcano-rush-props.ts`: Volcano Rush meshes (`buildVolcanoRushProps`)
 - `mega/inferno-drop.ts`: Mega 4, scaffold ramp, three flaming rings and foam pit (`RINGS`, `RAMP_TOP`, `CUSHION`)
 - `mega/inferno-drop-props.ts`: Inferno Drop meshes (`buildInfernoDropProps`)
+- `mega/ice-slide.ts`: Mega 5, ice ramp drift, snowman wall and igloo jump (`iceSurface`, `snowPieceAt`, `iglooSurface`, `iceBlockAt`, `SNOW_HAT`)
+- `mega/ice-slide-props.ts`: Ice Slide meshes (`buildIceSlideProps`)
 
 ## Dev hooks
 
 - `?kinds=loop,ramp`: obstacles come in this order and repeat (`loop`, `ramp`, `ring`, `crates`, `bridge`, `seesaw`, `coaster`, `halfpipe`, `penguins`, `wrecker`, `cannon`, `slide`, `trampolines`).
-- `?megas=triple-loop,...`: Mega courses come in this order (`triple-loop`, `sky-circus`, `volcano-rush`, `inferno-drop`).
+- `?megas=triple-loop,...`: Mega courses come in this order (`triple-loop`, `sky-circus`, `volcano-rush`, `inferno-drop`, `ice-slide`).
 - `?mega=1`: the first obstacle is a Mega Stunt. `?bikes=1`: start with 1 to 3 bikes.
 - `?lab=<kind>:<clear|crash>:<0|1>`: stunt lab, loops one stunt with the HUD hidden. `?lab=<megaId>:<0-3>`: the same for a Mega course with that many questions right.
 - `&at=<seconds>` freezes the stunt at that time; `&nitro=1` shows a nitro run-up.
