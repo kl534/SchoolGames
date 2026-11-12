@@ -413,7 +413,7 @@ export const REX = {
   land: 40,
   /** The wipeout lands in the jaws here, and is spat out to land here. */
   mouthD: 21,
-  mouthY: 5.0,
+  mouthY: 4.1,
   spitD: 34,
   spitS: 3.5,
   riderD: 36,
