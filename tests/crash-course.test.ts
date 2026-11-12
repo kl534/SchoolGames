@@ -138,8 +138,8 @@ describe('obstacle order', () => {
   it('picks by index among the allowed kinds, in order', () => {
     expect(nextKind(null, 0)).toBe('loop');
     expect(nextKind('loop', 0)).toBe('ramp');
-    expect(nextKind('loop', 0.999)).toBe('wrecker');
-    expect(nextKind('wrecker', 0.999)).toBe('penguins');
+    expect(nextKind('loop', 0.999)).toBe('trampolines');
+    expect(nextKind('wrecker', 0.999)).toBe('trampolines');
     expect(nextKind('wrecker', 0)).toBe('loop');
   });
 

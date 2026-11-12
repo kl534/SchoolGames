@@ -1,14 +1,14 @@
 # Crash Course map
 
-A stunt-bike side view: each answer sends the bike at an obstacle (10 kinds, each with a clear and a crash version) and every 8th is a Mega Stunt course of three big elements.
+A stunt-bike side view: each answer sends the bike at an obstacle (13 kinds, each with a clear and a crash version) and every 8th is a Mega Stunt course of three big elements.
 
 ## Files
 
 - `main.ts`: the game loop, learning loop, stunt playback and wiring of everything below
 - `rules.ts`: pure scoring, bikes, speed, obstacle and Mega choice, approach and nitro maths, spoken lines (`OBSTACLE_KINDS`, `MEGA_IDS`, `hitPoints`, `nextKind`, `approach`)
 - `layout.ts`: side-view screen fitting (`fitView`, `playBand`, `FOV`)
-- `stunts.ts`: the 40 obstacle stunts as keyframed animations plus the shared animation toolkit (`SPECS`, `track`, `ride`, `createFrame`)
-- `obstacles.ts`: the ten obstacles as meshes posed by `update(outcome, variant, t)` (`createObstacle`, `createObstaclePool`)
+- `stunts.ts`: the 52 obstacle stunts as keyframed animations plus the shared animation toolkit (`SPECS`, `track`, `ride`, `createFrame`)
+- `obstacles.ts`: the 13 obstacles as meshes posed by `update(outcome, variant, t)` (`createObstacle`, `createObstaclePool`)
 - `kit.ts`: prop-building helpers that remember what to dispose (`Kit`, `ribbon`, `smooth`, `lerp`)
 - `bike.ts`: the stunt bike and the parachute (`createBike`, `createParachute`)
 - `rider.ts`: the kid rider's rig and poses (`createRider`, `runPose`, `mixPose`, `neutralPose`)
@@ -31,7 +31,7 @@ A stunt-bike side view: each answer sends the bike at an obstacle (10 kinds, eac
 
 ## Dev hooks
 
-- `?kinds=loop,ramp`: obstacles come in this order and repeat (`loop`, `ramp`, `ring`, `crates`, `bridge`, `seesaw`, `coaster`, `halfpipe`, `penguins`, `wrecker`).
+- `?kinds=loop,ramp`: obstacles come in this order and repeat (`loop`, `ramp`, `ring`, `crates`, `bridge`, `seesaw`, `coaster`, `halfpipe`, `penguins`, `wrecker`, `cannon`, `slide`, `trampolines`).
 - `?megas=triple-loop,...`: Mega courses come in this order (`triple-loop`, `sky-circus`, `volcano-rush`, `inferno-drop`).
 - `?mega=1`: the first obstacle is a Mega Stunt. `?bikes=1`: start with 1 to 3 bikes.
 - `?lab=<kind>:<clear|crash>:<0|1>`: stunt lab, loops one stunt with the HUD hidden. `?lab=<megaId>:<0-3>`: the same for a Mega course with that many questions right.
@@ -50,6 +50,6 @@ A stunt-bike side view: each answer sends the bike at an obstacle (10 kinds, eac
 ## Tests
 
 - `tests/crash-course.test.ts`
-- `tests/crash-course-stunts.test.ts` (all 40 stunts)
+- `tests/crash-course-stunts.test.ts` (all 52 stunts and the Cannon Wall, Giant Slide and Trampoline Park props)
 - `tests/crash-course-mega.test.ts` (Mega courses)
 - `tests/tap-to-continue.test.ts` (tap-to-continue flow in `main.ts`)

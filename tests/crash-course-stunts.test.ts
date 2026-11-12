@@ -6,13 +6,24 @@ import {
   type Outcome,
   type Variant,
 } from '../src/games/crash-course/rules';
+import { runs } from './helpers/full';
+import { createObstacle } from '../src/games/crash-course/obstacles';
 import {
   arc,
+  BALL_COUNT,
+  ballAt,
+  BARREL_COUNT,
+  barrelAt,
+  barrelHome,
   BIKE_Y,
+  cannonRecoil,
   createFrame,
   crateAt,
+  PIT_Y,
   plankAt,
   SPECS,
+  stuntBeats,
+  trampolineDip,
   stuntDuration,
   stuntEvents,
   stuntFrame,
@@ -49,10 +60,10 @@ function numbers(f: Frame): number[] {
 
 const near = (a: number, b: number, tolerance = 0.02) => Math.abs(a - b) <= tolerance;
 
-describe('there are 40 stunts', () => {
+describe('there are 52 stunts', () => {
   it('covers every kind, outcome and variant', () => {
     expect(cases).toHaveLength(OBSTACLE_KINDS.length * 4);
-    expect(OBSTACLE_KINDS).toHaveLength(10);
+    expect(OBSTACLE_KINDS).toHaveLength(13);
   });
 });
 
@@ -263,5 +274,158 @@ describe('props', () => {
         }
       }
     }
+  });
+});
+
+const NEW_KINDS: ObstacleKind[] = ['cannon', 'slide', 'trampolines'];
+const newCases = cases.filter(([kind]) => NEW_KINDS.includes(kind));
+const rand = (a: number, b: number) => a + Math.random() * (b - a);
+
+describe.each(newCases)('new stunt %s %s %i', (kind, outcome, variant) => {
+  const duration = stuntDuration(kind, outcome, variant);
+
+  it('has one word, and a cheer after 60% when cleared', () => {
+    const events = stuntEvents(kind, outcome, variant);
+    expect(events.filter((e) => e.type === 'word')).toHaveLength(1);
+    const cheers = events.filter((e) => e.type === 'cheer');
+    if (outcome === 'clear') {
+      expect(cheers).toHaveLength(1);
+      expect(cheers[0].at).toBeGreaterThanOrEqual(duration * 0.6);
+    } else {
+      expect(cheers).toHaveLength(0);
+    }
+  });
+
+  it('keeps the bike and a free rider under the height limit', () => {
+    for (let t = 0; t <= duration + 1e-9; t += 1 / FPS) {
+      const f = stuntFrame(kind, outcome, variant, t);
+      expect(f.bike.y, `bike at ${t}`).toBeLessThanOrEqual(5.4);
+      if (f.rider.mode === 'free')
+        expect(f.rider.y + 1.2, `rider at ${t}`).toBeLessThanOrEqual(7.2);
+    }
+  });
+
+  it('ends a crash with the rider sitting dizzy', () => {
+    if (outcome !== 'crash') return;
+    const f = stuntFrame(kind, outcome, variant, duration);
+    expect(f.rider).toMatchObject({
+      mode: 'free',
+      pose: expect.stringMatching(/sit|splat/),
+      face: 'dizzy',
+    });
+  });
+
+  it('builds as an obstacle that follows every moment and disposes', () => {
+    const obstacle = createObstacle(kind);
+    expect(obstacle.length).toBe(SPECS[kind].length);
+    for (let t = 0; t <= duration; t += 0.05) obstacle.update(outcome, variant, t);
+    obstacle.ambient(1.5);
+    obstacle.reset();
+    obstacle.update(outcome, variant, duration);
+    obstacle.dispose();
+  });
+});
+
+describe('Cannon Wall props', () => {
+  it('keeps every barrel finite, and home in a clear', () => {
+    for (const outcome of OUTCOMES) {
+      for (const variant of VARIANTS) {
+        for (let n = 0; n < runs(400, 80); n++) {
+          const t = rand(-0.5, 4.5);
+          for (let i = 0; i < BARREL_COUNT; i++) {
+            const b = barrelAt(outcome, variant, i, t);
+            expect([b.x, b.y, b.rot].every(Number.isFinite)).toBe(true);
+            expect(b.y).toBeGreaterThanOrEqual(0.45 - 1e-6);
+            if (outcome === 'clear' || variant === 1 || i < 2) {
+              const home = barrelHome(i);
+              expect([b.x, b.y, b.rot]).toEqual([home.x, home.y, 0]);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it('topples the top six barrels in TIMBER! and recoils only when a shot is fired', () => {
+    const end = stuntDuration('cannon', 'crash', 0);
+    for (let i = 2; i < BARREL_COUNT; i++) {
+      expect(barrelAt('crash', 0, i, end).x).toBeGreaterThan(barrelHome(i).x + 1);
+    }
+    for (const outcome of OUTCOMES) {
+      for (const variant of VARIANTS) {
+        const fires = stuntBeats('cannon', outcome, variant).fire !== undefined;
+        expect(fires).toBe(!(outcome === 'crash' && variant === 0));
+        let top = 0;
+        for (let n = 0; n < runs(400, 80); n++) {
+          const k = cannonRecoil(outcome, variant, rand(-1, 5));
+          expect(k).toBeGreaterThanOrEqual(0);
+          expect(k).toBeLessThanOrEqual(1);
+        }
+        for (let t = 0; t < 4; t += 0.01) top = Math.max(top, cannonRecoil(outcome, variant, t));
+        expect(top > 0.9).toBe(fires);
+      }
+    }
+  });
+});
+
+describe('Giant Slide props', () => {
+  it('keeps every ball above the pit floor', () => {
+    for (const outcome of OUTCOMES) {
+      for (const variant of VARIANTS) {
+        for (let n = 0; n < runs(400, 80); n++) {
+          const t = rand(-0.5, 4.5);
+          for (let i = 0; i < BALL_COUNT; i++) {
+            const b = ballAt(outcome, variant, i, t);
+            expect([b.x, b.y, b.rot].every(Number.isFinite)).toBe(true);
+            expect(b.y).toBeGreaterThanOrEqual(PIT_Y - 0.1);
+          }
+        }
+      }
+    }
+  });
+
+  it('pops the balls when something lands in the pit, but not in the wheelie fail', () => {
+    const moved = (outcome: Outcome, variant: Variant) => {
+      let far = 0;
+      for (let t = 0; t < 4; t += 0.05) {
+        const rest = ballAt(outcome, variant, 3, 0);
+        far = Math.max(far, ballAt(outcome, variant, 3, t).y - rest.y);
+      }
+      return far;
+    };
+    expect(moved('clear', 0)).toBeGreaterThan(0.3);
+    expect(moved('clear', 1)).toBeGreaterThan(0.3);
+    expect(moved('crash', 0)).toBeGreaterThan(0.3);
+    expect(moved('crash', 1)).toBe(0);
+  });
+});
+
+describe('Trampoline Park props', () => {
+  it('dips each sheet within 0 to 0.5 and only in the bounce windows', () => {
+    for (const outcome of OUTCOMES) {
+      for (const variant of VARIANTS) {
+        const beats = stuntBeats('trampolines', outcome, variant);
+        const landings = Object.entries(beats)
+          .filter(([key]) => /^(b|r|splat|thud)/.test(key))
+          .map(([, at]) => at);
+        for (let n = 0; n < runs(600, 120); n++) {
+          const t = rand(-0.5, 4.5);
+          const inWindow = landings.some((at) => t >= at && t <= at + 0.42);
+          for (let i = 0; i < 3; i++) {
+            const dip = trampolineDip(outcome, variant, i, t);
+            expect(dip).toBeGreaterThanOrEqual(0);
+            expect(dip).toBeLessThanOrEqual(0.5);
+            if (!inWindow) expect(dip).toBe(0);
+          }
+        }
+      }
+    }
+  });
+
+  it('pushes a sheet down when the bike lands on it', () => {
+    expect(
+      trampolineDip('clear', 0, 1, stuntBeats('trampolines', 'clear', 0).b2 + 0.12),
+    ).toBeCloseTo(0.45, 2);
+    expect(trampolineDip('clear', 0, 0, 0.1)).toBe(0);
   });
 });
