@@ -8,6 +8,7 @@ import {
   CanvasTexture,
   CapsuleGeometry,
   CircleGeometry,
+  Color,
   CylinderGeometry,
   Group,
   Mesh,
@@ -20,7 +21,7 @@ import {
   type Material,
   type Object3D,
 } from 'three';
-import type { FaceName, PoseName } from './stunts';
+import type { Coat, FaceName, PoseName } from './stunts';
 
 /** The rider is drawn a little bigger than life, so he reads on a phone. */
 export const PERSON_SCALE = 1.3;
@@ -305,6 +306,13 @@ export function createAvatarTexture(avatar: string): CanvasTexture | null {
 
 // ---------- The rig ----------
 
+/** How far the skin, suit and helmet are tinted toward a colour for each coat. */
+const COATS: Record<Coat, { color: number; amount: number } | null> = {
+  none: null,
+  flour: { color: 0xf5f2ea, amount: 0.7 },
+  mud: { color: 0x6b4a2b, amount: 0.55 },
+};
+
 export interface RiderStyle {
   shirt: number;
   pants: number;
@@ -327,6 +335,10 @@ export interface Rider {
   setMode(mode: 'seated' | 'free', seat: Object3D, world: Object3D): void;
   setPose(name: PoseName): void;
   setFace(face: FaceName): void;
+  /** Off hides the helmet and shows the rider's hair instead (a monkey took it). */
+  setHelmet(on: boolean): void;
+  /** Dusts the rider in flour or mud; applied after the face, so it wins over soot. */
+  setCoat(coat: Coat): void;
   /** Free mode: where the hips are and how far the body is turned. */
   place(x: number, y: number, rot: number): void;
   setVisible(visible: boolean): void;
@@ -369,6 +381,8 @@ export function createRider(avatar: string, style: RiderStyle = DEFAULT_STYLE): 
   const strapMaterial = new MeshStandardMaterial({ color: 0x222233, roughness: 0.8 });
   const skinColor = skin.color.getHex();
   const helmetColor = helmet.color.getHex();
+  const shirtColor = shirt.color.getHex();
+  const pantsColor = pants.color.getHex();
 
   // root: the hips (the pivot); facing: which way the body looks; person: scaled rig.
   const root = new Group();
@@ -467,6 +481,14 @@ export function createRider(avatar: string, style: RiderStyle = DEFAULT_STYLE): 
   shell.rotation.x = -0.1;
   const peak = mesh(new BoxGeometry(0.3, 0.025, 0.1), helmet, headWear, 0, 0.1, HEAD_R + 0.04);
   peak.rotation.x = 0.35;
+  // The hair that shows when the helmet is off.
+  const hairMaterial = new MeshStandardMaterial({ color: 0x5a3b22, roughness: 0.85 });
+  const hair = mesh(
+    new SphereGeometry(HEAD_R + 0.01, 20, 10, 0, Math.PI * 2, 0, 1.75),
+    hairMaterial,
+    head,
+  );
+  hair.visible = false;
   const strap = mesh(
     new TorusGeometry(HEAD_R - 0.005, 0.012, 6, 24, Math.PI),
     strapMaterial,
@@ -536,12 +558,27 @@ export function createRider(avatar: string, style: RiderStyle = DEFAULT_STYLE): 
   let lastX = 0;
   let heading = 1;
 
+  // What colour each material is: the base, soot when the face is sooty, then the coat on top.
+  let coatName: Coat = 'none';
+  const tint = new Color();
+  const paint = () => {
+    const sooted = faceName === 'sooty';
+    const colors: [MeshStandardMaterial, number][] = [
+      [skin, sooted ? 0x3d3d44 : skinColor],
+      [helmet, sooted ? 0x55555c : helmetColor],
+      [shirt, shirtColor],
+      [pants, pantsColor],
+    ];
+    const toward = COATS[coatName];
+    for (const [material, base] of colors) {
+      material.color.setHex(base);
+      if (toward) material.color.lerp(tint.setHex(toward.color), toward.amount);
+    }
+  };
   const setFace = (face: FaceName) => {
     faceName = face;
     for (const name of Object.keys(faces) as FaceName[]) faces[name].visible = name === face;
-    const sooted = face === 'sooty';
-    skin.color.setHex(sooted ? 0x3d3d44 : skinColor);
-    helmet.color.setHex(sooted ? 0x55555c : helmetColor);
+    paint();
   };
   setFace('happy');
   apply(neutralPose());
@@ -568,6 +605,15 @@ export function createRider(avatar: string, style: RiderStyle = DEFAULT_STYLE): 
     },
     setFace(face) {
       if (face !== faceName) setFace(face);
+    },
+    setHelmet(on) {
+      headWear.visible = on;
+      hair.visible = !on;
+    },
+    setCoat(coat) {
+      if (coat === coatName) return;
+      coatName = coat;
+      paint();
     },
     place(x, y, rot) {
       root.position.set(x, y, 0);
@@ -606,6 +652,7 @@ export function createRider(avatar: string, style: RiderStyle = DEFAULT_STYLE): 
         white,
         mouthMaterial,
         strapMaterial,
+        hairMaterial,
       ]) {
         m.dispose();
       }

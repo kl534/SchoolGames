@@ -419,6 +419,8 @@ function run(session: GameSession, dev: DevOptions | null): void {
     if (pair.rider.mode !== r.mode) pair.rider.setMode(r.mode, bike.seat, scene);
     pair.rider.setPose(r.pose);
     pair.rider.setFace(r.face);
+    pair.rider.setHelmet(r.helmet);
+    pair.rider.setCoat(r.coat);
     pair.rider.setVisible(r.visible && (r.mode === 'free' || b.visible));
     if (r.mode === 'free') pair.rider.place(x0 + r.x, r.y, r.rot);
   };
@@ -435,6 +437,8 @@ function run(session: GameSession, dev: DevOptions | null): void {
     frame.rider.pose = pose;
     frame.rider.face = 'happy';
     frame.rider.visible = true;
+    frame.rider.helmet = true;
+    frame.rider.coat = 'none';
     applyFrame(pair, frame, 0, dt);
   };
 
@@ -472,6 +476,8 @@ function run(session: GameSession, dev: DevOptions | null): void {
       pair.bike.object.visible = false;
       pair.rider.setMode('seated', pair.bike.seat, scene);
       pair.rider.setFace('happy');
+      pair.rider.setHelmet(true);
+      pair.rider.setCoat('none');
     }
     bikeX = Math.round(camX / 4) * 4;
     camX = bikeX + fit.viewW * (0.5 - 0.28);
@@ -916,6 +922,8 @@ function run(session: GameSession, dev: DevOptions | null): void {
     pair.bike.object.visible = true;
     pair.rider.setMode('seated', pair.bike.seat, scene);
     pair.rider.setFace('happy');
+    pair.rider.setHelmet(true);
+    pair.rider.setCoat('none');
     pair.rider.setVisible(true);
     bikeX = respawnX;
     pair.lastX = respawnX;

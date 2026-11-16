@@ -570,6 +570,60 @@ export const sfx = {
       tone(ctx, 'square', 330, 330, t, 0.18, 0.18);
       tone(ctx, 'square', 247, 247, t + 0.18, 0.18, 0.18);
     }),
+  /** Jelly wobbling: a low sine with a fast, deep vibrato that fades over 0.7 s. */
+  wobble: () =>
+    play((ctx, t) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const lfo = ctx.createOscillator();
+      const depth = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 140;
+      lfo.frequency.value = 9;
+      depth.gain.value = 40;
+      lfo.connect(depth).connect(osc.frequency);
+      gain.gain.setValueAtTime(0.25, t);
+      gain.gain.linearRampToValueAtTime(0, t + 0.7);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      lfo.start(t);
+      osc.stop(t + 0.72);
+      lfo.stop(t + 0.72);
+    }),
+  /** A T. rex roar: a low sawtooth sliding down through a lowpass, with a rumble of noise. */
+  roar: () =>
+    play((ctx, t) => {
+      const osc = ctx.createOscillator();
+      const filter = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
+      const lfo = ctx.createOscillator();
+      const depth = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(120, t);
+      osc.frequency.linearRampToValueAtTime(70, t + 1.2);
+      filter.type = 'lowpass';
+      filter.frequency.value = 700;
+      lfo.frequency.value = 6;
+      depth.gain.value = 10;
+      lfo.connect(depth).connect(osc.frequency);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(0.3, t + 0.06);
+      gain.gain.linearRampToValueAtTime(0, t + 1.2);
+      osc.connect(filter).connect(gain).connect(ctx.destination);
+      osc.start(t);
+      lfo.start(t);
+      osc.stop(t + 1.22);
+      lfo.stop(t + 1.22);
+      noise(ctx, 'lowpass', 600, 200, t, 1.2, 0.3);
+    }),
+  /** A monkey's ooh-ooh-ah-ah: two rising chirps, then two falling ones. */
+  monkey: () =>
+    play((ctx, t) => {
+      tone(ctx, 'triangle', 700, 1000, t, 0.11, 0.14);
+      tone(ctx, 'triangle', 700, 1000, t + 0.14, 0.11, 0.14);
+      tone(ctx, 'triangle', 1150, 800, t + 0.3, 0.11, 0.14);
+      tone(ctx, 'triangle', 1150, 800, t + 0.42, 0.11, 0.14);
+    }),
   /** A school bell ringing for 1.6 s. */
   bell: () =>
     play((ctx, t) => {
