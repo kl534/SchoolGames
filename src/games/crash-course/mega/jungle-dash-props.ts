@@ -559,11 +559,11 @@ function buildCroc(kit: Kit): Croc {
   }
   // The head: a fixed lower jaw and an upper jaw that hinges open.
   const hinge = -0.9;
-  kit.box(1.1, 0.14, 0.7, skin, group, hinge - 0.5, CROC_TOP - 0.25, 0);
+  kit.box(1.1, 0.2, 0.95, skin, group, hinge - 0.5, CROC_TOP - 0.25, 0.1);
   const jaw = new Group();
   jaw.position.set(hinge, CROC_TOP - 0.18, 0);
   group.add(jaw);
-  kit.box(1.2, 0.2, 0.74, skin, jaw, -0.6, 0.1, 0);
+  kit.box(1.2, 0.3, 0.95, skin, jaw, -0.6, 0.12, 0.1);
   for (let i = 0; i < 4; i++) {
     const tooth = kit.mesh(
       new ConeGeometry(0.05, 0.14, 4),
@@ -587,7 +587,7 @@ function buildCroc(kit: Kit): Croc {
   }
   kit.mesh(new SphereGeometry(0.06, 6, 4), black, jaw, -1.1, 0.17, 0.2);
   const eyes: Mesh[] = [];
-  for (const z of [0.24, -0.24]) {
+  for (const z of [0.34, -0.14]) {
     const eye = kit.mesh(
       new SphereGeometry(0.2, 12, 8),
       white,
@@ -596,7 +596,7 @@ function buildCroc(kit: Kit): Croc {
       CROC_TOP + 0.24,
       z,
     );
-    kit.mesh(new SphereGeometry(0.1, 8, 6), black, eye, -0.06, 0, 0.14 * Math.sign(z));
+    kit.mesh(new SphereGeometry(0.1, 8, 6), black, eye, -0.06, 0, 0.14);
     eyes.push(eye);
   }
   group.position.z = -0.3;

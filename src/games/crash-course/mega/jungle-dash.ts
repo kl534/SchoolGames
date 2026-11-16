@@ -354,7 +354,7 @@ const HOP_X0 = [3.2, 7.4, 11.4, 15.4] as const;
 const HOP_X1 = [7.0, 11.0, 15.0, 18.9] as const;
 const HOP_PEAK = CROC_TOP + BIKE_Y + 1.6;
 /** The crash: the chomp (the jaw snaps shut on the front wheel) and the splash. */
-const CHOMP = { t: 1.15, x: 8.85, y: 0.9, pitch: -0.5 };
+const CHOMP = { t: 1.15, x: 8.9, y: 0.48, pitch: -0.5 };
 const T_SPLASH = 1.9;
 const SPLASH_AT = { x: 13, y: RIVER_Y + 0.15 };
 const T_SURFACE = 2.4;
@@ -481,7 +481,7 @@ const crash2: Def = (() => {
   // The bike hops off croc 0 to the open jaw and stops dead.
   const toJaw = route([
     [tOff, HOP_X0[1], backY('crash', 0, tOff)],
-    [CHOMP.t, CHOMP.x, CHOMP.y, 1.5],
+    [CHOMP.t, CHOMP.x, CHOMP.y, 1.3],
   ]);
   const seat = hipOf(CHOMP.x, CHOMP.y, CHOMP.pitch);
   const flung = route([
@@ -530,7 +530,6 @@ const crash2: Def = (() => {
       f.bike.y = q.y;
       f.bike.pitch = lerp(0.15, CHOMP.pitch, prog(t, tOff, CHOMP.t));
       f.bike.grounded = false;
-      f.bike.z = 0.35 * prog(t, tOff, CHOMP.t);
       f.rider.pose = 'armsUp';
       f.rider.face = 'scared';
       return;
@@ -539,7 +538,6 @@ const crash2: Def = (() => {
     f.bike.x = CHOMP.x - 0.05 * bump(t, CHOMP.t, 0.12);
     f.bike.y = CHOMP.y;
     f.bike.pitch = CHOMP.pitch;
-    f.bike.z = 0.35;
     f.bike.squash = 1 - 0.2 * bump(t, CHOMP.t + 0.04, 0.1);
     f.bike.grounded = false;
     if (t < T_SPLASH) {
