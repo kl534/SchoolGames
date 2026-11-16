@@ -5386,14 +5386,18 @@ const windmillCrash1: Def = (() => {
     events: () => [
       [0.2, 'sfx:whoosh', 2, 0.5],
       [tHit, 'sfx:crash', xHit, 1],
-      [tHit, 'poof', 8.8, 1.3, 0xffffff],
-      [tHit + 0.05, 'poof', 8.2, 1.8, 0xffffff],
-      [tHit + 0.1, 'poof', 9.4, 1.8, 0xffffff],
-      [tHit, 'smoke', 8.8, 1.5, 0xffffff],
+      ...[0, 0.1, 0.2, 0.3, 0.45, 0.6, 0.8].flatMap(
+        (d, k) =>
+          [
+            [tHit + d, 'poof', 7.8 + (k % 4) * 0.7, 1.2 + (k % 3) * 0.5, 0xfff8e8],
+            [tHit + d, 'smoke', 8.2 + (k % 3) * 0.8, 1.5 + (k % 2) * 0.6, 0xfff8e8],
+            [tHit + d + 0.03, 'poof', 8.4 + (k % 2) * 1.2, 0.9 + (k % 4) * 0.4, 0xfff8e8],
+          ] as Ev[],
+      ),
       [tHit + 0.1, 'word', 8.8, 4.2],
       [tLand, 'dust', 7.5, 0.1],
       [tLand, 'groan', 7.5, 1],
-      [tPuff, 'poof', 7.5, 1.0, 0xffffff],
+      [tPuff, 'poof', 7.5, 1.0, 0xfff8e8],
       [tPuff, 'stars', 7.5, 1.9],
     ],
   };
