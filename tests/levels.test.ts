@@ -46,7 +46,7 @@ import {
   VOCAB_GRADES,
 } from '../src/shared/topics/vocabulary';
 import { seededRandom } from '../src/shared/random';
-import { answerOptions, TOPICS, validateTopic } from '../src/shared/topics';
+import { answerOptions, getTopic, TOPICS, validateTopic } from '../src/shared/topics';
 import { DIVISION_REGION, STATE_CAPITALS, stateCapitals } from '../src/shared/topics/capitals';
 import { COUNTRIES } from '../src/shared/topics/countries';
 import { stateLocations } from '../src/shared/topics/locations';
@@ -903,13 +903,18 @@ describe('Vocabulary path', () => {
   const path = VOCABULARY_PATH;
   const level1 = VOCABULARY_LEVELS[0].facts;
 
-  it('has 54 levels, six sets for each of Grades 2 to 10', () => {
-    expect(VOCABULARY_LEVELS).toHaveLength(54);
+  it('has 72 levels, six sets for each of Grades 2 to 12 and College', () => {
+    expect(VOCABULARY_LEVELS).toHaveLength(72);
     expect(VOCABULARY_LEVELS.map((l) => l.title)).toEqual(
-      ['2', '3', '4', '5', '6', '7', '8', '9', '10'].flatMap((g) =>
-        [1, 2, 3, 4, 5, 6].map((s) => `Grade ${g} · Set ${s}`),
+      ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', 'college'].flatMap((g) =>
+        [1, 2, 3, 4, 5, 6].map((s) => `${g === 'college' ? 'College' : `Grade ${g}`} · Set ${s}`),
       ),
     );
+  });
+
+  it('ends with College set 6 and has the College topics', () => {
+    expect(VOCABULARY_LEVELS[71].title).toBe('College · Set 6');
+    expect(getTopic('antonyms-college')).toBeDefined();
   });
 
   it("holds each set's 50 words as the topics' own facts, synonym then antonym", () => {
@@ -945,7 +950,7 @@ describe('Vocabulary path', () => {
   });
 
   it('labels a level', () => {
-    expect(levelLabel(1, path)).toBe('Level 1 of 54: Grade 2 · Set 1');
+    expect(levelLabel(1, path)).toBe('Level 1 of 72: Grade 2 · Set 1');
   });
 
   const topicIdOf = (fact: { id: string }) =>

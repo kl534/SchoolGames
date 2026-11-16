@@ -116,6 +116,9 @@ describe('vocabulary topics', () => {
       'synonyms-grade-8',
       'synonyms-grade-9',
       'synonyms-grade-10',
+      'synonyms-grade-11',
+      'synonyms-grade-12',
+      'synonyms-college',
       'antonyms-grade-2',
       'antonyms-grade-3',
       'antonyms-grade-4',
@@ -125,6 +128,9 @@ describe('vocabulary topics', () => {
       'antonyms-grade-8',
       'antonyms-grade-9',
       'antonyms-grade-10',
+      'antonyms-grade-11',
+      'antonyms-grade-12',
+      'antonyms-college',
     ]);
     expect(SYNONYM_TOPICS.every((t) => t.subject === 'Synonyms')).toBe(true);
     expect(ANTONYM_TOPICS.every((t) => t.subject === 'Antonyms')).toBe(true);
@@ -154,7 +160,7 @@ describe('vocabulary distractors', () => {
         if (row[3][0]) set.add(row[3][0]);
         answersOfPos.set(row[1], set);
       }
-      // A part of speech with under four answers in a grade (Grade 9 has one adverb) borrows the
+      // A part of speech with under four answers in a grade (Grades 9 and 11 have one adverb) borrows the
       // same part of speech from the other grades.
       for (const [pos, set] of answersOfPos) {
         if (set.size >= 4) continue;
