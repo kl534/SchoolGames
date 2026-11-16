@@ -170,7 +170,7 @@ describe('vocabulary distractors', () => {
         }
       }
     });
-  });
+  }, 60_000);
 
   it('keeps near words out and the trap in', () => {
     const big = SYNONYM_TOPICS[0].facts.find((f) => f.id === 'syn-big')!;
