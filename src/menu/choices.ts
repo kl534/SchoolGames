@@ -4,6 +4,7 @@ import {
   levelLabel,
   levelsOpen,
   pathForLevelTopic,
+  pathOfTopic,
   type LevelPath,
   type PathId,
 } from '../shared/levels';
@@ -19,10 +20,15 @@ import {
   type StepCounts,
 } from '../shared/progress';
 
-/** How many choice ids `progress.recent` keeps (the current one + 3 shown as "Recently played"). */
+/** How many choice ids `progress.recent` keeps; `recent[0]` is the current one. */
 export const RECENT_MAX = 4;
-/** How many "Recently played" chips the picker shows. */
-export const RECENT_SHOWN = 3;
+
+/** Hero card colours on the picker: gradient start and border. */
+export const PATH_COLORS: Record<PathId, { from: string; edge: string }> = {
+  math: { from: '#1e3a8a', edge: '#3b82f6' },
+  'social-studies': { from: '#7c2d12', edge: '#f97316' },
+  vocabulary: { from: '#4c1d95', edge: '#a855f7' },
+};
 
 export const PATH_EMOJI: Record<PathId, string> = {
   math: '🔢',
@@ -51,7 +57,7 @@ export function currentChoice(progress: PlayerProgress): string {
 /**
  * Moves `id` to the front of `progress.recent` (no duplicates, at most RECENT_MAX, invalid ids
  * dropped). If `recent` has no valid id yet, it is first seeded with `currentChoice(progress)`, so
- * the choice the player was on (e.g. the default My Level · Math) becomes a "Recently played" chip.
+ * the choice the player was on (e.g. the default My Level · Math) stays in the list.
  * For a path id also sets `progress.homePath = path.id`. Throws on a non-choice id.
  */
 export function rememberChoice(progress: PlayerProgress, id: string): void {
@@ -65,12 +71,13 @@ export function rememberChoice(progress: PlayerProgress, id: string): void {
   if (path) progress.homePath = path.id;
 }
 
-/** Valid `recent` ids other than the current choice, at most RECENT_SHOWN, newest first. */
-export function recentChoices(progress: PlayerProgress): string[] {
-  const current = currentChoice(progress);
-  return (progress.recent ?? [])
-    .filter((id) => isChoice(id) && id !== current)
-    .slice(0, RECENT_SHOWN);
+/**
+ * The path to offer "Back to My Level" for: undefined when `choiceId` is a path itself;
+ * for a topic, `pathOfTopic(choiceId) ?? getPath(progress.homePath) ?? PATHS[0]`.
+ */
+export function levelPathFor(progress: PlayerProgress, choiceId: string): LevelPath | undefined {
+  if (pathForLevelTopic(choiceId)) return undefined;
+  return pathOfTopic(choiceId) ?? getPath(progress.homePath) ?? PATHS[0];
 }
 
 export interface ChoiceInfo {

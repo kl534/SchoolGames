@@ -33,11 +33,13 @@ import { errorText, linkAction } from '../shared/sync/messages';
 import type { AccountInfo, ServerConfig } from '../shared/sync/protocol';
 import { accountDialog, googleButton, renderLinkPage } from './account-extras';
 import {
+  PATH_COLORS,
   PATH_EMOJI,
   choiceInfo,
   currentChoice,
   factListSections,
   isChoice,
+  levelPathFor,
   masteryLabel,
   masteryText,
   pathChoiceInfo,
@@ -45,7 +47,6 @@ import {
   type FactListItem,
   pickerSections,
   readyLabel,
-  recentChoices,
   rememberChoice,
 } from './choices';
 import { demoStepsProgress } from './dev';
@@ -703,44 +704,49 @@ function renderPicker(
 
   const main = el('main', 'picker');
 
-  const recent = recentChoices(progress);
-  if (recent.length > 0) {
-    const section = el('section');
-    section.appendChild(el('h2', 'subject', 'Recently played'));
-    const row = el('div', 'recent-row');
-    for (const id of recent) {
-      const info = choiceInfo(progress, id);
-      const chip = choiceLink(player, id, 'recent-chip', current);
-      const emoji = info.kind === 'path' ? PATH_EMOJI[pathForLevelTopic(id)!.id] : '';
-      chip.textContent = emoji ? `${emoji} ${info.short}` : info.short;
-      row.appendChild(chip);
-    }
-    section.appendChild(row);
-    main.appendChild(section);
-  }
-
   const levels = el('section');
+  const heading = el('h2', 'subject', 'My Level');
+  heading.appendChild(el('span', 'start-badge', 'Start here'));
   levels.append(
-    el('h2', 'subject', 'My Level'),
+    heading,
     el('p', 'hint', 'Games mix facts from your level. New facts open as you learn.'),
   );
-  const pathGrid = el('div', 'pick-grid paths');
+  const pathCards = el('div', 'path-cards');
   for (const p of PATHS) {
     const info = pathChoiceInfo(progress, p);
-    const row = choiceLink(player, p.levelTopicId, 'pick-row path-row', current);
-    row.append(
-      el('span', 'path-emoji', PATH_EMOJI[p.id]),
-      el('h3', undefined, p.title),
-      el('p', undefined, info.subtitle),
-      masteryBar(info),
+    const card = choiceLink(player, p.levelTopicId, 'path-card', current);
+    const isCurrent = p.levelTopicId === current;
+    card.style.setProperty('--path-from', PATH_COLORS[p.id].from);
+    card.style.setProperty('--path-edge', PATH_COLORS[p.id].edge);
+    card.setAttribute(
+      'aria-label',
+      `My Level · ${p.title}. ${info.subtitle}${isCurrent ? '. Playing now' : ''}`,
     );
-    pathGrid.appendChild(row);
+    const body = el('div', 'path-body');
+    body.append(el('h3', undefined, p.title), el('p', undefined, info.subtitle), masteryBar(info));
+    card.append(el('span', 'path-emoji', PATH_EMOJI[p.id]), body);
+    if (isCurrent) card.appendChild(el('span', 'now-badge', 'Now'));
+    pathCards.appendChild(card);
   }
-  levels.appendChild(pathGrid);
+  levels.appendChild(pathCards);
   main.appendChild(levels);
 
-  const topics = el('section');
-  topics.append(el('h2', 'subject', 'One topic'), el('p', 'hint', 'Practice just this one.'));
+  main.appendChild(el('div', 'or-divider', 'or'));
+  const toggle = el('button', 'topics-toggle');
+  toggle.type = 'button';
+  toggle.setAttribute('aria-controls', 'one-topic');
+  const text = el('span', 'toggle-text');
+  text.append(
+    el('strong', undefined, 'Practice one topic'),
+    el('small', undefined, 'Just one table, list or word set.'),
+  );
+  const chevron = el('span', 'toggle-chevron');
+  toggle.append(el('span', 'toggle-emoji', '🎯'), text, chevron);
+  main.appendChild(toggle);
+
+  const oneTopic = el('div', 'one-topic');
+  oneTopic.id = 'one-topic';
+  oneTopic.appendChild(chips);
   for (const section of sections) {
     const sec = el('section', 'pick-section');
     sec.id = `pick-${section.anchor}`;
@@ -781,22 +787,31 @@ function renderPicker(
       }
       sec.appendChild(grid);
     }
-    topics.appendChild(sec);
+    oneTopic.appendChild(sec);
   }
-  main.appendChild(topics);
+  main.appendChild(oneTopic);
+
+  const setOpen = (open: boolean): void => {
+    oneTopic.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
+    chevron.textContent = open ? '▾' : '▸';
+  };
+  // Folded when the current choice is a path; open for a single topic or `?topics=<path>`.
+  setOpen(Boolean(path) || !pathForLevelTopic(current));
+  toggle.addEventListener('click', () => {
+    setOpen(Boolean(oneTopic.hidden));
+    if (!oneTopic.hidden) toggle.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 
   root.replaceChildren(
     header('What do you want to practice?', null, player, link(base, 'back-link', '← Back')),
-    chips,
     main,
   );
 
-  // Open on the chosen path's first subject, or else on the current choice.
+  // `?topics=<path>` opens on that path's first subject.
   if (path) {
     const first = pickerSections(path.topics)[0];
     document.getElementById(`pick-${first?.anchor}`)?.scrollIntoView({ block: 'start' });
-  } else if (!pathForLevelTopic(current)) {
-    root.querySelector('.pick-row.current, .tile.current')?.scrollIntoView({ block: 'center' });
   }
 }
 
@@ -838,9 +853,19 @@ function gameCard(
 // ---------- Home ----------
 
 /** The 'See facts' pill under the Practicing card, lined up with it. */
-function factsLinkRow(): HTMLElement {
+function factsLinkRow(player: Player, progress: PlayerProgress, choiceId: string): HTMLElement {
   const row = el('div', 'facts-link-row');
   row.appendChild(link(`${base}?facts`, 'facts-link', 'See facts ▸'));
+  const path = levelPathFor(progress, choiceId);
+  if (path) {
+    const back = link(topicMenuUrl(path.levelTopicId), 'facts-link level-link');
+    back.textContent = `↩ Back to My Level · ${path.title}`;
+    back.addEventListener('click', (e) => {
+      e.preventDefault();
+      pickChoice(player, path.levelTopicId);
+    });
+    row.appendChild(back);
+  }
   return row;
 }
 
@@ -879,7 +904,7 @@ function renderHome(
   root.replaceChildren(
     header(null, null, player),
     card,
-    factsLinkRow(),
+    factsLinkRow(player, progress, choiceId),
     el('h2', 'subject', 'Pick a game'),
     grid,
   );
