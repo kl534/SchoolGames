@@ -38,7 +38,14 @@ const stat = (learnStreak: number) => ({
 
 describe('isChoice', () => {
   it('accepts path level topics and topics only', () => {
-    for (const id of ['my-level', 'social-studies-level', 'times-7', 'state-capitals']) {
+    for (const id of [
+      'my-level',
+      'social-studies-level',
+      'vocabulary-level',
+      'times-7',
+      'state-capitals',
+      'antonyms-grade-3',
+    ]) {
       expect(isChoice(id)).toBe(true);
     }
     for (const id of ['', null, undefined, 'math', 'nope']) expect(isChoice(id)).toBe(false);
@@ -118,6 +125,8 @@ describe('pickerSections', () => {
       'Multiplication',
       'Division',
       'Social Studies',
+      'Synonyms',
+      'Antonyms',
     ]);
     expect(sections.map((s) => s.anchor)).toEqual([
       'addition',
@@ -125,6 +134,8 @@ describe('pickerSections', () => {
       'multiplication',
       'division',
       'social-studies',
+      'synonyms',
+      'antonyms',
     ]);
     const [add, , mul, div] = sections;
     expect(add.tiles).toBeUndefined();

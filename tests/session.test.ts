@@ -5,7 +5,12 @@ import {
   REVIEW_SPACING_MS,
   recordAnswer,
 } from '../src/shared/progress';
-import { LEVELS, MY_LEVEL_ID, SOCIAL_STUDIES_LEVEL_ID } from '../src/shared/levels';
+import {
+  LEVELS,
+  MY_LEVEL_ID,
+  SOCIAL_STUDIES_LEVEL_ID,
+  VOCABULARY_LEVEL_ID,
+} from '../src/shared/levels';
 import { devFacts } from '../src/shared/devfacts';
 import { gameUrl, parseGameParams, startGameSession } from '../src/shared/session';
 import { answerOptions, getTopic, TOPICS } from '../src/shared/topics';
@@ -460,5 +465,46 @@ describe('step report', () => {
     // A small round stays within what is open.
     session.chooseFacts(5);
     expect(saved().pathLevelsOpen).toEqual({ 'social-studies': 2 });
+  });
+});
+
+describe('Vocabulary level session', () => {
+  const start = (name: string) => {
+    const store = createProgressStore();
+    store.setCurrentPlayer(store.addPlayer(name, AVATARS[0]).id);
+    const session = startGameSession('level-game', `?topic=${VOCABULARY_LEVEL_ID}`);
+    if (!session) throw new Error('Vocabulary level not found');
+    return session;
+  };
+  const saved = () => {
+    const store = createProgressStore();
+    return store.load(store.currentPlayer()!.id);
+  };
+
+  it('starts at level 1', () => {
+    const session = start('Vocab starter');
+    expect(session.topic.id).toBe(VOCABULARY_LEVEL_ID);
+    expect(session.topic.description).toBe('Level 1 of 18: Grade 2 · Set 1');
+  });
+
+  it("saves answers under the fact's own topic and the vocabulary level count only", () => {
+    const session = start('Vocab answerer');
+    const [fact] = session.chooseFacts(10);
+    session.recordAnswer(fact, true);
+    const data = saved();
+    const topicId = fact.id.startsWith('syn-') ? 'synonyms-grade-2' : 'antonyms-grade-2';
+    expect(data.facts[topicId][fact.id].correct).toBe(1);
+    expect(data.facts[VOCABULARY_LEVEL_ID]).toBeUndefined();
+    expect(data.pathLevelsOpen).toEqual({ vocabulary: 1 });
+  });
+
+  it('keeps stars and high scores under vocabulary-level', () => {
+    const session = start('Vocab scorer');
+    expect(session.recordStars(2)).toBe(true);
+    expect(session.recordScore(300)).toBe(true);
+    const data = saved();
+    expect(data.best[VOCABULARY_LEVEL_ID]).toEqual({ 'level-game': 2 });
+    expect(data.highScores[VOCABULARY_LEVEL_ID]).toEqual({ 'level-game': 300 });
+    expect(data.best[MY_LEVEL_ID]).toBeUndefined();
   });
 });
