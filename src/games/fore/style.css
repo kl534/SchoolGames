@@ -282,10 +282,11 @@
   transform: translateX(-50%);
 }
 
+/* A long word prompt ("Antonym of INCONTROVERTIBLE") shrinks to stay clear of the speaker button. */
 .fg-q-text {
   flex: 1;
   min-width: 0;
-  font-size: 30px;
+  font-size: min(30px, 6.4vw);
   font-weight: 800;
   text-wrap: balance;
 }
@@ -614,7 +615,7 @@
   }
 
   .fg-q-text {
-    font-size: 26px;
+    font-size: min(26px, calc((min(34vw, 340px) - 84px) / 10.5));
   }
 
   .fg-answers {
@@ -671,7 +672,7 @@
   }
 
   .fg-q-text {
-    font-size: 20px;
+    font-size: min(20px, calc((min(34vw, 340px) - 80px) / 10.5));
   }
 
   .fg-answers {
