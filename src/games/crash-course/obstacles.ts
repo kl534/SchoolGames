@@ -1,5 +1,5 @@
 /**
- * The 13 obstacles, built from bright painted primitives. Each one's group has its origin at
+ * The 16 obstacles, built from bright painted primitives. Each one's group has its origin at
  * the entry line on the road. `update(outcome, variant, t)` poses the props for any moment of any
  * stunt (the same timeline the bike follows), `ambient(time)` keeps the idle bits moving, and
  * `reset()` puts everything back for the next ride.
@@ -33,6 +33,22 @@ import {
   BRIDGE_FROM,
   BRIDGE_PLANKS,
   BRIDGE_TO,
+  BUS_LEN,
+  BUS_TOP,
+  BUS_X,
+  busSurface,
+  HAYSTACK,
+  JELLY,
+  JELLY_BASE,
+  jellyKicker,
+  jellyWobble,
+  kidPop,
+  millDoor,
+  MILL_HUB,
+  SAIL_REACH,
+  SAIL_SPIN,
+  sailAngle,
+  windKicker,
   CANNON,
   cannonKicker,
   cannonRecoil,
@@ -1483,6 +1499,366 @@ function buildTrampolines(kit: Kit): Built {
   };
 }
 
+// ---------- Bus jump ----------
+
+function buildBuses(kit: Kit): Built {
+  const group = new Group();
+  const rib = ribbonMaterial(kit);
+  kit.mesh(ribbon(busSurface, 0.5, 4, 0.5, 0, 1.5, RED, WHITE), rib, group);
+  kit.mesh(ribbon(busSurface, 20.5, 24, 0.5, 0, 1.5, WHITE, RED), rib, group);
+  const yellow = kit.lit(0xffcf1a, 0.45);
+  const black = kit.lit(0x1c1c24, 0.5);
+  const glass = kit.lit(0x2b3a52, 0.2);
+  const bodyGeometry = new BoxGeometry(BUS_LEN, BUS_TOP - 0.5, 1.8);
+  const stripeGeometry = new BoxGeometry(BUS_LEN + 0.02, 0.14, 1.82);
+  const windowGeometry = new BoxGeometry(0.8, 0.62, 0.04);
+  const wheelGeometry = new CylinderGeometry(0.46, 0.46, 0.3, 16);
+  const signGeometry = new CylinderGeometry(0.3, 0.3, 0.05, 8);
+  kit.geometries.push(bodyGeometry, stripeGeometry, windowGeometry, wheelGeometry, signGeometry);
+  const skins = [0xf1b48a, 0xc98b5e, 0x8d5a3a, 0xf6c9a6];
+  const hairs = [0x2b1b12, 0xd9a441, 0x6b3a1e, 0xb5301f];
+  const shirts = [0x3aa0ff, 0x4cc46a, 0xff8fd0, 0xff7a2f];
+  const headGeometry = new SphereGeometry(0.2, 14, 10);
+  const hairGeometry = new SphereGeometry(0.215, 14, 8, 0, Math.PI * 2, 0, 1.6);
+  const shoulderGeometry = new SphereGeometry(0.28, 12, 8);
+  const armGeometry = new CylinderGeometry(0.05, 0.05, 0.5, 6);
+  kit.geometries.push(headGeometry, hairGeometry, shoulderGeometry, armGeometry);
+  interface Kid {
+    root: Group;
+    shoulders: Mesh;
+    arms: Mesh[];
+  }
+  const kids: Kid[][] = [];
+  for (let i = 0; i < BUS_X.length; i++) {
+    const x = BUS_X[i];
+    const bus = new Group();
+    bus.position.set(x, 0, 0);
+    group.add(bus);
+    const body = new Mesh(bodyGeometry, yellow);
+    body.position.set(0, 0.5 + (BUS_TOP - 0.5) / 2, 0);
+    bus.add(body);
+    for (const z of [-0.91, 0.91]) {
+      if (z > 0) {
+        const stripe = new Mesh(stripeGeometry, black);
+        stripe.position.set(0, 0.95, 0);
+        bus.add(stripe);
+      }
+      for (const wx of [-1.4, 1.4]) {
+        const wheel = new Mesh(wheelGeometry, black);
+        wheel.rotation.x = Math.PI / 2;
+        wheel.position.set(wx, 0.46, z * 0.88);
+        bus.add(wheel);
+      }
+    }
+    for (let k = 0; k < 4; k++) {
+      const pane = new Mesh(windowGeometry, glass);
+      pane.position.set(-1.5 + k, 1.85, 0.91);
+      bus.add(pane);
+    }
+    // The front: a windscreen and a bumper; the back has red lights.
+    kit.box(0.04, 0.7, 1.4, glass, bus, BUS_LEN / 2 + 0.01, 1.75, 0);
+    kit.box(0.14, 0.2, 1.9, black, bus, BUS_LEN / 2 + 0.05, 0.6, 0);
+    kit.box(0.04, 0.2, 0.2, kit.lit(RED, 0.4), bus, -BUS_LEN / 2 - 0.01, 0.9, 0.6);
+    kit.box(0.04, 0.2, 0.2, kit.lit(RED, 0.4), bus, -BUS_LEN / 2 - 0.01, 0.9, -0.6);
+    if (i === 0) {
+      // A red stop sign on its arm.
+      const sign = new Mesh(signGeometry, kit.lit(RED, 0.4));
+      sign.rotation.x = Math.PI / 2;
+      sign.rotation.y = Math.PI / 8;
+      sign.position.set(1.0, 1.05, 1.1);
+      bus.add(sign);
+      kit.box(0.4, 0.06, 0.04, kit.lit(WHITE, 0.4), bus, 1.0, 1.05, 1.14);
+    }
+    const row: Kid[] = [];
+    for (const [j, k] of [1, 2].entries()) {
+      const n = i * 2 + j;
+      const root = new Group();
+      root.position.set(-1.5 + k, 1.78, 0.93);
+      bus.add(root);
+      const head = new Mesh(headGeometry, kit.lit(skins[n % skins.length], 0.7));
+      root.add(head);
+      const hair = new Mesh(hairGeometry, kit.lit(hairs[(n * 3) % hairs.length], 0.8));
+      hair.position.y = 0.01;
+      root.add(hair);
+      const shirt = kit.lit(shirts[n % shirts.length], 0.7);
+      const shoulders = new Mesh(shoulderGeometry, shirt);
+      shoulders.position.y = -0.32;
+      shoulders.scale.set(1, 0.5, 0.6);
+      root.add(shoulders);
+      const arms: Mesh[] = [];
+      for (const side of [-1, 1]) {
+        const arm = new Mesh(armGeometry, kit.lit(skins[n % skins.length], 0.7));
+        arm.position.set(side * 0.3, -0.1, 0);
+        arm.rotation.z = -side * 0.35;
+        root.add(arm);
+        arms.push(arm);
+      }
+      row.push({ root, shoulders, arms });
+    }
+    kids.push(row);
+  }
+  let playing = false;
+  const pose = (i: number, pop: number, bob: number) => {
+    for (const kid of kids[i]) {
+      kid.root.position.y = 1.78 + 0.4 * pop + bob;
+      kid.shoulders.scale.y = 0.5 * pop + 0.001;
+      kid.shoulders.visible = pop > 0.02;
+      for (const arm of kid.arms) {
+        arm.visible = pop > 0.02;
+        arm.scale.y = pop + 0.001;
+        arm.position.y = -0.15 + 0.4 * pop;
+      }
+    }
+  };
+  const apply = (outcome: Outcome, variant: Variant, t: number) => {
+    playing = true;
+    for (let i = 0; i < kids.length; i++) pose(i, kidPop(outcome, variant, i, t), 0);
+  };
+  return {
+    group,
+    update: apply,
+    ambient(time) {
+      if (playing) return;
+      for (let i = 0; i < kids.length; i++) pose(i, 0, 0.03 * Math.sin(time * 3 + i * 2));
+    },
+    reset() {
+      playing = false;
+      for (let i = 0; i < kids.length; i++) pose(i, 0, 0);
+    },
+  };
+}
+
+// ---------- Windmill ----------
+
+function buildWindmill(kit: Kit): Built {
+  const group = new Group();
+  const rib = ribbonMaterial(kit);
+  kit.mesh(ribbon(windKicker, 3.5, 6, 0.4, 0, 0.5, 0xc98a4a, 0xb67a3c, 0.6), rib, group);
+  const stone = kit.lit(0xd8cdb4, 0.9);
+  const brown = kit.lit(0x7a4a22, 0.8);
+  const cream = kit.lit(0xf4ecd2, 0.7);
+  const tower = new CylinderGeometry(1.1, 1.5, 5, 24);
+  kit.mesh(tower, stone, group, MILL_HUB.x, 2.5, -2.2);
+  kit.mesh(new ConeGeometry(1.4, 1.3, 24), kit.lit(RED, 0.5), group, MILL_HUB.x, 5.65, -2.2);
+  // Stone bands, so the tower reads as bricks.
+  for (const y of [1.2, 2.4, 3.6]) {
+    const r = 1.5 - (0.4 * y) / 5 + 0.01;
+    kit.mesh(
+      new CylinderGeometry(r, r, 0.06, 24),
+      kit.lit(0xb7ab92, 0.9),
+      group,
+      MILL_HUB.x,
+      y,
+      -2.2,
+    );
+  }
+  // The doorway and its door, hinged on its left edge.
+  kit.box(1.2, 1.8, 0.06, kit.lit(0x2b1f18, 0.9), group, MILL_HUB.x, 0.9, -0.72);
+  const door = new Group();
+  door.position.set(MILL_HUB.x - 0.6, 0, -0.68);
+  group.add(door);
+  kit.box(1.2, 1.8, 0.1, kit.lit(0x9a6330, 0.7), door, 0.6, 0.9, 0);
+  kit.box(1.0, 0.1, 0.12, brown, door, 0.6, 0.45, 0);
+  kit.box(1.0, 0.1, 0.12, brown, door, 0.6, 1.35, 0);
+  kit.mesh(new SphereGeometry(0.07, 8, 6), kit.lit(GOLD, 0.3), door, 1.0, 0.9, 0.08);
+  // A little round window.
+  kit.mesh(
+    new CylinderGeometry(0.28, 0.28, 0.05, 16),
+    kit.lit(0x6a8fb8, 0.3),
+    group,
+    MILL_HUB.x,
+    3.0,
+    -0.95,
+  ).rotation.x = Math.PI / 2;
+  // The axle and hub.
+  kit.mesh(
+    new CylinderGeometry(0.14, 0.14, 0.8, 10),
+    brown,
+    group,
+    MILL_HUB.x,
+    MILL_HUB.y,
+    -0.7,
+  ).rotation.x = Math.PI / 2;
+  const sails = new Group();
+  sails.position.set(MILL_HUB.x, MILL_HUB.y, MILL_HUB.z);
+  group.add(sails);
+  kit.mesh(new SphereGeometry(0.3, 14, 10), brown, sails);
+  const reach = SAIL_REACH;
+  const spar = new BoxGeometry(reach - 0.3, 0.1, 0.1);
+  const barH = new BoxGeometry(reach - 0.3, 0.05, 0.06);
+  const barV = new BoxGeometry(0.05, 0.7, 0.06);
+  const slat = new BoxGeometry(0.06, 0.7, 0.05);
+  kit.geometries.push(spar, barH, barV, slat);
+  for (let k = 0; k < 4; k++) {
+    const sail = new Group();
+    sail.rotation.z = (k * Math.PI) / 2;
+    sails.add(sail);
+    const mid = 0.3 + (reach - 0.3) / 2;
+    const sparMesh = new Mesh(spar, brown);
+    sparMesh.position.set(mid, 0, 0);
+    sail.add(sparMesh);
+    for (const y of [-0.05, -0.75]) {
+      const bar = new Mesh(barH, cream);
+      bar.position.set(mid, y, 0);
+      sail.add(bar);
+    }
+    for (const x of [0.3, reach]) {
+      const bar = new Mesh(barV, cream);
+      bar.position.set(x - 0.025, -0.4, 0);
+      sail.add(bar);
+    }
+    for (let s = 0; s < 6; s++) {
+      const slatMesh = new Mesh(slat, brown);
+      slatMesh.position.set(0.5 + s * 0.3, -0.4, -0.01);
+      sail.add(slatMesh);
+    }
+  }
+  // The haystack.
+  const hay = kit.mesh(
+    new SphereGeometry(1, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+    kit.lit(0xe5c24a, 0.9),
+    group,
+    HAYSTACK.x,
+    0,
+    HAYSTACK.z,
+  );
+  hay.scale.set(HAYSTACK.w / 2, HAYSTACK.h, 1.0);
+  for (let i = 0; i < 6; i++) {
+    const strand = kit.box(
+      0.5,
+      0.04,
+      0.04,
+      kit.lit(0xb89a2c, 0.9),
+      group,
+      HAYSTACK.x - 0.7 + i * 0.28,
+      0.35 + (i % 3) * 0.28,
+      HAYSTACK.z + 0.85,
+    );
+    strand.rotation.z = 0.3 * (i % 2 ? 1 : -1);
+  }
+  let playing = false;
+  const apply = (outcome: Outcome, variant: Variant, t: number) => {
+    playing = true;
+    sails.rotation.z = sailAngle(outcome, variant, t);
+    door.rotation.y = -millDoor(outcome, variant, t);
+  };
+  return {
+    group,
+    update: apply,
+    ambient(time) {
+      if (!playing) sails.rotation.z = -SAIL_SPIN * time;
+    },
+    reset() {
+      playing = false;
+      sails.rotation.z = 0;
+      door.rotation.y = 0;
+    },
+  };
+}
+
+// ---------- Jelly wobble ----------
+
+function buildJelly(kit: Kit): Built {
+  const group = new Group();
+  const rib = ribbonMaterial(kit);
+  kit.mesh(ribbon(jellyKicker, 1.5, 4.5, 0.4, 0, 1.2, 0xc98a4a, 0xb67a3c), rib, group);
+  // Chocolate chips on the cookie's side.
+  const chip = kit.lit(0x4a2a18, 0.8);
+  for (const [x, dy] of [
+    [2.2, 0.08],
+    [3.0, 0.2],
+    [3.8, 0.35],
+    [2.7, 0.04],
+  ]) {
+    kit.mesh(new SphereGeometry(0.09, 6, 5), chip, group, x, jellyKicker(x) * 0.5 + dy, 1.2);
+  }
+  const w = JELLY.x1 - JELLY.x0;
+  const depth = 2.2;
+  const midX = (JELLY.x0 + JELLY.x1) / 2;
+  // The plate, a little wider than the jelly all round.
+  kit.box(w + 0.8, JELLY_BASE, depth + 0.8, kit.lit(WHITE, 0.3), group, midX, JELLY_BASE / 2, 0);
+  const jellyHeight = JELLY.h - JELLY_BASE;
+  const geometry = new BoxGeometry(w, jellyHeight, depth, 8, 6, 2);
+  kit.geometries.push(geometry);
+  const pos = geometry.getAttribute('position');
+  const rest = new Float32Array(pos.array.length);
+  // Round the edges: pull corners and edges in a little, then move to obstacle-local space.
+  for (let i = 0; i < pos.count; i++) {
+    const ex = Math.abs(pos.getX(i)) / (w / 2);
+    const ey = Math.abs(pos.getY(i)) / (jellyHeight / 2);
+    const ez = Math.abs(pos.getZ(i)) / (depth / 2);
+    const pull = 1 - 0.09 * Math.max(0, ex + ez + 0.6 * ey - 1.2);
+    rest[i * 3] = midX + pos.getX(i) * pull;
+    rest[i * 3 + 1] = JELLY_BASE + jellyHeight / 2 + pos.getY(i);
+    rest[i * 3 + 2] = pos.getZ(i) * pull;
+  }
+  const material = new MeshStandardMaterial({
+    color: 0xe8203a,
+    transparent: true,
+    opacity: 0.62,
+    roughness: 0.15,
+    depthWrite: false,
+  });
+  kit.materials.push(material);
+  const jelly = new Mesh(geometry, material);
+  jelly.renderOrder = 10;
+  group.add(jelly);
+  // The paler core, hidden while the bike is inside.
+  const core = kit.box(
+    w - 1,
+    jellyHeight - 0.6,
+    depth - 1,
+    kit.lit(0xf47a8c, 0.4),
+    group,
+    midX,
+    JELLY_BASE + 0.3 + (jellyHeight - 0.6) / 2,
+    0,
+  );
+  const shape = (lean: number, squash: number) => {
+    const spread = 1 / Math.sqrt(squash);
+    for (let i = 0; i < pos.count; i++) {
+      const x = rest[i * 3];
+      const y = rest[i * 3 + 1];
+      const z = rest[i * 3 + 2];
+      pos.setXYZ(
+        i,
+        midX + (x - midX) * spread + lean * (y / JELLY.h) ** 2,
+        JELLY_BASE + (y - JELLY_BASE) * squash,
+        z * spread,
+      );
+    }
+    pos.needsUpdate = true;
+    geometry.computeVertexNormals();
+    core.scale.set(spread, squash, spread);
+    core.position.y = JELLY_BASE + 0.3 + ((jellyHeight - 0.6) / 2) * squash;
+    core.position.x = midX + lean * 0.3;
+  };
+  let playing = false;
+  const hideCore = (outcome: Outcome, variant: Variant, t: number) => {
+    const b = stuntBeats('jelly', outcome, variant);
+    if (outcome === 'clear') return variant === 1 && t >= b.in - 0.05 && t <= b.out + 0.05;
+    return variant === 0 && t >= b.land && t <= b.spit + 0.1;
+  };
+  const apply = (outcome: Outcome, variant: Variant, t: number) => {
+    playing = true;
+    const w = jellyWobble(outcome, variant, t);
+    shape(w.lean, w.squash);
+    core.visible = !hideCore(outcome, variant, t);
+  };
+  return {
+    group,
+    update: apply,
+    ambient(time) {
+      if (!playing) shape(0.04 * Math.sin(TAU * 1.3 * time), 1);
+    },
+    reset() {
+      playing = false;
+      shape(0, 1);
+      core.visible = true;
+    },
+  };
+}
+
 const BUILDERS: Record<ObstacleKind, (kit: Kit) => Built> = {
   loop: buildLoop,
   ramp: buildRamp,
@@ -1497,6 +1873,9 @@ const BUILDERS: Record<ObstacleKind, (kit: Kit) => Built> = {
   cannon: buildCannon,
   slide: buildSlide,
   trampolines: buildTrampolines,
+  buses: buildBuses,
+  windmill: buildWindmill,
+  jelly: buildJelly,
 };
 
 const CUTS: Record<ObstacleKind, readonly [number, number] | null> = {
@@ -1513,6 +1892,9 @@ const CUTS: Record<ObstacleKind, readonly [number, number] | null> = {
   cannon: null,
   slide: null,
   trampolines: null,
+  buses: null,
+  windmill: null,
+  jelly: null,
 };
 
 export function createObstacle(kind: ObstacleKind): Obstacle {
