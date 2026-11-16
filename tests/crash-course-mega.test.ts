@@ -43,6 +43,20 @@ import {
   T_RING,
   towerRamp,
 } from '../src/games/crash-course/mega/inferno-drop';
+import {
+  CROC_LEN,
+  CROC_TOP,
+  CROC_X,
+  crocDip,
+  crocJaw,
+  crocX,
+  logRamp,
+  monkeyAt,
+  rexHead,
+  rexTop,
+  stolenHelmetAt,
+  vineAngle,
+} from '../src/games/crash-course/mega/jungle-dash';
 import { createMegaCoursePool } from '../src/games/crash-course/mega/mega-obstacles';
 import {
   ferrisPivot,
@@ -120,8 +134,8 @@ describe.each(MEGA_IDS)('the %s course', (id) => {
     expect(megaCuts(id)).toEqual(expected);
   });
 
-  // Ice Slide has no order: its tall snowman wall is in the middle.
-  it.skipIf(id === 'ice-slide')(
+  // Ice Slide and Jungle Dash have no order: their tall elements are not last.
+  it.skipIf(id === 'ice-slide' || id === 'jungle-dash')(
     'keeps the elements getting bigger (the Triple Loop: smaller)',
     () => {
       const heights = spec.elements.map((e) => e.height);
@@ -858,5 +872,204 @@ describe('Ice Slide specifics', () => {
         expect(later.x).toBeGreaterThan(home.x + 0.5);
       }
     }
+  });
+});
+
+describe('Jungle Dash specifics', () => {
+  const id = 'jungle-dash';
+  const spec = MEGA_SPECS[id];
+  const [vine, river, rex] = spec.elements;
+  const rand = (() => {
+    let seed = 11;
+    return () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  })();
+  /** When element `index` starts in the stunt that clears `passed` of them. */
+  const startOf = (passed: Passed, index: number) => megaSegments(id, passed)[index].start;
+
+  it('has the three elements in order, each under the Mega limits', () => {
+    expect(spec.elements.map((e) => e.name)).toEqual(['Vine Swing', 'Croc River', 'T. rex Jump']);
+    expect(spec.elements.map((e) => e.length)).toEqual([24, 22, 28]);
+    expect(spec.elements.map((e) => e.floorY)).toEqual([-1.2, -1.4, 0]);
+    expect(spec.emoji).toBe('🦖');
+    expect(spec.airborne).toBeUndefined();
+    expect(spec.rise).toBeUndefined();
+    for (const e of spec.elements) {
+      expect(e.length).toBeLessThanOrEqual(28);
+      expect(e.height).toBeLessThanOrEqual(MEGA_MAX_H);
+      e.cuts.forEach(([, to]) => expect(to).toBeLessThanOrEqual(e.length));
+      expect(e.clear.slow).toHaveLength(1);
+      expect(e.crash.slow).toHaveLength(1);
+    }
+    expect(spec.elements.map((e) => e.cuts)).toEqual([[[8, 16]], [[4, 18]], []]);
+  });
+
+  it('keeps the bike and rider under the Mega limit in every stunt', () => {
+    for (const passed of PASSED) {
+      const total = megaDuration(id, passed);
+      for (let t = 0; t <= total; t += 1 / FPS) {
+        const f = megaFrame(id, passed, t);
+        expect(f.bike.y).toBeLessThanOrEqual(4.6 + 1e-6);
+        if (f.rider.mode === 'free') expect(f.rider.y + 1.2).toBeLessThanOrEqual(6.4);
+      }
+    }
+  });
+
+  it('only loses the helmet to the monkey, and has it back at the end of the Vine Swing crash', () => {
+    const d = vine.crash.duration;
+    const grab = vine.crash.beats.grab;
+    for (let t = 0; t <= d; t += 1 / FPS) {
+      const f = megaFrame(id, 0, t);
+      expect(f.rider.helmet, `helmet at ${t}`).toBe(!(t >= grab && t < d - 0.1));
+      expect(f.rider.coat).toBe(t >= vine.crash.beats.mud ? 'mud' : 'none');
+    }
+    const end = megaFrame(id, 0, d);
+    expect(end.rider).toMatchObject({ mode: 'free', pose: 'sit', coat: 'mud', helmet: true });
+    expect(end.rider.y).toBeLessThan(0);
+    // Everything else keeps its helmet and stays clean.
+    for (const passed of [1, 2, 3] as const) {
+      for (let t = 0; t <= megaDuration(id, passed); t += 1 / FPS) {
+        const f = megaFrame(id, passed, t);
+        if (megaLocate(id, passed, t).index === 0 && passed > 0) {
+          expect(f.rider.helmet).toBe(true);
+          expect(f.rider.coat).toBe('none');
+        }
+      }
+    }
+  });
+
+  it('shows the stolen helmet only while the monkey has it, then on the rider', () => {
+    const d = vine.crash.duration;
+    expect(stolenHelmetAt('crash', vine.crash.beats.grab - 0.05).visible).toBe(false);
+    expect(stolenHelmetAt('crash', vine.crash.beats.grab + 0.2).visible).toBe(true);
+    expect(stolenHelmetAt('crash', d).visible).toBe(false);
+    expect(stolenHelmetAt('clear', 1.5).visible).toBe(false);
+    const late = stolenHelmetAt('crash', d - 0.11);
+    const rider = megaFrame(id, 0, d).rider;
+    expect(Math.hypot(late.x - rider.x, late.y - (rider.y + 1))).toBeLessThan(1.2);
+  });
+
+  it('lets the rider hold the vine through the clear swing and release it over the mud', () => {
+    const swing = vine.clear.beats;
+    const f = megaFrame(id, 1, swing.bottom);
+    expect(f.rider.mode).toBe('seated');
+    expect(f.bike.y).toBeGreaterThan(1);
+    expect(Math.abs(vineAngle('clear', swing.bottom))).toBeLessThan(0.05);
+    const landed = megaFrame(id, 1, vine.clear.duration - 0.6);
+    expect(landed.bike.x).toBeGreaterThan(16);
+  });
+
+  it('hops from croc to croc in the Croc River clear, landing on each back in turn', () => {
+    const beats = river.clear.beats;
+    const times = [beats.hop1, beats.hop2, beats.hop3];
+    const start = vine.clear.duration;
+    times.forEach((t, i) => {
+      const f = megaFrame(id, 2, start + t + 0.02);
+      const x = f.bike.x - megaOffsets(id)[1];
+      expect(Math.abs(x - CROC_X[i]), `croc ${i}`).toBeLessThan(CROC_LEN / 2);
+      expect(f.bike.y).toBeLessThan(CROC_TOP + BIKE_Y + 0.3);
+      expect(crocDip('clear', i, t + 0.1)).toBeGreaterThan(0.1);
+    });
+    const bank = megaFrame(id, 2, start + beats.bank + 0.05);
+    expect(bank.bike.x - megaOffsets(id)[1]).toBeGreaterThan(18);
+    expect(bank.bike.y).toBeCloseTo(BIKE_Y, 1);
+  });
+
+  it('ends the Croc River crash with the rider sitting on croc 2 and the jaw shut on the wheel', () => {
+    const end = megaFrame(id, 1, megaDuration(id, 1));
+    const offset = megaOffsets(id)[1];
+    const croc = crocX('crash', 2, river.crash.duration);
+    expect(end.rider).toMatchObject({ mode: 'free', pose: 'sit', face: 'dizzy', visible: true });
+    expect(Math.abs(end.rider.x - offset - croc)).toBeLessThan(CROC_LEN / 2);
+    expect(end.rider.y).toBeCloseTo(CROC_TOP + 0.3, 5);
+    expect(crocJaw('crash', 1, river.crash.duration)).toBeGreaterThan(0);
+    expect(crocJaw('crash', 1, river.crash.duration)).toBeLessThan(0.3);
+    // The rider goes under the water, out of sight, between the splash and surfacing.
+    const hidden = megaFrame(id, 1, vine.clear.duration + river.crash.beats.splash + 0.2);
+    expect(hidden.rider.visible).toBe(false);
+  });
+
+  it('flips over the T. rex clear of its head, back and tail', () => {
+    const d = rex.clear.duration;
+    const offset = megaOffsets(id)[2];
+    for (let t = 0; t <= d; t += 1 / 240) {
+      const f = megaFrame(id, 3, startOf(3, 2) + t);
+      const x = f.bike.x - offset;
+      // Over the T. rex (the road before and after it is ridden, not cleared).
+      if (rexTop(x) === 0) continue;
+      expect(f.bike.y - 0.42, `bike at ${t}`).toBeGreaterThan(rexTop(x) + 0.2 - 1e-9);
+      const turn = f.bike.pitch - TAU * Math.round(f.bike.pitch / TAU);
+      if (Math.abs(turn) > 2 && f.rider.mode === 'seated') {
+        expect(f.bike.y - 1.5, `head at ${t}`).toBeGreaterThan(rexTop(x) + 0.2 - 1e-9);
+      }
+    }
+    const peak = megaFrame(id, 3, startOf(3, 2) + rex.clear.beats.peak);
+    expect(Math.abs(peak.bike.x - offset - 14.5)).toBeLessThan(0.3);
+    expect(peak.bike.y).toBeGreaterThan(4.3);
+    const landed = megaFrame(id, 3, startOf(3, 2) + rex.clear.beats.land + 0.01);
+    expect(landed.bike.x - offset).toBeGreaterThan(21);
+    expect(Math.abs(landed.bike.pitch - TAU)).toBeLessThan(0.6);
+  });
+
+  it('lands the T. rex crash on its head, then leaves the rider dangling and dropping', () => {
+    const c = rex.crash;
+    const start = startOf(2, 2);
+    const base = megaOffsets(id)[2];
+    const land = megaFrame(id, 2, start + c.beats.land);
+    expect(Math.abs(land.bike.x - base - 12.2)).toBeLessThan(0.05);
+    expect(land.bike.y).toBeCloseTo(rexTop(land.bike.x - base) + BIKE_Y, 5);
+    expect(land.bike.squash).toBeLessThan(0.9);
+    const hang = megaFrame(id, 2, start + (c.beats.arms + c.beats.drop) / 2);
+    expect(hang.rider).toMatchObject({ mode: 'free', pose: 'dangle' });
+    expect(hang.rider.y).toBeGreaterThan(0.5);
+    const end = megaFrame(id, 2, start + c.duration);
+    expect(end.rider).toMatchObject({ mode: 'free', pose: 'sit', face: 'dizzy' });
+    expect(end.rider.x - base).toBeCloseTo(12.9, 5);
+    expect(end.bike.x - base).toBeLessThan(11);
+    expect(Math.abs(end.bike.roll - Math.PI / 2)).toBeLessThan(0.01);
+  });
+
+  it('has a continuous log ramp that ends at the road', () => {
+    expect(logRamp(0)).toBe(0);
+    expect(logRamp(2)).toBe(0);
+    expect(logRamp(8)).toBeCloseTo(2.4, 5);
+    expect(logRamp(rex.length)).toBe(0);
+    for (let x = 0; x < rex.length; x += 0.05) {
+      expect(Math.abs(logRamp(x + 0.05) - logRamp(x))).toBeLessThan(0.4);
+    }
+  });
+
+  it('keeps the monkey, helmet, crocs and T. rex head finite and in range at any time', () => {
+    for (let n = 0; n < runs(3000, 600); n++) {
+      const outcome = rand() < 0.5 ? 'clear' : 'crash';
+      const t = -1 + rand() * 7;
+      const m = monkeyAt(outcome, t);
+      const h = stolenHelmetAt(outcome, t);
+      for (const v of [m.x, m.y, m.rot, m.scale, h.x, h.y, h.rot])
+        expect(Number.isFinite(v)).toBe(true);
+      expect(m.y).toBeGreaterThan(3);
+      const i = Math.floor(rand() * 3);
+      const dip = crocDip(outcome, i, t);
+      const jaw = crocJaw(outcome, i, t);
+      expect(dip).toBeGreaterThanOrEqual(0);
+      expect(dip).toBeLessThanOrEqual(0.3 + 1e-9);
+      expect(jaw).toBeGreaterThanOrEqual(0);
+      expect(jaw).toBeLessThanOrEqual(0.9 + 1e-9);
+      if (outcome === 'clear' || i !== 1) expect(jaw).toBe(0);
+      expect(Number.isFinite(crocX(outcome, i, t))).toBe(true);
+      const head = rexHead(outcome, t);
+      expect(Math.abs(head.turn)).toBeLessThanOrEqual(0.8 + 1e-9);
+      expect(head.jaw).toBeGreaterThanOrEqual(-1e-9);
+      expect(head.jaw).toBeLessThanOrEqual(0.7 + 1e-9);
+      expect(Math.abs(head.shake)).toBeLessThanOrEqual(0.5 + 1e-9);
+      for (const v of [head.turn, head.jaw, head.shake]) expect(Number.isFinite(v)).toBe(true);
+    }
+  });
+
+  it('only opens a jaw in the crash, on the second croc', () => {
+    for (let t = 0; t < 4; t += 0.05) {
+      for (const i of [0, 1, 2]) expect(crocJaw('clear', i, t)).toBe(0);
+    }
+    expect(crocJaw('crash', 1, river.crash.beats.chomp - 0.2)).toBeGreaterThan(0.5);
+    expect(crocJaw('crash', 0, 0.9)).toBe(0);
   });
 });

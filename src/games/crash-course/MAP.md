@@ -1,6 +1,6 @@
 # Crash Course map
 
-A stunt-bike side view: each answer sends the bike at an obstacle (16 kinds, each with a clear and a crash version) and every 8th is a Mega Stunt course of three big elements (5 courses).
+A stunt-bike side view: each answer sends the bike at an obstacle (16 kinds, each with a clear and a crash version) and every 8th is a Mega Stunt course of three big elements (6 courses).
 
 ## Files
 
@@ -30,11 +30,13 @@ A stunt-bike side view: each answer sends the bike at an obstacle (16 kinds, eac
 - `mega/inferno-drop-props.ts`: Inferno Drop meshes (`buildInfernoDropProps`)
 - `mega/ice-slide.ts`: Mega 5, ice ramp drift, snowman wall and igloo jump (`iceSurface`, `snowPieceAt`, `iglooSurface`, `iceBlockAt`, `SNOW_HAT`)
 - `mega/ice-slide-props.ts`: Ice Slide meshes (`buildIceSlideProps`)
+- `mega/jungle-dash.ts`: Mega 6, vine swing with a helmet-stealing monkey, croc river and T. rex backflip (`vineAngle`, `monkeyAt`, `stolenHelmetAt`, `crocDip`, `crocJaw`, `crocX`, `logRamp`, `rexTop`, `rexHead`)
+- `mega/jungle-dash-props.ts`: Jungle Dash meshes and the jungle scenery (`buildJungleDashProps`)
 
 ## Dev hooks
 
 - `?kinds=loop,ramp`: obstacles come in this order and repeat (`loop`, `ramp`, `ring`, `crates`, `bridge`, `seesaw`, `coaster`, `halfpipe`, `penguins`, `wrecker`, `cannon`, `slide`, `trampolines`, `buses`, `windmill`, `jelly`).
-- `?megas=triple-loop,...`: Mega courses come in this order (`triple-loop`, `sky-circus`, `volcano-rush`, `inferno-drop`, `ice-slide`).
+- `?megas=triple-loop,...`: Mega courses come in this order (`triple-loop`, `sky-circus`, `volcano-rush`, `inferno-drop`, `ice-slide`, `jungle-dash`).
 - `?mega=1`: the first obstacle is a Mega Stunt. `?bikes=1`: start with 1 to 3 bikes.
 - `?lab=<kind>:<clear|crash>:<0|1>`: stunt lab, loops one stunt with the HUD hidden. `?lab=<megaId>:<0-3>`: the same for a Mega course with that many questions right.
 - `&at=<seconds>` freezes the stunt at that time; `&nitro=1` shows a nitro run-up.
@@ -53,6 +55,6 @@ A stunt-bike side view: each answer sends the bike at an obstacle (16 kinds, eac
 
 - `tests/crash-course.test.ts`
 - `tests/crash-course-stunts.test.ts` (all 64 stunts and the Cannon Wall, Giant Slide, Trampoline Park, Bus Jump, Windmill and Jelly Wobble props, and the rider's helmet and coat)
-- `tests/crash-course-mega.test.ts` (Mega courses)
+- `tests/crash-course-mega.test.ts` (Mega courses, with the Jungle Dash specifics)
 - `tests/crash-course-sounds.test.ts` (every `sfx:` event names a sound in `src/shared/audio.ts`)
 - `tests/tap-to-continue.test.ts` (tap-to-continue flow in `main.ts`)
