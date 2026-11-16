@@ -32,14 +32,17 @@
   gap: 10px;
   padding: 6px 8px 6px 22px;
   border-radius: 20px;
+  max-width: 100%;
   background: rgba(15, 18, 32, 0.8);
   pointer-events: auto;
 }
 
+/* A long word prompt ("Antonym of MICROSCOPIC") wraps instead of running off a narrow screen. */
 .pk-problem-text {
+  min-width: 0;
   font-size: clamp(30px, 8vmin, 60px);
   font-weight: 800;
-  white-space: nowrap;
+  text-align: center;
 }
 
 .pk-hear {
