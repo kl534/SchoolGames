@@ -24,7 +24,11 @@ export const RECENT_MAX = 4;
 /** How many "Recently played" chips the picker shows. */
 export const RECENT_SHOWN = 3;
 
-export const PATH_EMOJI: Record<PathId, string> = { math: '🔢', 'social-studies': '🌎' };
+export const PATH_EMOJI: Record<PathId, string> = {
+  math: '🔢',
+  'social-studies': '🌎',
+  vocabulary: '📖',
+};
 
 /** Topics matching a pattern become number tiles; `n` is the first capture group. */
 const TILE_PATTERNS: { pattern: RegExp; label: string }[] = [

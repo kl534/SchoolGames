@@ -2,8 +2,10 @@ import { factWeight, isLearned, reviewDue, type FactStat, type PlayerProgress } 
 import { shuffle, weightedSample, type Random } from './random';
 import { answerOptions, type Fact, type Topic } from './topics';
 import { SOCIAL_STUDIES_LEVELS } from './levels-social';
+import { VOCABULARY_LEVELS } from './levels-vocabulary';
 import { MATH_TOPICS, missingTwin, type Blank } from './topics/math';
 import { SOCIAL_STUDIES_TOPICS } from './topics/social-studies';
+import { VOCABULARY_TOPICS } from './topics/vocabulary';
 
 /** Pseudo topic id: My Level stars and high scores are saved under it. It is not in `TOPICS`. */
 export const MY_LEVEL_ID = 'my-level';
@@ -255,7 +257,7 @@ export const LEVELS: Level[] = [
   twins(bigLevels[2].divide, 'first', '? ÷ 15 = 6'),
 ];
 
-export type PathId = 'math' | 'social-studies';
+export type PathId = 'math' | 'social-studies' | 'vocabulary';
 
 export interface LevelPath {
   /** Used in menu URLs (`?path=`, `?topics=`) and as the key of `pathLevelsOpen`. */
@@ -271,6 +273,8 @@ export interface LevelPath {
 
 /** Pseudo topic id: Social Studies stars and high scores are saved under it. Not in `TOPICS`. */
 export const SOCIAL_STUDIES_LEVEL_ID = 'social-studies-level';
+/** Pseudo topic id: Vocabulary stars and high scores are saved under it. Not in `TOPICS`. */
+export const VOCABULARY_LEVEL_ID = 'vocabulary-level';
 
 export const MATH_PATH: LevelPath = {
   id: 'math',
@@ -286,8 +290,15 @@ export const SOCIAL_STUDIES_PATH: LevelPath = {
   topics: SOCIAL_STUDIES_TOPICS,
   levels: SOCIAL_STUDIES_LEVELS,
 };
+export const VOCABULARY_PATH: LevelPath = {
+  id: 'vocabulary',
+  title: 'Vocabulary',
+  levelTopicId: VOCABULARY_LEVEL_ID,
+  topics: VOCABULARY_TOPICS,
+  levels: VOCABULARY_LEVELS,
+};
 /** Tab order. */
-export const PATHS: LevelPath[] = [MATH_PATH, SOCIAL_STUDIES_PATH];
+export const PATHS: LevelPath[] = [MATH_PATH, SOCIAL_STUDIES_PATH, VOCABULARY_PATH];
 
 export function getPath(id: string | null | undefined): LevelPath | undefined {
   return PATHS.find((p) => p.id === id);
