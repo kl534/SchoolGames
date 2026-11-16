@@ -52,14 +52,17 @@
   gap: 10px;
   padding: 6px 8px 6px 22px;
   border-radius: 20px;
+  max-width: 100%;
   background: rgba(47, 24, 84, 0.85);
   pointer-events: auto;
 }
 
+/* A long word prompt ("Synonym of CONSIDERATE") wraps instead of running off a narrow screen. */
 .zb-problem-text {
+  min-width: 0;
   font-size: clamp(28px, 7vmin, 56px);
   font-weight: 800;
-  white-space: nowrap;
+  text-align: center;
 }
 
 .zb-hear {

@@ -12,6 +12,8 @@ import {
   pathOfTopic,
   SOCIAL_STUDIES_LEVEL_ID,
   SOCIAL_STUDIES_PATH,
+  UNLOCK_SHARE,
+  VOCABULARY_PATH,
   levelLabel,
   levelPassed,
   levelsOpen,
@@ -35,6 +37,14 @@ import {
   type PlayerProgress,
 } from '../src/shared/progress';
 import { SOCIAL_STUDIES_LEVELS } from '../src/shared/levels-social';
+import { VOCABULARY_LEVELS } from '../src/shared/levels-vocabulary';
+import {
+  ANTONYM_TOPICS,
+  antonymFact,
+  SYNONYM_TOPICS,
+  synonymFact,
+  VOCAB_GRADES,
+} from '../src/shared/topics/vocabulary';
 import { seededRandom } from '../src/shared/random';
 import { answerOptions, TOPICS, validateTopic } from '../src/shared/topics';
 import { DIVISION_REGION, STATE_CAPITALS, stateCapitals } from '../src/shared/topics/capitals';
@@ -886,5 +896,90 @@ describe('Social Studies path', () => {
 
   it('knows the real topic of a capital fact', () => {
     expect(topicOfFact(stateCapitals.facts[0])).toBe(stateCapitals);
+  });
+});
+
+describe('Vocabulary path', () => {
+  const path = VOCABULARY_PATH;
+  const level1 = VOCABULARY_LEVELS[0].facts;
+
+  it('has 18 levels, six sets for each of Grades 2 to 4', () => {
+    expect(VOCABULARY_LEVELS).toHaveLength(18);
+    expect(VOCABULARY_LEVELS.map((l) => l.title)).toEqual(
+      ['2', '3', '4'].flatMap((g) => [1, 2, 3, 4, 5, 6].map((s) => `Grade ${g} · Set ${s}`)),
+    );
+  });
+
+  it("holds each set's 50 words as the topics' own facts, synonym then antonym", () => {
+    VOCAB_GRADES.forEach((grade, g) => {
+      for (let k = 0; k < 6; k++) {
+        const expected: unknown[] = [];
+        for (const row of grade.rows.slice(50 * k, 50 * k + 50)) {
+          const syn = SYNONYM_TOPICS[g].facts.find((f) => f.id === synonymFact(row).id);
+          expected.push(syn);
+          const ant = antonymFact(row);
+          if (ant) expected.push(ANTONYM_TOPICS[g].facts.find((f) => f.id === ant.id));
+        }
+        const facts = VOCABULARY_LEVELS[g * 6 + k].facts;
+        expect(facts.length).toBe(expected.length);
+        facts.forEach((lf, i) => expect(lf.fact).toBe(expected[i]));
+      }
+    });
+  });
+
+  it('holds every vocab fact exactly once', () => {
+    const all = VOCABULARY_LEVELS.flatMap((l) => l.facts.map((lf) => lf.fact));
+    const expected = [...SYNONYM_TOPICS, ...ANTONYM_TOPICS].reduce((n, t) => n + t.facts.length, 0);
+    expect(all.length).toBe(expected);
+    expect(new Set(all).size).toBe(expected);
+  });
+
+  it('looks the path up', () => {
+    expect(PATHS.map((p) => p.id)).toEqual(['math', 'social-studies', 'vocabulary']);
+    expect(getPath('vocabulary')).toBe(path);
+    expect(pathForLevelTopic('vocabulary-level')).toBe(path);
+    expect(pathOfTopic('antonyms-grade-3')).toBe(path);
+    expect(pathOfTopic('synonyms-grade-2')).toBe(path);
+  });
+
+  it('labels a level', () => {
+    expect(levelLabel(1, path)).toBe('Level 1 of 18: Grade 2 · Set 1');
+  });
+
+  const topicIdOf = (fact: { id: string }) =>
+    fact.id.startsWith('syn-') ? 'synonyms-grade-2' : 'antonyms-grade-2';
+  const answerLevel1 = (progress: PlayerProgress, count: number) => {
+    for (const lf of level1.slice(0, count)) {
+      clock += REVIEW_SPACING_MS;
+      recordAnswer(progress, topicIdOf(lf.fact), lf.fact.id, true, clock);
+    }
+  };
+
+  it('opens level 2 once 80% of level 1 was answered right', () => {
+    const need = Math.ceil(level1.length * UNLOCK_SHARE);
+    const p = emptyProgress();
+    expect(levelsOpen(p, path)).toBe(1);
+    answerLevel1(p, need - 1);
+    expect(levelsOpen(p, path)).toBe(1);
+    answerLevel1(p, need);
+    expect(levelsOpen(p, path)).toBe(2);
+  });
+
+  it('picks only Grade 2 Set 1 facts for a new player', () => {
+    const allowed = new Set(level1.map((lf) => lf.fact.id));
+    for (let seed = 0; seed < runs(30, 5); seed++) {
+      const picked = chooseLevelFacts(emptyProgress(), 10, seededRandom(seed), path);
+      expect(picked).toHaveLength(10);
+      for (const fact of picked) expect(allowed.has(fact.id)).toBe(true);
+    }
+  });
+
+  it('makes a valid My Level topic', () => {
+    const topic = myLevelTopic(() => 'x', path);
+    expect(topic.id).toBe('vocabulary-level');
+    expect(validateTopic(topic)).toEqual([]);
+    expect(topicOfFact(ANTONYM_TOPICS[0].facts.find((f) => f.id === 'ant-happy')!)?.id).toBe(
+      'antonyms-grade-2',
+    );
   });
 });

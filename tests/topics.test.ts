@@ -226,6 +226,8 @@ describe('built-in topics', () => {
       'Multiplication',
       'Division',
       'Social Studies',
+      'Synonyms',
+      'Antonyms',
     ]);
     const ids = (subject: string) =>
       groupBySubject()
@@ -442,11 +444,14 @@ describe('state capitals', () => {
     expect(DIVISION_REGION[fourth.division]).toBe('northeast');
   });
 
-  it('is the last menu group, Social Studies', () => {
-    expect(groupBySubject().at(-1)).toEqual({
+  it('has Social Studies before the Synonyms and Antonyms groups', () => {
+    const groups = groupBySubject();
+    expect(groups.at(-3)).toEqual({
       subject: 'Social Studies',
       topics: [stateLocations, countryLocations, stateCapitals],
     });
+    expect(groups.at(-2)?.subject).toBe('Synonyms');
+    expect(groups.at(-1)?.subject).toBe('Antonyms');
   });
 });
 
