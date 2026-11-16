@@ -420,6 +420,13 @@ h2.subject {
   }
 }
 
+/* Three paths side by side, so no row sits alone. */
+@media (min-width: 760px) {
+  .pick-grid.paths {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
 .pick-row {
   display: block;
   min-height: 64px;
