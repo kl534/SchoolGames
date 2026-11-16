@@ -54,15 +54,18 @@
   gap: 10px;
   padding: 6px 8px 6px 22px;
   border-radius: 20px;
+  max-width: 100%;
   background: rgba(22, 14, 64, 0.82);
   border: 2px solid rgba(124, 108, 255, 0.55);
   pointer-events: auto;
 }
 
+/* A long word prompt (\"Antonym of INDISPENSABLE\") wraps instead of running off a narrow screen. */
 .ar-problem-text {
+  min-width: 0;
   font-size: clamp(28px, 7vmin, 56px);
   font-weight: 800;
-  white-space: nowrap;
+  text-align: center;
 }
 
 .ar-hear {

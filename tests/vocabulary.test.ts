@@ -110,9 +110,15 @@ describe('vocabulary topics', () => {
       'synonyms-grade-2',
       'synonyms-grade-3',
       'synonyms-grade-4',
+      'synonyms-grade-5',
+      'synonyms-grade-6',
+      'synonyms-grade-7',
       'antonyms-grade-2',
       'antonyms-grade-3',
       'antonyms-grade-4',
+      'antonyms-grade-5',
+      'antonyms-grade-6',
+      'antonyms-grade-7',
     ]);
     expect(SYNONYM_TOPICS.every((t) => t.subject === 'Synonyms')).toBe(true);
     expect(ANTONYM_TOPICS.every((t) => t.subject === 'Antonyms')).toBe(true);
