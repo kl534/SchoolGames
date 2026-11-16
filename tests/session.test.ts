@@ -484,7 +484,7 @@ describe('Vocabulary level session', () => {
   it('starts at level 1', () => {
     const session = start('Vocab starter');
     expect(session.topic.id).toBe(VOCABULARY_LEVEL_ID);
-    expect(session.topic.description).toBe('Level 1 of 36: Grade 2 · Set 1');
+    expect(session.topic.description).toBe('Level 1 of 54: Grade 2 · Set 1');
   });
 
   it("saves answers under the fact's own topic and the vocabulary level count only", () => {

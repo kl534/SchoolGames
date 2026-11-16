@@ -903,10 +903,10 @@ describe('Vocabulary path', () => {
   const path = VOCABULARY_PATH;
   const level1 = VOCABULARY_LEVELS[0].facts;
 
-  it('has 36 levels, six sets for each of Grades 2 to 7', () => {
-    expect(VOCABULARY_LEVELS).toHaveLength(36);
+  it('has 54 levels, six sets for each of Grades 2 to 10', () => {
+    expect(VOCABULARY_LEVELS).toHaveLength(54);
     expect(VOCABULARY_LEVELS.map((l) => l.title)).toEqual(
-      ['2', '3', '4', '5', '6', '7'].flatMap((g) =>
+      ['2', '3', '4', '5', '6', '7', '8', '9', '10'].flatMap((g) =>
         [1, 2, 3, 4, 5, 6].map((s) => `Grade ${g} · Set ${s}`),
       ),
     );
@@ -945,7 +945,7 @@ describe('Vocabulary path', () => {
   });
 
   it('labels a level', () => {
-    expect(levelLabel(1, path)).toBe('Level 1 of 36: Grade 2 · Set 1');
+    expect(levelLabel(1, path)).toBe('Level 1 of 54: Grade 2 · Set 1');
   });
 
   const topicIdOf = (fact: { id: string }) =>
