@@ -120,8 +120,8 @@ describe.each(MEGA_IDS)('the %s course', (id) => {
     expect(megaCuts(id)).toEqual(expected);
   });
 
-  // Ice Slide has no order: its tall snowman wall is in the middle.
-  it.skipIf(id === 'ice-slide')(
+  // Ice Slide and Jungle Dash have no order: their tall elements are not last.
+  it.skipIf(id === 'ice-slide' || id === 'jungle-dash')(
     'keeps the elements getting bigger (the Triple Loop: smaller)',
     () => {
       const heights = spec.elements.map((e) => e.height);

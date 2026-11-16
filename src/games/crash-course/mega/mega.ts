@@ -17,6 +17,7 @@ import {
 } from '../stunts';
 import { ICE_SLIDE } from './ice-slide';
 import { INFERNO_DROP } from './inferno-drop';
+import { JUNGLE_DASH } from './jungle-dash';
 import { SKY_CIRCUS } from './sky-circus';
 import { TRIPLE_LOOP } from './triple-loop';
 import { VOLCANO_RUSH } from './volcano-rush';
@@ -56,6 +57,7 @@ export const MEGA_SPECS: Record<MegaId, MegaSpec> = {
   'volcano-rush': VOLCANO_RUSH,
   'inferno-drop': INFERNO_DROP,
   'ice-slide': ICE_SLIDE,
+  'jungle-dash': JUNGLE_DASH,
 };
 
 const specOf = (id: MegaId) => MEGA_SPECS[id];
