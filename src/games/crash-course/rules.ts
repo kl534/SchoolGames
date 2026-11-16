@@ -130,12 +130,7 @@ export function startsMega(n: number): boolean {
 // ---------- Mega courses ----------
 
 export type MegaId =
-  | 'triple-loop'
-  | 'sky-circus'
-  | 'volcano-rush'
-  | 'inferno-drop'
-  | 'ice-slide'
-  | 'jungle-dash';
+  'triple-loop' | 'sky-circus' | 'volcano-rush' | 'inferno-drop' | 'ice-slide' | 'jungle-dash';
 /** The Mega courses, in the order `nextMega` picks among them. */
 export const MEGA_IDS: readonly MegaId[] = [
   'triple-loop',
