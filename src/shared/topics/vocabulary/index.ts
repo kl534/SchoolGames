@@ -9,6 +9,9 @@ import { GRADE_7 } from './grade-7';
 import { GRADE_8 } from './grade-8';
 import { GRADE_9 } from './grade-9';
 import { GRADE_10 } from './grade-10';
+import { GRADE_11 } from './grade-11';
+import { GRADE_12 } from './grade-12';
+import { GRADE_COLLEGE } from './grade-college';
 import type { VocabRow } from './types';
 
 export type { PartOfSpeech, VocabRow } from './types';
@@ -34,6 +37,9 @@ export const VOCAB_GRADES: VocabGrade[] = [
   { id: '8', title: 'Grade 8', rows: GRADE_8 },
   { id: '9', title: 'Grade 9', rows: GRADE_9 },
   { id: '10', title: 'Grade 10', rows: GRADE_10 },
+  { id: '11', title: 'Grade 11', rows: GRADE_11 },
+  { id: '12', title: 'Grade 12', rows: GRADE_12 },
+  { id: 'college', title: 'College', rows: GRADE_COLLEGE },
 ];
 export const SETS_PER_GRADE = 6;
 export const WORDS_PER_SET = 50;
