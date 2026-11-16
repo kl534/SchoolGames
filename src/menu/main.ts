@@ -799,7 +799,7 @@ function renderPicker(
   // Folded when the current choice is a path; open for a single topic or `?topics=<path>`.
   setOpen(Boolean(path) || !pathForLevelTopic(current));
   toggle.addEventListener('click', () => {
-    setOpen(oneTopic.hidden);
+    setOpen(Boolean(oneTopic.hidden));
     if (!oneTopic.hidden) toggle.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
