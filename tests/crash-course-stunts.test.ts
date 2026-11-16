@@ -16,9 +16,17 @@ import {
   barrelAt,
   barrelHome,
   BIKE_Y,
+  BUS_TOP,
+  BUS_X,
   cannonRecoil,
   createFrame,
   crateAt,
+  JELLY,
+  jellyWobble,
+  kidPop,
+  millDoor,
+  resetFrame,
+  sailAngle,
   PIT_Y,
   plankAt,
   SPECS,
@@ -30,6 +38,7 @@ import {
   stuntWord,
   TAU,
   track,
+  BUS_LEN,
   type Frame,
 } from '../src/games/crash-course/stunts';
 
@@ -60,10 +69,10 @@ function numbers(f: Frame): number[] {
 
 const near = (a: number, b: number, tolerance = 0.02) => Math.abs(a - b) <= tolerance;
 
-describe('there are 52 stunts', () => {
+describe('there are 64 stunts', () => {
   it('covers every kind, outcome and variant', () => {
     expect(cases).toHaveLength(OBSTACLE_KINDS.length * 4);
-    expect(OBSTACLE_KINDS).toHaveLength(13);
+    expect(OBSTACLE_KINDS).toHaveLength(16);
   });
 });
 
@@ -277,7 +286,7 @@ describe('props', () => {
   });
 });
 
-const NEW_KINDS: ObstacleKind[] = ['cannon', 'slide', 'trampolines'];
+const NEW_KINDS: ObstacleKind[] = ['buses', 'windmill', 'jelly'];
 const newCases = cases.filter(([kind]) => NEW_KINDS.includes(kind));
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
@@ -427,5 +436,166 @@ describe('Trampoline Park props', () => {
       trampolineDip('clear', 0, 1, stuntBeats('trampolines', 'clear', 0).b2 + 0.12),
     ).toBeCloseTo(0.45, 2);
     expect(trampolineDip('clear', 0, 0, 0.1)).toBe(0);
+  });
+});
+
+describe('Bus Jump props', () => {
+  it('keeps the kids in 0 to 1, and down outside the passes in a clear', () => {
+    for (const outcome of OUTCOMES) {
+      for (const variant of VARIANTS) {
+        const beats = stuntBeats('buses', outcome, variant);
+        for (let n = 0; n < runs(600, 120); n++) {
+          const t = rand(-0.5, 4.5);
+          for (let i = 0; i < 3; i++) {
+            const pop = kidPop(outcome, variant, i, t);
+            expect(pop).toBeGreaterThanOrEqual(0);
+            expect(pop).toBeLessThanOrEqual(1);
+            if (outcome === 'clear') {
+              const pass = beats[`pass${i}`];
+              // They rise 0.3 s before the bike is over the bus and are down 0.75 s after.
+              if (t < pass - 0.3 || t > pass + 0.75) expect(pop).toBe(0);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it('pops every bus up to 0.6 at the hit in a crash, and keeps them there', () => {
+    for (const variant of VARIANTS) {
+      const hit = stuntBeats('buses', 'crash', variant).hit;
+      for (let i = 0; i < 3; i++) {
+        expect(kidPop('crash', variant, i, hit - 0.01)).toBe(0);
+        expect(kidPop('crash', variant, i, hit + 0.5)).toBeCloseTo(0.6, 9);
+        expect(kidPop('crash', variant, i, 9)).toBeCloseTo(0.6, 9);
+      }
+    }
+  });
+
+  it('never puts the bike inside a bus in either clear', () => {
+    for (const variant of VARIANTS) {
+      const duration = stuntDuration('buses', 'clear', variant);
+      for (let t = 0; t <= duration; t += 1 / FPS) {
+        const f = stuntFrame('buses', 'clear', variant, t);
+        for (const x of BUS_X) {
+          if (Math.abs(f.bike.x - x) < BUS_LEN / 2) {
+            expect(f.bike.y - 0.42, `bike over the bus at ${x}, t = ${t}`).toBeGreaterThanOrEqual(
+              BUS_TOP - 1e-6,
+            );
+          }
+        }
+      }
+    }
+  });
+});
+
+describe('Windmill props', () => {
+  it('turns the sails smoothly', () => {
+    for (const outcome of OUTCOMES) {
+      for (const variant of VARIANTS) {
+        for (let n = 0; n < runs(400, 80); n++) {
+          const t = rand(0, 3.8);
+          const a = sailAngle(outcome, variant, t);
+          expect(Number.isFinite(a)).toBe(true);
+          expect(Math.abs(sailAngle(outcome, variant, t + 1 / FPS) - a)).toBeLessThan(0.3);
+        }
+      }
+    }
+  });
+
+  it('puts a sail tip straight down over the ducking rider in clear 0', () => {
+    const duck = stuntBeats('windmill', 'clear', 0).duck;
+    const angle = sailAngle('clear', 0, duck);
+    const off = Math.min(
+      ...[0, 1, 2, 3].map((k) => {
+        const d = (angle + (k * Math.PI) / 2 + Math.PI / 2) % TAU;
+        return Math.min(Math.abs(d), TAU - Math.abs(d));
+      }),
+    );
+    expect(off).toBeLessThan(0.25);
+    expect(near(stuntFrame('windmill', 'clear', 0, duck).bike.x, 9, 0.6)).toBe(true);
+  });
+
+  it('opens the door only in the flour crash', () => {
+    for (const outcome of OUTCOMES) {
+      for (const variant of VARIANTS) {
+        for (let n = 0; n < runs(300, 60); n++) {
+          const open = millDoor(outcome, variant, rand(-0.5, 4.5));
+          expect(open).toBeGreaterThanOrEqual(0);
+          expect(open).toBeLessThanOrEqual(1.4);
+          if (!(outcome === 'crash' && variant === 1)) expect(open).toBe(0);
+        }
+      }
+    }
+    expect(millDoor('crash', 1, 3)).toBeCloseTo(1.4, 9);
+  });
+});
+
+describe('Jelly Wobble props', () => {
+  it('stays in its ranges and is still at the start and the end of a clear', () => {
+    for (const outcome of OUTCOMES) {
+      for (const variant of VARIANTS) {
+        const duration = stuntDuration('jelly', outcome, variant);
+        for (let n = 0; n < runs(600, 120); n++) {
+          const w = jellyWobble(outcome, variant, rand(-0.5, duration + 0.5));
+          expect(Math.abs(w.lean)).toBeLessThanOrEqual(0.7);
+          expect(w.squash).toBeGreaterThanOrEqual(0.7);
+          expect(w.squash).toBeLessThanOrEqual(1.2);
+        }
+        expect(jellyWobble(outcome, variant, 0)).toEqual({ lean: 0, squash: 1 });
+        if (outcome === 'clear') {
+          for (let t = duration - 0.2; t <= duration; t += 0.02) {
+            const w = jellyWobble(outcome, variant, t);
+            expect(Math.abs(w.lean)).toBeLessThan(0.03);
+            expect(Math.abs(w.squash - 1)).toBeLessThan(0.03);
+          }
+        }
+      }
+    }
+  });
+
+  it('wobbles when it is hit', () => {
+    const land = stuntBeats('jelly', 'clear', 0).land;
+    expect(jellyWobble('clear', 0, land + 0.05).squash).toBeLessThan(0.85);
+    const out = stuntBeats('jelly', 'clear', 1).out;
+    expect(
+      Math.max(...[0.05, 0.1, 0.15].map((d) => jellyWobble('clear', 1, out + d).lean)),
+    ).toBeGreaterThan(0.3);
+  });
+
+  it('has the bike inside the jelly box between going in and coming out', () => {
+    const beats = stuntBeats('jelly', 'clear', 1);
+    for (let t = beats.in; t <= beats.out; t += 1 / FPS) {
+      const f = stuntFrame('jelly', 'clear', 1, t);
+      expect(f.bike.x, `x at ${t}`).toBeGreaterThanOrEqual(JELLY.x0 - 1e-6);
+      expect(f.bike.x, `x at ${t}`).toBeLessThanOrEqual(JELLY.x1 + 1e-6);
+      expect(f.bike.y, `y at ${t}`).toBeGreaterThan(0.15);
+      expect(f.bike.y, `y at ${t}`).toBeLessThan(JELLY.h);
+    }
+  });
+});
+
+describe('rider helmet and coat', () => {
+  it('has a helmet and no coat in a new frame, and a reset restores them', () => {
+    expect(createFrame().rider).toMatchObject({ helmet: true, coat: 'none' });
+    const f = createFrame();
+    f.rider.helmet = false;
+    f.rider.coat = 'mud';
+    expect(resetFrame(f).rider).toMatchObject({ helmet: true, coat: 'none' });
+  });
+
+  it('wears the flour only at the end of the flour crash, and nothing else is ever covered', () => {
+    for (const [kind, outcome, variant] of cases) {
+      const duration = stuntDuration(kind, outcome, variant);
+      const flour = kind === 'windmill' && outcome === 'crash' && variant === 1;
+      for (let t = 0; t <= duration + 1e-9; t += 1 / FPS) {
+        const r = stuntFrame(kind, outcome, variant, t).rider;
+        expect(r.helmet, `${kind} ${outcome} ${variant} at ${t}`).toBe(true);
+        if (!flour) expect(r.coat, `${kind} ${outcome} ${variant} at ${t}`).toBe('none');
+      }
+      expect(stuntFrame(kind, outcome, variant, duration).rider.coat).toBe(
+        flour ? 'flour' : 'none',
+      );
+    }
   });
 });
