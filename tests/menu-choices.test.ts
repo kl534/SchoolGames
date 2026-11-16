@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
+  PATH_COLORS,
   RECENT_MAX,
   choiceInfo,
   currentChoice,
   factListSections,
   isChoice,
+  levelPathFor,
   masteryLabel,
   masteryText,
   pickerSections,
   readyLabel,
-  recentChoices,
   rememberChoice,
 } from '../src/menu/choices';
 import { demoStepsProgress } from '../src/menu/dev';
@@ -90,11 +91,30 @@ describe('rememberChoice', () => {
   });
 });
 
-describe('recentChoices', () => {
-  it('leaves out the current choice, shows at most 3, newest first', () => {
-    const p = { ...emptyProgress(), recent: ['times-1', 'times-2', 'times-3', 'times-4'] };
-    expect(recentChoices(p)).toEqual(['times-2', 'times-3', 'times-4']);
-    expect(recentChoices(emptyProgress())).toEqual([]);
+describe('levelPathFor', () => {
+  it("is undefined for a path and the topic's path for a topic", () => {
+    const p = emptyProgress();
+    for (const id of ['my-level', 'social-studies-level', 'vocabulary-level']) {
+      expect(levelPathFor(p, id)).toBeUndefined();
+    }
+    expect(levelPathFor(p, 'times-7')?.id).toBe('math');
+    expect(levelPathFor(p, 'state-capitals')?.id).toBe('social-studies');
+    expect(levelPathFor(p, 'synonyms-grade-2')?.id).toBe('vocabulary');
+  });
+
+  it('always offers a path for a topic and none for a path', () => {
+    const p = emptyProgress();
+    for (const t of TOPICS) expect(levelPathFor(p, t.id)).toBeDefined();
+    for (const path of PATHS) expect(levelPathFor(p, path.levelTopicId)).toBeUndefined();
+  });
+});
+
+describe('PATH_COLORS', () => {
+  it('has a hex from and edge colour for every path', () => {
+    for (const path of PATHS) {
+      expect(PATH_COLORS[path.id].from).toMatch(/^#[0-9a-f]{6}$/);
+      expect(PATH_COLORS[path.id].edge).toMatch(/^#[0-9a-f]{6}$/);
+    }
   });
 });
 
@@ -168,7 +188,6 @@ describe('remembering random choices', () => {
         expect(new Set(p.recent).size).toBe(p.recent!.length);
         expect(p.recent!.length).toBeLessThanOrEqual(RECENT_MAX);
         expect(currentChoice(p)).toBe(last);
-        expect(recentChoices(p)).not.toContain(last);
       }
     }
   });
