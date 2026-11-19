@@ -416,9 +416,10 @@ h2.subject {
   grid-template-columns: 1fr;
 }
 
+/* Four cards (Math, Social Studies, Vocabulary, Typing): two by two. */
 @media (min-width: 700px) {
   .path-cards {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
