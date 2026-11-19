@@ -1,6 +1,6 @@
 import { PerspectiveCamera, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { MAX_DEV_STREAK, parseDev } from '../src/games/splash-zone/dev';
+import { MAX_DEV_STREAK, parseRideDev } from '../src/shared/jetski/dev';
 import {
   CAM_BACK,
   CAM_UP,
@@ -22,7 +22,7 @@ import {
   LOOK_LAG,
   STUNT_MAX_DIST,
   STUNT_MIN_DIST,
-} from '../src/games/splash-zone/layout';
+} from '../src/shared/jetski/layout';
 import {
   BASE_POINTS,
   COIN_GAP,
@@ -58,8 +58,8 @@ import {
   worldSpeedFactor,
   type Tier,
   type TrickId,
-} from '../src/games/splash-zone/rules';
-import { LAUNCHERS } from '../src/games/splash-zone/anim';
+} from '../src/shared/jetski/rules';
+import { LAUNCHERS } from '../src/shared/jetski/anim';
 import {
   TRICK_SPECS,
   createFrame,
@@ -67,7 +67,7 @@ import {
   trickDuration,
   trickFrame,
   trickFraming,
-} from '../src/games/splash-zone/tricks';
+} from '../src/shared/jetski/tricks';
 import { VOICE_LINES } from '../src/games/splash-zone/voice';
 import { runs } from './helpers/full';
 
@@ -322,6 +322,19 @@ describe('layout', () => {
     }
   });
 
+  it('a bottom inset ends the band 12 px above it, and only that', () => {
+    for (const [w, h] of SCREENS) {
+      const plain = playBand(w, h);
+      const inset = playBand(w, h, 130);
+      expect(inset.top).toBe(plain.top);
+      expect(inset.bottom).toBe(h - 130 - 12);
+      expect(playBand(w, h, undefined)).toEqual(plain);
+      // bandShift and bandFraction follow the same band.
+      expect(h / 2 - bandShift(w, h, 130)).toBeCloseTo((inset.top + inset.bottom) / 2, 9);
+      expect(bandFraction(w, h, 130)).toBeCloseTo((inset.bottom - inset.top) / h, 9);
+    }
+  });
+
   it('the stunt camera is a three-quarter side view on the right, nearly level', () => {
     const pose = stuntPose(1, -20, 3, 15);
     expect(pose.lookX).toBe(1);
@@ -470,47 +483,53 @@ describe('layout', () => {
 
 // ---------- Dev hooks and voice ----------
 
-describe('parseDev', () => {
+describe('parseRideDev', () => {
   it('reads each hook', () => {
-    expect(parseDev('?tricks=backflip,submarine').tricks).toEqual(['backflip', 'submarine']);
-    expect(parseDev('?streak=6').streak).toBe(6);
-    expect(parseDev('?skis=1').skis).toBe(1);
-    expect(parseDev('?lab=backflip:clear').lab).toEqual({ trick: 'backflip', outcome: 'clear' });
-    expect(parseDev('?lab=submarine:fail&at=3.5')).toMatchObject({
+    expect(parseRideDev('?tricks=backflip,submarine').tricks).toEqual(['backflip', 'submarine']);
+    expect(parseRideDev('?streak=6').streak).toBe(6);
+    expect(parseRideDev('?skis=1').skis).toBe(1);
+    expect(parseRideDev('?lab=backflip:clear').lab).toEqual({
+      trick: 'backflip',
+      outcome: 'clear',
+    });
+    expect(parseRideDev('?lab=submarine:fail&at=3.5')).toMatchObject({
       lab: { trick: 'submarine', outcome: 'fail' },
       at: 3.5,
     });
-    expect(parseDev('?lab=respawn&at=0.9')).toMatchObject({ lab: { respawn: true }, at: 0.9 });
-    expect(parseDev('?lab=whale-of-a-time:3&at=7.4')).toMatchObject({
+    expect(parseRideDev('?lab=respawn&at=0.9')).toMatchObject({ lab: { respawn: true }, at: 0.9 });
+    expect(parseRideDev('?lab=whale-of-a-time:3&at=7.4')).toMatchObject({
       lab: { mega: 'whale-of-a-time', passed: 3 },
       at: 7.4,
     });
-    expect(parseDev('?lab=harbour-havoc:0').lab).toEqual({ mega: 'harbour-havoc', passed: 0 });
-    expect(parseDev('?world=harbour').world).toBe('harbour');
-    expect(parseDev('?world=iceberg').world).toBe('iceberg');
-    expect(parseDev('?world=volcano').world).toBe('volcano');
-    expect(parseDev('?world=reef').world).toBe('reef');
-    expect(parseDev('?world=candy').world).toBe('candy');
-    expect(parseDev('?world=dino').world).toBe('dino');
-    expect(parseDev('?tricks=tail-whip,egg-hatch').tricks).toEqual(['tail-whip', 'egg-hatch']);
-    expect(parseDev('?lab=sweet-tooth-rush:3&at=9').lab).toEqual({
+    expect(parseRideDev('?lab=harbour-havoc:0').lab).toEqual({ mega: 'harbour-havoc', passed: 0 });
+    expect(parseRideDev('?world=harbour').world).toBe('harbour');
+    expect(parseRideDev('?world=iceberg').world).toBe('iceberg');
+    expect(parseRideDev('?world=volcano').world).toBe('volcano');
+    expect(parseRideDev('?world=reef').world).toBe('reef');
+    expect(parseRideDev('?world=candy').world).toBe('candy');
+    expect(parseRideDev('?world=dino').world).toBe('dino');
+    expect(parseRideDev('?tricks=tail-whip,egg-hatch').tricks).toEqual(['tail-whip', 'egg-hatch']);
+    expect(parseRideDev('?lab=sweet-tooth-rush:3&at=9').lab).toEqual({
       mega: 'sweet-tooth-rush',
       passed: 3,
     });
-    expect(parseDev('?lab=jaws-some-jump:1&at=4').lab).toEqual({
+    expect(parseRideDev('?lab=jaws-some-jump:1&at=4').lab).toEqual({
       mega: 'jaws-some-jump',
       passed: 1,
     });
-    expect(parseDev('?lab=geyser-blast:3&at=9').lab).toEqual({ mega: 'geyser-blast', passed: 3 });
-    expect(parseDev('?lab=penguin-parade:2&at=4').lab).toEqual({
+    expect(parseRideDev('?lab=geyser-blast:3&at=9').lab).toEqual({
+      mega: 'geyser-blast',
+      passed: 3,
+    });
+    expect(parseRideDev('?lab=penguin-parade:2&at=4').lab).toEqual({
       mega: 'penguin-parade',
       passed: 2,
     });
-    expect(parseDev('?mega=1').mega).toBe(true);
+    expect(parseRideDev('?mega=1').mega).toBe(true);
   });
 
   it('has nothing set by default', () => {
-    expect(parseDev('')).toEqual({
+    expect(parseRideDev('')).toEqual({
       tricks: [],
       streak: null,
       skis: null,
@@ -522,36 +541,39 @@ describe('parseDev', () => {
   });
 
   it('ignores malformed input', () => {
-    expect(parseDev('?tricks=backflip,nope,,corkscrew').tricks).toEqual(['backflip', 'corkscrew']);
-    expect(parseDev('?tricks=').tricks).toEqual([]);
-    expect(parseDev('?streak=x').streak).toBeNull();
-    expect(parseDev('?streak=').streak).toBeNull();
-    expect(parseDev('?streak=-1').streak).toBeNull();
-    expect(parseDev('?streak=2.5').streak).toBeNull();
-    expect(parseDev(`?streak=${MAX_DEV_STREAK + 1}`).streak).toBeNull();
-    expect(parseDev(`?streak=${MAX_DEV_STREAK}`).streak).toBe(MAX_DEV_STREAK);
-    expect(parseDev('?streak=0').streak).toBe(0);
-    expect(parseDev('?skis=0').skis).toBeNull();
-    expect(parseDev('?skis=4').skis).toBeNull();
-    expect(parseDev('?skis=2').skis).toBe(2);
-    expect(parseDev('?lab=backflip').lab).toBeNull();
-    expect(parseDev('?lab=backflip:crash').lab).toBeNull();
-    expect(parseDev('?lab=nope:clear').lab).toBeNull();
-    expect(parseDev('?lab=backflip:clear:0').lab).toBeNull();
-    expect(parseDev('?lab=whale-of-a-time').lab).toBeNull();
-    expect(parseDev('?lab=whale-of-a-time:4').lab).toBeNull();
-    expect(parseDev('?lab=whale-of-a-time:-1').lab).toBeNull();
-    expect(parseDev('?lab=whale-of-a-time:1.5').lab).toBeNull();
-    expect(parseDev('?lab=whale-of-a-time:clear').lab).toBeNull();
-    expect(parseDev('?lab=nope:2').lab).toBeNull();
-    expect(parseDev('?lab=harbour-havoc:2:1').lab).toBeNull();
-    expect(parseDev('?world=atlantis').world).toBeNull();
-    expect(parseDev('?world=').world).toBeNull();
-    expect(parseDev('?lab=penguin-parade:4').lab).toBeNull();
-    expect(parseDev('?mega=0').mega).toBe(false);
-    expect(parseDev('?mega=yes').mega).toBe(false);
-    expect(parseDev('?at=abc').at).toBeNull();
-    expect(parseDev('?at=').at).toBeNull();
+    expect(parseRideDev('?tricks=backflip,nope,,corkscrew').tricks).toEqual([
+      'backflip',
+      'corkscrew',
+    ]);
+    expect(parseRideDev('?tricks=').tricks).toEqual([]);
+    expect(parseRideDev('?streak=x').streak).toBeNull();
+    expect(parseRideDev('?streak=').streak).toBeNull();
+    expect(parseRideDev('?streak=-1').streak).toBeNull();
+    expect(parseRideDev('?streak=2.5').streak).toBeNull();
+    expect(parseRideDev(`?streak=${MAX_DEV_STREAK + 1}`).streak).toBeNull();
+    expect(parseRideDev(`?streak=${MAX_DEV_STREAK}`).streak).toBe(MAX_DEV_STREAK);
+    expect(parseRideDev('?streak=0').streak).toBe(0);
+    expect(parseRideDev('?skis=0').skis).toBeNull();
+    expect(parseRideDev('?skis=4').skis).toBeNull();
+    expect(parseRideDev('?skis=2').skis).toBe(2);
+    expect(parseRideDev('?lab=backflip').lab).toBeNull();
+    expect(parseRideDev('?lab=backflip:crash').lab).toBeNull();
+    expect(parseRideDev('?lab=nope:clear').lab).toBeNull();
+    expect(parseRideDev('?lab=backflip:clear:0').lab).toBeNull();
+    expect(parseRideDev('?lab=whale-of-a-time').lab).toBeNull();
+    expect(parseRideDev('?lab=whale-of-a-time:4').lab).toBeNull();
+    expect(parseRideDev('?lab=whale-of-a-time:-1').lab).toBeNull();
+    expect(parseRideDev('?lab=whale-of-a-time:1.5').lab).toBeNull();
+    expect(parseRideDev('?lab=whale-of-a-time:clear').lab).toBeNull();
+    expect(parseRideDev('?lab=nope:2').lab).toBeNull();
+    expect(parseRideDev('?lab=harbour-havoc:2:1').lab).toBeNull();
+    expect(parseRideDev('?world=atlantis').world).toBeNull();
+    expect(parseRideDev('?world=').world).toBeNull();
+    expect(parseRideDev('?lab=penguin-parade:4').lab).toBeNull();
+    expect(parseRideDev('?mega=0').mega).toBe(false);
+    expect(parseRideDev('?mega=yes').mega).toBe(false);
+    expect(parseRideDev('?at=abc').at).toBeNull();
+    expect(parseRideDev('?at=').at).toBeNull();
   });
 });
 

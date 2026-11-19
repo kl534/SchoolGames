@@ -388,6 +388,27 @@
   color: #cfd8ff;
 }
 
+/* The score multiplier (Type Rider's level squared), a gold pill under the best score. */
+.sz-multiplier {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #713f12;
+  color: #facc15;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 24px;
+}
+
+.sz-multiplier[hidden] {
+  display: none;
+}
+
+.sz-multiplier.on {
+  animation: sz-score 0.3s ease-out;
+}
+
 /* The four answers along the bottom: two rows of two on a narrow phone. */
 .sz-answers {
   position: fixed;

@@ -11,19 +11,24 @@ export interface PlayBand {
 }
 
 /**
- * The part of the screen the HUD leaves clear, in CSS pixels. Mirrors the HUD in style.css: on a
+ * The part of the screen the HUD leaves clear, in CSS pixels. Mirrors the HUD in ride.css: on a
  * portrait phone the question and the wake strip sit below the menu buttons and the answers wrap
  * into two rows; in a short landscape phone everything is squeezed to the edges.
  */
-export function playBand(width: number, height: number): PlayBand {
-  if (height <= 460) return { top: 96, bottom: height - 84 };
-  if (width <= 640) return { top: 284, bottom: height - 170 };
-  return { top: 118, bottom: height - 100 };
+export function playBand(width: number, height: number, bottomInset?: number): PlayBand {
+  if (height <= 460) return { top: 96, bottom: bottomBound(height - 84, height, bottomInset) };
+  if (width <= 640) return { top: 284, bottom: bottomBound(height - 170, height, bottomInset) };
+  return { top: 118, bottom: bottomBound(height - 100, height, bottomInset) };
+}
+
+/** With a bottom inset (a game's own strip at the bottom, in place of the answers) the band ends 12 px above it. */
+function bottomBound(answersBottom: number, height: number, bottomInset?: number): number {
+  return bottomInset === undefined ? answersBottom : height - bottomInset - 12;
 }
 
 /** How many CSS pixels to slide the picture down so its middle is the middle of the band. */
-export function bandShift(width: number, height: number): number {
-  const band = playBand(width, height);
+export function bandShift(width: number, height: number, bottomInset?: number): number {
+  const band = playBand(width, height, bottomInset);
   return height / 2 - (band.top + band.bottom) / 2;
 }
 
@@ -140,8 +145,8 @@ export function stuntLookD(
 }
 
 /** How much of the screen's height the HUD leaves clear. */
-export function bandFraction(width: number, height: number): number {
-  const band = playBand(width, height);
+export function bandFraction(width: number, height: number, bottomInset?: number): number {
+  const band = playBand(width, height, bottomInset);
   return (band.bottom - band.top) / Math.max(height, 1);
 }
 

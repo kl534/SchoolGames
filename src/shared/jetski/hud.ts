@@ -1,9 +1,10 @@
 /**
  * The DOM on top of the picture: the question panel and wake strip, the jet skis left, the score
  * and tier meter, the four answers, the banner, the comic word, the pops and the screen effects.
- * Plain elements styled in style.css (prefix `sz-`); the game loop in main.ts drives them.
+ * Plain elements styled in ride.css (prefix `sz-`); the ride (ride.ts) drives them.
  */
-import { fillAnswers, lockAnswers } from '../../shared/answers';
+import './ride.css';
+import { fillAnswers, lockAnswers } from '../answers';
 import { MEGA_PIECES, SKIS, type LauncherKind, type MegaId } from './rules';
 
 /** What the wake strip's goal icon can show: a launcher, a checkpoint gate or a Mega course. */
@@ -112,14 +113,17 @@ export interface Hud {
   /** Everything at the top centre: question, wake strip, mega pips. */
   top: HTMLElement;
   problemText: HTMLElement;
-  hear: HTMLButtonElement;
-  answers: HTMLElement;
+  /** The 🔊 button and the answer grid: null (and no buttons) when the hud is made with `answers: false`. */
+  hear: HTMLButtonElement | null;
+  answers: HTMLElement | null;
   buttons: HTMLButtonElement[];
   /** The big message under the question ("Wipeout!" and the like). */
   banner: HTMLElement;
   /** The player's avatar and the jet skis left, under the Menu button. */
   setSkis(skis: number, justLost?: boolean): void;
   setScore(score: number, best: number, pulse?: boolean): void;
+  /** The gold "×49" pill under the best score; null hides it. It pops when the number changes. */
+  setMultiplier(n: number | null): void;
   /** The tier meter: 0 to 3 waves filled; `pulse` makes the newly filled one pop. */
   setTier(tier: 0 | 1 | 2 | 3, pulse?: boolean): void;
   /** How many waves of the tier meter are filled now. */
@@ -159,7 +163,12 @@ export interface Hud {
   dispose(): void;
 }
 
-export function createHud(avatar: string): Hud {
+export interface HudOptions {
+  /** false: no answer grid and no 🔊 button (a game that is not a quiz). */
+  answers: boolean;
+}
+
+export function createHud(avatar: string, options: HudOptions = { answers: true }): Hud {
   const root = document.body;
   const created: HTMLElement[] = [];
   const make = <K extends keyof HTMLElementTagNameMap>(
@@ -176,10 +185,13 @@ export function createHud(avatar: string): Hud {
   const problem = make('div', 'sz-problem', top);
   problem.setAttribute('aria-live', 'polite');
   const problemText = make('span', 'sz-problem-text', problem);
-  const hear = make('button', 'sz-hear', problem);
-  hear.type = 'button';
-  hear.textContent = '🔊';
-  hear.setAttribute('aria-label', 'Hear the question');
+  let hear: HTMLButtonElement | null = null;
+  if (options.answers) {
+    hear = make('button', 'sz-hear', problem);
+    hear.type = 'button';
+    hear.textContent = '🔊';
+    hear.setAttribute('aria-label', 'Hear the question');
+  }
 
   const wakeBox = make('div', 'sz-wake', top);
   const wakeBar = make('div', 'sz-wake-bar', wakeBox);
@@ -198,6 +210,8 @@ export function createHud(avatar: string): Hud {
   const score = make('div', 'sz-score', root);
   const scoreValue = make('div', 'sz-score-value', score);
   const bestText = make('div', 'sz-best', score);
+  const multiplier = make('div', 'sz-multiplier', score);
+  multiplier.hidden = true;
   const meter = make('div', 'sz-tier', score);
   meter.setAttribute('role', 'img');
   const waves = Array.from({ length: 3 }, () => {
@@ -206,12 +220,14 @@ export function createHud(avatar: string): Hud {
     return wave;
   });
 
-  const answers = make('div', 'sz-answers', root);
-  const buttons = Array.from({ length: 4 }, () => {
-    const button = make('button', 'sz-answer', answers);
-    button.type = 'button';
-    return button;
-  });
+  const answers = options.answers ? make('div', 'sz-answers', root) : null;
+  const buttons: HTMLButtonElement[] = answers
+    ? Array.from({ length: 4 }, () => {
+        const button = make('button', 'sz-answer', answers);
+        button.type = 'button';
+        return button;
+      })
+    : [];
 
   const banner = make('div', 'sz-banner', root);
   banner.setAttribute('role', 'status');
@@ -291,6 +307,14 @@ export function createHud(avatar: string): Hud {
       scoreValue.textContent = value.toLocaleString();
       bestText.textContent = `Best ${best.toLocaleString()}`;
       if (pulse) restart(scoreValue);
+    },
+    setMultiplier(n) {
+      multiplier.hidden = n === null;
+      if (n === null) return;
+      const text = `×${n.toLocaleString()}`;
+      if (multiplier.textContent === text) return;
+      multiplier.textContent = text;
+      restart(multiplier);
     },
     setTier(tier, pulse = false) {
       waves.forEach((wave, i) => wave.classList.toggle('lit', i < tier));
@@ -395,7 +419,7 @@ export function createHud(avatar: string): Hud {
     },
     setTopVisible(visible, optionCount) {
       top.hidden = !visible;
-      answers.hidden = !visible;
+      if (answers) answers.hidden = !visible;
       buttons.forEach((b, i) => (b.hidden = i >= optionCount));
       if (!visible) banner.hidden = true;
       else if (!banner.hidden) layoutBanner();
