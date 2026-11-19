@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Type Rider</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #5ec8ff;
+      }
+      #game {
+        position: fixed;
+        inset: 0;
+      }
+      /* The keyboard strip: the next key lights up while it is not learned yet. */
+      .tk.tr-kb {
+        position: fixed;
+        left: 50%;
+        bottom: max(12px, env(safe-area-inset-bottom));
+        z-index: 12;
+        width: min(94vw, 620px, 80vh);
+        transform: translateX(-50%);
+        pointer-events: none;
+      }
+      .tk.tr-kb[data-hidden] {
+        visibility: hidden;
+      }
+      .tr-note {
+        position: fixed;
+        left: 50%;
+        top: 40%;
+        z-index: 30;
+        box-sizing: border-box;
+        width: min(88vw, 420px);
+        padding: 16px 20px;
+        border-radius: 20px;
+        background: rgba(15, 23, 42, 0.94);
+        border: 2px solid #facc15;
+        color: #fff;
+        font:
+          700 20px/1.35 system-ui,
+          sans-serif;
+        text-align: center;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+      }
+      .tr-note strong {
+        display: block;
+        color: #facc15;
+        font-size: 24px;
+      }
+      .tr-note[hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
