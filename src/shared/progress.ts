@@ -1,4 +1,5 @@
 import { deviceStore, readJson, writeJson, type KeyValueStore } from './storage';
+import { normalizeTyping, type TypingProgress } from './typing/progress';
 
 export interface Player {
   id: string;
@@ -52,6 +53,8 @@ export interface PlayerProgress {
   homePath?: string;
   /** Choice ids the menu was last set to, newest first; `recent[0]` is the home page's choice. See `src/menu/choices.ts`. */
   recent?: string[];
+  /** The Typing path: open level, key history, clock speed (see `src/shared/typing/progress.ts`). */
+  typing?: TypingProgress;
   /** When (ms) this was last saved on a device; set only for account players, used by sync. */
   savedAt?: number;
 }
@@ -431,6 +434,8 @@ export function normalizeProgress(data: Partial<PlayerProgress>): PlayerProgress
     // 4 is RECENT_MAX in src/menu/choices.ts (shared code does not import the menu).
     progress.recent = data.recent.filter((id): id is string => typeof id === 'string').slice(0, 4);
   }
+  if (data.typing && typeof data.typing === 'object')
+    progress.typing = normalizeTyping(data.typing);
   if (typeof data.savedAt === 'number') progress.savedAt = data.savedAt;
   migrateAboveTenTables(progress);
   migrateRenamedGames(progress);

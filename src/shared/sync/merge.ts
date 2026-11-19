@@ -1,4 +1,5 @@
 import type { FactStat, PlayerProgress } from '../progress';
+import type { TypingProgress } from '../typing/progress';
 
 type Nested = Record<string, Record<string, number>>;
 
@@ -40,10 +41,29 @@ function maxOptional(a: number | undefined, b: number | undefined): number | und
   return Math.max(a, b);
 }
 
+/** Typing: the open level and best speed are the larger; the rest comes from the side saved last. */
+function mergeTyping(
+  first: TypingProgress | undefined,
+  second: TypingProgress | undefined,
+): TypingProgress | undefined {
+  if (!first || !second) {
+    const only = first ?? second;
+    return only && structuredClone(only);
+  }
+  return {
+    open: Math.max(first.open, second.open),
+    level: first.level,
+    lessons: [...new Set([...first.lessons, ...second.lessons])].sort((x, y) => x - y),
+    keys: structuredClone(first.keys),
+    spk: first.spk,
+    bestWpm: Math.max(first.bestWpm, second.bestWpm),
+  };
+}
+
 /**
  * Merges two devices' progress for one player. Both inputs are already normalized and are not
  * changed. Facts: the newer stat wins whole. Scores, stars and open levels: the larger value.
- * Fields that can go down (`ladders`, `homePath`, `recent`): from the side saved last.
+ * Fields that can go down (`ladders`, `homePath`, `recent`): from the side saved last (`typing` too, except its open level, lessons and best speed).
  */
 export function mergeProgress(a: PlayerProgress, b: PlayerProgress): PlayerProgress {
   const facts: PlayerProgress['facts'] = {};
@@ -85,6 +105,9 @@ export function mergeProgress(a: PlayerProgress, b: PlayerProgress): PlayerProgr
   if (homePath !== undefined) out.homePath = homePath;
   const recent = first.recent ?? second.recent;
   if (recent) out.recent = [...recent];
+
+  const typing = mergeTyping(first.typing, second.typing);
+  if (typing) out.typing = typing;
 
   const savedAt = maxOptional(a.savedAt, b.savedAt);
   if (savedAt !== undefined) out.savedAt = savedAt;

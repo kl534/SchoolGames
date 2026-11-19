@@ -6,6 +6,7 @@ import {
   type PlayerProgress,
 } from '../src/shared/progress';
 import { mergeProgress } from '../src/shared/sync/merge';
+import { emptyTyping, type TypingProgress } from '../src/shared/typing/progress';
 import { runs } from './helpers/full';
 
 const stat = (correct: number, wrong: number, lastSeen: number): FactStat => ({
@@ -134,6 +135,16 @@ describe('mergeProgress properties', () => {
     if (rnd() < 0.5) p.pathLevelsOpen = { social: 1 + int(9) };
     if (rnd() < 0.5) p.ladders = { t1: { g1: int(10) } };
     if (rnd() < 0.5) p.homePath = pick(['math', 'social']);
+    if (rnd() < 0.5) {
+      p.typing = {
+        open: 1 + int(40),
+        level: 1 + int(40),
+        lessons: [1 + int(5), 1 + int(40)],
+        keys: { f: '1'.repeat(1 + int(20)), j: '0101' },
+        spk: 0.5 + int(20) / 10,
+        bestWpm: int(100),
+      };
+    }
     if (rnd() < 0.7) p.savedAt = 1 + int(1_000_000);
     return normalizeProgress(p);
   };
@@ -185,10 +196,54 @@ describe('mergeProgress properties', () => {
           }
         }
         expect(m.levelsOpen ?? 0).toBeGreaterThanOrEqual(side.levelsOpen ?? 0);
+        expect(m.typing?.open ?? 0).toBeGreaterThanOrEqual(side.typing?.open ?? 0);
+        expect(m.typing?.bestWpm ?? 0).toBeGreaterThanOrEqual(side.typing?.bestWpm ?? 0);
         for (const [t, facts] of Object.entries(side.facts)) {
           for (const f of Object.keys(facts)) expect(m.facts[t][f]).toBeDefined();
         }
       }
     }
+  });
+});
+
+describe('mergeProgress typing', () => {
+  const typing = (extra: Partial<TypingProgress>): TypingProgress => ({
+    ...emptyTyping(),
+    ...extra,
+  });
+
+  it('takes the larger open level and best speed, and joins the lessons', () => {
+    const a = prog({ typing: typing({ open: 5, bestWpm: 12, lessons: [1, 2, 5] }), savedAt: 10 });
+    const b = prog({ typing: typing({ open: 3, bestWpm: 30, lessons: [1, 3] }), savedAt: 20 });
+    for (const m of [mergeProgress(a, b), mergeProgress(b, a)]) {
+      expect(m.typing?.open).toBe(5);
+      expect(m.typing?.bestWpm).toBe(30);
+      expect(m.typing?.lessons).toEqual([1, 2, 3, 5]);
+    }
+  });
+
+  it('takes keys, seconds per key and last level from the side saved last', () => {
+    const a = prog({
+      typing: typing({ keys: { f: '1111' }, spk: 1.5, level: 4 }),
+      savedAt: 10,
+    });
+    const b = prog({
+      typing: typing({ keys: { j: '0000' }, spk: 2.2, level: 2 }),
+      savedAt: 20,
+    });
+    for (const m of [mergeProgress(a, b), mergeProgress(b, a)]) {
+      expect(m.typing?.keys).toEqual({ j: '0000' });
+      expect(m.typing?.spk).toBe(2.2);
+      expect(m.typing?.level).toBe(2);
+    }
+  });
+
+  it('keeps typing that only one side has, and copies it', () => {
+    const a = prog({ typing: typing({ open: 7, keys: { f: '11' } }) });
+    const m = mergeProgress(a, prog());
+    expect(m.typing).toEqual(a.typing);
+    expect(m.typing).not.toBe(a.typing);
+    expect(m.typing?.keys).not.toBe(a.typing?.keys);
+    expect(mergeProgress(prog(), prog()).typing).toBeUndefined();
   });
 });
