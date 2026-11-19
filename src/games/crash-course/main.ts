@@ -1073,7 +1073,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
         hud.pop(`+${COIN_POINTS}`, toScreen(coin.position.x, coin.position.y + 0.8), 'good');
       }
     }
-    if (collecting) {
+    if (collecting && clockRunning) {
       coinIn -= delta;
       if (coinIn <= 0) {
         coinIn = 3 + Math.random() * 3;
