@@ -19,6 +19,14 @@ import {
   type PlayerProgress,
   type StepCounts,
 } from '../shared/progress';
+import { LEVEL_COUNT, levelOf, TYPING_LEVELS } from '../shared/typing/course';
+import {
+  TOTAL_LEARNABLE,
+  TYPING_LEVEL_ID,
+  emptyTyping,
+  learnedCount,
+  skillLearned,
+} from '../shared/typing/progress';
 
 /** How many choice ids `progress.recent` keeps; `recent[0]` is the current one. */
 export const RECENT_MAX = 4;
@@ -36,15 +44,21 @@ export const PATH_EMOJI: Record<PathId, string> = {
   vocabulary: '📖',
 };
 
+/** The Typing card on the picker: not a `LevelPath` (it has no facts), so it has its own look. */
+export const TYPING_CARD = { emoji: '⌨️', from: '#064e3b', edge: '#10b981' };
+
 /** Topics matching a pattern become number tiles; `n` is the first capture group. */
 const TILE_PATTERNS: { pattern: RegExp; label: string }[] = [
   { pattern: /^times-(\d+)$/, label: 'Times tables' },
   { pattern: /^divide-by-(\d+)$/, label: 'Divide by' },
 ];
 
-/** True for a path's level topic id or a topic id in TOPICS. */
+/** True for a path's level topic id, the Typing path's id or a topic id in TOPICS. */
 export function isChoice(id: string | null | undefined): id is string {
-  return Boolean(id) && (pathForLevelTopic(id) !== undefined || getTopic(id) !== undefined);
+  return (
+    Boolean(id) &&
+    (id === TYPING_LEVEL_ID || pathForLevelTopic(id) !== undefined || getTopic(id) !== undefined)
+  );
 }
 
 /** The first valid id in `recent`; else the path saved in the old `homePath`; else 'my-level'. */
@@ -58,7 +72,8 @@ export function currentChoice(progress: PlayerProgress): string {
  * Moves `id` to the front of `progress.recent` (no duplicates, at most RECENT_MAX, invalid ids
  * dropped). If `recent` has no valid id yet, it is first seeded with `currentChoice(progress)`, so
  * the choice the player was on (e.g. the default My Level · Math) stays in the list.
- * For a path id also sets `progress.homePath = path.id`. Throws on a non-choice id.
+ * For a path id also sets `progress.homePath = path.id` (the Typing choice leaves `homePath` as it
+ * is: it is not a `LevelPath`). Throws on a non-choice id.
  */
 export function rememberChoice(progress: PlayerProgress, id: string): void {
   if (!isChoice(id)) throw new Error(`Not a choice: ${id}`);
@@ -76,14 +91,14 @@ export function rememberChoice(progress: PlayerProgress, id: string): void {
  * for a topic, `pathOfTopic(choiceId) ?? getPath(progress.homePath) ?? PATHS[0]`.
  */
 export function levelPathFor(progress: PlayerProgress, choiceId: string): LevelPath | undefined {
-  if (pathForLevelTopic(choiceId)) return undefined;
+  if (pathForLevelTopic(choiceId) || choiceId === TYPING_LEVEL_ID) return undefined;
   return pathOfTopic(choiceId) ?? getPath(progress.homePath) ?? PATHS[0];
 }
 
 export interface ChoiceInfo {
   id: string;
-  kind: 'path' | 'topic';
-  /** 'My Level · Math', 'My Level · Social Studies', or the topic title ('7 times table'). */
+  kind: 'path' | 'topic' | 'typing';
+  /** 'My Level · Math', 'My Level · Typing', or the topic title ('7 times table'). */
   title: string;
   /** Short name for chips: the path title ('Math') or the topic title. */
   short: string;
@@ -167,11 +182,40 @@ export function pathChoiceInfo(
   };
 }
 
+/**
+ * The Typing path: 'Level 7 of 40: r u', and a bar of what is learned over every key skill and
+ * speed level (a key with some presses but not learned yet counts as started).
+ */
+export function typingChoiceInfo(progress: PlayerProgress): ChoiceInfo {
+  const tp = progress.typing ?? emptyTyping();
+  const learned = learnedCount(tp);
+  const started = TYPING_LEVELS.filter((level) => level.n >= tp.open).reduce(
+    (sum, level) =>
+      sum +
+      level.skills.filter((skill) => !skillLearned(tp, skill) && (tp.keys[skill] ?? '') !== '')
+        .length,
+    0,
+  );
+  const open = Math.min(Math.max(tp.open, 1), LEVEL_COUNT);
+  return {
+    id: TYPING_LEVEL_ID,
+    kind: 'typing',
+    title: 'My Level · Typing',
+    short: 'Typing',
+    subtitle: `Level ${open} of ${LEVEL_COUNT}: ${levelOf(open).title}`,
+    mastered: learned,
+    steps: [TOTAL_LEARNABLE - learned - started, started, 0, learned, 0],
+    due: 0,
+    total: TOTAL_LEARNABLE,
+  };
+}
+
 export function choiceInfo(
   progress: PlayerProgress,
   id: string,
   now: number = Date.now(),
 ): ChoiceInfo {
+  if (id === TYPING_LEVEL_ID) return typingChoiceInfo(progress);
   const path = pathForLevelTopic(id);
   if (path) return pathChoiceInfo(progress, path, now);
   const topic = getTopic(id);
@@ -258,6 +302,8 @@ export function factListSections(
   choiceId: string,
   now: number,
 ): FactListSection[] {
+  // The Typing path has no facts to list.
+  if (choiceId === TYPING_LEVEL_ID) return [];
   const item = (fact: Fact, topicId: string): FactListItem => {
     const stat = progress.facts[topicId]?.[fact.id];
     return {

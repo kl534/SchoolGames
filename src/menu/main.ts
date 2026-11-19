@@ -10,6 +10,7 @@ import {
   type StepCounts,
   STEP_NAMES,
 } from '../shared/progress';
+import { TYPING_LEVEL_ID } from '../shared/typing/progress';
 import { statementParts } from '../shared/topics';
 import { getPath, PATHS, pathForLevelTopic, type LevelPath } from '../shared/levels';
 import { gameUrl } from '../shared/session';
@@ -35,6 +36,7 @@ import { accountDialog, googleButton, renderLinkPage } from './account-extras';
 import {
   PATH_COLORS,
   PATH_EMOJI,
+  TYPING_CARD,
   choiceInfo,
   currentChoice,
   factListSections,
@@ -43,6 +45,7 @@ import {
   masteryLabel,
   masteryText,
   pathChoiceInfo,
+  typingChoiceInfo,
   type ChoiceInfo,
   type FactListItem,
   pickerSections,
@@ -728,6 +731,25 @@ function renderPicker(
     if (isCurrent) card.appendChild(el('span', 'now-badge', 'Now'));
     pathCards.appendChild(card);
   }
+  // Typing is a path with no facts: its own card, after Vocabulary.
+  const typingInfo = typingChoiceInfo(progress);
+  const typingCard = choiceLink(player, TYPING_LEVEL_ID, 'path-card', current);
+  const typingCurrent = current === TYPING_LEVEL_ID;
+  typingCard.style.setProperty('--path-from', TYPING_CARD.from);
+  typingCard.style.setProperty('--path-edge', TYPING_CARD.edge);
+  typingCard.setAttribute(
+    'aria-label',
+    `${typingInfo.title}. ${typingInfo.subtitle}${typingCurrent ? '. Playing now' : ''}`,
+  );
+  const typingBody = el('div', 'path-body');
+  typingBody.append(
+    el('h3', undefined, typingInfo.short),
+    el('p', undefined, typingInfo.subtitle),
+    masteryBar(typingInfo),
+  );
+  typingCard.append(el('span', 'path-emoji', TYPING_CARD.emoji), typingBody);
+  if (typingCurrent) typingCard.appendChild(el('span', 'now-badge', 'Now'));
+  pathCards.appendChild(typingCard);
   levels.appendChild(pathCards);
   main.appendChild(levels);
 
@@ -797,7 +819,7 @@ function renderPicker(
     chevron.textContent = open ? '▾' : '▸';
   };
   // Folded when the current choice is a path; open for a single topic or `?topics=<path>`.
-  setOpen(Boolean(path) || !pathForLevelTopic(current));
+  setOpen(Boolean(path) || !(pathForLevelTopic(current) || current === TYPING_LEVEL_ID));
   toggle.addEventListener('click', () => {
     setOpen(Boolean(oneTopic.hidden));
     if (!oneTopic.hidden) toggle.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -876,7 +898,9 @@ function renderHome(
   choiceId: string,
 ): void {
   const info = choiceInfo(progress, choiceId);
-  const games = discoverGames();
+  // The Typing choice lists only the typing games; every other choice hides them.
+  const typing = choiceId === TYPING_LEVEL_ID;
+  const games = discoverGames().filter((game) => (game.section === 'typing') === typing);
 
   const grid = el('main', 'grid');
   for (const game of games) {
@@ -904,7 +928,7 @@ function renderHome(
   root.replaceChildren(
     header(null, null, player),
     card,
-    factsLinkRow(player, progress, choiceId),
+    ...(typing ? [] : [factsLinkRow(player, progress, choiceId)]),
     el('h2', 'subject', 'Pick a game'),
     grid,
   );
@@ -1015,13 +1039,12 @@ function render(root: HTMLElement): void {
   // `?path=` is an old link to a path; `?topic=` is where "Other games" and the picker land.
   const wanted = getPath(params.get('path'))?.levelTopicId ?? params.get('topic');
   const factsChoice = params.get('facts');
-  if (params.has('facts')) {
-    renderFacts(
-      root,
-      player,
-      progress,
-      isChoice(factsChoice) ? factsChoice : currentChoice(progress),
-    );
+  const factsFor = isChoice(factsChoice) ? factsChoice : currentChoice(progress);
+  if (params.has('facts') && factsFor === TYPING_LEVEL_ID) {
+    // The Typing path has no facts to list: its home page is the place to look.
+    renderHome(root, player, progress, factsFor);
+  } else if (params.has('facts')) {
+    renderFacts(root, player, progress, factsFor);
   } else if (isChoice(wanted)) {
     rememberChoice(progress, wanted);
     store.save(player.id, progress);
