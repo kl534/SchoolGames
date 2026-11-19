@@ -37,6 +37,14 @@ describe('validateManifest', () => {
     expect(validateManifest({ ...valid, scoring })).toEqual([expect.stringMatching(/scoring/)]);
   });
 
+  it("accepts a section of 'typing' and nothing else", () => {
+    expect(isGameManifest({ ...valid, section: 'typing' })).toBe(true);
+    expect(isGameManifest(valid)).toBe(true);
+    for (const section of ['quiz', '', 'Typing', 3, null]) {
+      expect(validateManifest({ ...valid, section })).toEqual([expect.stringMatching(/section/)]);
+    }
+  });
+
   it('rejects bad thumbnail and tags', () => {
     expect(isGameManifest({ ...valid, thumbnail: 3 })).toBe(false);
     expect(isGameManifest({ ...valid, tags: 'x' })).toBe(false);

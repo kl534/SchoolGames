@@ -1,0 +1,9 @@
+{
+  "id": "type-rider",
+  "title": "Type Rider",
+  "description": "Type the letters to pull off jet-ski stunts. Learn every key, then get fast!",
+  "thumbnail": "thumbnail.svg",
+  "tags": ["typing", "jet ski", "keyboard", "3d"],
+  "scoring": "score",
+  "section": "typing"
+}

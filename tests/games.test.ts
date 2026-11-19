@@ -29,6 +29,9 @@ describe('game folders', () => {
     });
 
     it('shows and hides the state map', () => {
+      // A typing game asks no facts, so it has no map to show.
+      const manifest = JSON.parse(readFileSync(resolve(dir, 'game.json'), 'utf8'));
+      if (manifest.section === 'typing') return;
       const main = readFileSync(resolve(dir, 'main.ts'), 'utf8');
       expect(main).toMatch(/from '\.\.\/\.\.\/shared\/maps'/);
       expect(main).toContain('showFactMap(');

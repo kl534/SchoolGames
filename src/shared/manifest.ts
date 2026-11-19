@@ -7,6 +7,8 @@ export interface GameManifest {
   tags?: string[];
   /** How the menu shows progress: 'stars' (the default) or a 'score' with a high score. */
   scoring?: 'stars' | 'score';
+  /** 'typing': listed only under the Typing path (a quiz game has no section). */
+  section?: 'typing';
 }
 
 const ID_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -34,6 +36,9 @@ export function validateManifest(value: unknown): string[] {
   }
   if (m.scoring !== undefined && m.scoring !== 'stars' && m.scoring !== 'score') {
     errors.push("scoring must be 'stars' or 'score' when present");
+  }
+  if (m.section !== undefined && m.section !== 'typing') {
+    errors.push("section must be 'typing' when present");
   }
   return errors;
 }

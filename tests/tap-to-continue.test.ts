@@ -5,12 +5,16 @@ import { describe, expect, it } from 'vitest';
 const gamesDir = resolve(import.meta.dirname, '../src/games');
 
 /**
- * Every game: each one has answer buttons, so each waits for a tap on the green answer after a
- * miss. A new game fails here until it uses the shared tap flow.
+ * Every quiz game: each one has answer buttons, so each waits for a tap on the green answer after
+ * a miss. A new game fails here until it uses the shared tap flow. A typing game (`"section":
+ * "typing"`) has no answer buttons, so it is left out.
  */
+const isTyping = (id: string): boolean =>
+  JSON.parse(readFileSync(resolve(gamesDir, id, 'game.json'), 'utf8')).section === 'typing';
 const GAMES = readdirSync(gamesDir, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)
+  .filter((id) => !isTyping(id))
   .sort();
 
 function sources(id: string): Record<string, string> {

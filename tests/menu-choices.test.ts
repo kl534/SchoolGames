@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   PATH_COLORS,
   RECENT_MAX,
+  TYPING_CARD,
   choiceInfo,
   currentChoice,
   factListSections,
@@ -12,6 +13,7 @@ import {
   pickerSections,
   readyLabel,
   rememberChoice,
+  typingChoiceInfo,
 } from '../src/menu/choices';
 import { demoStepsProgress } from '../src/menu/dev';
 import { LEVELS, MATH_PATH, PATHS, levelLabel, levelsOpen } from '../src/shared/levels';
@@ -28,6 +30,7 @@ import {
 } from '../src/shared/progress';
 import { TOPICS } from '../src/shared/topics';
 import { runs } from './helpers/full';
+import { TOTAL_LEARNABLE, TYPING_LEVEL_ID, emptyTyping } from '../src/shared/typing/progress';
 
 const stat = (learnStreak: number) => ({
   correct: 3,
@@ -369,5 +372,54 @@ describe('demoStepsProgress', () => {
     );
     expect(due.length).toBeGreaterThan(0);
     expect(due.length).toBeLessThan(learned.length);
+  });
+});
+
+describe('the Typing choice', () => {
+  const typingProgress = (open: number, keys: Record<string, string> = {}) => ({
+    ...emptyProgress(),
+    typing: { ...emptyTyping(), open, keys },
+  });
+
+  it('is a choice, with the id the stars and high scores are saved under', () => {
+    expect(TYPING_LEVEL_ID).toBe('typing-level');
+    expect(isChoice('typing-level')).toBe(true);
+    expect(currentChoice({ ...emptyProgress(), recent: ['typing-level'] })).toBe('typing-level');
+  });
+
+  it('is remembered without touching homePath, and has no level path or facts', () => {
+    const p = { ...emptyProgress(), homePath: 'social-studies' };
+    rememberChoice(p, 'typing-level');
+    expect(p.recent).toEqual(['typing-level', 'social-studies-level']);
+    expect(p.homePath).toBe('social-studies');
+    expect(levelPathFor(p, 'typing-level')).toBeUndefined();
+    expect(factListSections(p, 'typing-level', 0)).toEqual([]);
+  });
+
+  it('describes the level and what is learned', () => {
+    const fresh = typingChoiceInfo(emptyProgress());
+    expect(fresh).toMatchObject({
+      id: 'typing-level',
+      kind: 'typing',
+      title: 'My Level · Typing',
+      short: 'Typing',
+      subtitle: 'Level 1 of 40: f j',
+      mastered: 0,
+      due: 0,
+      total: TOTAL_LEARNABLE,
+    });
+    expect(fresh.steps).toEqual([TOTAL_LEARNABLE, 0, 0, 0, 0]);
+    expect(choiceInfo(emptyProgress(), 'typing-level').kind).toBe('typing');
+    // Level 7 (r u) is open: levels 1 to 6 are learned (13 keys), r has been tried, u is learned.
+    const info = typingChoiceInfo(typingProgress(7, { r: '1110', u: '1'.repeat(20) }));
+    expect(info.subtitle).toBe('Level 7 of 40: r u');
+    expect(info.steps).toEqual([TOTAL_LEARNABLE - 14 - 1, 1, 0, 14, 0]);
+    expect(info.mastered).toBe(14);
+    expect(info.steps.reduce((a, b) => a + b, 0)).toBe(info.total);
+  });
+
+  it('has a hex card colour', () => {
+    expect(TYPING_CARD.from).toMatch(/^#[0-9a-f]{6}$/);
+    expect(TYPING_CARD.edge).toMatch(/^#[0-9a-f]{6}$/);
   });
 });
