@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url';
 import { countSpeech, MAX_COUNT } from '../../src/shared/pictures/plan';
 import { KICKS_PER_ROUND, scoreSpeech } from '../../src/shared/round';
 import { TAP_SPEECH } from '../../src/shared/tapgate';
+import { TYPING_VOICE_LINES } from '../../src/shared/typing/lines';
 import { TOPICS } from '../../src/shared/topics';
 import { normalizeSpeech, voiceKey } from '../../src/shared/voice';
 
@@ -15,13 +16,14 @@ const root = resolve(import.meta.dirname, '../..');
 const gamesDir = resolve(root, 'src/games');
 export const LINES_FILE = resolve(root, 'src/shared/voice-lines.json');
 
-/** Lines spoken by every game: round scores, the reminder to tap the green answer and the miss pictures' counts. */
+/** Lines spoken by every game: round scores, the reminder to tap the green answer, the miss pictures' counts and the typing lesson's finger explanations. */
 function sharedLines(): string[] {
   const lines: string[] = [TAP_SPEECH];
   for (let total = 1; total <= KICKS_PER_ROUND; total++) {
     for (let correct = 0; correct <= total; correct++) lines.push(scoreSpeech(correct, total));
   }
   for (let n = 1; n <= MAX_COUNT; n++) lines.push(countSpeech(n));
+  lines.push(...TYPING_VOICE_LINES);
   return lines;
 }
 

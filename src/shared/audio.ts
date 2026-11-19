@@ -395,6 +395,10 @@ export const sfx = {
       tone(ctx, 'triangle', 330, 220, t + 0.25, 0.45, 0.3);
     }),
   tick: () => play((ctx, t) => tone(ctx, 'square', 1200, 1200, t, 0.05, 0.08)),
+  /** A right key in a typing game: a short, soft blip. */
+  key: () => play((ctx, t) => tone(ctx, 'sine', 900, 900, t, 0.03, 0.06)),
+  /** A wrong key: a short low buzz. */
+  wrongKey: () => play((ctx, t) => tone(ctx, 'square', 180, 140, t, 0.12, 0.12)),
   /** A thrown object whistling through the air. */
   whoosh: () => play((ctx, t) => noise(ctx, 'bandpass', 500, 2600, t, 0.3, 0.5)),
   /** A cartoon explosion: a rumbling noise burst over a deep thump. */
