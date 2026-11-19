@@ -256,7 +256,7 @@ function run(session: TypingSession): void {
   };
 
   /** Everything before a run: the picker and the lesson (or neither with `start=1`), then `go()`. */
-  const showStart = (go: () => void) => {
+  const showStart = (go: () => void, firstRun = false) => {
     showKeyboard(false);
     const begin = () => {
       playLevel = clamp(typing.level, 1, typing.open);
@@ -270,7 +270,8 @@ function run(session: TypingSession): void {
       showKeyboard(true);
       go();
     };
-    if (!dev?.start) openPicker(begin);
+    // `start=1` skips the picker on page load only; play again always shows it.
+    if (!dev?.start || !firstRun) openPicker(begin);
     else if (dev.lesson) lessonThen(typing.level, true, begin);
     else begin();
   };
@@ -279,7 +280,7 @@ function run(session: TypingSession): void {
   const driver: RideDriver = {
     intro(go) {
       // The ride is made once this returns: the start screen waits a tick for it.
-      setTimeout(() => showStart(go), 0);
+      setTimeout(() => showStart(go, true), 0);
     },
 
     beginTurn(turn: RideTurn) {
