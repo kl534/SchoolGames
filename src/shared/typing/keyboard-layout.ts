@@ -213,3 +213,55 @@ export const keyCenter = (key: KeyDef): { x: number; y: number } => ({
   x: key.x + key.w / 2,
   y: key.y + 0.5,
 });
+
+/** Seconds one reach takes: out, hold (the key is pressed), back, rest. Reaching for a shifted char takes `SHIFT_REACH_EXTRA` longer. */
+export const REACH_CYCLE = 1.5;
+export const SHIFT_REACH_EXTRA = 0.5;
+const REACH_OUT = 0.35;
+const REACH_HOLD = 0.3;
+const REACH_BACK = 0.35;
+/** When the main finger starts moving after the Shift pinky has gone in. */
+const SHIFT_LEAD = 0.4;
+const SHIFT_MOVE = 0.25;
+
+export const reachCycle = (char: string): number =>
+  REACH_CYCLE + (needsShift(char) ? SHIFT_REACH_EXTRA : 0);
+
+export interface ReachPhase {
+  /** How far the finger is from its home key to the target, 0 to 1. */
+  out: number;
+  /** The key is held down. */
+  pressed: boolean;
+  /** How far the Shift pinky is from its home key to the Shift key, 0 to 1 (0 without Shift). */
+  shift: number;
+}
+
+const smooth = (p: number): number => {
+  const c = Math.min(Math.max(p, 0), 1);
+  return c * c * (3 - 2 * c);
+};
+
+/** The hands' pose `t` seconds into the loop of reaching for `char` (it repeats every `reachCycle`). */
+export function reachPhase(char: string, t: number): ReachPhase {
+  const cycle = reachCycle(char);
+  const u = ((t % cycle) + cycle) % cycle;
+  const lead = needsShift(char) ? SHIFT_LEAD : 0;
+  const m = u - lead;
+  let out = 0;
+  let pressed = false;
+  if (m >= 0 && m < REACH_OUT) out = smooth(m / REACH_OUT);
+  else if (m >= REACH_OUT && m < REACH_OUT + REACH_HOLD) {
+    out = 1;
+    pressed = true;
+  } else if (m >= REACH_OUT + REACH_HOLD && m < REACH_OUT + REACH_HOLD + REACH_BACK) {
+    out = 1 - smooth((m - REACH_OUT - REACH_HOLD) / REACH_BACK);
+  }
+  let shift = 0;
+  if (needsShift(char)) {
+    const held = lead + REACH_OUT + REACH_HOLD + REACH_BACK;
+    if (u < SHIFT_MOVE) shift = smooth(u / SHIFT_MOVE);
+    else if (u < held) shift = 1;
+    else shift = 1 - smooth((u - held) / SHIFT_MOVE);
+  }
+  return { out, pressed, shift };
+}
