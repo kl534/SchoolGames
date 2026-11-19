@@ -7,6 +7,14 @@ import voiceLines from '../src/shared/voice-lines.json';
 import { countSpeech, MAX_COUNT } from '../src/shared/pictures/plan';
 import { scoreSpeech } from '../src/shared/round';
 import { TAP_SPEECH } from '../src/shared/tapgate';
+import {
+  MIX_LINE,
+  multiplierLine,
+  READY_LINE,
+  speedLine,
+  TYPING_VOICE_LINES,
+  YOUR_TURN,
+} from '../src/shared/typing/lines';
 import { normalizeSpeech, voiceKey } from '../src/shared/voice';
 
 describe('voiceKey', () => {
@@ -51,6 +59,14 @@ describe('collectVoiceLines', () => {
     const lines = await collectVoiceLines();
     expect(MAX_COUNT).toBe(256);
     for (let n = 1; n <= MAX_COUNT; n++) expect(lines).toContain(countSpeech(n));
+  });
+
+  it("has the typing lesson's finger lines, and none of its on-screen lines", async () => {
+    const lines = await collectVoiceLines();
+    for (const line of TYPING_VOICE_LINES) expect(lines).toContain(line);
+    for (const line of [YOUR_TURN, MIX_LINE, READY_LINE, multiplierLine(7), speedLine(20)]) {
+      expect(lines).not.toContain(line);
+    }
   });
 
   it('has no duplicates and no key collisions', async () => {
