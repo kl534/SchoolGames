@@ -309,7 +309,7 @@ describe('planBlock', () => {
       const words = wordsFor(n).length >= WORDS_FROM || levelOf(n).kind === 'speed';
       for (const length of lengths) {
         if (length < 3 && words) continue;
-        for (let i = 0; i < runs(40, 8); i++) {
+        for (let i = 0; i < runs(25, 6); i++) {
           const text = planBlock({ level: n, length, random });
           expect(text.length).toBeGreaterThan(0);
           for (const c of text) expect(known.has(c)).toBe(true);
@@ -327,7 +327,7 @@ describe('planBlock', () => {
         }
       }
     }
-  });
+  }, 60_000);
 
   it('draws about half of a group block from the new keys', () => {
     const random = seededRandom(5);

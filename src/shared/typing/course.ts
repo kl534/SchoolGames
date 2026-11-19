@@ -99,6 +99,16 @@ const isChar = (skill: SkillId): boolean => skill.length === 1;
 
 /** Every char typeable by level n: the char skills of levels up to n and, from 16, the capitals. For speed levels, all 95. */
 export function knownChars(n: number): string[] {
+  const cached = KNOWN.get(n);
+  if (cached) return [...cached];
+  const chars = computeKnown(n);
+  KNOWN.set(n, chars);
+  return [...chars];
+}
+
+const KNOWN = new Map<number, string[]>();
+
+function computeKnown(n: number): string[] {
   if (levelOf(n).kind === 'speed') return [...ALL_CHARS];
   const chars = TYPING_LEVELS.slice(0, n).flatMap((l) => l.skills.filter(isChar));
   if (n >= SHIFT_LEVEL) {

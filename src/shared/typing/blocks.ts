@@ -29,10 +29,18 @@ export interface CharSet {
   fresh: string[];
 }
 
-/** The words whose letters are all in `known`. */
+const wordsCache = new Map<string, string[]>();
+
+/** The words whose letters are all in `known` (remembered: every block asks). */
 export function wordsIn(known: readonly string[]): string[] {
-  const letters = new Set(known);
-  return WORDS.filter((word) => [...word].every((c) => letters.has(c)));
+  const key = known.join('');
+  let words = wordsCache.get(key);
+  if (!words) {
+    const letters = new Set(known);
+    words = WORDS.filter((word) => [...word].every((c) => letters.has(c)));
+    wordsCache.set(key, words);
+  }
+  return words;
 }
 
 /** The words typeable by level n. */
@@ -146,7 +154,8 @@ function wordsBlock(set: CharSet, o: PlanOptions): string {
   const speed = levelOf(level).kind === 'speed';
   const known = new Set(set.known);
   const pool = wordsIn(set.known);
-  const freshWords = pool.filter((w) => [...w].some((c) => set.fresh.includes(c)));
+  const freshWords =
+    set.fresh.length > 0 ? pool.filter((w) => [...w].some((c) => set.fresh.includes(c))) : [];
   const digits = set.known.filter(isDigit);
   const freshDigits = set.fresh.filter(isDigit);
   const symbols = set.known.filter(isSymbol);
