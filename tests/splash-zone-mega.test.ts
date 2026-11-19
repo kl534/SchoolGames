@@ -1,6 +1,6 @@
 import { PerspectiveCamera, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { TAU, createFrame, seatOf, type Frame } from '../src/games/splash-zone/anim';
+import { TAU, createFrame, seatOf, type Frame } from '../src/shared/jetski/anim';
 import {
   SIDE_MARGIN,
   SWING_IN,
@@ -11,7 +11,7 @@ import {
   playBand,
   stuntDistance,
   stuntPose,
-} from '../src/games/splash-zone/layout';
+} from '../src/shared/jetski/layout';
 import {
   MEGA_SPECS,
   megaDuration,
@@ -29,7 +29,7 @@ import {
   megaSegments,
   megaWord,
   megaWordAt,
-} from '../src/games/splash-zone/mega/mega';
+} from '../src/shared/jetski/mega/mega';
 import {
   GATE_BEAT,
   MEGA_BANNER,
@@ -46,10 +46,10 @@ import {
   type MegaId,
   type Passed,
   type WorldId,
-} from '../src/games/splash-zone/rules';
-import { SLOW_RATE, focusOf as focusOf2 } from '../src/games/splash-zone/tricks';
-import { PALETTES } from '../src/games/splash-zone/world';
-import { createGate, createMegaCoursePool } from '../src/games/splash-zone/mega/mega-props';
+} from '../src/shared/jetski/rules';
+import { SLOW_RATE, focusOf as focusOf2 } from '../src/shared/jetski/tricks';
+import { PALETTES } from '../src/shared/jetski/world';
+import { createGate, createMegaCoursePool } from '../src/shared/jetski/mega/mega-props';
 import {
   BRIDGE,
   CRASH,
@@ -59,7 +59,7 @@ import {
   PIER,
   ferryY,
   leafAngle,
-} from '../src/games/splash-zone/mega/harbour-havoc';
+} from '../src/shared/jetski/mega/harbour-havoc';
 import {
   FIZZLE,
   SANDBAR,
@@ -70,8 +70,8 @@ import {
   sandbarY,
   spoutY,
   whaleY,
-} from '../src/games/splash-zone/mega/whale-of-a-time';
-import { spoutLevel, tailAngle } from '../src/games/splash-zone/mega/whale-of-a-time-props';
+} from '../src/shared/jetski/mega/whale-of-a-time';
+import { spoutLevel, tailAngle } from '../src/shared/jetski/mega/whale-of-a-time-props';
 import {
   FETCH,
   SHARK,
@@ -83,7 +83,7 @@ import {
   sharkMouth,
   sharkPose,
   waveLevel,
-} from '../src/games/splash-zone/mega/jaws-some-jump';
+} from '../src/shared/jetski/mega/jaws-some-jump';
 import {
   BONK,
   BOULDERS,
@@ -93,8 +93,8 @@ import {
   SOOT,
   boulderLandAt,
   lavaY,
-} from '../src/games/splash-zone/mega/geyser-blast';
-import { geyserLevel } from '../src/games/splash-zone/mega/geyser-blast-props';
+} from '../src/shared/jetski/mega/geyser-blast';
+import { geyserLevel } from '../src/shared/jetski/mega/geyser-blast-props';
 import {
   ARCH,
   BERG,
@@ -104,7 +104,7 @@ import {
   SKID,
   bergY,
   floeY,
-} from '../src/games/splash-zone/mega/penguin-parade';
+} from '../src/shared/jetski/mega/penguin-parade';
 import {
   BEAR,
   DONUT,
@@ -116,7 +116,7 @@ import {
   T_MELT,
   bearY,
   bellySquash,
-} from '../src/games/splash-zone/mega/sweet-tooth-rush';
+} from '../src/shared/jetski/mega/sweet-tooth-rush';
 import {
   NECK,
   REX,
@@ -130,7 +130,7 @@ import {
   neckY,
   rexRampY,
   stegoRampY,
-} from '../src/games/splash-zone/mega/raptor-rapids';
+} from '../src/shared/jetski/mega/raptor-rapids';
 import { runs } from './helpers/full';
 
 const PASSED: Passed[] = [0, 1, 2, 3];

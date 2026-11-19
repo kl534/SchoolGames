@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { runs } from './helpers/full';
-import { resetFrame, seatOf, surfaceY, swell } from '../src/games/splash-zone/anim';
+import { resetFrame, seatOf, surfaceY, swell } from '../src/shared/jetski/anim';
 import {
   TRICK_IDS,
   TRICK_NAMES,
@@ -8,7 +8,7 @@ import {
   TIER_LAUNCHER,
   type Outcome,
   type TrickId,
-} from '../src/games/splash-zone/rules';
+} from '../src/shared/jetski/rules';
 import {
   RESPAWN_TIME,
   SLOW_RATE,
@@ -22,7 +22,7 @@ import {
   trickRate,
   trickWord,
   type Frame,
-} from '../src/games/splash-zone/tricks';
+} from '../src/shared/jetski/tricks';
 
 const OUTCOMES: Outcome[] = ['clear', 'fail'];
 const FPS = 60;
