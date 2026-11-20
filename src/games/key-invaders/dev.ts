@@ -16,6 +16,8 @@
  * - `?ufo=1` the UFO is up from the start (in the middle of the lane while frozen).
  * - `?freeze=1` the march, bombs, UFO and particles hold still; keys still work.
  * - `?levelup=1` the first kill passes the level.
+ * - `?keys=<text>` (at most 12 characters, `%20` for a space) once the first wave marches, these keys
+ *   are typed in order (works with `freeze=1`): `?keys=f` shows every invader starting with F in play.
  */
 import { LEVEL_COUNT } from '../../shared/typing/course';
 import { SPK_MAX, SPK_MIN } from '../../shared/typing/progress';
@@ -38,6 +40,7 @@ export interface InvadersDev {
   ufo: boolean;
   freeze: boolean;
   levelup: boolean;
+  keys: string | null;
   /** Any hook is in the URL: nothing is saved. */
   hooked: boolean;
 }
@@ -58,6 +61,7 @@ const HOOKS = [
   'ufo',
   'freeze',
   'levelup',
+  'keys',
 ];
 
 /** Reads the dev hooks from a query string; anything malformed is ignored. */
@@ -74,6 +78,7 @@ export function parseDev(search: string): InvadersDev {
   const typed = num('typed');
   const spk = num('spk');
   const chunk = q.get('chunk') ?? '';
+  const keys = q.get('keys') ?? '';
   return {
     level: intIn('level', 1, LEVEL_COUNT),
     start: q.get('start') === '1',
@@ -90,6 +95,7 @@ export function parseDev(search: string): InvadersDev {
     ufo: q.get('ufo') === '1',
     freeze: q.get('freeze') === '1',
     levelup: q.get('levelup') === '1',
+    keys: /^[\x20-\x7e]{1,12}$/.test(keys) ? keys : null,
     hooked: HOOKS.some((name) => q.has(name)),
   };
 }
