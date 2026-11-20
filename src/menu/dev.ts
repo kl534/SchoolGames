@@ -93,7 +93,7 @@ export function demoTypingProgress(kind: 'keys' | 'speed'): PlayerProgress {
     ...emptyTyping(),
     open,
     level: open,
-    spk: kind === 'keys' ? 1.2 : 0.6,
+    spk: kind === 'keys' ? 1.2 : 0.9,
     bestWpm: kind === 'keys' ? 14.6 : 23.4,
     lessons: Array.from({ length: open }, (_, i) => i + 1),
   };
