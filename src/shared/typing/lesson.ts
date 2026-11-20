@@ -23,6 +23,7 @@ import {
   multiplierLine,
   NEW_KEYS,
   READY_LINE,
+  SPACE_LINE,
   speedLine,
   YOUR_TURN,
 } from './lines';
@@ -61,6 +62,10 @@ export interface KeyLessonOptions {
   random?: Random;
   container?: HTMLElement;
   lab?: LessonLab;
+  /** The ready card's title (default `READY_LINE`, "You're ready! Let's ride!"). */
+  readyLine?: string;
+  /** The ready card's prompt to start (default 'Press the space bar to ride!'). */
+  spaceLine?: string;
 }
 
 export interface KeyLesson {
@@ -177,13 +182,13 @@ export function showKeyLesson(o: KeyLessonOptions): KeyLesson {
   keyboard.element.classList.add('tl-kb');
   card.appendChild(keyboard.element);
   const doneCard = el('div', 'tl-done', card);
-  el('h2', 'tl-ready', doneCard, READY_LINE);
+  el('h2', 'tl-ready', doneCard, o.readyLine ?? READY_LINE);
   if (level >= 2) {
     const mult = el('div', 'tl-mult', doneCard);
     el('span', 'tl-badge', mult, `×${multiplier(level)}`);
     el('p', 'tl-mult-line', mult, multiplierLine(level));
   }
-  el('p', 'tl-space', doneCard, 'Press the space bar to ride!');
+  el('p', 'tl-space', doneCard, o.spaceLine ?? SPACE_LINE);
   const buttons = el('div', 'tl-buttons', card);
 
   // ---------- State ----------

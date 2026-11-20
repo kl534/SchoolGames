@@ -521,6 +521,43 @@ describe('level picker', () => {
   });
 });
 
+describe('ready and space lines', () => {
+  const ready = (level: number, extra: { readyLine?: string; spaceLine?: string } = {}) => {
+    track(showKeyLesson({ level, onDone: vi.fn(), onSkip: vi.fn(), speak: vi.fn(), ...extra }));
+    return [
+      document.querySelector('.tl-ready')!.textContent,
+      document.querySelector('.tl-space')!.textContent,
+    ];
+  };
+  const picker = (spaceLine?: string) => {
+    track(
+      showLevelPicker({
+        typing: emptyTyping(),
+        selected: 1,
+        onPick: vi.fn(),
+        onTestOut: vi.fn(),
+        onLesson: vi.fn(),
+        onStart: vi.fn(),
+        spaceLine,
+      }),
+    );
+    return document.querySelector('.tp-space')!.textContent;
+  };
+
+  it('keeps the ride lines by default on the lesson and the picker', () => {
+    expect(ready(2)).toEqual(["You're ready! Let's ride!", 'Press the space bar to ride!']);
+    expect(picker()).toBe('Press the space bar to ride!');
+  });
+
+  it('takes other lines for the lesson and the picker', () => {
+    expect(ready(2, { readyLine: "You're ready! Let's blast!", spaceLine: 'Go!' })).toEqual([
+      "You're ready! Let's blast!",
+      'Go!',
+    ]);
+    expect(picker('Press the space bar to play!')).toBe('Press the space bar to play!');
+  });
+});
+
 describe('test out', () => {
   it('passes with 90% right first time', () => {
     expect(testPassed(20, 27, 30, 10)).toBe(true);
