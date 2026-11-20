@@ -64,7 +64,7 @@ describe('parseDev', () => {
 
   it('reads this game hooks', () => {
     const dev = parseDev(
-      '?level=7&start=1&lesson=1&block=rfrj%20ur&typed=2&wrong=1&spk=0.8&clock=30&levelup=1',
+      '?level=7&start=1&lesson=1&block=rfrj%20ur&typed=2&wrong=1&spk=1.2&clock=30&levelup=1',
     );
     expect(dev).toMatchObject({
       level: 7,
@@ -73,7 +73,7 @@ describe('parseDev', () => {
       block: 'rfrj ur',
       typed: 2,
       wrong: true,
-      spk: 0.8,
+      spk: 1.2,
       clock: 30,
       levelup: true,
       hooked: true,
@@ -81,7 +81,7 @@ describe('parseDev', () => {
   });
 
   it('clamps spk and keeps the ride hooks', () => {
-    expect(parseDev('?spk=0.01').spk).toBe(0.25);
+    expect(parseDev('?spk=0.01').spk).toBe(0.9);
     expect(parseDev('?spk=99').spk).toBe(2.5);
     const dev = parseDev('?skis=1&mega=1&world=lagoon&clock=0.3');
     expect(dev).toMatchObject({ skis: 1, mega: true, world: 'lagoon', clock: 0.3, hooked: true });

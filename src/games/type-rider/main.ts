@@ -13,6 +13,7 @@ import {
   HISTORY,
   SPEED_STREAK,
   TYPING_LEVEL_ID,
+  MEGA_CLOCK_EXTRA,
   clockFor,
   levelPassed,
   levelUp,
@@ -27,6 +28,7 @@ import { devOptions } from './dev';
 import {
   blockKeys,
   blockOutcome,
+  blockTarget,
   emptyStats,
   resultsText,
   speedStreak,
@@ -294,7 +296,11 @@ function run(session: TypingSession): void {
           random: Math.random,
           history: typing.keys,
         });
-      const seconds = dev?.clock ?? clockFor(playLevel, text.length, typing.spk);
+      const extra =
+        blockTarget(turn.target, turn.tier) === 'mega-ramp' || turn.target === 'gate'
+          ? MEGA_CLOCK_EXTRA
+          : 0;
+      const seconds = dev?.clock ?? clockFor(playLevel, text.length, typing.spk, extra);
       hud.problemText.replaceChildren(block.element);
       hud.setTopVisible(true, 0);
       // After the panel shows, so the row can shrink to fit it.
