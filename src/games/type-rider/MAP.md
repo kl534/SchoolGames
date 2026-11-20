@@ -16,7 +16,7 @@ Voice rule (owner): only the lesson's finger explanations are spoken, by the les
 
 ## Dev hooks
 
-The ride's hooks (`tricks`, `streak`, `skis`, `lab`, `at`, `world`, `mega`), listed in `src/shared/jetski/MAP.md`, and:
+The ride's hooks (`tricks`, `streak`, `skis`, `lab`, `at`, `world`, `mega`, `cycles`), listed in `src/shared/jetski/MAP.md`, and:
 
 - `?level=<1-40>`: play that level (open in memory; the keys of the levels before it count as learned, so only its new keys light up).
 - `?start=1`: skip the picker and the lesson. `?lesson=1`: show the level's lesson even if it was seen (works with `start=1`).

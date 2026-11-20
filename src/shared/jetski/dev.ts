@@ -12,6 +12,8 @@
  * - `?lab=<megaId>:<0-3>` the same lab for a Mega course, with that many questions right (it
  *   clears that many elements and wipes out on the next); `&at=` freezes it likewise.
  * - `?world=<id>` start the run in that world (`lagoon`, `dino`, `harbour`, `iceberg`, `volcano`, `reef`, `candy`).
+ * - `?cycles=<n>` start as if the rider had already been through all the worlds n times (a later
+ *   lap, so a higher top speed).
  * - `?mega=1` the first turn is this world's Mega Stunt.
  */
 import {
@@ -27,6 +29,7 @@ import {
 } from './rules';
 
 export const MAX_DEV_STREAK = 20;
+export const MAX_DEV_CYCLES = 20;
 
 /** The trick lab plays one trick; the respawn lab loops the boat; the Mega lab plays a course. */
 export type Lab =
@@ -40,6 +43,7 @@ export interface RideDev {
   at: number | null;
   world: WorldId | null;
   mega: boolean;
+  cycles: number;
 }
 
 const isTrick = (name: string): name is TrickId => (TRICK_IDS as readonly string[]).includes(name);
@@ -74,6 +78,7 @@ export function parseRideDev(search: string): RideDev {
     lab = { mega: trick as MegaId, passed: Number(outcome) as Passed };
   }
   const at = num('at');
+  const cycles = num('cycles');
   return {
     tricks,
     streak: Number.isInteger(streak) && streak >= 0 && streak <= MAX_DEV_STREAK ? streak : null,
@@ -82,5 +87,6 @@ export function parseRideDev(search: string): RideDev {
     at: Number.isFinite(at) ? at : null,
     world: isWorld(q.get('world') ?? '') ? (q.get('world') as WorldId) : null,
     mega: q.get('mega') === '1',
+    cycles: Number.isInteger(cycles) && cycles >= 0 && cycles <= MAX_DEV_CYCLES ? cycles : 0,
   };
 }
