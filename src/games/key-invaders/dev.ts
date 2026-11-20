@@ -11,7 +11,7 @@
  * - `?wrong=1` holds the red flash on the locked label.
  * - `?spk=<seconds>` start with this many seconds per key (0.25 to 2.5).
  * - `?wave=<n>` start at wave n (and its pace). `?lives=<1-3>` start with that many cannons.
- * - `?drop=<0-11>` wave 1 starts n drops down. `?left=<1-18>` the wave starts with only n invaders,
+ * - `?drop=<0-23>` wave 1 starts n drops down. `?left=<1-18>` the wave starts with only n invaders,
  *   bottom rows first, left to right.
  * - `?ufo=1` the UFO is up from the start (in the middle of the lane while frozen).
  * - `?freeze=1` the march, bombs, UFO and particles hold still; keys still work.

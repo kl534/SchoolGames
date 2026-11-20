@@ -25,9 +25,9 @@ export const BASE_POINTS: Record<Kind, number> = { octopus: 10, crab: 20, squid:
 /** Keys a wave is planned with: 6 × (3 + 4 + 5). */
 export const WAVE_KEYS = 72;
 export const CANNONS = 3;
-export const SLACK_START = 1.6;
+export const SLACK_START = 3.2;
 export const SLACK_PER_WAVE = 0.92;
-export const SLACK_MIN = 1.1;
+export const SLACK_MIN = 2.2;
 /** The march is up to this much faster with one invader left (×1 with all 18). */
 export const THIN = 0.25;
 export const STEP_MIN = 0.12; // s
@@ -174,7 +174,7 @@ export function spkFor(level: number, spk: number): number {
   return levelOf(level).kind === 'speed' && goal ? 12 / goal : spk;
 }
 
-/** How many times the time to type the whole wave the march gives: 1.6 at wave 1, 8% less each wave, never below 1.1. */
+/** How many times the time to type the whole wave the march gives: 3.2 at wave 1, 8% less each wave, never below 2.2. */
 export function waveSlack(wave: number): number {
   return Math.max(SLACK_MIN, SLACK_START * SLACK_PER_WAVE ** (wave - 1));
 }

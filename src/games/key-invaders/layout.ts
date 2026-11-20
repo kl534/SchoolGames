@@ -11,13 +11,13 @@ export const ROW_PITCH = 1.3;
 /** One cube of an invader. */
 export const PIXEL = 0.1;
 /** The bottom row's bottom y at drop 0. */
-export const START_BOTTOM = 8.2;
+export const START_BOTTOM = 14.2;
 /** How far the formation drops at the edge. */
 export const DROP = 0.5;
 /** The top of the bunkers: an invader whose bottom gets here has landed. */
 export const LAND_Y = 2.2;
 /** Drops from the start to the bunker line: `(START_BOTTOM - LAND_Y) / DROP`. */
-export const DROPS_TO_LAND = 12;
+export const DROPS_TO_LAND = 24;
 /** One sideways step, and the steps of one full pass of a full formation. */
 export const STEP_X = 0.35;
 export const STEPS_PER_PASS = 8;
@@ -40,10 +40,10 @@ export const CANNON_ROWS = 6;
 export const GROUND_Y = 0;
 
 /** The UFO's lane: its bottom y; its label sits above it. */
-export const UFO_BOTTOM = 12.2;
+export const UFO_BOTTOM = 18.2;
 
-/** The box the camera must show: x ±6.7, y -0.3 to 13.8. */
-export const FIELD_BOX = { left: -6.7, right: 6.7, bottom: -0.3, top: 13.8 };
+/** The box the camera must show: x ±6.7, y -0.3 to 19.8. */
+export const FIELD_BOX = { left: -6.7, right: 6.7, bottom: -0.3, top: 19.8 };
 
 /** The camera's tilt from the front, in degrees, and its field of view. */
 export const TILT_DEG = 25;
