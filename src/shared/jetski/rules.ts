@@ -92,11 +92,16 @@ export const TIER2_FROM = 3;
 export const TIER3_FROM = 6;
 /** Points for a right answer however slow, and the extra for answering instantly. */
 export const BASE_POINTS = 100;
-export const TIME_BONUS = 50;
+export const TIME_BONUS = 400;
 /** Points for riding through a coin. */
 export const COIN_POINTS = 25;
-/** How much faster the world gets with each trick landed, and the most it can reach. */
-export const SPEED_STEP = 0.05;
+/**
+ * How much faster the world gets with each trick landed, the top speed of the first lap through
+ * all the worlds, how much higher it gets with each full lap, and the ceiling it never passes.
+ */
+export const SPEED_STEP = 0.02;
+export const SPEED_CAP_START = 1.15;
+export const SPEED_CAP_PER_CYCLE = 0.05;
 export const SPEED_MAX = 1.6;
 
 const clamp01 = (n: number) => Math.min(Math.max(n, 0), 1);
@@ -119,7 +124,7 @@ export function nextTrick(tier: Tier, previous: TrickId | null, random: number):
 }
 
 /**
- * Points for one right answer: 100, plus up to 50 for time left on the clock, times the tier
+ * Points for one right answer: 100, plus up to 400 for time left on the clock, times the tier
  * (1, 2 or 3). A timeTotal of 0 or less counts as no time left.
  */
 export function hitPoints(timeLeft: number, timeTotal: number, tier: Tier): number {
@@ -146,9 +151,25 @@ export function outOfSkis(skis: number): boolean {
   return skis <= 0;
 }
 
-/** How much faster than the base speed the world goes after this many tricks are landed. */
-export function worldSpeedFactor(landed: number): number {
-  return Math.min(1 + SPEED_STEP * Math.max(landed, 0), SPEED_MAX);
+/** The top speed factor after this many full laps through all the worlds. */
+export function speedCap(cycles: number): number {
+  return Math.min(
+    SPEED_CAP_START + SPEED_CAP_PER_CYCLE * Math.max(Math.floor(cycles), 0),
+    SPEED_MAX,
+  );
+}
+
+/** How many full laps through all the worlds are done after this many worlds are cleared. */
+export function cyclesDone(worldsCleared: number): number {
+  return Math.floor(Math.max(worldsCleared, 0) / WORLD_ORDER.length);
+}
+
+/**
+ * How much faster than the base speed the world goes after this many tricks are landed, held at
+ * the top speed of the lap the rider is on.
+ */
+export function worldSpeedFactor(landed: number, cycles = 0): number {
+  return Math.min(1 + SPEED_STEP * Math.max(landed, 0), speedCap(cycles));
 }
 
 /** Eases `current` towards `goal`; frame-rate independent for a given `rate` (1/seconds). */
@@ -173,12 +194,12 @@ export interface Approach {
 }
 
 /**
- * gap = clamp(RIDE_SPEED * worldSpeedFactor(landed) * clock, MIN_GAP, MAX_GAP) with clock the
+ * gap = clamp(RIDE_SPEED * worldSpeedFactor(landed, cycles) * clock, MIN_GAP, MAX_GAP) with clock the
  * fact's timer (at least 1 s); rideSpeed = gap / clock.
  */
-export function approach(landed: number, clockSeconds: number): Approach {
+export function approach(landed: number, clockSeconds: number, cycles = 0): Approach {
   const clock = Math.max(clockSeconds, 1);
-  const gap = clamp(RIDE_SPEED * worldSpeedFactor(landed) * clock, MIN_GAP, MAX_GAP);
+  const gap = clamp(RIDE_SPEED * worldSpeedFactor(landed, cycles) * clock, MIN_GAP, MAX_GAP);
   return { gap, rideSpeed: gap / clock };
 }
 

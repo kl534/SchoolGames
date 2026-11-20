@@ -44,6 +44,8 @@ import {
   TURBO_MAX,
   approach,
   approachProgress,
+  cyclesDone,
+  speedCap,
   coinSide,
   easeToward,
   hitPoints,
@@ -141,12 +143,12 @@ describe('nextTrick', () => {
 });
 
 describe('points', () => {
-  it('hitPoints: 100, plus up to 50 for time left, times the tier', () => {
-    expect(hitPoints(10, 10, 1)).toBe(150);
+  it('hitPoints: 100, plus up to 400 for time left, times the tier', () => {
+    expect(hitPoints(10, 10, 1)).toBe(500);
     expect(hitPoints(0, 10, 1)).toBe(100);
-    expect(hitPoints(5, 10, 2)).toBe(250);
-    expect(hitPoints(10, 10, 3)).toBe(450);
-    expect(BASE_POINTS + TIME_BONUS).toBe(150);
+    expect(hitPoints(5, 10, 2)).toBe(600);
+    expect(hitPoints(10, 10, 3)).toBe(1500);
+    expect(BASE_POINTS + TIME_BONUS).toBe(500);
   });
 
   it('a timer of 0 counts as no time left, and odd times are clamped', () => {
@@ -154,7 +156,7 @@ describe('points', () => {
     expect(hitPoints(5, 0, 3)).toBe(300);
     expect(hitPoints(5, -3, 2)).toBe(200);
     expect(hitPoints(-4, 10, 1)).toBe(100);
-    expect(hitPoints(40, 10, 1)).toBe(150);
+    expect(hitPoints(40, 10, 1)).toBe(500);
   });
 
   it('nextStreak, loseSki and outOfSkis', () => {
@@ -167,12 +169,43 @@ describe('points', () => {
     expect(outOfSkis(0)).toBe(true);
   });
 
-  it('worldSpeedFactor grows 5 % a trick and caps at 1.6', () => {
+  it('worldSpeedFactor grows 2 % a trick and holds at the top speed of the lap', () => {
     expect(worldSpeedFactor(0)).toBe(1);
-    expect(worldSpeedFactor(4)).toBeCloseTo(1.2, 9);
-    expect(worldSpeedFactor(12)).toBeCloseTo(1.6, 9);
-    expect(worldSpeedFactor(500)).toBe(SPEED_MAX);
+    expect(worldSpeedFactor(4)).toBeCloseTo(1.08, 9);
+    expect(worldSpeedFactor(8)).toBeCloseTo(1.15, 9);
+    expect(worldSpeedFactor(500)).toBeCloseTo(1.15, 9);
     expect(worldSpeedFactor(-3)).toBe(1);
+    expect(worldSpeedFactor(500, 1)).toBeCloseTo(1.2, 9);
+    expect(worldSpeedFactor(500, 3)).toBeCloseTo(1.3, 9);
+    expect(worldSpeedFactor(500, 100)).toBe(SPEED_MAX);
+  });
+
+  it('speedCap rises by 0.05 a lap, never falls and stops at SPEED_MAX', () => {
+    expect(speedCap(0)).toBeCloseTo(1.15, 9);
+    expect(speedCap(-2)).toBeCloseTo(1.15, 9);
+    expect(speedCap(1.9)).toBeCloseTo(1.2, 9);
+    for (let c = 0; c < 30; c++) expect(speedCap(c + 1)).toBeGreaterThanOrEqual(speedCap(c));
+    expect(speedCap(10)).toBeCloseTo(SPEED_MAX, 9);
+  });
+
+  it('cyclesDone counts full laps of the seven worlds', () => {
+    expect(cyclesDone(0)).toBe(0);
+    expect(cyclesDone(6)).toBe(0);
+    expect(cyclesDone(7)).toBe(1);
+    expect(cyclesDone(15)).toBe(2);
+    expect(cyclesDone(-3)).toBe(0);
+  });
+
+  it('worldSpeedFactor stays between 1 and the cap and never falls (random sweep)', () => {
+    for (let i = 0; i < runs(3000, 300); i++) {
+      const landed = Math.floor(Math.random() * 60);
+      const cycles = Math.floor(Math.random() * 14);
+      const f = worldSpeedFactor(landed, cycles);
+      expect(f).toBeGreaterThanOrEqual(1);
+      expect(f).toBeLessThanOrEqual(speedCap(cycles));
+      expect(worldSpeedFactor(landed + 1, cycles)).toBeGreaterThanOrEqual(f);
+      expect(worldSpeedFactor(landed, cycles + 1)).toBeGreaterThanOrEqual(f);
+    }
   });
 
   it('easeToward moves a fraction of the way and never overshoots', () => {
@@ -197,7 +230,9 @@ describe('the approach', () => {
     expect(approach(0, 1).gap).toBe(MIN_GAP);
     expect(approach(0, 100).gap).toBe(MAX_GAP);
     expect(approach(0, 6).gap).toBeCloseTo(RIDE_SPEED * 6, 9);
-    expect(approach(4, 6).gap).toBeCloseTo(RIDE_SPEED * 1.2 * 6, 9);
+    expect(approach(4, 6).gap).toBeCloseTo(RIDE_SPEED * 1.08 * 6, 9);
+    expect(approach(40, 6).gap).toBeCloseTo(RIDE_SPEED * 1.15 * 6, 9);
+    expect(approach(40, 6, 1).gap).toBeCloseTo(RIDE_SPEED * 1.2 * 6, 9);
   });
 
   it('turboSpeed stays between the entry speed and the maximum', () => {
@@ -537,7 +572,10 @@ describe('parseRideDev', () => {
       at: null,
       world: null,
       mega: false,
+      cycles: 0,
     });
+    expect(parseRideDev('?cycles=2').cycles).toBe(2);
+    expect(parseRideDev('?cycles=-1').cycles).toBe(0);
   });
 
   it('ignores malformed input', () => {

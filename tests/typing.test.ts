@@ -58,6 +58,7 @@ import {
   recordPress,
   skillLearned,
   SPK_MAX,
+  MEGA_CLOCK_EXTRA,
   SPK_MIN,
   TOTAL_LEARNABLE,
   wpm,
@@ -471,7 +472,7 @@ describe('key stats', () => {
     expect(nextSpk(2, 'perfect')).toBeCloseTo(1.9, 5);
     expect(nextSpk(2, 'timeout')).toBeCloseTo(2.2, 5);
     expect(nextSpk(2, 'mistakes')).toBe(2);
-    expect(nextSpk(0.26, 'perfect')).toBe(SPK_MIN);
+    expect(nextSpk(0.92, 'perfect')).toBe(SPK_MIN);
     expect(nextSpk(2.4, 'timeout')).toBe(SPK_MAX);
   });
 
@@ -480,6 +481,11 @@ describe('key stats', () => {
     expect(clockFor(3, 3, 1)).toBeCloseTo(4.5, 5);
     // 20 wpm is 100 keys a minute: 12 / 20 = 0.6 s a key.
     expect(clockFor(31, 10, 2)).toBeCloseTo(10 * 0.6 + 0.5, 5);
+    // Mega blocks get MEGA_CLOCK_EXTRA more seconds on key levels only; speed levels ignore it.
+    expect(clockFor(1, 8, SPK_MIN, MEGA_CLOCK_EXTRA)).toBeCloseTo(8 * 0.9 + 1.5 + 2, 5);
+    expect(clockFor(1, 3, SPK_MIN)).toBeCloseTo(4.2, 5);
+    expect(clockFor(1, 5, 2, 0)).toBe(clockFor(1, 5, 2));
+    expect(clockFor(31, 10, 2, MEGA_CLOCK_EXTRA)).toBe(clockFor(31, 10, 2));
     expect(wpm(50, 60)).toBe(10);
     expect(wpm(30, 30)).toBe(12);
   });
@@ -514,6 +520,7 @@ describe('normalizeTyping', () => {
     expect(tp.spk).toBe(SPK_MAX);
     expect(tp.bestWpm).toBe(0);
     expect(normalizeTyping({ spk: 0 }).spk).toBe(SPK_MIN);
+    expect(normalizeTyping({ spk: 0.4 }).spk).toBe(0.9);
   });
 
   it('is kept by normalizeProgress', () => {

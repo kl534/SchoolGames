@@ -11,7 +11,7 @@ Voice rule: only the lesson's finger explanations are spoken (`HOME_ROW_LINE`, `
 - `lines.ts`: the lesson's lines and the fixed on-screen lines (`lessonLine`, `TYPING_VOICE_LINES`, `multiplierLine`, `speedLine`, `YOUR_TURN`, `MIX_LINE`, `READY_LINE`, `NEW_KEYS`, `TEST_PASS`, `TEST_FAIL`)
 - `words.ts`: the list of common kid words blocks are made of (`WORDS`)
 - `blocks.ts`: the blocks of keys to type (`planBlock`, `wordsFor`, `BLOCK_KEYS`, `TEST_KEYS`, `FRESH_SHARE`, `MAX_GROUP`, `WORDS_FROM`)
-- `progress.ts`: the first-try history of each key, the open level, seconds per key and the clock (`TypingProgress`, `recordPress`, `skillLearned`, `levelPassed`, `learnedCount`, `nextSpk`, `clockFor`, `wpm`, `openLevel`, `levelUp`, `normalizeTyping`, `TYPING_LEVEL_ID`)
+- `progress.ts`: the first-try history of each key, the open level, seconds per key and the clock (`TypingProgress`, `recordPress`, `skillLearned`, `levelPassed`, `learnedCount`, `nextSpk`, `clockFor` (a key level's Mega ramp and gate blocks get `MEGA_CLOCK_EXTRA` = 2 s more; `SPK_MIN` is 0.9 s a key), `wpm`, `openLevel`, `levelUp`, `normalizeTyping`, `TYPING_LEVEL_ID`)
 - `session.ts`: `startTypingSession(gameId)`: the player, their typing progress, `save()`, `highScore()` and `recordScore()` under `TYPING_LEVEL_ID`
 - `keys.ts`: `onTypingKey(handler)`: one `keydown` listener for single-char keys (ignores repeats and Ctrl, Alt, Meta; cancels the keys it handles; reports Caps Lock)
 - `keyboard.ts`: the keyboard picture, with or without two hands whose fingers reach for the lit key (`createKeyboard`: `light`, `flash`, `setFaint`, `reach`, `pulse`, `tint`, `setCaps`)

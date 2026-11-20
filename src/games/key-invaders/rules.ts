@@ -126,17 +126,17 @@ export interface LockCandidate {
 }
 
 /**
- * The target a first key locks on: among those starting with `char`, an invader before the UFO,
+ * The target to aim at among those whose text starts with `typed`: an invader before the UFO,
  * then the lowest, then the one nearest the cannon. Null when none starts with it.
  */
 export function lockTarget(
   targets: readonly LockCandidate[],
-  char: string,
+  typed: string,
   cannonX: number,
 ): string | null {
   let best: LockCandidate | null = null;
   for (const t of targets) {
-    if (t.text[0] !== char) continue;
+    if (!t.text.startsWith(typed)) continue;
     if (best === null) {
       best = t;
       continue;
@@ -152,6 +152,82 @@ export function lockTarget(
     if (Math.abs(t.x - cannonX) < Math.abs(best.x - cannonX)) best = t;
   }
   return best ? best.id : null;
+}
+
+/** What is locked: the ids still in play (empty = nothing locked), the one aimed at, the keys typed. */
+export interface Aim {
+  candidates: string[];
+  primary: string | null;
+  typed: string;
+}
+
+export const NO_AIM: Aim = { candidates: [], primary: null, typed: '' };
+
+export type AimStep =
+  /** Nothing was locked and no target starts with the key: buzz only, no mistake recorded. */
+  | { kind: 'stray' }
+  /** The key fits no candidate: a mistake at position `aim.typed.length`; the aim is unchanged. */
+  | { kind: 'wrong'; aim: Aim }
+  /** The key fits: the new aim, and the ids that dropped out (they go back to untyped). */
+  | { kind: 'right'; aim: Aim; dropped: string[] }
+  /** A candidate's whole text is typed: `id` dies; `others` are the rest (back to untyped). */
+  | { kind: 'kill'; id: string; others: string[] };
+
+/** One key against the aim: every target that starts with what is typed stays in play. */
+export function aimKey(
+  aim: Aim,
+  targets: readonly LockCandidate[],
+  char: string,
+  cannonX: number,
+): AimStep {
+  const next = aim.typed + char;
+  const pool =
+    aim.candidates.length === 0 ? targets : targets.filter((t) => aim.candidates.includes(t.id));
+  const fit = pool.filter((t) => t.text.startsWith(next));
+  if (fit.length === 0)
+    return aim.candidates.length === 0 ? { kind: 'stray' } : { kind: 'wrong', aim };
+  const done = fit.filter((t) => t.text.length === next.length);
+  if (done.length > 0) {
+    const id =
+      aim.primary !== null && done.some((t) => t.id === aim.primary)
+        ? aim.primary
+        : (lockTarget(done, next, cannonX) as string);
+    const others = [...new Set([...aim.candidates, ...fit.map((t) => t.id)])].filter(
+      (x) => x !== id,
+    );
+    return { kind: 'kill', id, others };
+  }
+  const ids = fit.map((t) => t.id);
+  const primary =
+    aim.primary !== null && ids.includes(aim.primary)
+      ? aim.primary
+      : lockTarget(fit, next, cannonX);
+  return {
+    kind: 'right',
+    aim: { candidates: ids, primary, typed: next },
+    dropped: aim.candidates.filter((x) => !ids.includes(x)),
+  };
+}
+
+/** The aim without `id`: re-picks the primary if it was `id`; NO_AIM if no candidate is left. */
+export function aimWithout(
+  aim: Aim,
+  id: string,
+  targets: readonly LockCandidate[],
+  cannonX: number,
+): Aim {
+  if (!aim.candidates.includes(id)) return aim;
+  const candidates = aim.candidates.filter((x) => x !== id);
+  if (candidates.length === 0) return NO_AIM;
+  const primary =
+    aim.primary !== id
+      ? aim.primary
+      : lockTarget(
+          targets.filter((t) => candidates.includes(t.id)),
+          aim.typed,
+          cannonX,
+        );
+  return { candidates, primary, typed: aim.typed };
 }
 
 /** The streak's points multiplier, with the streak counted after the kill: ×2 from 5, ×3 from 10, ×4 from 20. */

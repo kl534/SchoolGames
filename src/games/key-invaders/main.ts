@@ -67,7 +67,10 @@ import {
   UFO_AT_ALIVE,
   emptyStats,
   killPoints,
-  lockTarget,
+  NO_AIM,
+  aimKey,
+  aimWithout,
+  type Aim,
   nextStep,
   planChunk,
   recoil,
@@ -266,9 +269,8 @@ function run(session: TypingSession): void {
   let cannonX = 0;
   let finished = false;
 
-  /** The locked target and how many of its keys are done. */
-  let lock: Target | null = null;
-  let pos = 0;
+  /** What is locked: the targets still in play, the one aimed at, and the keys typed. */
+  let aim: Aim = NO_AIM;
   let lockedAt = 0;
   /** Speed levels: the group of kills so far and the groups in a row at the goal. */
   let group: Group = { keys: 0, mistakes: 0, seconds: 0 };
@@ -312,11 +314,24 @@ function run(session: TypingSession): void {
     return out;
   };
 
+  const byId = (id: string | null): Target | null =>
+    id === null ? null : (targets().find((t) => t.id === id) ?? null);
+  const primary = (): Target | null => byId(aim.primary);
+  const pos = (): number => aim.typed.length;
+  const candidatesOf = (): Target[] =>
+    aim.candidates.map(byId).filter((t): t is Target => t !== null);
+  const lockCandidates = () =>
+    targets().map((t) => {
+      const p = targetPos(t);
+      return { id: t.id, text: t.text, bottomY: p.y, x: p.x, ufo: t.ufo };
+    });
+
   // ---------- Keyboard strip ----------
   /** Lights the next key unless it is learned; the whole strip fades when every key on screen is. */
   const paintKeyboard = () => {
     let next: string | null;
-    if (lock) next = lock.text[pos] ?? null;
+    const aimed = primary();
+    if (aimed) next = aimed.text[pos()] ?? null;
     else {
       // Nothing locked: the first key of the lowest target.
       let lowest: Target | null = null;
@@ -403,7 +418,9 @@ function run(session: TypingSession): void {
   const dropTarget = (t: Target) => {
     t.label.remove();
     t.voxels.chip(0);
-    if (lock === t) lock = null;
+    if (aim.candidates.includes(t.id)) {
+      aim = aimWithout(aim, t.id, lockCandidates(), cannonX);
+    }
   };
 
   /** The lowest living invader of a column. */
@@ -437,7 +454,8 @@ function run(session: TypingSession): void {
   };
 
   const paintLabel = (t: Target) => {
-    t.label.setState({ typed: lock === t ? pos : 0, locked: lock === t, wrong: false });
+    const candidate = aim.candidates.includes(t.id);
+    t.label.setState({ typed: candidate ? pos() : 0, locked: candidate, wrong: false });
   };
 
   const syncVisuals = () => {
@@ -456,10 +474,11 @@ function run(session: TypingSession): void {
     ufo.voxels.place(ufo.x, UFO_BOTTOM);
     cannon.place(cannonX, GROUND_Y);
 
-    if (lock) {
-      const p = targetPos(lock);
+    const aimed = primary();
+    if (aimed) {
+      const p = targetPos(aimed);
       outline.setVisible(true);
-      outline.place(p.x, p.y, lock.voxels.width, lock.voxels.height);
+      outline.place(p.x, p.y, aimed.voxels.width, aimed.voxels.height);
     } else {
       outline.setVisible(false);
     }
@@ -509,28 +528,27 @@ function run(session: TypingSession): void {
 
   // ---------- Locking and typing ----------
   const aimCannon = () => {
-    if (!lock) return;
-    cannonX = targetPos(lock).x;
+    const aimed = primary();
+    if (aimed) cannonX = targetPos(aimed).x;
   };
 
-  const lockOn = (t: Target) => {
-    lock = t;
-    pos = 0;
-    lockedAt = activeTime;
-    paintLabel(t);
+  /** Clears the aim and repaints the labels of everything that was in play. */
+  const clearAim = () => {
+    const old = candidatesOf();
+    aim = NO_AIM;
+    for (const t of old) paintLabel(t);
   };
 
   /** The locked target is lost (the UFO left, or the row exploded): its typed keys still count. */
   const dropLock = () => {
-    if (!lock) return;
+    const aimed = primary();
+    if (!aimed) return;
+    const typed = pos();
     let wrong = 0;
-    for (const i of lock.mistakes) if (i < pos) wrong++;
-    stats.keys += pos;
-    stats.right += pos - wrong;
-    const t = lock;
-    lock = null;
-    pos = 0;
-    paintLabel(t);
+    for (const i of aimed.mistakes) if (i < typed) wrong++;
+    stats.keys += typed;
+    stats.right += typed - wrong;
+    clearAim();
   };
 
   const rise = (text: string, x: number, y: number, color?: string) => {
@@ -584,8 +602,7 @@ function run(session: TypingSession): void {
     save();
 
     // The invader (or the UFO) is gone.
-    lock = null;
-    pos = 0;
+    aim = NO_AIM;
     if (t.ufo) {
       ufo.active = false;
       ufo.target = null;
@@ -608,50 +625,62 @@ function run(session: TypingSession): void {
 
   const onKey = (char: string) => {
     if (paused() || phase !== 'marching') return;
-    if (!lock) {
-      const id = lockTarget(
-        targets().map((t) => {
-          const p = targetPos(t);
-          return { id: t.id, text: t.text, bottomY: p.y, x: p.x, ufo: t.ufo };
-        }),
-        char,
-        cannonX,
-      );
-      const found = targets().find((t) => t.id === id);
-      if (!found) {
-        keyboard.flash(char, 'wrong');
-        sfx.wrongKey();
-        return;
-      }
-      lockOn(found);
-      if (groupStart === null && speedLevel()) groupStart = activeTime;
-    } else if (groupStart === null && speedLevel()) {
-      groupStart = activeTime;
+    const was = aim;
+    const before = primary();
+    const at = pos();
+    const step = aimKey(aim, lockCandidates(), char, cannonX);
+    if (step.kind === 'stray') {
+      keyboard.flash(char, 'wrong');
+      sfx.wrongKey();
+      paintKeyboard();
+      return;
     }
-    const t = lock!;
-    const expected = t.text[pos];
-    if (char === expected) {
-      if (!t.mistakes.has(pos)) recordPress(typing, expected, true);
-      keyboard.flash(char, 'right');
-      pos++;
-      if (pos >= t.text.length) {
-        kill(t);
-      } else {
-        const p = targetPos(t);
-        sfx.zap();
-        effects.bolt(cannonX, CANNON_ROWS * PIXEL, p.x, p.y + t.voxels.height / 2);
-        t.voxels.chip(chipCount(t.voxels.cubes, pos, t.text.length));
-        paintLabel(t);
-        aimCannon();
-      }
-    } else {
-      if (!t.mistakes.has(pos)) {
-        t.mistakes.add(pos);
-        recordPress(typing, expected, false);
+    if (was.candidates.length === 0) lockedAt = activeTime;
+    if (groupStart === null && speedLevel()) groupStart = activeTime;
+
+    if (step.kind === 'wrong') {
+      const cands = candidatesOf();
+      if (before && !before.mistakes.has(at)) recordPress(typing, before.text[at], false);
+      for (const c of cands) {
+        c.mistakes.add(at);
+        c.label.flashWrong();
       }
       keyboard.flash(char, 'wrong');
       sfx.wrongKey();
-      t.label.flashWrong();
+    } else if (step.kind === 'right') {
+      if (!before || !before.mistakes.has(at)) recordPress(typing, char, true);
+      keyboard.flash(char, 'right');
+      for (const id of step.dropped) {
+        const d = byId(id);
+        if (!d) continue;
+        d.mistakes.clear();
+        d.voxels.chip(0);
+      }
+      aim = step.aim;
+      for (const id of step.dropped) {
+        const d = byId(id);
+        if (d) paintLabel(d);
+      }
+      if (before && before.id !== aim.primary) before.voxels.chip(0);
+      const t = primary()!;
+      const p = targetPos(t);
+      sfx.zap();
+      effects.bolt(cannonX, CANNON_ROWS * PIXEL, p.x, p.y + t.voxels.height / 2);
+      t.voxels.chip(chipCount(t.voxels.cubes, pos(), t.text.length));
+      for (const c of candidatesOf()) paintLabel(c);
+      aimCannon();
+    } else {
+      const t = byId(step.id)!;
+      if (!t.mistakes.has(at)) recordPress(typing, char, true);
+      keyboard.flash(char, 'right');
+      const others = step.others.map(byId).filter((o): o is Target => o !== null);
+      for (const o of others) {
+        o.mistakes.clear();
+        o.voxels.chip(0);
+      }
+      aim = NO_AIM;
+      for (const o of others) paintLabel(o);
+      kill(t);
     }
     paintKeyboard();
   };
@@ -674,7 +703,17 @@ function run(session: TypingSession): void {
   const ufoLeaves = () => {
     if (!ufo.target) return;
     const t = ufo.target;
-    if (lock === t) dropLock();
+    if (aim.candidates.includes(t.id)) {
+      if (aim.candidates.length === 1) dropLock();
+      else {
+        const was = aim.primary;
+        aim = aimWithout(aim, t.id, lockCandidates(), cannonX);
+        const now = primary();
+        if (now && aim.primary !== was) {
+          now.voxels.chip(chipCount(now.voxels.cubes, pos(), now.text.length));
+        }
+      }
+    }
     ufo.active = false;
     ufo.target = null;
     dropTarget(t);
@@ -683,6 +722,7 @@ function run(session: TypingSession): void {
 
   const startWave = () => {
     phase = 'entering';
+    aim = NO_AIM;
     const first = waveIndex === 0;
     for (const inv of invaders) {
       if (inv.target) {
@@ -703,8 +743,6 @@ function run(session: TypingSession): void {
     ufo.target = null;
     ufo.active = false;
     ufoSent = false;
-    lock = null;
-    pos = 0;
     march = { offsetX: 0, drops: first && dev?.drop ? dev.drop : 0, dir: 1 };
     stepClock = 0;
     stepCount = 0;
@@ -717,6 +755,7 @@ function run(session: TypingSession): void {
     timers.after(1.0, () => {
       phase = 'marching';
       entry = 0;
+      if (first && dev?.keys) for (const c of dev.keys) onKey(c);
       paintKeyboard();
     });
     if (first) {
@@ -733,9 +772,10 @@ function run(session: TypingSession): void {
     const front = frontOf(dev.lock - 1);
     if (!front?.target) return;
     const t = front.target;
-    lockOn(t);
-    pos = Math.min(dev.typed, t.text.length - 1);
-    t.voxels.chip(chipCount(t.voxels.cubes, pos, t.text.length));
+    const typed = Math.min(dev.typed, t.text.length - 1);
+    aim = { candidates: [t.id], primary: t.id, typed: t.text.slice(0, typed) };
+    lockedAt = activeTime;
+    t.voxels.chip(chipCount(t.voxels.cubes, typed, t.text.length));
     paintLabel(t);
     if (dev.wrong) t.label.flashWrong(true);
     cannonX = invaderX(front.col, march.offsetX);
@@ -931,8 +971,9 @@ function run(session: TypingSession): void {
     }
     if (phase === 'over') overTime += dt;
     // The cannon slides under the locked target (0.15 s) and follows it as it marches.
-    if (lock && phase === 'marching') {
-      const to = targetPos(lock).x;
+    const aimed = primary();
+    if (aimed && phase === 'marching') {
+      const to = targetPos(aimed).x;
       cannonX += (to - cannonX) * (1 - Math.exp(-dt / 0.05));
     }
     effects.update(dt, bombHit, hold);
