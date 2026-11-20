@@ -153,7 +153,10 @@ export function outOfSkis(skis: number): boolean {
 
 /** The top speed factor after this many full laps through all the worlds. */
 export function speedCap(cycles: number): number {
-  return Math.min(SPEED_CAP_START + SPEED_CAP_PER_CYCLE * Math.max(Math.floor(cycles), 0), SPEED_MAX);
+  return Math.min(
+    SPEED_CAP_START + SPEED_CAP_PER_CYCLE * Math.max(Math.floor(cycles), 0),
+    SPEED_MAX,
+  );
 }
 
 /** How many full laps through all the worlds are done after this many worlds are cleared. */
