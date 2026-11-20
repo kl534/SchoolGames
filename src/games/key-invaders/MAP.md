@@ -26,13 +26,13 @@ Voice rule (owner): only the lesson's finger explanations are spoken, by the les
 - `?chunk=<text>`: every invader's chunk is this text (`%20` is a space); the closing space is added.
 - `?lock=<1-6>`: the front invader of that column starts locked; `?typed=<n>`: with it, n keys done. `?wrong=1`: holds the red flash on the locked label.
 - `?spk=<seconds>`: seconds per key to start with. `?wave=<n>`: start at wave n and its pace. `?lives=<1-3>`: start with that many cannons.
-- `?drop=<0-11>`: the first wave starts n drops down. `?left=<1-18>`: the first wave starts with only n invaders (bottom rows first, left to right).
+- `?drop=<0-23>`: the first wave starts n drops down. `?left=<1-18>`: the first wave starts with only n invaders (bottom rows first, left to right).
 - `?ufo=1`: the UFO is up from the start (in the middle of the lane while frozen).
 - `?freeze=1`: the march, bombs, UFO and particles hold still; keys still work.
 - `?levelup=1`: the first kill passes the level (its lesson shows after the wave).
 - `?keys=<text>`: once the first wave marches, these keys (at most 12, `%20` is a space) are typed in order; works with `freeze=1`. `?keys=f` shows every invader starting with F in play.
 - With any hook nothing is saved.
-- Examples: `npm run shots -- "key-invaders?start=1&level=1&freeze=1" "key-invaders?start=1&level=1&freeze=1&keys=f" "key-invaders?start=1&level=12&freeze=1&ufo=1&lock=3&typed=2" "key-invaders?start=1&level=3&lives=1&drop=11"`
+- Examples: `npm run shots -- "key-invaders?start=1&level=1&freeze=1" "key-invaders?start=1&level=1&freeze=1&keys=f" "key-invaders?start=1&level=12&freeze=1&ufo=1&lock=3&typed=2" "key-invaders?start=1&level=3&lives=1&drop=23"`
 
 ## Where changes go
 

@@ -113,7 +113,7 @@ describe('parseDev', () => {
 
   it('ignores junk and out of range values', () => {
     const dev = parseDev(
-      '?level=41&lock=7&lives=4&drop=12&left=19&wave=0&typed=-1&spk=abc&chunk=%C3%A9&start=yes&freeze=0',
+      '?level=41&lock=7&lives=4&drop=24&left=19&wave=0&typed=-1&spk=abc&chunk=%C3%A9&start=yes&freeze=0',
     );
     expect(dev).toMatchObject({
       level: null,
@@ -132,7 +132,7 @@ describe('parseDev', () => {
     expect(parseDev('?lock=1').lock).toBe(1);
     expect(parseDev('?lock=6').lock).toBe(6);
     expect(parseDev('?drop=0').drop).toBe(0);
-    expect(parseDev('?drop=11').drop).toBe(11);
+    expect(parseDev('?drop=23').drop).toBe(23);
     expect(parseDev('?left=18').left).toBe(18);
   });
 
@@ -428,13 +428,13 @@ describe('points', () => {
 });
 
 describe('pace', () => {
-  it('gives 1.6 times the typing time at wave 1, 8% less each wave, never below 1.1', () => {
-    expect(waveSlack(1)).toBeCloseTo(1.6, 10);
-    expect(waveSlack(2)).toBeCloseTo(1.472, 10);
+  it('gives 3.2 times the typing time at wave 1, 8% less each wave, never below 2.2', () => {
+    expect(waveSlack(1)).toBeCloseTo(3.2, 10);
+    expect(waveSlack(2)).toBeCloseTo(2.944, 10);
     expect(waveSlack(3)).toBeLessThan(waveSlack(2));
     for (let wave = 1; wave < 60; wave++) expect(waveSlack(wave)).toBeGreaterThanOrEqual(SLACK_MIN);
     expect(waveSlack(60)).toBe(SLACK_MIN);
-    expect(waveBudget(1, 1)).toBeCloseTo(WAVE_KEYS * 1.6, 10);
+    expect(waveBudget(1, 1)).toBeCloseTo(WAVE_KEYS * 3.2, 10);
   });
 
   it('steps slower on a bigger budget, faster as the formation thins, never below the minimum', () => {
@@ -642,12 +642,12 @@ describe('fieldRect', () => {
     expect(r.y).toBe(132);
   });
 
-  it('draws a readable field: about the doc pixels per unit', () => {
+  it('draws a readable field: enough pixels per unit for the tall field (invaders start 12 units above the bunkers)', () => {
     for (const [w, h, minPx] of [
       [390, 844, 20],
-      [844, 390, 17],
-      [1024, 768, 28],
-      [1366, 1024, 40],
+      [844, 390, 13],
+      [1024, 768, 20],
+      [1366, 1024, 30],
     ]) {
       const r = fieldRect({ w, h }, keyboardFor(w, h));
       const d = cameraDistance(FIELD_BOX, r.w / r.h);
