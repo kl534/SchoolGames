@@ -28,11 +28,14 @@ import { labelFontPx, staggerLabels } from '../src/games/key-invaders/labels';
 import {
   CHUNK_KEYS,
   COLUMNS,
+  NO_AIM,
   ROWS,
   ROW_KINDS,
   SLACK_MIN,
   STEP_MIN,
   WAVE_KEYS,
+  aimKey,
+  aimWithout,
   emptyStats,
   killPoints,
   lockTarget,
@@ -78,13 +81,14 @@ describe('parseDev', () => {
       ufo: false,
       freeze: false,
       levelup: false,
+      keys: null,
       hooked: false,
     });
   });
 
   it('reads every hook', () => {
     const dev = parseDev(
-      '?level=12&start=1&lesson=1&chunk=ab%20cd&lock=3&typed=2&wrong=1&spk=0.8&wave=4&lives=2&drop=8&left=5&ufo=1&freeze=1&levelup=1',
+      '?level=12&start=1&lesson=1&chunk=ab%20cd&lock=3&typed=2&wrong=1&spk=0.8&wave=4&lives=2&drop=8&left=5&ufo=1&freeze=1&levelup=1&keys=f%20j',
     );
     expect(dev).toEqual({
       level: 12,
@@ -102,6 +106,7 @@ describe('parseDev', () => {
       ufo: true,
       freeze: true,
       levelup: true,
+      keys: 'f j',
       hooked: true,
     });
   });
@@ -129,6 +134,14 @@ describe('parseDev', () => {
     expect(parseDev('?drop=0').drop).toBe(0);
     expect(parseDev('?drop=11').drop).toBe(11);
     expect(parseDev('?left=18').left).toBe(18);
+  });
+
+  it('reads keys, at most 12 characters', () => {
+    expect(parseDev('?keys=f%20j').keys).toBe('f j');
+    expect(parseDev('?keys=abcdefghijklm').keys).toBeNull();
+    expect(parseDev('?keys=abcdefghijkl').keys).toBe('abcdefghijkl');
+    expect(parseDev('').keys).toBeNull();
+    expect(parseDev('?keys=f').hooked).toBe(true);
   });
 
   it('clamps spk', () => {
@@ -245,6 +258,155 @@ describe('lockTarget', () => {
   it('is null when no target starts with the key', () => {
     expect(lockTarget([t('a', 'fj ', 8, 0)], 'k', 0)).toBeNull();
     expect(lockTarget([], 'f', 0)).toBeNull();
+  });
+
+  it('takes a prefix: only targets starting with all of it', () => {
+    const targets = [t('ff', 'ffj ', 8, 0), t('fj', 'fjj ', 9, 0)];
+    expect(lockTarget(targets, 'f', 0)).toBe('ff');
+    expect(lockTarget(targets, 'fj', 0)).toBe('fj');
+    expect(lockTarget(targets, 'fk', 0)).toBeNull();
+  });
+});
+
+describe('aimKey', () => {
+  const t = (id: string, text: string, bottomY: number, x: number, ufo = false) => ({
+    id,
+    text,
+    bottomY,
+    x,
+    ufo,
+  });
+  const right = (step: ReturnType<typeof aimKey>) => {
+    if (step.kind !== 'right') throw new Error(`expected right, got ${step.kind}`);
+    return step;
+  };
+
+  it('narrows as you type (the owner case)', () => {
+    const targets = [t('a', 'ffj ', 8, 0), t('b', 'fjj ', 9, 0)];
+    const s1 = right(aimKey(NO_AIM, targets, 'f', 0));
+    expect(s1.aim).toEqual({ candidates: ['a', 'b'], primary: 'a', typed: 'f' });
+    expect(s1.dropped).toEqual([]);
+    const s2 = right(aimKey(s1.aim, targets, 'j', 0));
+    expect(s2.aim).toEqual({ candidates: ['b'], primary: 'b', typed: 'fj' });
+    expect(s2.dropped).toEqual(['a']);
+    const s3 = right(aimKey(s2.aim, targets, 'j', 0));
+    expect(aimKey(s3.aim, targets, ' ', 0)).toEqual({ kind: 'kill', id: 'b', others: [] });
+  });
+
+  it('narrows the other way', () => {
+    const targets = [t('a', 'ffj ', 8, 0), t('b', 'fjj ', 9, 0)];
+    const s1 = right(aimKey(NO_AIM, targets, 'f', 0));
+    const s2 = right(aimKey(s1.aim, targets, 'f', 0));
+    expect(s2.aim.primary).toBe('a');
+    expect(s2.aim.candidates).toEqual(['a']);
+    expect(s2.dropped).toEqual(['b']);
+  });
+
+  it('is a stray key when nothing is locked and nothing fits', () => {
+    expect(aimKey(NO_AIM, [t('a', 'fj ', 8, 0)], 'k', 0)).toEqual({ kind: 'stray' });
+  });
+
+  it('is wrong, with the aim unchanged, when no candidate fits', () => {
+    const targets = [t('a', 'ffj ', 8, 0), t('b', 'fjj ', 9, 0)];
+    const s1 = right(aimKey(NO_AIM, targets, 'f', 0));
+    const step = aimKey(s1.aim, targets, 'k', 0);
+    expect(step).toEqual({
+      kind: 'wrong',
+      aim: { candidates: ['a', 'b'], primary: 'a', typed: 'f' },
+    });
+  });
+
+  it('blows up the primary of two with the same keys; the other goes back to untyped', () => {
+    const targets = [t('a', 'fj ', 8, 0), t('b', 'fj ', 9, 0)];
+    let aim = right(aimKey(NO_AIM, targets, 'f', 0)).aim;
+    aim = right(aimKey(aim, targets, 'j', 0)).aim;
+    expect(aimKey(aim, targets, ' ', 0)).toEqual({ kind: 'kill', id: 'a', others: ['b'] });
+  });
+
+  it('keeps the primary while it is a candidate, even if the cannon moves', () => {
+    const targets = [t('a', 'fjj ', 9, 0), t('b', 'fjf ', 9, 4)];
+    const s1 = right(aimKey(NO_AIM, targets, 'f', 0));
+    expect(s1.aim.primary).toBe('a');
+    const s2 = right(aimKey(s1.aim, targets, 'j', 4));
+    expect(s2.aim.primary).toBe('a');
+  });
+
+  it('treats the UFO as a candidate, primary only when no invader is', () => {
+    const targets = [t('inv', 'fj ', 9, 0), t('ufo', 'fj jf ', 12, 0, true)];
+    const s1 = right(aimKey(NO_AIM, targets, 'f', 0));
+    expect(s1.aim).toEqual({ candidates: ['inv', 'ufo'], primary: 'inv', typed: 'f' });
+    const s2 = right(aimKey(s1.aim, targets, 'j', 0));
+    expect(aimKey(s2.aim, targets, ' ', 0)).toEqual({ kind: 'kill', id: 'inv', others: ['ufo'] });
+    expect(right(aimKey(NO_AIM, [targets[1]], 'f', 0)).aim.primary).toBe('ufo');
+  });
+
+  it('ignores candidate ids that are not targets any more', () => {
+    const targets = [t('a', 'fj ', 8, 0)];
+    const aim = { candidates: ['gone', 'a'], primary: 'gone', typed: 'f' };
+    const step = right(aimKey(aim, targets, 'j', 0));
+    expect(step.aim).toEqual({ candidates: ['a'], primary: 'a', typed: 'fj' });
+    expect(step.dropped).toEqual(['gone']);
+  });
+
+  it('never leaves the player stuck: typing any target text always ends in a kill of that text', () => {
+    const rand = (n: number) => Math.floor(Math.random() * n);
+    for (let run = 0; run < runs(3000, 400); run++) {
+      const count = 2 + rand(5);
+      const targets = Array.from({ length: count }, (_, i) => {
+        const len = 2 + rand(3);
+        let text = '';
+        for (let k = 0; k < len; k++) text += 'fj'[rand(2)];
+        return t(`t${i}`, `${text} `, 8 + rand(3), rand(6));
+      });
+      const picked = targets[rand(count)];
+      let aim = NO_AIM;
+      for (let k = 0; k < picked.text.length; k++) {
+        const step = aimKey(aim, targets, picked.text[k], rand(6));
+        if (k < picked.text.length - 1) {
+          expect(step.kind).toBe('right');
+          if (step.kind === 'right') aim = step.aim;
+        } else {
+          expect(step.kind).toBe('kill');
+          if (step.kind === 'kill') {
+            expect(targets.find((x) => x.id === step.id)?.text).toBe(picked.text);
+          }
+        }
+      }
+    }
+  });
+});
+
+describe('aimWithout', () => {
+  const t = (id: string, text: string, bottomY: number, x: number) => ({
+    id,
+    text,
+    bottomY,
+    x,
+    ufo: false,
+  });
+  const targets = [t('a', 'ffj ', 8, 0), t('b', 'ffk ', 9, 0)];
+  const aim = { candidates: ['a', 'b'], primary: 'a', typed: 'ff' };
+
+  it('re-picks the primary among the rest', () => {
+    expect(aimWithout(aim, 'a', targets, 0)).toEqual({
+      candidates: ['b'],
+      primary: 'b',
+      typed: 'ff',
+    });
+  });
+
+  it('keeps the primary when another one goes', () => {
+    expect(aimWithout(aim, 'b', targets, 0).primary).toBe('a');
+  });
+
+  it('is NO_AIM when the last candidate goes', () => {
+    expect(aimWithout({ candidates: ['a'], primary: 'a', typed: 'f' }, 'a', targets, 0)).toEqual(
+      NO_AIM,
+    );
+  });
+
+  it('returns the aim unchanged for a non-candidate', () => {
+    expect(aimWithout(aim, 'zzz', targets, 0)).toBe(aim);
   });
 });
 
