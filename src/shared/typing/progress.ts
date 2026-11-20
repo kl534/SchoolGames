@@ -32,7 +32,7 @@ export interface TypingProgress {
 export const HISTORY = 20;
 export const LEARN_RIGHT = 18;
 export const SPK_START = 2.0;
-export const SPK_MIN = 0.25;
+export const SPK_MIN = 0.9;
 export const SPK_MAX = 2.5;
 export const SPK_PERFECT = 0.95;
 export const SPK_TIMEOUT = 1.1;
@@ -131,11 +131,14 @@ export function nextSpk(spk: number, result: 'perfect' | 'mistakes' | 'timeout')
   return clamp(next, SPK_MIN, SPK_MAX);
 }
 
-/** Seconds on the clock for a block of `keys` keys on level n. */
-export function clockFor(n: number, keys: number, spk: number): number {
+/** Extra seconds a key level's long Mega blocks (the mega ramp and the gates) get on the clock. */
+export const MEGA_CLOCK_EXTRA = 2;
+
+/** Seconds on the clock for a block of `keys` keys on level n; `extra` seconds more on key levels. */
+export function clockFor(n: number, keys: number, spk: number, extra = 0): number {
   const level = levelOf(n);
   if (level.kind === 'speed') return keys * (12 / level.wpm!) + CLOCK_SLACK_SPEED;
-  return keys * spk + CLOCK_SLACK;
+  return keys * spk + CLOCK_SLACK + extra;
 }
 
 /** Words a minute: five keys make a word. */
