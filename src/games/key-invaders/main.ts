@@ -123,7 +123,7 @@ interface Invader {
 }
 
 /**
- * Key Invaders: a Space Invaders formation marches down on four bunkers; the lowest invader of each
+ * Typo Troopers: a Space Invaders formation marches down on four bunkers; the lowest invader of each
  * column carries a chunk of keys. The first key locks the cannon on one, each right key chips it,
  * the closing space bar blasts it. Only the lesson speaks; nothing else here reads aloud.
  */
@@ -208,7 +208,7 @@ function run(session: TypingSession): void {
   note.className = 'ki-note';
   note.hidden = true;
   const noteTitle = document.createElement('strong');
-  noteTitle.textContent = 'Key Invaders needs a keyboard ⌨️';
+  noteTitle.textContent = 'Typo Troopers needs a keyboard ⌨️';
   note.append(noteTitle, 'Plug one in or open it, then press the space bar.');
   document.body.appendChild(note);
 

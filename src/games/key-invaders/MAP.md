@@ -1,4 +1,6 @@
-# Key Invaders map
+# Typo Troopers map
+
+The game is called Typo Troopers; its folder and id stay `key-invaders` (saved progress, high scores and links use the id).
 
 A Space Invaders typing game: a formation of 3 rows × 6 columns of glowing voxel invaders marches side to side and steps down towards four bunkers. The lowest living invader of each column carries a short chunk of keys from the player's typing level, ending in a space (`fj␣`, later words like `cat␣`). The first key keeps every invader that starts with it in play (each shows its typed keys; the laser cannon and the yellow square aim at the lowest, then nearest one); each next key drops the ones that no longer fit; each right key zaps a bolt and chips cubes off the aimed one; the closing space bar blasts it. A key that fits none buzzes and the lock stays. When the formation reaches the bunkers the player loses one of 3 cannons. Waves are endless and faster each time; a mystery UFO with a long chunk crosses the top once per wave. Points are multiplied by level × level (the gold `×49` badge) and by a streak multiplier (×2 from 5 perfect kills in a row, ×3 from 10, ×4 from 20).
 

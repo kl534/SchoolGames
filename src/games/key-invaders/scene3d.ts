@@ -1,5 +1,5 @@
 /**
- * The 3D scene of Key Invaders: a starfield over the whole canvas, then the field in its rectangle
+ * The 3D scene of Typo Troopers: a starfield over the whole canvas, then the field in its rectangle
  * under a fixed, tilted arcade camera. Two passes with `autoClear` off. `project` turns a world
  * point into screen pixels for the labels and pops.
  */

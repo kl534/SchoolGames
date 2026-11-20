@@ -1,5 +1,5 @@
 /**
- * Where everything of Key Invaders is: the field, the formation's grid, the bunkers, the cannon
+ * Where everything of Typo Troopers is: the field, the formation's grid, the bunkers, the cannon
  * and the camera. Pure (no DOM, no three.js): the numbers are tested.
  */
 

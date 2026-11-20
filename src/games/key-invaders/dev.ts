@@ -1,5 +1,5 @@
 /**
- * Dev-only hooks of Key Invaders, for checking every state by eye. With any hook in the URL nothing
+ * Dev-only hooks of Typo Troopers, for checking every state by eye. With any hook in the URL nothing
  * is saved. They compile away in production builds.
  *
  * - `?level=<1-40>` play that level (it is open in memory, and the keys of the levels before it

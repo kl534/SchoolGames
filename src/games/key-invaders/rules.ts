@@ -1,5 +1,5 @@
 /**
- * The pure rules of Key Invaders: the chunks of keys, what a lock-on picks, points, the pace of the
+ * The pure rules of Typo Troopers: the chunks of keys, what a lock-on picks, points, the pace of the
  * march, the march itself, the speed levels' groups and the results line. No DOM, no three.js.
  */
 import type { Random } from '../../shared/random';
