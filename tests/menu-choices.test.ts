@@ -30,7 +30,13 @@ import {
 } from '../src/shared/progress';
 import { TOPICS } from '../src/shared/topics';
 import { runs } from './helpers/full';
-import { TOTAL_LEARNABLE, TYPING_LEVEL_ID, emptyTyping } from '../src/shared/typing/progress';
+import { demoTypingProgress } from '../src/menu/dev';
+import {
+  TOTAL_LEARNABLE,
+  TYPING_LEVEL_ID,
+  emptyTyping,
+  normalizeTyping,
+} from '../src/shared/typing/progress';
 
 const stat = (learnStreak: number) => ({
   correct: 3,
@@ -416,6 +422,25 @@ describe('the Typing choice', () => {
     expect(info.steps).toEqual([TOTAL_LEARNABLE - 14 - 1, 1, 0, 14, 0]);
     expect(info.mastered).toBe(14);
     expect(info.steps.reduce((a, b) => a + b, 0)).toBe(info.total);
+  });
+
+  it('counts passed keys that slipped as due, and an open key with 12+ right as almost', () => {
+    const info = typingChoiceInfo(
+      typingProgress(7, { f: '1'.repeat(17) + '000', r: '1'.repeat(12) + '00' }),
+    );
+    expect(info.due).toBe(1);
+    expect(info.steps[2]).toBe(1);
+    expect(info.steps[1]).toBe(0);
+    expect(info.steps.reduce((a, b) => a + b, 0)).toBe(info.total);
+  });
+
+  it('has demo progress that is the Typing choice and survives normalizing', () => {
+    for (const kind of ['keys', 'speed'] as const) {
+      const demo = demoTypingProgress(kind);
+      expect(currentChoice(demo)).toBe('typing-level');
+      expect(normalizeTyping(demo.typing)).toEqual(demo.typing);
+    }
+    expect(typingChoiceInfo(demoTypingProgress('keys')).due).toBe(2);
   });
 
   it('has a hex card colour', () => {

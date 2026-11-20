@@ -10,7 +10,16 @@ import {
   type StepCounts,
   STEP_NAMES,
 } from '../shared/progress';
-import { TYPING_LEVEL_ID } from '../shared/typing/progress';
+import { HISTORY, LEARN_RIGHT, TYPING_LEVEL_ID, emptyTyping } from '../shared/typing/progress';
+import {
+  SLIP_WRONG,
+  keyStates,
+  typingReport,
+  type KeyState,
+  type LevelReport,
+  type SkillReport,
+} from '../shared/typing/report';
+import { createKeyboard, type KeyTint } from '../shared/typing/keyboard';
 import { statementParts } from '../shared/topics';
 import { getPath, PATHS, pathForLevelTopic, type LevelPath } from '../shared/levels';
 import { gameUrl } from '../shared/session';
@@ -52,7 +61,7 @@ import {
   readyLabel,
   rememberChoice,
 } from './choices';
-import { demoStepsProgress } from './dev';
+import { demoStepsProgress, demoTypingProgress } from './dev';
 import { el, errorLine, field, textButton } from './dom';
 
 const store = createProgressStore();
@@ -113,7 +122,7 @@ function addSegments(
   });
 }
 
-function masteryBar(info: Pick<ChoiceInfo, 'steps' | 'total' | 'due'>): HTMLElement {
+function masteryBar(info: Pick<ChoiceInfo, 'steps' | 'total' | 'due' | 'kind'>): HTMLElement {
   const { steps, total } = info;
   const wrap = el('div', 'mastery');
   const bar = el('div', 'mastery-bar');
@@ -124,7 +133,10 @@ function masteryBar(info: Pick<ChoiceInfo, 'steps' | 'total' | 'due'>): HTMLElem
     'mastery-started',
   ]);
   wrap.append(bar, el('span', undefined, masteryText(steps, total)));
-  if (info.due > 0) wrap.appendChild(el('span', 'card-review', `🔁 ${info.due} to review`));
+  if (info.due > 0) {
+    const verb = info.kind === 'typing' ? 'practice' : 'review';
+    wrap.appendChild(el('span', 'card-review', `🔁 ${info.due} to ${verb}`));
+  }
   return wrap;
 }
 
@@ -891,6 +903,13 @@ function factsLinkRow(player: Player, progress: PlayerProgress, choiceId: string
   return row;
 }
 
+/** The 'See keys' pill under the Practicing card on the Typing home page. */
+function typingKeysLinkRow(): HTMLElement {
+  const row = el('div', 'facts-link-row');
+  row.appendChild(link(`${base}?facts`, 'facts-link', 'See keys ▸'));
+  return row;
+}
+
 function renderHome(
   root: HTMLElement,
   player: Player,
@@ -928,7 +947,7 @@ function renderHome(
   root.replaceChildren(
     header(null, null, player),
     card,
-    ...(typing ? [] : [factsLinkRow(player, progress, choiceId)]),
+    typing ? typingKeysLinkRow() : factsLinkRow(player, progress, choiceId),
     el('h2', 'subject', 'Pick a game'),
     grid,
   );
@@ -1009,6 +1028,107 @@ function renderFacts(
   root.replaceChildren(header(info.title, null, player, link(base, 'back-link', '← Back')), main);
 }
 
+// ---------- Typing keys ----------
+
+const KEY_DARK = '#0f172a';
+const AMBER = '#fbbf24';
+const GREEN = '#4cc38a';
+
+/** Fill, label and ring of each key state on the keyboard picture; a new key stays dark. */
+const STATE_TINTS: Record<Exclude<KeyState, 'new'>, KeyTint> = {
+  learned: { fill: GREEN, label: KEY_DARK },
+  practice: { fill: GREEN, label: KEY_DARK, ring: AMBER },
+  almost: { fill: AMBER, label: KEY_DARK },
+  started: { fill: '#94a3b8', label: KEY_DARK },
+  locked: { fill: '#151a2e', label: '#475569' },
+};
+
+function keyTints(states: Record<string, KeyState>): Record<string, KeyTint> {
+  const tints: Record<string, KeyTint> = {};
+  for (const [id, state] of Object.entries(states)) {
+    if (state !== 'new') tints[id] = STATE_TINTS[state];
+  }
+  return tints;
+}
+
+function keyChip(skill: SkillReport): HTMLElement {
+  const chip = el('div', 'fact-chip');
+  chip.append(el('span', 'key-cap', skill.label), factDots(skill.step));
+  let note = '';
+  if (skill.step === 3 && skill.practice) {
+    chip.appendChild(el('span', 'fact-ready', '🔁 practice'));
+    note = `, needs practice, ${skill.presses - skill.right} of the last ${HISTORY} wrong`;
+  } else if (skill.step === 3) {
+    chip.appendChild(el('span', 'fact-solid', '✓'));
+  } else if (skill.step > 0) {
+    chip.appendChild(el('span', 'fact-ready', `${skill.right}/${HISTORY}`));
+    note = `, ${skill.right} of the last ${HISTORY} right`;
+  }
+  chip.setAttribute('aria-label', `${skill.label}, ${STEP_NAMES[skill.step]}${note}`);
+  return chip;
+}
+
+function speedChip(level: LevelReport): HTMLElement {
+  const chip = el('div', 'fact-chip speed-chip');
+  const text = `${level.wpm} wpm`;
+  if (level.passed) {
+    chip.append(text, el('span', 'fact-solid', '✓'));
+  } else {
+    chip.append(`🎯 ${text} goal`);
+  }
+  chip.setAttribute('aria-label', `${text}, ${level.passed ? 'passed' : 'goal'}`);
+  return chip;
+}
+
+function renderTypingKeys(root: HTMLElement, player: Player, progress: PlayerProgress): void {
+  const tp = progress.typing ?? emptyTyping();
+  const info = typingChoiceInfo(progress);
+  const main = el('main', 'picker facts-page typing-keys');
+  main.appendChild(masteryBar(info));
+  if (tp.bestWpm > 0) {
+    main.appendChild(el('p', 'hint typing-best', `Best speed: ${Math.round(tp.bestWpm)} wpm`));
+  }
+  main.append(
+    el(
+      'p',
+      'hint',
+      `${LEARN_RIGHT} of the last ${HISTORY} right first time and a key is learned. ${SLIP_WRONG} misses on a passed key and it needs practice.`,
+    ),
+    el(
+      'p',
+      'hint fact-legend',
+      '●●● Learned ✓ · ●●● Practice 🔁 · ●●○ Almost · ●○○ Started · ○○○ New',
+    ),
+  );
+  const keyboard = createKeyboard({ hands: false });
+  keyboard.tint(keyTints(keyStates(tp)));
+  const board = el('div', 'typing-board');
+  board.appendChild(keyboard.element);
+  const legend = el('div', 'typing-board-legend');
+  const swatches: [string, Exclude<KeyState, 'new' | 'locked'>][] = [
+    ['Learned', 'learned'],
+    ['Practice', 'practice'],
+    ['Almost', 'almost'],
+    ['Started', 'started'],
+  ];
+  for (const [text, state] of swatches) {
+    const item = el('span', 'legend-item');
+    const swatch = el('span', 'swatch');
+    swatch.style.background = STATE_TINTS[state].fill;
+    if (STATE_TINTS[state].ring) swatch.style.border = `2px solid ${STATE_TINTS[state].ring}`;
+    item.append(swatch, text);
+    legend.appendChild(item);
+  }
+  main.append(board, legend);
+  for (const level of typingReport(tp)) {
+    const chips = el('div', 'fact-chips');
+    if (level.kind === 'speed') chips.appendChild(speedChip(level));
+    else for (const skill of level.skills) chips.appendChild(keyChip(skill));
+    main.append(el('h2', 'subject', level.heading), chips);
+  }
+  root.replaceChildren(header(info.title, null, player, link(base, 'back-link', '← Back')), main);
+}
+
 function render(root: HTMLElement): void {
   const params = new URLSearchParams(location.search);
   const back = `${base}?players`;
@@ -1028,9 +1148,15 @@ function render(root: HTMLElement): void {
     renderPlayers(root);
     return;
   }
-  if (import.meta.env.DEV && params.get('demo') === 'steps') {
+  const demo = import.meta.env.DEV ? params.get('demo') : null;
+  if (demo === 'steps' || demo === 'typing' || demo === 'typing-speed') {
     // Dev: swap in the demo progress, then drop `demo` from the URL and carry on.
-    store.save(player.id, demoStepsProgress(Date.now()));
+    store.save(
+      player.id,
+      demo === 'steps'
+        ? demoStepsProgress(Date.now())
+        : demoTypingProgress(demo === 'typing' ? 'keys' : 'speed'),
+    );
     params.delete('demo');
     const rest = params.toString();
     history.replaceState(null, '', `${location.pathname}${rest ? `?${rest}` : ''}`);
@@ -1041,8 +1167,7 @@ function render(root: HTMLElement): void {
   const factsChoice = params.get('facts');
   const factsFor = isChoice(factsChoice) ? factsChoice : currentChoice(progress);
   if (params.has('facts') && factsFor === TYPING_LEVEL_ID) {
-    // The Typing path has no facts to list: its home page is the place to look.
-    renderHome(root, player, progress, factsFor);
+    renderTypingKeys(root, player, progress);
   } else if (params.has('facts')) {
     renderFacts(root, player, progress, factsFor);
   } else if (isChoice(wanted)) {
