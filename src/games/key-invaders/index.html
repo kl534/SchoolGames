@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Key Invaders</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #05060f;
+      }
+      #game {
+        position: fixed;
+        inset: 0;
+      }
+
+      /* The keyboard strip: the next key lights up while it is not learned yet. */
+      .tk.ki-kb {
+        position: fixed;
+        left: 50%;
+        bottom: max(12px, env(safe-area-inset-bottom));
+        z-index: 12;
+        width: min(94vw, 620px, 80vh);
+        transform: translateX(-50%);
+        pointer-events: none;
+      }
+      .tk.ki-kb[data-corner] {
+        left: auto;
+        right: max(12px, env(safe-area-inset-right));
+        width: min(40vw, 80vh, 620px);
+        transform: none;
+      }
+      .tk.ki-kb[data-hidden] {
+        visibility: hidden;
+      }
+
+      /* The row of score, level, streak, high score, cannons and wave. */
+      .ki-hud {
+        position: fixed;
+        z-index: 12;
+        top: max(12px, env(safe-area-inset-top));
+        left: 50%;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 48px;
+        transform: translateX(-50%);
+        color: #fff;
+        font:
+          800 18px/1 ui-monospace,
+          Menlo,
+          Consolas,
+          monospace;
+        white-space: nowrap;
+        pointer-events: none;
+      }
+      .ki-hud[hidden] {
+        display: none;
+      }
+      @media (max-width: 699px) {
+        .ki-hud {
+          top: calc(max(12px, env(safe-area-inset-top)) + 56px);
+          height: 40px;
+          gap: 6px;
+          font-size: 16px;
+        }
+      }
+      .ki-hud > * {
+        display: inline-flex;
+        align-items: center;
+        height: 32px;
+        padding: 0 10px;
+        box-sizing: border-box;
+        border-radius: 16px;
+        background: rgba(15, 18, 32, 0.8);
+      }
+      .ki-hud > [hidden] {
+        display: none;
+      }
+      .ki-score {
+        min-width: 4.4em;
+        justify-content: center;
+        font-size: 1.25em;
+      }
+      .ki-level {
+        background: #facc15;
+        color: #1a1400;
+      }
+      .ki-streak {
+        background: #ff7a1a;
+        color: #fff;
+      }
+      .ki-hi {
+        padding: 0 8px;
+        color: #9aa3b8;
+        font-size: 0.72em;
+      }
+      .ki-cannons {
+        gap: 3px;
+        color: #7cff4f;
+      }
+      .ki-cannons span[data-lost] {
+        opacity: 0.25;
+      }
+
+      /* The labels of keys under the invaders. */
+      .ki-labels {
+        position: fixed;
+        inset: 0;
+        z-index: 6;
+        overflow: hidden;
+        pointer-events: none;
+      }
+      .ki-labels[hidden] {
+        display: none;
+      }
+      .ki-label {
+        position: absolute;
+        left: 0;
+        top: 0;
+        box-sizing: border-box;
+        padding: 0.12em 0.4em;
+        border: 2px solid var(--ki-color, #fff);
+        border-radius: 0.45em;
+        background: rgba(5, 6, 15, 0.8);
+        color: #fff;
+        font:
+          800 16px/1.15 ui-monospace,
+          Menlo,
+          Consolas,
+          monospace;
+        white-space: pre;
+        transform-origin: 50% 0;
+      }
+      .ki-label[data-locked='1'] {
+        border-color: #facc15;
+        scale: 1.2;
+        z-index: 2;
+      }
+      .ki-label > span {
+        border-radius: 3px;
+      }
+      .ki-label > .ki-space {
+        opacity: 0.7;
+      }
+      .ki-label > [data-state='done'] {
+        color: #4ade80;
+      }
+      .ki-label > [data-state='current'] {
+        background: #facc15;
+        color: #000;
+        opacity: 1;
+      }
+      .ki-label > [data-state='wrong'] {
+        background: rgba(250, 204, 21, 0.25);
+        color: #ef4444;
+        opacity: 1;
+      }
+      .ki-shake {
+        animation: ki-shake 0.25s linear;
+      }
+      @keyframes ki-shake {
+        0%,
+        100% {
+          translate: 0 0;
+        }
+        20% {
+          translate: -4px 0;
+        }
+        40% {
+          translate: 4px 0;
+        }
+        60% {
+          translate: -3px 0;
+        }
+        80% {
+          translate: 3px 0;
+        }
+      }
+
+      /* Pops of text. */
+      .ki-pops {
+        position: fixed;
+        inset: 0;
+        z-index: 14;
+        overflow: hidden;
+        pointer-events: none;
+      }
+      .ki-pop {
+        position: absolute;
+        color: #fff;
+        font:
+          800 18px/1 ui-monospace,
+          Menlo,
+          Consolas,
+          monospace;
+        text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+        white-space: nowrap;
+      }
+      .ki-pop-centre {
+        left: 50%;
+        top: 42%;
+        font-size: 28px;
+        animation: ki-centre 1.2s ease-out forwards;
+      }
+      .ki-pop-score {
+        animation: ki-score 0.8s ease-out forwards;
+      }
+      @keyframes ki-centre {
+        0% {
+          opacity: 0;
+          transform: translate(-50%, 10px) scale(0.8);
+        }
+        15% {
+          opacity: 1;
+          transform: translate(-50%, 0) scale(1.1);
+        }
+        75% {
+          opacity: 1;
+          transform: translate(-50%, -6px) scale(1);
+        }
+        100% {
+          opacity: 0;
+          transform: translate(-50%, -14px) scale(1);
+        }
+      }
+      @keyframes ki-score {
+        0% {
+          opacity: 1;
+          transform: translate(-50%, 0);
+        }
+        100% {
+          opacity: 0;
+          transform: translate(-50%, -30px);
+        }
+      }
+
+      .ki-note {
+        position: fixed;
+        left: 50%;
+        top: 40%;
+        z-index: 30;
+        box-sizing: border-box;
+        width: min(88vw, 420px);
+        padding: 16px 20px;
+        border-radius: 20px;
+        background: rgba(15, 23, 42, 0.94);
+        border: 2px solid #facc15;
+        color: #fff;
+        font:
+          700 20px/1.35 system-ui,
+          sans-serif;
+        text-align: center;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+      }
+      .ki-note strong {
+        display: block;
+        color: #facc15;
+        font-size: 24px;
+      }
+      .ki-note[hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

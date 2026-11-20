@@ -1,0 +1,9 @@
+{
+  "id": "key-invaders",
+  "title": "Key Invaders",
+  "description": "Type the letters to blast the invaders before they land!",
+  "thumbnail": "thumbnail.svg",
+  "tags": ["typing", "space", "keyboard", "3d"],
+  "scoring": "score",
+  "section": "typing"
+}
