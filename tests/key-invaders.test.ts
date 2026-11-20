@@ -88,7 +88,7 @@ describe('parseDev', () => {
 
   it('reads every hook', () => {
     const dev = parseDev(
-      '?level=12&start=1&lesson=1&chunk=ab%20cd&lock=3&typed=2&wrong=1&spk=0.8&wave=4&lives=2&drop=8&left=5&ufo=1&freeze=1&levelup=1&keys=f%20j',
+      '?level=12&start=1&lesson=1&chunk=ab%20cd&lock=3&typed=2&wrong=1&spk=1.2&wave=4&lives=2&drop=8&left=5&ufo=1&freeze=1&levelup=1&keys=f%20j',
     );
     expect(dev).toEqual({
       level: 12,
@@ -98,7 +98,7 @@ describe('parseDev', () => {
       lock: 3,
       typed: 2,
       wrong: true,
-      spk: 0.8,
+      spk: 1.2,
       wave: 4,
       lives: 2,
       drop: 8,
@@ -145,7 +145,7 @@ describe('parseDev', () => {
   });
 
   it('clamps spk', () => {
-    expect(parseDev('?spk=0.01').spk).toBe(0.25);
+    expect(parseDev('?spk=0.01').spk).toBe(0.9);
     expect(parseDev('?spk=99').spk).toBe(2.5);
   });
 
