@@ -85,6 +85,7 @@ import {
   tierFor,
   trailLength,
   turboSpeed,
+  cyclesDone,
   worldSpeedFactor,
   type MegaId,
   type Outcome,
@@ -353,6 +354,7 @@ export function createRide(container: HTMLElement, o: RideOptions): Ride {
   let multiplier = 1;
   let skisLeft = dev?.skis ?? SKIS;
   let landed = 0;
+  let worldsCleared = (dev?.cycles ?? 0) * WORLD_ORDER.length;
   let lastTrick: TrickId | null = null;
   let devTrickIndex = 0;
   /** Ticks up for each question, so late callbacks can tell they are stale. */
@@ -596,6 +598,7 @@ export function createRide(container: HTMLElement, o: RideOptions): Ride {
     streak = dev?.streak ?? 0;
     skisLeft = dev?.skis ?? SKIS;
     landed = 0;
+    worldsCleared = (dev?.cycles ?? 0) * WORLD_ORDER.length;
     lastTrick = null;
     devTrickIndex = 0;
     answeredRight = null;
@@ -697,7 +700,7 @@ export function createRide(container: HTMLElement, o: RideOptions): Ride {
     phase = 'riding';
     clockRunning = false;
     launcherPlaced = false;
-    rideSpeedGoal = RIDE_SPEED * worldSpeedFactor(landed);
+    rideSpeedGoal = RIDE_SPEED * worldSpeedFactor(landed, cyclesDone(worldsCleared));
     hud.setTopVisible(false, 0);
     hud.showBanner('MEGA STUNT!', MEGA_SPECS[id].title, 'warn');
     sfx.alarm();
@@ -742,7 +745,7 @@ export function createRide(container: HTMLElement, o: RideOptions): Ride {
     clockLeft = clockTotal;
     clockRunning = false;
     launcherPlaced = false;
-    rideSpeedGoal = RIDE_SPEED * worldSpeedFactor(landed);
+    rideSpeedGoal = RIDE_SPEED * worldSpeedFactor(landed, cyclesDone(worldsCleared));
     phase = 'riding';
     hud.setWake(0, { urgent: false, waiting: true });
     // The driver puts the prompt up and starts the clock once the player may begin.
@@ -758,7 +761,7 @@ export function createRide(container: HTMLElement, o: RideOptions): Ride {
   const startClock = (seconds: number) => {
     if (phase !== 'riding' || clockRunning || launcherPlaced) return;
     setClock(seconds);
-    const ap = approach(landed, clockTotal);
+    const ap = approach(landed, clockTotal, cyclesDone(worldsCleared));
     placeTarget(ap.gap);
     rideSpeedGoal = ap.rideSpeed;
     startSpeed = speed;
@@ -774,7 +777,7 @@ export function createRide(container: HTMLElement, o: RideOptions): Ride {
   const answer = (right: boolean, opts: { resetStreak?: boolean } = {}) => {
     if (phase !== 'riding') return;
     // If the prompt is still being read the clock has not started: the answer counts as full time.
-    if (!launcherPlaced) placeTarget(approach(landed, clockTotal).gap);
+    if (!launcherPlaced) placeTarget(approach(landed, clockTotal, cyclesDone(worldsCleared)).gap);
     clockRunning = false;
     answeredRight = right;
     if (right) {
@@ -1217,6 +1220,7 @@ export function createRide(container: HTMLElement, o: RideOptions): Ride {
       boat.object.visible = false;
       skis[1 - activeIndex].object.visible = false;
       normals = 0;
+      worldsCleared++;
       setWorld(nextWorld(worldId));
       hud.wipe('off');
     });
