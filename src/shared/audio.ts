@@ -382,6 +382,9 @@ function play(fn: (ctx: AudioContext, now: number) => void): void {
   fn(ctx, ctx.currentTime);
 }
 
+/** The four low notes of the invaders' march (Hz). */
+const MARCH_NOTES = [98, 87, 78, 73];
+
 export const sfx = {
   kick: () => play((ctx, t) => tone(ctx, 'sine', 160, 45, t, 0.15, 0.9)),
   goal: () =>
@@ -397,6 +400,31 @@ export const sfx = {
   tick: () => play((ctx, t) => tone(ctx, 'square', 1200, 1200, t, 0.05, 0.08)),
   /** A right key in a typing game: a short, soft blip. */
   key: () => play((ctx, t) => tone(ctx, 'sine', 900, 900, t, 0.03, 0.06)),
+  /** The march of an invader formation: one of four low square notes, by `step % 4`. */
+  march: (step: number) =>
+    play((ctx, t) => {
+      const f = MARCH_NOTES[((Math.floor(step) % 4) + 4) % 4];
+      tone(ctx, 'square', f, f, t, 0.09, 0.14);
+    }),
+  /** A bolt leaving the cannon: a very short, quiet square blip sliding down. */
+  zap: () => play((ctx, t) => tone(ctx, 'square', 1400, 600, t, 0.06, 0.05)),
+  /** A flying saucer: a sine warble between 600 and 900 Hz. */
+  ufo: () =>
+    play((ctx, t) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      for (let i = 0; i < 6; i++) {
+        osc.frequency.setValueAtTime(i % 2 === 0 ? 600 : 900, t + i * 0.075);
+      }
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.exponentialRampToValueAtTime(0.1, t + 0.04);
+      gain.gain.setValueAtTime(0.1, t + 0.4);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.46);
+    }),
   /** A wrong key: a short low buzz. */
   wrongKey: () => play((ctx, t) => tone(ctx, 'square', 180, 140, t, 0.12, 0.12)),
   /** A thrown object whistling through the air. */

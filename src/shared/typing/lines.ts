@@ -15,6 +15,8 @@ export const HOME_REST_LINE =
 export const YOUR_TURN = 'Your turn!';
 export const MIX_LINE = 'Now mix it up!';
 export const READY_LINE = "You're ready! Let's ride!";
+/** The prompt on the picker and the lesson's ready card: the space bar starts the game. */
+export const SPACE_LINE = 'Press the space bar to ride!';
 export const NEW_KEYS = 'New keys!';
 export const TEST_PASS = 'You tested out!';
 export const TEST_FAIL = 'Not yet. Keep practicing!';

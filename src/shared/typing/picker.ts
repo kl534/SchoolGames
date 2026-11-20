@@ -7,6 +7,7 @@ import './typing.css';
 import { LEVEL_COUNT, levelOf, multiplier, TYPING_LEVELS, type TypingLevel } from './course';
 import { button, el, overlay } from './dom';
 import { onTypingKey } from './keys';
+import { SPACE_LINE } from './lines';
 import type { TypingProgress } from './progress';
 
 export interface PickerOptions {
@@ -22,6 +23,8 @@ export interface PickerOptions {
   /** The space bar was pressed. */
   onStart(): void;
   container?: HTMLElement;
+  /** The prompt to start (default 'Press the space bar to ride!'). */
+  spaceLine?: string;
 }
 
 export interface LevelPicker {
@@ -50,7 +53,7 @@ export function showLevelPicker(o: PickerOptions): LevelPicker {
   const lessonButton = button('tp-lesson', 'Show me the keys again', actions, () =>
     o.onLesson(selected),
   );
-  el('p', 'tp-space', card, 'Press the space bar to ride!');
+  el('p', 'tp-space', card, o.spaceLine ?? SPACE_LINE);
   let selected = o.selected;
   let ask: HTMLElement | null = null;
   let disposed = false;
