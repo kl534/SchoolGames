@@ -38,6 +38,12 @@ const KNUCKLE_DROP = 1.3;
 const HANDS_HEIGHT = 5.9;
 const FLASH_MS = 250;
 
+export interface KeyTint {
+  fill: string;
+  label: string;
+  ring?: string;
+}
+
 export interface Keyboard {
   /** Put this where the keyboard goes; it fills the width it is given. */
   readonly element: HTMLElement;
@@ -51,6 +57,8 @@ export interface Keyboard {
   reach(char: string | null, t: number): void;
   /** Makes these keys pulse (and fill in their finger colour); null stops. */
   pulse(chars: string[] | null): void;
+  /** Colours keys by id under any light, pulse or flash; null clears. */
+  tint(tints: Record<string, KeyTint> | null): void;
   /** Shows or hides the Caps Lock pill. */
   setCaps(on: boolean): void;
   dispose(): void;
@@ -198,6 +206,7 @@ export function createKeyboard(o: { hands: boolean }): Keyboard {
   let pulseIds = new Map<string, string>();
   const flashes = new Map<string, 'right' | 'wrong'>();
   const flashTimers = new Set<ReturnType<typeof setTimeout>>();
+  let tints: Record<string, KeyTint> = {};
   let pressed: string | null = null;
   let disposed = false;
 
@@ -206,18 +215,23 @@ export function createKeyboard(o: { hands: boolean }): Keyboard {
     const grey = NON_TYPING.has(id);
     const flash = flashes.get(id);
     const color = flash ? (flash === 'right' ? RIGHT : WRONG) : (lit.get(id) ?? pulseIds.get(id));
-    rect.setAttribute('fill', color ?? (grey ? GREY_FILL : KEY_FILL));
+    const tint = color ? undefined : tints[id];
+    rect.setAttribute('fill', color ?? tint?.fill ?? (grey ? GREY_FILL : KEY_FILL));
     if (id === pressed) {
       rect.setAttribute('stroke', '#ffffff');
       rect.setAttribute('stroke-width', '0.1');
+    } else if (tint?.ring) {
+      rect.setAttribute('stroke', tint.ring);
+      rect.setAttribute('stroke-width', '0.12');
     } else {
       rect.removeAttribute('stroke');
       rect.removeAttribute('stroke-width');
     }
     rect.classList.toggle('tk-pulse', pulseIds.has(id));
     for (const node of labels.get(id) ?? []) {
-      node.setAttribute('fill', color ? DARK : grey ? GREY_LABEL : LABEL);
-      node.setAttribute('font-weight', color ? '800' : '600');
+      const labelColor = color ? DARK : (tint?.label ?? (grey ? GREY_LABEL : LABEL));
+      node.setAttribute('fill', labelColor);
+      node.setAttribute('font-weight', labelColor === DARK ? '800' : '600');
     }
   }
   const paintAll = () => rects.forEach((_, id) => paint(id));
@@ -311,6 +325,10 @@ export function createKeyboard(o: { hands: boolean }): Keyboard {
         }
       }
       for (const id of new Set([...before, ...pulseIds.keys()])) paint(id);
+    },
+    tint(next) {
+      tints = next ?? {};
+      paintAll();
     },
     setCaps(on) {
       pill.hidden = !on;

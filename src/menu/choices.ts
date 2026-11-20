@@ -19,14 +19,9 @@ import {
   type PlayerProgress,
   type StepCounts,
 } from '../shared/progress';
-import { LEVEL_COUNT, levelOf, TYPING_LEVELS } from '../shared/typing/course';
-import {
-  TOTAL_LEARNABLE,
-  TYPING_LEVEL_ID,
-  emptyTyping,
-  learnedCount,
-  skillLearned,
-} from '../shared/typing/progress';
+import { LEVEL_COUNT, levelOf } from '../shared/typing/course';
+import { TOTAL_LEARNABLE, TYPING_LEVEL_ID, emptyTyping } from '../shared/typing/progress';
+import { practiceCount, typingSteps } from '../shared/typing/report';
 
 /** How many choice ids `progress.recent` keeps; `recent[0]` is the current one. */
 export const RECENT_MAX = 4;
@@ -184,18 +179,11 @@ export function pathChoiceInfo(
 
 /**
  * The Typing path: 'Level 7 of 40: r u', and a bar of what is learned over every key skill and
- * speed level (a key with some presses but not learned yet counts as started).
+ * speed level (see `typingSteps`); `due` counts the passed keys that need practice.
  */
 export function typingChoiceInfo(progress: PlayerProgress): ChoiceInfo {
   const tp = progress.typing ?? emptyTyping();
-  const learned = learnedCount(tp);
-  const started = TYPING_LEVELS.filter((level) => level.n >= tp.open).reduce(
-    (sum, level) =>
-      sum +
-      level.skills.filter((skill) => !skillLearned(tp, skill) && (tp.keys[skill] ?? '') !== '')
-        .length,
-    0,
-  );
+  const steps = typingSteps(tp);
   const open = Math.min(Math.max(tp.open, 1), LEVEL_COUNT);
   return {
     id: TYPING_LEVEL_ID,
@@ -203,9 +191,9 @@ export function typingChoiceInfo(progress: PlayerProgress): ChoiceInfo {
     title: 'My Level · Typing',
     short: 'Typing',
     subtitle: `Level ${open} of ${LEVEL_COUNT}: ${levelOf(open).title}`,
-    mastered: learned,
-    steps: [TOTAL_LEARNABLE - learned - started, started, 0, learned, 0],
-    due: 0,
+    mastered: steps[3],
+    steps,
+    due: practiceCount(tp),
     total: TOTAL_LEARNABLE,
   };
 }
