@@ -1157,3 +1157,58 @@ button.danger:disabled {
   font-size: 13px;
   white-space: nowrap;
 }
+
+/* ---------- Typing keys page ---------- */
+
+.typing-board {
+  width: 100%;
+  max-width: 640px;
+  margin: 12px auto 4px;
+}
+
+.typing-board-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.typing-board-legend .legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.swatch {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+}
+
+.key-cap {
+  display: inline-flex;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  justify-content: center;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  font:
+    700 15px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+
+.speed-chip {
+  gap: 8px;
+}
+
+.typing-best {
+  font-weight: 700;
+}

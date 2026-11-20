@@ -1,5 +1,7 @@
 /** Dev-only demo progress for the menu (`?demo=steps`). Pure: no DOM. */
 import { LEVELS } from '../shared/levels';
+import { TYPING_LEVELS } from '../shared/typing/course';
+import { TYPING_LEVEL_ID, type TypingProgress, emptyTyping } from '../shared/typing/progress';
 import {
   LEVELS_VERSION,
   SOCIAL_LEVELS_VERSION,
@@ -75,5 +77,43 @@ export function demoStepsProgress(now: number): PlayerProgress {
       i++;
     }
   }
+  return progress;
+}
+
+/**
+ * Demo typing progress (`?demo=typing`, `?demo=typing-speed`). 'keys': level 8 open, two passed
+ * keys slipped (d, ;), g and h tested out, t almost and y started. 'speed': level 31 open, every
+ * key learned except Left Shift, which slipped.
+ */
+export function demoTypingProgress(kind: 'keys' | 'speed'): PlayerProgress {
+  const progress = emptyProgress();
+  progress.recent = [TYPING_LEVEL_ID];
+  const open = kind === 'keys' ? 8 : 31;
+  const typing: TypingProgress = {
+    ...emptyTyping(),
+    open,
+    level: open,
+    spk: kind === 'keys' ? 1.2 : 0.6,
+    bestWpm: kind === 'keys' ? 14.6 : 23.4,
+    lessons: Array.from({ length: open }, (_, i) => i + 1),
+  };
+  const good = '1'.repeat(20);
+  if (kind === 'keys') {
+    for (const level of TYPING_LEVELS.filter((l) => l.n < 8)) {
+      for (const skill of level.skills) typing.keys[skill] = good;
+    }
+    delete typing.keys.g;
+    delete typing.keys.h;
+    typing.keys.d = '1'.repeat(17) + '000';
+    typing.keys[';'] = '00101' + '1'.repeat(15);
+    typing.keys.t = '1'.repeat(13);
+    typing.keys.y = '1010';
+  } else {
+    for (const level of TYPING_LEVELS) {
+      for (const skill of level.skills) typing.keys[skill] = good;
+    }
+    typing.keys['shift-left'] = '1'.repeat(15) + '00000';
+  }
+  progress.typing = typing;
   return progress;
 }

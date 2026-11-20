@@ -1,6 +1,6 @@
 # Typing map (`src/shared/typing/`)
 
-What a typing game (Type Rider, `src/games/type-rider/`, added later) is built from: the course of 40 levels (28 of keys, two at a time, then 12 of speed), what the player has learned on each key, the lesson that opens a level, the keyboard picture, the level picker and the test-out. Real keyboards only, US QWERTY. The pure files (`course`, `keyboard-layout`, `lines`, `words`, `blocks`, `progress`) import no DOM.
+What a typing game (Type Rider, `src/games/type-rider/`, added later) is built from: the course of 40 levels (28 of keys, two at a time, then 12 of speed), what the player has learned on each key, the lesson that opens a level, the keyboard picture, the level picker and the test-out. Real keyboards only, US QWERTY. The pure files (`course`, `keyboard-layout`, `lines`, `words`, `blocks`, `progress`, `report`) import no DOM.
 
 Voice rule: only the lesson's finger explanations are spoken (`HOME_ROW_LINE`, `HOME_REST_LINE` and the 71 `lessonLine`s, listed in `TYPING_VOICE_LINES`). Every other line (`YOUR_TURN`, `MIX_LINE`, `READY_LINE`, the multiplier and speed lines, the test-out lines) is on-screen text and must never be passed to `speak()`. `scripts/voice/lines.ts` adds `TYPING_VOICE_LINES` to the shared lines; a game's `voice.ts` may list them too.
 
@@ -14,7 +14,8 @@ Voice rule: only the lesson's finger explanations are spoken (`HOME_ROW_LINE`, `
 - `progress.ts`: the first-try history of each key, the open level, seconds per key and the clock (`TypingProgress`, `recordPress`, `skillLearned`, `levelPassed`, `learnedCount`, `nextSpk`, `clockFor`, `wpm`, `openLevel`, `levelUp`, `normalizeTyping`, `TYPING_LEVEL_ID`)
 - `session.ts`: `startTypingSession(gameId)`: the player, their typing progress, `save()`, `highScore()` and `recordScore()` under `TYPING_LEVEL_ID`
 - `keys.ts`: `onTypingKey(handler)`: one `keydown` listener for single-char keys (ignores repeats and Ctrl, Alt, Meta; cancels the keys it handles; reports Caps Lock)
-- `keyboard.ts`: the keyboard picture, with or without two hands whose fingers reach for the lit key (`createKeyboard`: `light`, `flash`, `setFaint`, `reach`, `pulse`, `setCaps`)
+- `keyboard.ts`: the keyboard picture, with or without two hands whose fingers reach for the lit key (`createKeyboard`: `light`, `flash`, `setFaint`, `reach`, `pulse`, `tint`, `setCaps`)
+- `report.ts`: what the menu's "See keys" page shows: each key's step on the open levels, keys of passed levels that slipped, the bar's counts and the colour state of each keyboard key (`typingReport`, `skillReport`, `practiceCount`, `typingSteps`, `keyStates`, `skillLabel`, `ALMOST_RIGHT`, `SLIP_WRONG`)
 - `block.ts`: the row of keys to type: done green, the current one yellow, wrong flashes red (`createBlockView`)
 - `lesson.ts`: the lesson that opens a level: home row (level 1), then show, try and mix for each new key, then the ready card; a speed level gets a 2.5 s card (`showKeyLesson`, `lessonSteps`)
 - `picker.ts`: the start screen with the 40 level chips and the test-out question (`showLevelPicker`)
