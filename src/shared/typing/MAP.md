@@ -1,6 +1,6 @@
 # Typing map (`src/shared/typing/`)
 
-What a typing game (Type Rider, `src/games/type-rider/`, added later) is built from: the course of 40 levels (28 of keys, two at a time, then 12 of speed), what the player has learned on each key, the lesson that opens a level, the keyboard picture, the level picker and the test-out. Real keyboards only, US QWERTY. The pure files (`course`, `keyboard-layout`, `lines`, `words`, `blocks`, `progress`) import no DOM.
+What a typing game (Type Rider, `src/games/type-rider/`; Key Invaders, `src/games/key-invaders/`, the second; both added later) is built from: the course of 40 levels (28 of keys, two at a time, then 12 of speed), what the player has learned on each key, the lesson that opens a level, the keyboard picture, the level picker and the test-out. Real keyboards only, US QWERTY. The pure files (`course`, `keyboard-layout`, `lines`, `words`, `blocks`, `progress`) import no DOM.
 
 Voice rule: only the lesson's finger explanations are spoken (`HOME_ROW_LINE`, `HOME_REST_LINE` and the 71 `lessonLine`s, listed in `TYPING_VOICE_LINES`). Every other line (`YOUR_TURN`, `MIX_LINE`, `READY_LINE`, the multiplier and speed lines, the test-out lines) is on-screen text and must never be passed to `speak()`. `scripts/voice/lines.ts` adds `TYPING_VOICE_LINES` to the shared lines; a game's `voice.ts` may list them too.
 
@@ -34,3 +34,5 @@ Voice rule: only the lesson's finger explanations are spoken (`HOME_ROW_LINE`, `
 - `view=testout&level=<n>&typed=<n>`: the test-out for a level.
 - `view=speed&level=<29-40>`: the speed card.
 - `seed=<n>` fixes the random blocks.
+
+Options for games' own wording: `showKeyLesson` takes `readyLine` (the ready card's heading) and `spaceLine` (its space-bar line), `showLevelPicker` takes `spaceLine`; defaults are Type Rider's lines.
