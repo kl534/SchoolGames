@@ -2,6 +2,8 @@ import { Vector3 } from 'three';
 import { sfx, speak, unlockAudio } from '../../shared/audio';
 import { showResults } from '../../shared/results';
 import { starsFor } from '../../shared/round';
+import { DANCE_SECONDS } from '../../shared/dances';
+import { chooseDance } from '../../shared/dances/dev';
 import { createScene } from '../../shared/scene';
 import { createTimers } from '../../shared/timers';
 import { createBackButton, createMuteButton, createPauseOverlay } from '../../shared/ui';
@@ -34,6 +36,7 @@ import {
 } from './fighters';
 import { createHud } from './hud';
 import {
+  BOSS_FONT_FLOOR,
   createLabel,
   createPops,
   labelFontPx,
@@ -59,34 +62,49 @@ import {
 } from './layout';
 import { MOVES } from './moves';
 import {
+  BOSS_BANNER_SECONDS,
+  BOSS_GAP_SECONDS,
   HIT_GRACE,
-  HIT_RING,
   HIT_WRONG,
   HP_MAX,
+  ITEM_EMOJI,
+  ITEM_HEAL,
+  ITEM_KEYS,
   MAX_THUGS,
   READ_SECONDS,
-  REFILL_SCRAP,
+  REFILL_STAGE,
   SPEED_GROUP,
+  STAGE_SCRAPS,
+  STAR_KNOCKOUTS,
   attackerOf,
   blockPlan,
   blockPoints,
+  bossScrapKinds,
+  dropsItem,
   emptyStats,
+  fightNumber,
   hitHero,
   killPoints,
   lockThug,
   mastered,
   moveClassOf,
+  pickItem,
   pickMove,
   refill,
   resultsText,
+  ringDamage,
   ringSeconds,
   scrapBonus,
   scrapKinds,
+  scrapSize,
   slackFor,
   speedGroupPasses,
   spkFor,
+  stageBonus,
+  stageInfo,
   streakMultiplier,
   type Group,
+  type ItemType,
   type Kind,
   type MoveId,
 } from './rules';
@@ -98,7 +116,10 @@ const SPACE_LINE = 'Every block ends with the space bar: that is the punch!';
 const COLORS: Record<Kind, string> = { thug: '#7dd3fc', bruiser: '#f472b6', boss: '#fb923c' };
 const ENTER_DELAY = 0.6;
 
-type Phase = 'start' | 'walking' | 'entering' | 'fighting' | 'scrapclear' | 'over';
+type Phase = 'start' | 'walking' | 'entering' | 'fighting' | 'scrapclear' | 'stageclear' | 'over';
+/** Seconds the hero takes to jog over to an item. */
+const GRAB_SECONDS = 0.4;
+const ITEM_COLOR = '#4ade80';
 
 const clamp = (n: number, low: number, high: number): number => Math.min(Math.max(n, low), high);
 const fmt = (n: number): string => n.toLocaleString('en-US');
@@ -127,6 +148,20 @@ interface Thug {
   mistakes: Set<number>;
   /** No wrong key and no ring hit on the whole combo so far. */
   perfect: boolean;
+}
+
+/** A dropped item: a block of 2 keys and its space, shown as a floating label with its emoji. */
+interface Item {
+  id: string;
+  type: ItemType;
+  text: string;
+  /** World x of the drop. */
+  x: number;
+  z: number;
+  label: Label;
+  font: number;
+  pos: number;
+  mistakes: Set<number>;
 }
 
 /** A move the hero is about to throw or is throwing at a thug. */
@@ -178,7 +213,8 @@ function run(session: TypingSession): void {
   // ---------- The scene ----------
   const ctx = createScene(container, { fov: 40, near: 0.5, far: 140 });
   const camera = ctx.camera;
-  const street = createStreet(ctx.scene);
+  let street = createStreet(ctx.scene, stageInfo(1).def);
+  let streetId = stageInfo(1).def.id;
   ctx.scene.add(street.object);
   const effects = createEffects();
   ctx.scene.add(effects.object);
@@ -222,7 +258,9 @@ function run(session: TypingSession): void {
   let picker: LevelPicker | null = null;
   let finished = false;
 
-  let scrap = 1;
+  /** The stage (from 1, counting loops of the four) and the fight in it (the last is the boss). */
+  let stage = 1;
+  let fight = 1;
   let firstScrap = true;
   let rampSteps = 0;
   let hp = HP_MAX;
@@ -258,10 +296,27 @@ function run(session: TypingSession): void {
   /** Dev `at`: the first move holds at this time. */
   let holding = false;
   let strikesStarted = 0;
+  /** Items on the street, the one being typed, those typed and waiting for the hero, and the jog. */
+  let items: Item[] = [];
+  let itemSeq = 0;
+  let lockedItem: Item | null = null;
+  let grabQueue: Item[] = [];
+  let grab: { item: Item; t: number; from: number } | null = null;
+  /** Knock-outs the star still makes perfect. */
+  let starLeft = 0;
+  /** Seconds before the boss walks in (the banner shows meanwhile). */
+  let bossWait = 0;
+  let winUsed = false;
+  let devItemUsed = false;
+  /** Dev `?win=dance`: the stage clear holds the dance for ever. */
+  const holdDance = dev?.win ?? false;
 
   const speedLevel = () => levelOf(playLevel).kind === 'speed';
   const frozen = () => dev?.freeze ?? false;
   const paused = () => pause.isPaused;
+  const stageDef = () => stageInfo(stage).def;
+  const loopNo = () => stageInfo(stage).loop;
+  const bossFight = () => fight > STAGE_SCRAPS;
   const spkEff = () => spkFor(playLevel, typing.spk);
   const ringFor = (t: Thug) => ringSeconds(t.plan[t.block], spkEff(), slackFor(rampSteps));
 
@@ -296,7 +351,8 @@ function run(session: TypingSession): void {
       score,
       streak: streakMultiplier(streak),
       level: playLevel,
-      fight: scrap,
+      fight: `Stage ${stage} · ${bossFight() ? 'Boss' : `${fight}/${STAGE_SCRAPS}`}`,
+      stars: starLeft,
       best: session.highScore(),
     });
   };
@@ -304,6 +360,16 @@ function run(session: TypingSession): void {
   const rise = (text: string, thug: Fighter, color?: string, big = false) => {
     const p = project(thug.worldX(), thug.headHeight() * 0.6);
     pops.rise(text, p.x, p.y, color, big);
+  };
+
+  /** The street the stage is set in: rebuilt when the stage's look changes. */
+  const applyStage = () => {
+    const def = stageDef();
+    if (def.id === streetId) return;
+    street.dispose();
+    street = createStreet(ctx.scene, def);
+    streetId = def.id;
+    ctx.scene.add(street.object);
   };
 
   // ---------- Thugs and their labels ----------
@@ -349,7 +415,10 @@ function run(session: TypingSession): void {
     if (slot === null) return;
     nextSide = side === 1 ? -1 : 1;
     const plan = blockPlan(kind);
-    const fighter = createFighter(lookFor(kind, Math.random), Math.random() * 6);
+    const fighter = createFighter(
+      lookFor(kind, Math.random, stageDef().bossShirt),
+      Math.random() * 6,
+    );
     ctx.scene.add(fighter.person.root);
     const slotSide = SLOTS[slot].side;
     fighter.z = SLOTS[slot].z;
@@ -390,10 +459,97 @@ function run(session: TypingSession): void {
   };
   let spawning = false;
 
-  const spawnFromQueue = (instant: boolean) => {
-    while (queue.length > 0 && thugs.length < MAX_THUGS) {
+  const spawnFromQueue = (instant: boolean, limit = Infinity) => {
+    let spawned = 0;
+    while (queue.length > 0 && thugs.length < MAX_THUGS && spawned < limit) {
       spawn(queue.shift() as Kind, instant);
+      spawned++;
       if (takenSlots().size >= SLOTS.length) break;
+    }
+  };
+
+  // ---------- Items ----------
+  const paintItem = (it: Item) => {
+    it.label.setState({ typed: it.pos, locked: lockedItem === it, wrong: false });
+  };
+
+  /** An item lands at (x, z): a 2-key block whose first key differs from every label showing. */
+  const dropItem = (type: ItemType, x: number, z: number) => {
+    if (phase === 'over' || phase === 'walking' || phase === 'start') return;
+    const avoid = [...thugs.map((t) => t.text[0]), ...items.map((i) => i.text[0])];
+    const text = targetText(
+      planChunk({
+        level: playLevel,
+        keys: ITEM_KEYS,
+        random: Math.random,
+        history: typing.keys,
+        avoid,
+      }),
+    );
+    const label = createLabel(labelLayer, `${text}`, ITEM_COLOR, ITEM_EMOJI[type]);
+    const it: Item = {
+      id: `i${itemSeq++}`,
+      type,
+      text,
+      x,
+      z,
+      label,
+      font: 0,
+      pos: 0,
+      mistakes: new Set(),
+    };
+    items.push(it);
+    paintItem(it);
+  };
+
+  /** Removes every item (and what is waiting to grab them); with `fade` they fade out. */
+  const clearItems = (fade: boolean) => {
+    for (const it of items) {
+      if (fade) it.label.fade();
+      else it.label.remove();
+    }
+    items = [];
+    lockedItem = null;
+    grabQueue = [];
+    grab = null;
+  };
+
+  const finishGrab = (it: Item) => {
+    grab = null;
+    sfx.chime();
+    const at = project(hero.worldX(), 2.1);
+    if (it.type === 'star') {
+      starLeft = STAR_KNOCKOUTS;
+      pops.rise('⭐ Next 3 are perfect!', at.x, at.y, '#c4b5fd', true);
+    } else {
+      const before = hp;
+      hp = refill(hp, ITEM_HEAL[it.type]);
+      hud.setHealth(hp);
+      pops.rise(`+${hp - before} HP`, at.x, at.y, '#4ade80', true);
+    }
+    items = items.filter((x) => x !== it);
+    it.label.fade();
+    hero.setMode({ kind: 'idle' });
+    renderHud();
+  };
+
+  const pumpGrabs = () => {
+    if (grab) {
+      grab.t += dtNow;
+      const k = Math.min(1, grab.t / GRAB_SECONDS);
+      hero.x = grab.from + (grab.item.x - grab.from) * k;
+      if (k >= 1) finishGrab(grab.item);
+    } else if (
+      grabQueue.length > 0 &&
+      strike === null &&
+      strikes.length === 0 &&
+      !hero.busy &&
+      phase !== 'over'
+    ) {
+      const item = grabQueue.shift() as Item;
+      grab = { item, t: 0, from: hero.x };
+      hero.face(item.x >= hero.x ? 1 : -1);
+      hero.setMode({ kind: 'walk' });
     }
   };
 
@@ -502,7 +658,12 @@ function run(session: TypingSession): void {
   };
   let dtNow = 0;
 
-  const heroIdle = () => strike === null && strikes.length === 0 && !hero.busy;
+  const heroIdle = () =>
+    strike === null &&
+    strikes.length === 0 &&
+    !hero.busy &&
+    grab === null &&
+    grabQueue.length === 0;
 
   // ---------- Hits on the hero ----------
   const hurtHero = (amount: number, thug: Thug) => {
@@ -531,7 +692,7 @@ function run(session: TypingSession): void {
     t.readLeft = READ_SECONDS;
     if (!speedLevel()) typing.spk = nextSpk(typing.spk, 'timeout');
     save();
-    hurtHero(HIT_RING, t);
+    hurtHero(ringDamage(t.kind), t);
   };
 
   // ---------- Keys ----------
@@ -590,13 +751,16 @@ function run(session: TypingSession): void {
     }
 
     // The finisher: the thug is knocked out.
-    const perfect = t.perfect;
+    const clean = t.perfect;
+    // The star makes the next knock-outs perfect for the streak and the score, not for the typing stats.
+    const perfect = clean || starLeft > 0;
+    if (starLeft > 0) starLeft--;
     const before = streakMultiplier(streak);
     streak = perfect ? streak + 1 : 0;
     const points = killPoints(t.kind, streak, playLevel);
     score += points;
     stats.knockouts++;
-    if (!speedLevel()) typing.spk = nextSpk(typing.spk, perfect ? 'perfect' : 'mistakes');
+    if (!speedLevel()) typing.spk = nextSpk(typing.spk, clean ? 'perfect' : 'mistakes');
     else {
       groupKills++;
       if (groupKills >= SPEED_GROUP) closeGroup();
@@ -620,19 +784,73 @@ function run(session: TypingSession): void {
     thugs = thugs.filter((x) => x !== t);
     t.label.remove();
     dying.push({ fighter: t.fighter, away: sideOf(t.fighter), strike: s, flown: -1 });
-    spawnCooldown = ENTER_DELAY;
+    spawnCooldown = Math.max(spawnCooldown, ENTER_DELAY);
+    if (dev?.item || dropsItem(t.kind, Math.random)) {
+      const type = dev?.item ?? pickItem(Math.random);
+      const { x, z } = t.fighter;
+      timers.after(0.5, () => dropItem(type, x, z));
+    }
     renderHud();
   };
 
+  /** A key on the item being typed: a wrong one only buzzes (recorded once per spot, no hit). */
+  const itemKey = (it: Item, char: string) => {
+    const expected = it.text[it.pos];
+    if (char === expected) {
+      if (!it.mistakes.has(it.pos)) recordPress(typing, expected, true);
+      sfx.key();
+      it.pos++;
+      if (it.pos < it.text.length) {
+        paintItem(it);
+        return;
+      }
+      stats.keys += it.text.length;
+      stats.right += it.text.length - it.mistakes.size;
+      lockedItem = null;
+      paintItem(it);
+      grabQueue.push(it);
+      save();
+    } else {
+      it.label.flashWrong();
+      sfx.wrongKey();
+      if (!it.mistakes.has(it.pos)) {
+        recordPress(typing, expected, false);
+        it.mistakes.add(it.pos);
+      }
+    }
+  };
+
   const onKey = (char: string) => {
-    if (paused() || phase !== 'fighting') return;
+    if (paused()) return;
+    // Only the items can be typed once the scrap is cleared.
+    if (phase !== 'fighting' && !(phase === 'scrapclear' && items.length > 0)) return;
+    if (lockedItem) {
+      itemKey(lockedItem, char);
+      return;
+    }
     let t = locked;
     if (!t) {
+      const free = items.filter((i) => !grabQueue.includes(i) && grab?.item !== i);
       const id = lockThug(
-        thugs.map((x) => ({ id: x.id, text: x.text, x: x.fighter.worldX(), engaged: x.engaged })),
+        [
+          ...thugs.map((x) => ({
+            id: x.id,
+            text: x.text,
+            x: x.fighter.worldX(),
+            engaged: x.engaged,
+          })),
+          ...free.map((i) => ({ id: i.id, text: i.text, x: i.x, engaged: true, item: true })),
+        ],
         char,
         hero.x,
       );
+      const item = free.find((i) => i.id === id);
+      if (item) {
+        lockedItem = item;
+        item.pos = 0;
+        itemKey(item, char);
+        return;
+      }
       t = thugs.find((x) => x.id === id) ?? null;
       if (!t) {
         sfx.wrongKey();
@@ -660,38 +878,62 @@ function run(session: TypingSession): void {
     }
   };
 
-  // ---------- Scraps ----------
+  // ---------- Scraps and stages ----------
   const startWalking = () => {
     phase = 'walking';
+    clearItems(true);
+    applyStage();
     walkLeft = firstScrap ? FIRST_WALK_SECONDS : WALK_SECONDS;
     hero.face(1, true);
     hero.setMode({ kind: 'walk' });
-    pops.centre(`Fight ${scrap}`, '#ffffff');
+    if (fight === 1) pops.centre(`Stage ${stage}: ${stageDef().title}`, '#ffffff');
+    else if (!bossFight()) pops.centre(`Fight ${fight}`, '#ffffff');
     renderHud();
     if (frozen()) startEntering();
   };
 
   const startEntering = () => {
+    if (dev?.win && !winUsed) {
+      // Dev: no fight, the stage clears at once.
+      winUsed = true;
+      firstScrap = false;
+      clearStage();
+      return;
+    }
     phase = 'entering';
     hero.setMode({ kind: 'idle' });
     hero.x = anchorX;
     const first = firstScrap;
-    const kinds = dev?.kind
-      ? Array.from({ length: scrapKinds(scrap, Math.random).length }, () => dev.kind as Kind)
-      : scrapKinds(scrap, Math.random);
+    let kinds: Kind[];
+    if (bossFight()) kinds = bossScrapKinds(loopNo());
+    else if (dev?.kind && dev.kind !== 'boss') {
+      kinds = Array.from({ length: scrapSize(fight, loopNo()) }, () => dev.kind as Kind);
+    } else kinds = scrapKinds(fight, Math.random, loopNo(), stage);
     queue = first && dev?.thugs ? kinds.slice(0, dev.thugs) : kinds;
     firstScrap = false;
     nextSide = 1;
+    if (bossFight() && !frozen()) {
+      // The alarm and the banner, then the boss walks in alone.
+      bossWait = BOSS_BANNER_SECONDS;
+      pops.centre(`Boss: ${stageDef().boss}`, '#fb923c');
+      sfx.alarm();
+      return;
+    }
     spawning = true;
-    spawnFromQueue(frozen());
+    spawnFromQueue(frozen(), bossFight() && !frozen() ? 1 : undefined);
     spawning = false;
+    if (bossFight()) spawnCooldown = BOSS_GAP_SECONDS;
     if (thugs.some((t) => t.engaged)) beginFighting();
   };
 
   const beginFighting = () => {
     if (phase !== 'entering') return;
     phase = 'fighting';
-    if (dev?.lock && scrap === (dev.scrap ?? 1) && !devLockUsed) applyDevLock();
+    if (dev?.lock && !devLockUsed) applyDevLock();
+    if (dev?.item && !devItemUsed) {
+      devItemUsed = true;
+      dropItem(dev.item, anchorX - 1.9, 0.3);
+    }
     if (dev?.keys && !devKeysUsed) {
       devKeysUsed = true;
       for (const c of dev.keys) onKey(c);
@@ -717,13 +959,17 @@ function run(session: TypingSession): void {
     }
   };
 
-  const afterScrap = () => {
-    scrap++;
+  /** The next fight of the stage, or the next stage after a boss. */
+  const nextFight = () => {
+    if (bossFight()) {
+      stage++;
+      fight = 1;
+    } else fight++;
     if (pendingLevel === null) {
       startWalking();
       return;
     }
-    // A level opened in this fight: its lesson shows, then the walk goes on with the new keys.
+    // A level opened in the stage that just ended: its lesson shows, then the walk goes on with the new keys.
     playLevel = pendingLevel;
     pendingLevel = null;
     typing.level = playLevel;
@@ -732,19 +978,42 @@ function run(session: TypingSession): void {
     lessonThen(playLevel, true, startWalking);
   };
 
+  /** A scrap is cleared: the bonus, then the walk to the next fight (a little longer while an item waits). */
   const clearScrap = () => {
     phase = 'scrapclear';
     sfx.chime();
-    const bonus = scrapBonus(scrap, playLevel);
+    const bonus = scrapBonus(fightNumber(stage, fight), playLevel);
     score += bonus;
     pops.centre(`Fight cleared! +${fmt(bonus)}`, '#4ade80');
-    if (mastered(typing, playLevel)) rampSteps++;
-    const before = hp;
-    hp = refill(hp, REFILL_SCRAP);
-    hud.setHealth(hp, before > hp ? before : undefined);
-    checkLevelUp();
     renderHud();
-    timers.after(1.4, afterScrap);
+    timers.after(1.4, () => {
+      if (items.length > 0) timers.after(2.0, nextFight);
+      else nextFight();
+    });
+  };
+
+  /** The boss is down: the stage bonus, health back, the dance, the level-up check, then the next stage. */
+  const clearStage = () => {
+    phase = 'stageclear';
+    clearItems(true);
+    sfx.chime();
+    const bonus = stageBonus(stage, playLevel);
+    score += bonus;
+    pops.centre(`Stage ${stage} clear! +${fmt(bonus)}`, '#4ade80');
+    const before = hp;
+    hp = refill(hp, REFILL_STAGE);
+    hud.setHealth(hp, before > hp ? before : undefined);
+    hero.setMode({ kind: 'dance', dance: chooseDance(), t: 0 });
+    renderHud();
+    if (holdDance) return;
+    timers.after(DANCE_SECONDS, () => {
+      hero.face(1);
+      hero.setMode({ kind: 'idle' });
+      if (mastered(typing, playLevel)) rampSteps++;
+      checkLevelUp();
+      renderHud();
+      timers.after(pendingLevel === null ? 0.3 : 1.4, nextFight);
+    });
   };
 
   const over = () => {
@@ -757,6 +1026,7 @@ function run(session: TypingSession): void {
     }
     strikes = [];
     strike = null;
+    clearItems(false);
     labelLayer.hidden = true;
     hero.setMode({ kind: 'down', t: 0 });
     sfx.miss();
@@ -785,7 +1055,7 @@ function run(session: TypingSession): void {
       score,
       highScore: Math.max(before, score),
       newHighScore,
-      outcome: resultsText(stats, scrap, opened),
+      outcome: resultsText(stats, stage, opened),
       playAgainLabel: 'Brawl again 🥊',
       onPlayAgain: () => showStart(),
     });
@@ -805,6 +1075,8 @@ function run(session: TypingSession): void {
     strike = null;
     locked = null;
     pos = 0;
+    clearItems(false);
+    bossWait = 0;
     words.clear();
     effects.clear();
     timers.clear();
@@ -815,28 +1087,50 @@ function run(session: TypingSession): void {
     const showLabels = phase === 'entering' || phase === 'fighting' || phase === 'scrapclear';
     labelLayer.hidden = !showLabels;
     if (!showLabels) return;
-    const { h } = size();
+    const { w, h } = size();
     const safeTop = parseFloat(getComputedStyle(probe).paddingTop) || 0;
     const pitch = Math.abs(project(2, 1).x - project(0, 1).x);
-    const boxes: { t: Thug; box: LabelBox }[] = [];
+    const cap = h < 500 ? 18 : 22;
+    const boxes: { label: Label; box: LabelBox }[] = [];
     for (const t of thugs) {
       if (!t.engaged) continue;
-      const font = Math.min(labelFontPx(pitch, t.text.length), h < 500 ? 18 : 22);
+      const floor = t.kind === 'boss' ? BOSS_FONT_FLOOR : 13;
+      const font = Math.min(labelFontPx(pitch, t.text.length, floor), cap);
       if (font !== t.font) {
         t.font = font;
         t.label.setFont(font);
       }
-      const w = t.label.width;
+      const lw = t.label.width;
       const lh = t.label.height;
       const head = project(t.fighter.worldX(), t.fighter.headHeight() + 0.1, t.fighter.z);
       const far = t.slot >= 2 ? lh + 2 : 0;
-      boxes.push({ t, box: { x: head.x - w / 2, y: head.y - lh - 6 - far, w, h: lh } });
+      boxes.push({
+        label: t.label,
+        box: { x: head.x - lw / 2, y: head.y - lh - 6 - far, w: lw, h: lh },
+      });
+    }
+    // Items float at the height of the hero's chest.
+    for (const it of items) {
+      const font = Math.min(labelFontPx(pitch, it.text.length), cap);
+      if (font !== it.font) {
+        it.font = font;
+        it.label.setFont(font);
+      }
+      const p = project(it.x, 1.0, it.z);
+      boxes.push({
+        label: it.label,
+        box: {
+          x: p.x - it.label.width / 2,
+          y: p.y - it.label.height,
+          w: it.label.width,
+          h: it.label.height,
+        },
+      });
     }
     const dy = staggerLabels(boxes.map((b) => b.box));
     boxes.forEach((b, i) => {
-      const { w } = size();
       const x = clamp(b.box.x, 4, Math.max(4, w - b.box.w - 4));
-      b.t.label.place(x, clampLabelY(b.box.y + dy[i], b.box.h, w, h, safeTop));
+      b.label.place(x, clampLabelY(b.box.y + dy[i], b.box.h, w, h, safeTop));
     });
   };
 
@@ -854,6 +1148,10 @@ function run(session: TypingSession): void {
         }
       }
     }
+    // Dev `at` with `win=dance`: the dance holds at that time.
+    if (dev?.at != null && dev.win && hero.mode.kind === 'dance') {
+      dt = Math.min(dt, Math.max(0, dev.at - hero.mode.t));
+    }
     dtNow = dt;
     timers.update(dt);
     const hold = frozen();
@@ -867,6 +1165,16 @@ function run(session: TypingSession): void {
       }
     } else if (phase === 'entering' || phase === 'fighting') {
       if (phase === 'fighting') activeTime += dt;
+      if (bossWait > 0) {
+        bossWait -= dt;
+        if (bossWait <= 0) {
+          bossWait = 0;
+          spawning = true;
+          spawnFromQueue(false, 1);
+          spawning = false;
+          spawnCooldown = BOSS_GAP_SECONDS;
+        }
+      }
       // Thugs walk in to their slots.
       for (const t of thugs) {
         if (t.engaged) continue;
@@ -882,8 +1190,8 @@ function run(session: TypingSession): void {
       if (phase === 'fighting') {
         spawnCooldown -= dt;
         if (spawnCooldown <= 0 && queue.length > 0 && thugs.length < MAX_THUGS) {
-          spawnFromQueue(false);
-          spawnCooldown = ENTER_DELAY;
+          spawnFromQueue(false, bossFight() ? 1 : undefined);
+          spawnCooldown = bossFight() ? BOSS_GAP_SECONDS : ENTER_DELAY;
         }
         updateRings(dt, hold);
         // The scrap is over when nobody is left and the last hit has landed.
@@ -892,16 +1200,25 @@ function run(session: TypingSession): void {
           queue.length === 0 &&
           dying.length === 0 &&
           heroIdle() &&
+          bossWait <= 0 &&
           phase === 'fighting'
         ) {
-          clearScrap();
+          if (bossFight()) clearStage();
+          else clearScrap();
         }
       }
     }
 
     pumpStrikes();
+    pumpGrabs();
     // The hero slides back to the middle when nothing is going on.
-    if (heroIdle() && phase !== 'walking' && phase !== 'over' && hero.mode.kind !== 'down') {
+    if (
+      heroIdle() &&
+      phase !== 'walking' &&
+      phase !== 'over' &&
+      phase !== 'stageclear' &&
+      hero.mode.kind !== 'down'
+    ) {
       const d = anchorX - hero.x;
       if (Math.abs(d) > 0.02) {
         const step = 8 * dt;
@@ -1032,7 +1349,10 @@ function run(session: TypingSession): void {
       score = 0;
       streak = 0;
       hp = dev?.hp ?? HP_MAX;
-      scrap = dev?.scrap ?? 1;
+      stage = (dev?.loop ?? 0) * 4 + (dev?.stage ?? 1);
+      fight = dev?.kind === 'boss' ? STAGE_SCRAPS + 1 : (dev?.scrap ?? 1);
+      starLeft = 0;
+      clearItems(false);
       rampSteps = dev?.ramp ?? 0;
       firstScrap = true;
       finished = false;
