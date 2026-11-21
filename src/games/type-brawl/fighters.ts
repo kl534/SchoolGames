@@ -16,6 +16,7 @@ import {
   launchPath,
   mirrorPose,
   moveFrame,
+  moveDash,
   moveSpin,
   reactionFrame,
   swingPose,
@@ -238,6 +239,7 @@ export function createFighter(look: Look, idleSeed = 0): Fighter {
             m.t += delta;
             moveFrame(m.move, m.t, pose);
             spin = moveSpin(m.move, m.t);
+            offsetX = facing * moveDash(m.move, m.t);
             if (m.t >= MOVES[m.move].duration) mode = { kind: 'idle' };
             break;
           }
