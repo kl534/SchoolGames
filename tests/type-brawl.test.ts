@@ -27,18 +27,35 @@ import {
 import { neutralPose } from '../src/games/type-brawl/person';
 import {
   BLOCKS,
+  BOSS_BANNER_SECONDS,
+  BOSS_GAP_SECONDS,
   HIT_RING,
+  HIT_RING_BOSS,
+  ITEM_DROP_CHANCE,
+  ITEM_EMOJI,
+  ITEM_HEAL,
+  ITEM_KEYS,
+  STAGES,
+  STAGE_SCRAPS,
+  STAR_KNOCKOUTS,
   HIT_WRONG,
   HP_MAX,
   MAX_THUGS,
   MOVES_BY_CLASS,
-  REFILL_SCRAP,
+  REFILL_STAGE,
   RING_MIN,
   SLACK_MIN,
   SLACK_START,
   attackerOf,
   blockPlan,
   blockPoints,
+  bossScrapKinds,
+  dropsItem,
+  fightNumber,
+  pickItem,
+  ringDamage,
+  stageBonus,
+  stageInfo,
   emptyStats,
   hitHero,
   killPoints,
@@ -80,6 +97,10 @@ describe('parseDev', () => {
       chunk: null,
       thugs: null,
       kind: null,
+      stage: null,
+      loop: null,
+      item: null,
+      win: false,
       lock: null,
       typed: 0,
       wrong: false,
@@ -99,7 +120,8 @@ describe('parseDev', () => {
   it('reads every hook', () => {
     const dev = parseDev(
       '?level=7&start=1&lesson=1&spk=1.4&chunk=fj%20k&thugs=2&kind=bruiser&lock=3&typed=2&wrong=1' +
-        '&hp=60&scrap=4&ramp=5&ring=0.85&freeze=1&move=flying-kick&at=0.55&levelup=1&keys=fjf%20',
+        '&hp=60&scrap=4&ramp=5&ring=0.85&freeze=1&move=flying-kick&at=0.55&levelup=1&keys=fjf%20' +
+        '&stage=3&loop=2&item=pizza&win=dance',
     );
     expect(dev).toEqual({
       level: 7,
@@ -109,6 +131,10 @@ describe('parseDev', () => {
       chunk: 'fj k',
       thugs: 2,
       kind: 'bruiser',
+      stage: 3,
+      loop: 2,
+      item: 'pizza',
+      win: true,
       lock: 3,
       typed: 2,
       wrong: true,
@@ -127,13 +153,17 @@ describe('parseDev', () => {
 
   it('keeps numbers in range and ignores what is malformed', () => {
     const bad = parseDev(
-      'level=0&spk=-1&thugs=4&kind=boss&lock=5&typed=x&hp=0&hp=101&scrap=0&ramp=21&ring=1.5&move=headbutt&at=-1&keys=' +
+      'level=0&spk=-1&thugs=4&kind=king&stage=5&loop=-1&item=milk&win=1&lock=5&typed=x&hp=0&hp=101&scrap=5&ramp=21&ring=1.5&move=headbutt&at=-1&keys=' +
         'a'.repeat(13),
     );
     expect(bad.level).toBeNull();
     expect(bad.spk).toBeNull();
     expect(bad.thugs).toBeNull();
     expect(bad.kind).toBeNull();
+    expect(bad.stage).toBeNull();
+    expect(bad.loop).toBeNull();
+    expect(bad.item).toBeNull();
+    expect(bad.win).toBe(false);
     expect(bad.lock).toBeNull();
     expect(bad.typed).toBe(0);
     expect(bad.hp).toBeNull();
@@ -149,6 +179,10 @@ describe('parseDev', () => {
     expect(parseDev('?spk=0.1').spk).toBe(0.9);
     expect(parseDev('?spk=9').spk).toBe(2.5);
     expect(parseDev('?ring=0').ring).toBe(0);
+    expect(parseDev('?kind=boss').kind).toBe('boss');
+    expect(parseDev('?stage=4&loop=0&scrap=4').stage).toBe(4);
+    expect(parseDev('?loop=0').loop).toBe(0);
+    expect(parseDev('?scrap=4').scrap).toBe(4);
     expect(parseDev('?hp=1').hp).toBe(1);
     expect(parseDev('?hp=100').hp).toBe(100);
   });
@@ -395,13 +429,51 @@ describe('points, health and scraps', () => {
     expect(hitHero(100, HIT_WRONG)).toBe(92);
     expect(hitHero(100, HIT_RING)).toBe(88);
     expect(hitHero(5, 12)).toBe(0);
-    expect(refill(90, REFILL_SCRAP)).toBe(HP_MAX);
-    expect(refill(50, REFILL_SCRAP)).toBe(65);
+    expect(refill(90, REFILL_STAGE)).toBe(HP_MAX);
+    expect(refill(50, REFILL_STAGE)).toBe(90);
   });
 
-  it('scrapSize: 3 thugs, then 4, 5 and 6', () => {
-    expect([1, 2, 3, 4, 5, 9].map(scrapSize)).toEqual([3, 4, 5, 6, 6, 6]);
+  it('scrapSize: 3 thugs, then 4, 5 and 6; each loop adds one, up to 8', () => {
+    expect([1, 2, 3, 4, 5, 9].map((n) => scrapSize(n))).toEqual([3, 4, 5, 6, 6, 6]);
     expect(scrapSize(1)).toBe(MAX_THUGS);
+    expect([1, 2, 3].map((n) => scrapSize(n, 1))).toEqual([4, 5, 6]);
+    expect([1, 2, 3].map((n) => scrapSize(n, 3))).toEqual([6, 7, 8]);
+    expect(scrapSize(3, 20)).toBe(8);
+    expect(scrapSize(9, 20)).toBe(8);
+  });
+
+  it('bossScrapKinds: the boss first, then 2 thugs, one more each loop', () => {
+    expect(bossScrapKinds()).toEqual(['boss', 'thug', 'thug']);
+    expect(bossScrapKinds(2)).toEqual(['boss', 'thug', 'thug', 'thug', 'thug']);
+    expect(bossScrapKinds(50)).toHaveLength(8);
+  });
+
+  it('later stages have bruisers from the first scrap', () => {
+    const random = seededRandom(5);
+    let bruisers = 0;
+    for (let i = 0; i < 300; i++) {
+      bruisers += scrapKinds(1, random, 0, 2).filter((k) => k === 'bruiser').length;
+    }
+    expect(bruisers).toBeGreaterThan(100);
+    expect(scrapKinds(1, random, 0, 1).every((k) => k === 'thug')).toBe(true);
+  });
+
+  it('the stage bonus is three scrap bonuses and fights count on through the stages', () => {
+    expect(stageBonus(1, 1)).toBe(150);
+    expect(stageBonus(2, 7)).toBe(3 * 100 * 49);
+    expect(fightNumber(1, 1)).toBe(1);
+    expect(fightNumber(1, STAGE_SCRAPS)).toBe(3);
+    expect(fightNumber(2, 1)).toBe(4);
+    expect(fightNumber(5, 2)).toBe(14);
+  });
+
+  it('a boss hits for 20, the others for 12', () => {
+    expect(HIT_RING_BOSS).toBe(20);
+    expect(ringDamage('boss')).toBe(20);
+    expect(ringDamage('thug')).toBe(HIT_RING);
+    expect(ringDamage('bruiser')).toBe(HIT_RING);
+    expect(BOSS_BANNER_SECONDS).toBe(1);
+    expect(BOSS_GAP_SECONDS).toBe(2);
   });
 
   it('scrapKinds: only thugs before scrap 3, about a third bruisers from then on', () => {
@@ -437,14 +509,14 @@ describe('speed groups', () => {
 });
 
 describe('resultsText', () => {
-  it('puts the fight first, always, and leaves empty parts out', () => {
-    expect(resultsText(emptyStats(), 1, [])).toBe('Fight 1');
+  it('puts the stage first, always, and leaves empty parts out', () => {
+    expect(resultsText(emptyStats(), 1, [])).toBe('Stage 1');
     expect(
       resultsText({ keys: 100, right: 94, fastKeys: 140, fastSeconds: 60, knockouts: 11 }, 4, [8]),
-    ).toBe('Fight 4 · 11 knock-outs · 28 words a minute · 94% right · Level 8 opened!');
+    ).toBe('Stage 4 · 11 knock-outs · 28 words a minute · 94% right · Level 8 opened!');
     expect(
       resultsText({ keys: 10, right: 10, fastKeys: 0, fastSeconds: 0, knockouts: 1 }, 2, [3, 4, 5]),
-    ).toBe('Fight 2 · 1 knock-out · 100% right · Levels 3 to 5 opened!');
+    ).toBe('Stage 2 · 1 knock-out · 100% right · Levels 3 to 5 opened!');
     expect(runWpm({ keys: 0, right: 0, fastKeys: 10, fastSeconds: 0, knockouts: 0 })).toBe(0);
   });
 });
@@ -603,5 +675,106 @@ describe('voice', () => {
     const main = readFileSync(resolve(dir, 'main.ts'), 'utf8');
     expect(main.match(/\bspeak\b/g)?.length).toBe(2); // the import and the lesson option
     expect(main).toMatch(/showKeyLesson\(\{[^}]*\bspeak\b/s);
+  });
+});
+
+describe('stages', () => {
+  it('there are four, with the planned bosses, and each is distinct', () => {
+    expect(STAGES.map((st) => st.id)).toEqual(['street', 'docks', 'dojo', 'rooftop']);
+    expect(STAGES.map((st) => st.boss)).toEqual([
+      'Big Biff',
+      'Captain Crunch',
+      'Sensei Snap',
+      'Rooftop Rex',
+    ]);
+    expect(new Set(STAGES.map((st) => st.palette.sky[0])).size).toBe(4);
+    expect(new Set(STAGES.map((st) => st.palette.ground)).size).toBe(4);
+    for (const st of STAGES) {
+      expect(st.props.length).toBeGreaterThanOrEqual(3);
+      expect(st.palette.walls.length).toBeGreaterThanOrEqual(3);
+      for (const color of [
+        ...st.palette.sky,
+        st.palette.ground,
+        st.palette.walk,
+        st.palette.roof,
+      ]) {
+        expect(color).toMatch(/^#[0-9a-f]{6}$/);
+      }
+    }
+  });
+
+  it('stageInfo loops through the four, one loop harder each time', () => {
+    expect([1, 2, 3, 4, 5, 6, 8, 9].map((n) => stageInfo(n).def.id)).toEqual([
+      'street',
+      'docks',
+      'dojo',
+      'rooftop',
+      'street',
+      'docks',
+      'rooftop',
+      'street',
+    ]);
+    expect([1, 4, 5, 8, 9, 13].map((n) => stageInfo(n).loop)).toEqual([0, 0, 1, 1, 2, 3]);
+    expect(stageInfo(0).def.id).toBe('street');
+  });
+
+  it('a boss has the five blocks of the plan and is the heaviest hitter', () => {
+    expect(blockPlan('boss')).toEqual([2, 3, 3, 4, 5]);
+    expect(moveClassOf(blockPlan('boss'), 0)).toBe('light');
+    expect(moveClassOf(blockPlan('boss'), 3)).toBe('heavy');
+    expect(moveClassOf(blockPlan('boss'), 4)).toBe('finisher');
+  });
+});
+
+describe('items', () => {
+  it('drop from thugs and bruisers a quarter of the time, never from a boss', () => {
+    const random = seededRandom(9);
+    let drops = 0;
+    const n = runs(4000, 400);
+    for (let i = 0; i < n; i++) if (dropsItem('thug', random)) drops++;
+    expect(ITEM_DROP_CHANCE).toBe(0.25);
+    expect(drops / n).toBeGreaterThan(0.2);
+    expect(drops / n).toBeLessThan(0.3);
+    for (let i = 0; i < 200; i++) expect(dropsItem('boss', () => 0)).toBe(false);
+    expect(dropsItem('bruiser', () => 0.24)).toBe(true);
+    expect(dropsItem('bruiser', () => 0.25)).toBe(false);
+  });
+
+  it('are picked 6 cola : 3 pizza : 1 star', () => {
+    expect(pickItem(() => 0)).toBe('cola');
+    expect(pickItem(() => 0.59)).toBe('cola');
+    expect(pickItem(() => 0.6)).toBe('pizza');
+    expect(pickItem(() => 0.89)).toBe('pizza');
+    expect(pickItem(() => 0.9)).toBe('star');
+    expect(pickItem(() => 0.999)).toBe('star');
+    const random = seededRandom(4);
+    const counts = { cola: 0, pizza: 0, star: 0 };
+    const n = runs(5000, 500);
+    for (let i = 0; i < n; i++) counts[pickItem(random)]++;
+    expect(counts.cola / n).toBeGreaterThan(0.5);
+    expect(counts.cola / n).toBeLessThan(0.7);
+    expect(counts.star / n).toBeLessThan(0.15);
+    expect(counts.star).toBeGreaterThan(0);
+  });
+
+  it('heal 20 and 40, the star heals nothing, and a block is 2 keys', () => {
+    expect(ITEM_HEAL).toEqual({ cola: 20, pizza: 40, star: 0 });
+    expect(refill(70, ITEM_HEAL.pizza)).toBe(HP_MAX);
+    expect(STAR_KNOCKOUTS).toBe(3);
+    expect(ITEM_KEYS).toBe(2);
+    expect(Object.keys(ITEM_EMOJI).sort()).toEqual(['cola', 'pizza', 'star']);
+  });
+
+  it('are locked after thugs, however near, and among themselves nearest first', () => {
+    const cands: Candidate[] = [
+      { id: 'i0', text: 'f ', x: 0.1, engaged: true, item: true },
+      { id: 't1', text: 'f  ', x: 2.6, engaged: true },
+      { id: 'i2', text: 'j ', x: 1.0, engaged: true, item: true },
+      { id: 'i3', text: 'j ', x: 0.4, engaged: true, item: true },
+    ];
+    expect(lockThug(cands, 'f', 0)).toBe('t1');
+    expect(lockThug(cands, 'j', 0)).toBe('i3');
+    expect(lockThug(cands.slice(0, 1), 'f', 0)).toBe('i0');
+    expect(lockThug([...cands].reverse(), 'f', 0)).toBe('t1');
   });
 });
