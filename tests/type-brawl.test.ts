@@ -24,8 +24,10 @@ import {
   MOVES,
   launchPath,
   mirrorPose,
+  moveDash,
   moveFrame,
   moveSpin,
+  REACT_SECONDS,
   reactionFrame,
 } from '../src/games/type-brawl/moves';
 import { neutralPose } from '../src/games/type-brawl/person';
@@ -305,6 +307,57 @@ describe('moves', () => {
     expect(reactionFrame(MOVES.uppercut.reaction, 0.5, pose).lift).toBeCloseTo(0, 1);
     expect(reactionFrame(MOVES.jab.reaction, 0.25, pose).push).toBeGreaterThan(0.1);
     expect(reactionFrame(MOVES.roundhouse.reaction, 0.5, pose).spin).toBeCloseTo(0.5, 5);
+  });
+});
+
+describe('the three new moves', () => {
+  it('16 distinct moves in four classes, all in MOVES', () => {
+    expect(MOVES_BY_CLASS.light).toHaveLength(3);
+    expect(MOVES_BY_CLASS.medium).toHaveLength(5);
+    expect(MOVES_BY_CLASS.heavy).toHaveLength(4);
+    expect(MOVES_BY_CLASS.finisher).toHaveLength(4);
+    const all = Object.values(MOVES_BY_CLASS).flat();
+    expect(all).toHaveLength(16);
+    expect(new Set(all).size).toBe(16);
+    expect([...all].sort()).toEqual(Object.keys(MOVES).sort());
+  });
+
+  it('?move= takes the new ids', () => {
+    for (const id of ['backfist', 'sweep', 'charge']) expect(parseDev(`?move=${id}`).move).toBe(id);
+  });
+
+  it('moveDash: the charge lunges 0.8 and comes back; other moves do not move', () => {
+    const { duration, contact } = MOVES.charge;
+    expect(moveDash('charge', 0)).toBe(0);
+    expect(moveDash('charge', duration)).toBeCloseTo(0, 6);
+    expect(moveDash('charge', contact)).toBeCloseTo(0.8, 6);
+    for (let t = 0; t <= duration + 1e-9; t += 0.01) {
+      expect(moveDash('charge', t)).toBeGreaterThanOrEqual(0);
+      expect(moveDash('charge', t)).toBeLessThanOrEqual(0.8 + 1e-9);
+    }
+    for (let t = 0; t <= MOVES.jab.duration; t += 0.01) expect(moveDash('jab', t)).toBe(0);
+  });
+
+  it("the charge's low launch; the flying kick keeps its apex", () => {
+    const launch = MOVES.charge.launch!;
+    expect(launchPath(launch, 0.4).y).toBeCloseTo(0.5, 5);
+    expect(launchPath(launch, 0.8).dx).toBeCloseTo(5.5, 5);
+    expect(launchPath(MOVES['flying-kick'].launch!, 0.4).y).toBeCloseTo(1.2, 5);
+  });
+
+  it('the swept reaction tips the enemy back and lands it again', () => {
+    const pose = neutralPose();
+    const mid = reactionFrame(MOVES.sweep.reaction, REACT_SECONDS * 0.4, pose);
+    expect(mid.lift).toBeGreaterThan(0.2);
+    expect(pose.lean).toBeLessThan(-0.5);
+    expect(pose.legL.raise).toBeGreaterThan(0.8);
+    expect(reactionFrame(MOVES.sweep.reaction, REACT_SECONDS, pose).lift).toBeCloseTo(0, 1);
+  });
+
+  it('the backfist turn is nearly done at contact', () => {
+    const turn = moveSpin('backfist', MOVES.backfist.contact);
+    expect(turn).toBeGreaterThan(1.8 * Math.PI);
+    expect(turn).toBeLessThanOrEqual(2 * Math.PI);
   });
 });
 
@@ -830,12 +883,12 @@ describe('items', () => {
 });
 
 describe('robots, monsters and their moves', () => {
-  it('has 13 moves, each in exactly one class, with the three new ones as planned', () => {
+  it('has 16 moves, each in exactly one class, with the three new ones as planned', () => {
     const all = Object.values(MOVES_BY_CLASS).flat();
-    expect(all).toHaveLength(13);
-    expect(new Set(all).size).toBe(13);
-    expect(Object.keys(MOVES)).toHaveLength(13);
-    expect(Object.values(MOVES_BY_CLASS).map((m) => m.length)).toEqual([2, 5, 3, 3]);
+    expect(all).toHaveLength(16);
+    expect(new Set(all).size).toBe(16);
+    expect(Object.keys(MOVES)).toHaveLength(16);
+    expect(Object.values(MOVES_BY_CLASS).map((m) => m.length)).toEqual([3, 5, 4, 4]);
     for (const id of all) {
       expect(MOVES[id].contact).toBeLessThan(MOVES[id].duration);
       expect(Object.values(MOVES_BY_CLASS).filter((m) => m.includes(id))).toHaveLength(1);

@@ -26,12 +26,15 @@ export type MoveId =
   | 'throw'
   | 'knee'
   | 'headbutt'
-  | 'back-elbow';
+  | 'back-elbow'
+  | 'backfist'
+  | 'sweep'
+  | 'charge';
 export const MOVES_BY_CLASS: Record<MoveClass, MoveId[]> = {
-  light: ['jab', 'cross'],
+  light: ['jab', 'cross', 'backfist'],
   medium: ['hook', 'kick', 'elbow', 'knee', 'headbutt'],
-  heavy: ['uppercut', 'roundhouse', 'back-elbow'],
-  finisher: ['flying-kick', 'spin-kick', 'throw'],
+  heavy: ['uppercut', 'roundhouse', 'back-elbow', 'sweep'],
+  finisher: ['flying-kick', 'spin-kick', 'throw', 'charge'],
 };
 export type Species = 'robot' | 'monster';
 export type Body =
