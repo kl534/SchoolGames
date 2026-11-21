@@ -16,6 +16,8 @@ import {
   type Material,
   type Object3D,
 } from 'three';
+import { bodyPalette, buildBody, type Costume } from './bodies';
+import type { Body } from './rules';
 
 /** Everybody is drawn a little bigger than life, so they read on a phone. */
 export const PERSON_SCALE = 1.3;
@@ -31,7 +33,7 @@ const FOREARM_BASE = 0.16;
 const HEAD_Y = 0.62;
 const HEAD_R = 0.2;
 
-export type HatStyle = 'headband' | 'crown' | 'none';
+export type HatStyle = 'headband' | 'crown' | 'tophat' | 'none';
 
 export interface PersonStyle {
   shirt: number;
@@ -49,6 +51,8 @@ export interface PersonStyle {
   eyepatch?: boolean;
   /** Size of the whole person next to the usual (1). */
   scale?: number;
+  /** A toy robot or monster instead of the kid; `shirt` is then its colour. */
+  body?: Body;
 }
 
 /** One arm or leg, in human terms: how far it is raised forward, swung out sideways, and bent. */
@@ -128,6 +132,8 @@ export interface Person {
   setEyepatch(on: boolean): void;
   /** Size of the whole person next to the usual (1). */
   setScale(scale: number): void;
+  /** Moves a robot's wind-up key, tails and googly eyes (a kid has none); `hurry` spins the key faster. */
+  tick(delta: number, hurry: boolean): void;
   /** Changes the colours of the shirt, and of the shorts and headband (the trim). */
   recolour(shirt: number, trim: number): void;
   /** World position of a point on the hand. */
@@ -169,15 +175,25 @@ const shadowMaterial = new MeshBasicMaterial({
 export function createPerson(style: PersonStyle): Person {
   const UPPER_ARM = UPPER_ARM_BASE * (style.armLength ?? 1);
   const FOREARM = FOREARM_BASE * (style.armLength ?? 1);
-  const shirt = new MeshStandardMaterial({ color: style.shirt, roughness: 0.7 });
-  const pants = new MeshStandardMaterial({ color: style.pants, roughness: 0.8 });
-  const skin = new MeshStandardMaterial({ color: style.skin ?? 0xf1b48a, roughness: 0.75 });
+  const palette = style.body ? bodyPalette(style.body, style.shirt) : null;
+  const shirt = new MeshStandardMaterial({ color: palette?.shirt ?? style.shirt, roughness: 0.7 });
+  const pants = new MeshStandardMaterial({ color: palette?.pants ?? style.pants, roughness: 0.8 });
+  const skin = new MeshStandardMaterial({
+    color: palette?.skin ?? style.skin ?? 0xf1b48a,
+    roughness: 0.75,
+  });
+  const handMaterial = palette
+    ? new MeshStandardMaterial({ color: palette.hand, roughness: 0.6 })
+    : skin;
   const hair = new MeshStandardMaterial({ color: style.hair ?? 0x5a3416, roughness: 0.9 });
   const hat = new MeshStandardMaterial({
     color: style.hatColor ?? style.pants,
     roughness: 0.55,
   });
-  const shoe = new MeshStandardMaterial({ color: style.shoe ?? 0xf4f4f4, roughness: 0.6 });
+  const shoe = new MeshStandardMaterial({
+    color: palette?.shoe ?? style.shoe ?? 0xf4f4f4,
+    roughness: 0.6,
+  });
 
   const root = new Group();
   root.scale.setScalar(PERSON_SCALE);
@@ -198,20 +214,27 @@ export function createPerson(style: PersonStyle): Person {
 
   const torso = joint(body, 0, HIP_Y);
   torso.rotation.order = 'YXZ';
-  mesh(new CapsuleGeometry(0.15, 0.12, 6, 16), shirt, torso, 0, 0.2).scale.set(1.15, 1, 0.9);
-  mesh(new CylinderGeometry(0.152, 0.152, 0.05, 16), pants, torso, 0, 0.0).scale.set(1.15, 1, 0.9);
-  mesh(new CylinderGeometry(0.06, 0.065, 0.1, 10), skin, torso, 0, 0.44);
+  const kidTorso = joint(torso, 0, 0);
+  mesh(new CapsuleGeometry(0.15, 0.12, 6, 16), shirt, kidTorso, 0, 0.2).scale.set(1.15, 1, 0.9);
+  mesh(new CylinderGeometry(0.152, 0.152, 0.05, 16), pants, kidTorso, 0, 0.0).scale.set(
+    1.15,
+    1,
+    0.9,
+  );
+  mesh(new CylinderGeometry(0.06, 0.065, 0.1, 10), skin, kidTorso, 0, 0.44);
 
   const head = joint(torso, 0, HEAD_Y);
   head.rotation.order = 'YXZ';
-  mesh(new SphereGeometry(HEAD_R, 24, 18), skin, head);
+  /** The kid's face, which a robot or monster replaces. */
+  const kidFace = joint(head, 0, 0);
+  mesh(new SphereGeometry(HEAD_R, 24, 18), skin, kidFace);
   const pupils: { mesh: Mesh; side: number }[] = [];
   for (const side of [-1, 1]) {
-    mesh(new SphereGeometry(0.047, 12, 10), eyeWhite, head, side * 0.075, 0.03, HEAD_R - 0.035);
+    mesh(new SphereGeometry(0.047, 12, 10), eyeWhite, kidFace, side * 0.075, 0.03, HEAD_R - 0.035);
     const pupil = mesh(
       new SphereGeometry(0.027, 10, 8),
       eyeMaterial,
-      head,
+      kidFace,
       side * 0.075,
       0.03,
       HEAD_R - 0.035 + 0.03,
@@ -220,21 +243,21 @@ export function createPerson(style: PersonStyle): Person {
     mesh(
       new SphereGeometry(0.05, 10, 8),
       skin,
-      head,
+      kidFace,
       side * (HEAD_R - 0.005),
       -0.02,
       0.0,
     ).scale.set(0.55, 1, 0.9);
   }
-  mesh(new SphereGeometry(0.03, 8, 6), skin, head, 0, -0.025, HEAD_R + 0.005);
-  const smile = mesh(new TorusGeometry(0.045, 0.009, 6, 12, Math.PI), smileMaterial, head);
+  mesh(new SphereGeometry(0.03, 8, 6), skin, kidFace, 0, -0.025, HEAD_R + 0.005);
+  const smile = mesh(new TorusGeometry(0.045, 0.009, 6, 12, Math.PI), smileMaterial, kidFace);
   smile.position.set(0, -0.045, HEAD_R - 0.005);
   smile.rotation.z = Math.PI;
 
   /** Everything worn on the head, so a mask or cap can come off. */
   const headWear = joint(head, 0, 0);
   const hatStyle: HatStyle = style.hat ?? 'headband';
-  mesh(
+  const hairMesh = mesh(
     new SphereGeometry(HEAD_R + 0.012, 24, 14, 0, Math.PI * 2, 0, 1.55),
     hair,
     headWear,
@@ -268,6 +291,36 @@ export function createPerson(style: PersonStyle): Person {
         );
         tail.rotation.set(0.25, 0, tilt);
       }
+    }
+    if (kind === 'tophat') {
+      const tilt = 0.12;
+      const brim = mesh(
+        new CylinderGeometry(0.2, 0.2, 0.025, 20),
+        hat,
+        hatSlot,
+        0,
+        HEAD_R + 0.01,
+        0,
+      );
+      brim.rotation.z = tilt;
+      const top = mesh(
+        new CylinderGeometry(0.115, 0.125, 0.2, 18),
+        hat,
+        hatSlot,
+        0.01,
+        HEAD_R + 0.12,
+        0,
+      );
+      top.rotation.z = tilt;
+      const ribbon = mesh(
+        new CylinderGeometry(0.128, 0.128, 0.04, 18),
+        accent,
+        hatSlot,
+        0,
+        HEAD_R + 0.06,
+        0,
+      );
+      ribbon.rotation.z = tilt;
     }
     if (kind === 'crown') {
       const base = mesh(
@@ -317,7 +370,9 @@ export function createPerson(style: PersonStyle): Person {
     const elbow = joint(shoulder, 0, -UPPER_ARM);
     mesh(new CapsuleGeometry(0.047, FOREARM - 0.05, 4, 10), skin, elbow, 0, -FOREARM / 2);
     const hand = joint(elbow, 0, -FOREARM - 0.02);
-    mesh(new SphereGeometry(0.058, 10, 8), skin, hand);
+    mesh(new SphereGeometry(0.058, 10, 8), handMaterial, hand).scale.setScalar(
+      palette?.handScale ?? 1,
+    );
     return { shoulder, elbow, hand };
   };
   const armL = makeArm(1);
@@ -341,6 +396,14 @@ export function createPerson(style: PersonStyle): Person {
   const strap = mesh(new TorusGeometry(HEAD_R + 0.004, 0.007, 6, 28), black, patch, 0, 0.05, 0);
   strap.rotation.set(Math.PI / 2 + 0.25, 0, 0);
   patch.visible = style.eyepatch ?? false;
+
+  let costume: Costume | null = null;
+  if (style.body) {
+    kidTorso.visible = false;
+    kidFace.visible = false;
+    hairMesh.visible = false;
+    costume = buildBody(style.body, style.shirt, torso, head);
+  }
 
   const baseScale = PERSON_SCALE;
   root.scale.setScalar(baseScale * (style.scale ?? 1));
@@ -387,6 +450,7 @@ export function createPerson(style: PersonStyle): Person {
     setCape: (on) => (cape.visible = on),
     setEyepatch: (on) => (patch.visible = on),
     setScale: (scale) => root.scale.setScalar(baseScale * scale),
+    tick: (delta, hurry) => costume?.tick(delta, hurry),
     recolour(shirtColor, trimColor) {
       shirt.color.setHex(shirtColor);
       hat.color.setHex(trimColor);

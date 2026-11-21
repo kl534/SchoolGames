@@ -25,7 +25,7 @@ import {
 import { startTypingSession, type TypingSession } from '../../shared/typing/session';
 import { showTestOut } from '../../shared/typing/testout';
 import { devOptions } from './dev';
-import { createEffects, createWords } from './effects';
+import { createBonkStars, createEffects, createWords } from './effects';
 import {
   HERO_LOOK,
   LAUNCH_TOTAL,
@@ -60,7 +60,7 @@ import {
   pickSlot,
   spawnOffset,
 } from './layout';
-import { MOVES } from './moves';
+import { MOVES, POP_AT } from './moves';
 import {
   BOSS_BANNER_SECONDS,
   BOSS_GAP_SECONDS,
@@ -90,6 +90,7 @@ import {
   moveClassOf,
   pickItem,
   pickMove,
+  pickWord,
   refill,
   resultsText,
   ringDamage,
@@ -227,6 +228,8 @@ function run(session: TypingSession): void {
 
   const hero = createFighter(HERO_LOOK);
   ctx.scene.add(hero.person.root);
+  const bonkStars = createBonkStars();
+  hero.person.head.add(bonkStars.object);
   const hud = createHud(session.player?.avatar ?? '⭐');
 
   const note = document.createElement('div');
@@ -286,7 +289,13 @@ function run(session: TypingSession): void {
   let thugs: Thug[] = [];
   let queue: Kind[] = [];
   /** Thugs that were knocked out and are waiting for the hit to land, then flying away. */
-  let dying: { fighter: Fighter; away: 1 | -1; strike: Strike | null; flown: number }[] = [];
+  let dying: {
+    fighter: Fighter;
+    away: 1 | -1;
+    strike: Strike | null;
+    flown: number;
+    popped: boolean;
+  }[] = [];
   let strikes: Strike[] = [];
   let strike: Strike | null = null;
   /** The thug the hero is locked on, and how many keys of its block are typed. */
@@ -416,7 +425,7 @@ function run(session: TypingSession): void {
     nextSide = side === 1 ? -1 : 1;
     const plan = blockPlan(kind);
     const fighter = createFighter(
-      lookFor(kind, Math.random, stageDef().bossShirt),
+      lookFor(kind, Math.random, stage - 1, dev?.species ?? undefined),
       Math.random() * 6,
     );
     ctx.scene.add(fighter.person.root);
@@ -610,12 +619,14 @@ function run(session: TypingSession): void {
     const def = MOVES[s.move];
     const target = s.target;
     const chest = { x: target.worldX(), y: target.headHeight() * 0.6, z: target.z + 0.2 };
-    effects.burst(chest, def.cls);
+    const species = target.look.species ?? 'robot';
+    effects.hit(chest, def.cls, species, target.look.color ?? 0xffffff);
     const at = project(chest.x, chest.y + 0.3, chest.z);
-    words.pop(def.word, at, frozen());
-    if (def.cls === 'light') sfx.slap();
-    else if (def.cls === 'finisher') sfx.boom();
-    else sfx.thud();
+    words.pop(pickWord(species, def.cls, Math.random), at, frozen());
+    if (def.cls === 'finisher') sfx.boom();
+    else if (def.cls === 'heavy') sfx.thud();
+    else if (species === 'robot') sfx.slap();
+    else sfx.glove();
     const away = sideOf(target) as 1 | -1;
     if (s.finisher) {
       effects.shake('finisher');
@@ -624,11 +635,16 @@ function run(session: TypingSession): void {
         entry.flown = 0;
         entry.away = away;
       }
+      const launch = MOVES[def.launch ? s.move : 'flying-kick'].launch;
+      // The flight ends inside the picture, so the pop can be seen.
+      const dir = away * (launch?.dir ?? 1);
+      const room = dir * (anchorX + dir * (halfWidth() - 1.6) - target.worldX());
       target.setMode({
         kind: 'launch',
         move: def.launch ? s.move : 'flying-kick',
         t: 0,
         away,
+        cap: Math.max(0.5, room),
       });
     } else {
       target.setMode({ kind: 'react', move: s.move, t: 0, away });
@@ -677,12 +693,20 @@ function run(session: TypingSession): void {
       hp = hitHero(hp, amount);
       hud.setHealth(hp, before);
       hud.hurt();
+      bonk(frozen());
       effects.shake('hit');
       sfx.thud();
       // A hero in the middle of a move shows the hit only on the HUD.
       if (strike === null && !hero.busy) hero.setMode({ kind: 'hurt', t: 0 });
       if (hp <= 0) over();
     });
+  };
+
+  /** The silly bonk: stars circle the hero's head for 0.8 s and a BONK! word pops over it. */
+  const bonk = (hold = false) => {
+    bonkStars.show(hold ? Infinity : 0.8);
+    const head = hero.person.head.getWorldPosition(new Vector3());
+    words.pop('BONK!', project(head.x, head.y + 0.55, head.z), hold);
   };
 
   const ringHit = (t: Thug) => {
@@ -783,7 +807,13 @@ function run(session: TypingSession): void {
     strikes.push(s);
     thugs = thugs.filter((x) => x !== t);
     t.label.remove();
-    dying.push({ fighter: t.fighter, away: sideOf(t.fighter), strike: s, flown: -1 });
+    dying.push({
+      fighter: t.fighter,
+      away: sideOf(t.fighter),
+      strike: s,
+      flown: -1,
+      popped: false,
+    });
     spawnCooldown = Math.max(spawnCooldown, ENTER_DELAY);
     if (dev?.item || dropsItem(t.kind, Math.random)) {
       const type = dev?.item ?? pickItem(Math.random);
@@ -930,6 +960,11 @@ function run(session: TypingSession): void {
     if (phase !== 'entering') return;
     phase = 'fighting';
     if (dev?.lock && !devLockUsed) applyDevLock();
+    if (dev?.bonk && !bonkUsed) {
+      bonkUsed = true;
+      hud.hurt(true);
+      bonk(true);
+    }
     if (dev?.item && !devItemUsed) {
       devItemUsed = true;
       dropItem(dev.item, anchorX - 1.9, 0.3);
@@ -939,6 +974,9 @@ function run(session: TypingSession): void {
       for (const c of dev.keys) onKey(c);
     }
   };
+  let popHeld = false;
+  let popHeldUsed = false;
+  let bonkUsed = false;
   let devLockUsed = false;
   let devKeysUsed = false;
 
@@ -1029,8 +1067,9 @@ function run(session: TypingSession): void {
     clearItems(false);
     labelLayer.hidden = true;
     hero.setMode({ kind: 'down', t: 0 });
+    bonkStars.show(Infinity);
     sfx.miss();
-    pops.centre('Knocked out!', '#ff5a5a');
+    pops.centre('Bonked out!', '#ffd23f');
     timers.after(1.6, finish);
   };
 
@@ -1079,6 +1118,7 @@ function run(session: TypingSession): void {
     bossWait = 0;
     words.clear();
     effects.clear();
+    bonkStars.hide();
     timers.clear();
   };
 
@@ -1228,12 +1268,32 @@ function run(session: TypingSession): void {
     }
 
     // Bodies that were launched go when they have flown.
-    for (const d of dying) if (d.flown >= 0) d.flown += dt;
+    for (const d of dying) {
+      if (d.flown < 0 || (d.popped && popHeld)) continue;
+      d.flown += dt;
+      if (!d.popped && d.flown >= POP_AT) {
+        d.popped = true;
+        const f = d.fighter;
+        const species = f.look.species ?? 'robot';
+        effects.pop({ x: f.worldX(), y: 0.45, z: f.z }, species, f.look.color ?? 0xffffff);
+        sfx.fizz();
+        if (dev?.pop && !popHeldUsed) {
+          // Dev: the first pop shows 0.15 s of its burst and holds there.
+          popHeldUsed = true;
+          popHeld = true;
+          effects.update(0.15);
+        }
+      }
+    }
     for (const d of dying.filter((x) => x.flown >= LAUNCH_TOTAL)) disposeFighter(d.fighter);
     dying = dying.filter((d) => d.flown < LAUNCH_TOTAL);
 
+    bonkStars.update(dt);
     hero.update(dt);
-    for (const t of thugs) t.fighter.update(dt);
+    for (const t of thugs) {
+      t.fighter.hurry = t.id === lastAttacker && t.readLeft <= 0;
+      t.fighter.update(dt);
+    }
     for (const d of dying) d.fighter.update(dt);
     effects.update(dt, hold && dev?.at == null);
     hud.update(dt, hold);

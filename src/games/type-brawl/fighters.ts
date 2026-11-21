@@ -5,6 +5,7 @@ import {
   HURT_SECONDS,
   LAUNCH_SECONDS,
   MOVES,
+  POP_AT,
   REACT_SECONDS,
   SWING_SECONDS,
   downPose,
@@ -27,7 +28,7 @@ import {
   type HatStyle,
   type Person,
 } from './person';
-import type { Kind, MoveId } from './rules';
+import { STAGES, THUG_BODIES, type Body, type Kind, type MoveId, type Species } from './rules';
 import type { Random } from '../../shared/random';
 
 export interface Look {
@@ -40,6 +41,10 @@ export interface Look {
   eyepatch?: boolean;
   cape?: boolean;
   scale: number;
+  /** A toy robot or monster; its colour is `color` (also `shirt`). Unset for the kid hero. */
+  body?: Body;
+  species?: Species;
+  color?: number;
 }
 
 export const HERO_LOOK: Look = {
@@ -50,32 +55,49 @@ export const HERO_LOOK: Look = {
   scale: 1,
 };
 
-const THUG_SHIRTS = [0xe76f51, 0x2a9d8f, 0xe9c46a, 0x9b5de5, 0x00a6fb, 0xf15bb5];
-const SKINS = [0xf1b48a, 0xc68642, 0x8d5524, 0xffdbac];
-const HAIRS = [0x5a3416, 0x1b1b1b, 0xb5651d, 0x8a8a8a];
+/** Bright colours of the robots and monsters. */
+export const TOY_COLORS = [0x4cc9f0, 0xf9c74f, 0x90be6b, 0xf8961e, 0xf28482, 0xb185ff];
+
+/** The species of a body. */
+export const speciesOf = (body: Body): Species =>
+  body === 'toy-robot' || body === 'box-robot' || body === 'giga-bot' || body === 'robo-rex'
+    ? 'robot'
+    : 'monster';
 
 /**
- * How a thug of this kind looks: a random shirt, hat and skin; a bruiser is bigger, darker and wears an
- * eyepatch; a boss is bigger still, in the stage's colour, with a cape and a crown.
+ * How an enemy looks: a thug is a toy robot or a monster (equal chance), a bruiser a box robot or a big
+ * monster, in a bright colour; a boss is its stage's body and colour (`bossIndex` counts stages from 0,
+ * looping). `only` makes every thug and bruiser that species (dev).
  */
-export function lookFor(kind: Kind, random: Random, bossShirt = 0x5b1a2a): Look {
-  const pick = <T>(items: readonly T[]): T => items[Math.floor(random() * items.length)];
-  const base: Look = {
-    shirt: pick(THUG_SHIRTS),
-    pants: 0x2b2d42,
-    skin: pick(SKINS),
-    hair: pick(HAIRS),
-    hat: random() < 0.5 ? 'headband' : 'none',
-    hatColor: pick([0xffd23f, 0x111111, 0xffffff]),
-    scale: 1,
-  };
-  if (kind === 'bruiser') {
-    return { ...base, shirt: 0x3a2f4d, pants: 0x1a1a24, scale: 1.2, eyepatch: true, hat: 'none' };
-  }
+export function lookFor(kind: Kind, random: Random, bossIndex = 0, only?: Species): Look {
   if (kind === 'boss') {
-    return { ...base, shirt: bossShirt, scale: 1.4, cape: true, hat: 'crown', hatColor: 0xffc928 };
+    const def = STAGES[((bossIndex % STAGES.length) + STAGES.length) % STAGES.length];
+    return {
+      shirt: def.bossColor,
+      pants: def.bossColor,
+      hat: def.id === 'docks' ? 'crown' : def.id === 'dojo' ? 'tophat' : 'none',
+      hatColor: def.id === 'docks' ? 0xffc928 : 0x25252e,
+      cape: def.id === 'docks',
+      scale: 1.4,
+      body: def.body,
+      species: def.species,
+      color: def.bossColor,
+    };
   }
-  return base;
+  const pair = THUG_BODIES[kind];
+  const species: Species = only ?? (random() < 0.5 ? 'robot' : 'monster');
+  const body = species === 'robot' ? pair[0] : pair[1];
+  const color = TOY_COLORS[Math.floor(random() * TOY_COLORS.length)];
+  return {
+    shirt: color,
+    pants: color,
+    hat: 'none',
+    hatColor: color,
+    scale: kind === 'bruiser' ? 1.2 : 1,
+    body,
+    species,
+    color,
+  };
 }
 
 export type Mode =
@@ -88,13 +110,15 @@ export type Mode =
   /** A recoil after a hit (hero) or after a move that did not finish (thug). */
   | { kind: 'hurt'; t: number }
   | { kind: 'react'; move: MoveId; t: number; away: 1 | -1 }
-  | { kind: 'launch'; move: MoveId; t: number; away: 1 | -1 }
+  /** `cap`: the most distance (world units) the flight may cover, so the pop stays on screen. */
+  | { kind: 'launch'; move: MoveId; t: number; away: 1 | -1; cap?: number }
   | { kind: 'down'; t: number }
   /** A victory dance, facing the camera. */
   | { kind: 'dance'; dance: DanceId; t: number };
 
 export interface Fighter {
   readonly person: Person;
+  readonly look: Look;
   /** Where the feet stand; the animation adds its own offsets on top. */
   x: number;
   z: number;
@@ -110,6 +134,10 @@ export interface Fighter {
   headHeight(): number;
   /** The world x of the feet right now, with the animation's offsets. */
   worldX(): number;
+  /** A robot's wind-up key spins faster while its ring runs. */
+  hurry: boolean;
+  /** True once a launched enemy has lain down and popped: it is gone from view. */
+  readonly popped: boolean;
 }
 
 const TURN_SPEED = (Math.PI * 2) / 0.25 / 2;
@@ -127,6 +155,7 @@ export function createFighter(look: Look, idleSeed = 0): Fighter {
     cape: look.cape,
     eyepatch: look.eyepatch,
     scale: look.scale,
+    body: look.body,
   });
   const animator: Animator = createAnimator(person);
   let mode: Mode = { kind: 'idle' };
@@ -137,10 +166,11 @@ export function createFighter(look: Look, idleSeed = 0): Fighter {
   let offsetX = 0;
   let offsetY = 0;
   let spin = 0;
-  let shrink = 1;
+  let gone = false;
 
   const fighter: Fighter = {
     person,
+    look,
     x: 0,
     z: 0,
     get facing() {
@@ -172,6 +202,10 @@ export function createFighter(look: Look, idleSeed = 0): Fighter {
     },
     headHeight: () => BODY_HEIGHT * look.scale,
     worldX: () => fighter.x + offsetX,
+    hurry: false,
+    get popped() {
+      return gone;
+    },
     update(delta) {
       clock += delta;
       const target = mode.kind === 'dance' ? 0 : facing * (Math.PI / 2);
@@ -181,8 +215,7 @@ export function createFighter(look: Look, idleSeed = 0): Fighter {
       offsetX = 0;
       offsetY = 0;
       spin = 0;
-      shrink = 1;
-      let fall = 0;
+      gone = false;
       let flips = 0;
       let spins = 0;
       let lying = false;
@@ -234,12 +267,12 @@ export function createFighter(look: Look, idleSeed = 0): Fighter {
             if (!launch) break;
             const path = launchPath(launch, m.t);
             flyingPose(pose, m.t);
-            offsetX = m.away * path.dx;
+            offsetX = m.away * path.dx * Math.min(1, (m.cap ?? Infinity) / launch.dist);
             offsetY = path.y;
             flips = path.flips;
             spins = path.spins;
             lying = path.lying;
-            shrink = path.scale;
+            gone = m.t >= POP_AT;
             if (path.lying) {
               pose.armL.raise = 0.3;
               pose.armR.raise = 0.3;
@@ -255,8 +288,7 @@ export function createFighter(look: Look, idleSeed = 0): Fighter {
             break;
           case 'down':
             m.t += delta;
-            fall = downPose(pose, m.t);
-            offsetX = -facing * 0.5 * fall;
+            downPose(pose, m.t);
             break;
         }
         const mirrored = facing === -1 && m.kind !== 'launch' && m.kind !== 'dance';
@@ -264,7 +296,7 @@ export function createFighter(look: Look, idleSeed = 0): Fighter {
       });
 
       // Whole-body tilts that the rig's joints do not do: falling back, flips and cartwheels.
-      let tipX = -fall * (Math.PI / 2 - 0.12);
+      let tipX = 0;
       if (flips !== 0 || lying) {
         const turned = lying ? 0 : flips * Math.PI * 2;
         const flat = lying
@@ -274,10 +306,12 @@ export function createFighter(look: Look, idleSeed = 0): Fighter {
       }
       person.body.rotation.x = tipX;
       person.body.rotation.y = 0;
-      person.root.rotation.y = yaw + spin + (lying ? 0 : spins * Math.PI * 2);
+      // Robots and monsters turn a little to the camera so their faces show.
+      const toCamera = look.body && mode.kind !== 'dance' ? -yaw * 0.32 : 0;
+      person.root.rotation.y = yaw + toCamera + spin + (lying ? 0 : spins * Math.PI * 2);
       person.root.position.set(fighter.x + offsetX, offsetY + (lying ? 0.18 : 0), fighter.z);
-      person.setScale(look.scale * Math.max(shrink, 0.001));
-      person.root.visible = shrink > 0.02;
+      person.tick(delta, fighter.hurry);
+      person.root.visible = !gone;
     },
   };
   return fighter;

@@ -21,8 +21,8 @@ export interface Hud {
   /** Shows `hp`; with `ghostFrom` a pale chunk from that value down to `hp` eases off. */
   setHealth(hp: number, ghostFrom?: number): void;
   render(n: HudNumbers): void;
-  /** A red flash on the screen's edge (0.25 s) and a shake of the bar. */
-  hurt(): void;
+  /** A soft yellow flash on the screen's edge (0.25 s) and a shake of the bar; `hold` keeps the flash up (dev). */
+  hurt(hold?: boolean): void;
   /** Eases the ghost chunk off; `hold` keeps it where it is (dev freeze). */
   update(delta: number, hold?: boolean): void;
   show(shown: boolean): void;
@@ -109,11 +109,12 @@ export function createHud(avatar: string): Hud {
       fight.textContent = n.fight;
       best.textContent = `Best ${fmt(Math.max(n.best, n.score))}`;
     },
-    hurt() {
+    hurt(hold = false) {
+      flash.classList.toggle('hold', hold);
       flash.classList.remove('go');
       bar.classList.remove('br-shake');
       void flash.offsetWidth;
-      flash.classList.add('go');
+      if (!hold) flash.classList.add('go');
       bar.classList.add('br-shake');
     },
     update(delta, hold = false) {

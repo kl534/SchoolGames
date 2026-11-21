@@ -46,7 +46,6 @@ export interface MoveDef {
   duration: number;
   /** Seconds in when the hit lands. */
   contact: number;
-  word: string;
   reaction: Reaction;
   /** Finishers launch the thug instead. */
   launch?: Launch;
@@ -60,7 +59,6 @@ export const MOVES: Record<MoveId, MoveDef> = {
     cls: 'light',
     duration: 0.35,
     contact: 0.14,
-    word: 'POW!',
     reaction: { push: 0.15 },
   },
   cross: {
@@ -68,7 +66,6 @@ export const MOVES: Record<MoveId, MoveDef> = {
     cls: 'light',
     duration: 0.4,
     contact: 0.18,
-    word: 'BAM!',
     reaction: { push: 0.2 },
   },
   hook: {
@@ -76,7 +73,6 @@ export const MOVES: Record<MoveId, MoveDef> = {
     cls: 'medium',
     duration: 0.5,
     contact: 0.22,
-    word: 'WHAP!',
     reaction: { push: 0.3, snap: true },
   },
   kick: {
@@ -84,7 +80,6 @@ export const MOVES: Record<MoveId, MoveDef> = {
     cls: 'medium',
     duration: 0.5,
     contact: 0.25,
-    word: 'THWACK!',
     reaction: { push: 0.35 },
   },
   elbow: {
@@ -92,7 +87,6 @@ export const MOVES: Record<MoveId, MoveDef> = {
     cls: 'medium',
     duration: 0.45,
     contact: 0.2,
-    word: 'BOP!',
     reaction: { push: 0.25, doubled: true },
   },
   uppercut: {
@@ -100,7 +94,6 @@ export const MOVES: Record<MoveId, MoveDef> = {
     cls: 'heavy',
     duration: 0.6,
     contact: 0.28,
-    word: 'SMACK!',
     reaction: { push: 0.1, lift: 0.3 },
   },
   roundhouse: {
@@ -108,7 +101,6 @@ export const MOVES: Record<MoveId, MoveDef> = {
     cls: 'heavy',
     duration: 0.65,
     contact: 0.3,
-    word: 'CRACK!',
     reaction: { push: 0.4, spin: 0.5 },
   },
   'flying-kick': {
@@ -116,7 +108,6 @@ export const MOVES: Record<MoveId, MoveDef> = {
     cls: 'finisher',
     duration: 0.9,
     contact: 0.4,
-    word: 'K.O.!',
     reaction: { push: 0 },
     launch: { dist: 4.5, dir: 1, flips: 1, spins: 0 },
   },
@@ -125,7 +116,6 @@ export const MOVES: Record<MoveId, MoveDef> = {
     cls: 'finisher',
     duration: 1.0,
     contact: 0.45,
-    word: 'SMASH!',
     reaction: { push: 0 },
     launch: { dist: 5, dir: 1, flips: -1, spins: 2 },
     spin: 1,
@@ -135,9 +125,30 @@ export const MOVES: Record<MoveId, MoveDef> = {
     cls: 'finisher',
     duration: 1.1,
     contact: 0.5,
-    word: 'BOOM!',
     reaction: { push: 0 },
     launch: { dist: 4, dir: -1, flips: 1, spins: 0 },
+  },
+  knee: {
+    id: 'knee',
+    cls: 'medium',
+    duration: 0.5,
+    contact: 0.24,
+    reaction: { push: 0.2, doubled: true },
+  },
+  headbutt: {
+    id: 'headbutt',
+    cls: 'medium',
+    duration: 0.45,
+    contact: 0.22,
+    reaction: { push: 0.25, snap: true },
+  },
+  'back-elbow': {
+    id: 'back-elbow',
+    cls: 'heavy',
+    duration: 0.6,
+    contact: 0.3,
+    reaction: { push: 0.45 },
+    spin: 0.5,
   },
 };
 
@@ -258,6 +269,90 @@ function keysFor(id: MoveId, c: number): Keys {
         [wind, { armR: [0.9, 0.1, 2.6], twist: -0.3, lean: 0.0 }],
         [c, { armR: [1.15, 0.05, 2.5], twist: 0.9, lean: 0.4, lift: -0.12, legL: [0.5, 0.1, 0.6] }],
         [after, { armR: [1.15, 0.05, 2.5], twist: 0.9, lean: 0.4, lift: -0.12 }],
+        [1, {}],
+      ];
+    case 'knee':
+      return [
+        [0, {}],
+        [wind, { armL: [1.2, 0.3, 0.9], armR: [1.2, 0.3, 0.9], lean: 0.2, legR: [0.3, 0.1, 1.2] }],
+        [
+          c,
+          {
+            armL: [1.5, 0.15, 0.5],
+            armR: [1.5, 0.15, 0.5],
+            lean: 0.45,
+            lift: 0.03,
+            legR: [1.5, 0.1, 1.7],
+            legL: [0.1, 0.1, 0.15],
+          },
+        ],
+        [
+          after,
+          {
+            armL: [1.5, 0.15, 0.5],
+            armR: [1.5, 0.15, 0.5],
+            lean: 0.4,
+            legR: [1.4, 0.1, 1.6],
+            legL: [0.1, 0.1, 0.15],
+          },
+        ],
+        [1, {}],
+      ];
+    case 'headbutt':
+      return [
+        [0, {}],
+        [wind, { lean: -0.3, headPitch: 0.45, armL: [0.5, 0.5, 1.2], armR: [0.5, 0.5, 1.2] }],
+        [
+          c,
+          {
+            lean: 0.65,
+            headPitch: -0.5,
+            lift: -0.1,
+            armL: [0.3, 0.7, 0.8],
+            armR: [0.3, 0.7, 0.8],
+            legL: [0.4, 0.1, 0.6],
+          },
+        ],
+        [
+          after,
+          {
+            lean: 0.6,
+            headPitch: -0.45,
+            lift: -0.1,
+            armL: [0.3, 0.7, 0.8],
+            armR: [0.3, 0.7, 0.8],
+            legL: [0.4, 0.1, 0.6],
+          },
+        ],
+        [1, {}],
+      ];
+    case 'back-elbow':
+      return [
+        [0, {}],
+        [wind, { armR: [0.5, 0.3, 2.4], lean: 0.1, lift: -0.1, legL: [0.4, 0.1, 0.7] }],
+        [
+          c,
+          {
+            armR: [-1.1, 0.35, 1.6],
+            armL: [0.5, 0.6, 1.6],
+            lean: 0.2,
+            lift: -0.1,
+            headYaw: 0.5,
+            legL: [0.4, 0.1, 0.7],
+            legR: [-0.3, 0.1, 0.5],
+          },
+        ],
+        [
+          after,
+          {
+            armR: [-1.1, 0.35, 1.7],
+            armL: [0.5, 0.6, 1.6],
+            lean: 0.2,
+            lift: -0.1,
+            headYaw: 0.5,
+            legL: [0.4, 0.1, 0.7],
+          },
+        ],
         [1, {}],
       ];
     case 'uppercut':
@@ -476,10 +571,14 @@ export function moveFrame(id: MoveId, t: number, pose: Pose): Pose {
   return mixPose(scratchA, scratchB, easeInOut(k), pose);
 }
 
-/** The yaw (radians) a spinning move adds to the hero at `t`: a whole turn between 25% and 90% of it. */
+/**
+ * The yaw (radians) a spinning move adds to the hero at `t`: a whole turn between 20% and 90% of it;
+ * a half turn (back-elbow) swings round to its peak at the middle of the move and back.
+ */
 export function moveSpin(id: MoveId, t: number): number {
   const def = MOVES[id];
   if (!def.spin) return 0;
+  if (def.spin < 1) return def.spin * Math.PI * 2 * Math.sin(Math.PI * clamp01(t / def.duration));
   const u = clamp01((t / def.duration - 0.2) / 0.7);
   return def.spin * Math.PI * 2 * easeInOut(u);
 }
@@ -537,11 +636,13 @@ export function reactionFrame(
   };
 }
 
-/** Seconds in the air, lying on the ground, and shrinking away after a finisher. */
+/** Seconds in the air and lying on the ground after a finisher; then the enemy pops apart and a short pause. */
 export const AIR_SECONDS = 0.8;
 export const LYING_SECONDS = 0.4;
-export const SHRINK_SECONDS = 0.4;
-export const LAUNCH_SECONDS = AIR_SECONDS + LYING_SECONDS + SHRINK_SECONDS;
+export const POP_PAUSE = 0.1;
+/** Seconds after contact when the enemy pops (and vanishes). */
+export const POP_AT = AIR_SECONDS + LYING_SECONDS;
+export const LAUNCH_SECONDS = AIR_SECONDS + LYING_SECONDS + POP_PAUSE;
 export const LAUNCH_APEX = 1.2;
 
 export interface LaunchState {
@@ -552,22 +653,19 @@ export interface LaunchState {
   /** Somersault turns (about the sideways axis) and spins (about the vertical axis). */
   flips: number;
   spins: number;
-  scale: number;
   lying: boolean;
 }
 
-/** The ballistic path of a launched thug `t` seconds after contact: apex 1.2 over 0.8 s, then lying 0.4 s, then shrinking away. */
+/** The ballistic path of a launched thug `t` seconds after contact: apex 1.2 over 0.8 s, then lying 0.4 s; the pop follows. */
 export function launchPath(launch: Launch, t: number): LaunchState {
   const air = clamp01(t / AIR_SECONDS);
   const dx = launch.dist * launch.dir * easeOut(air) * 0.85 + launch.dist * launch.dir * 0.15 * air;
   const y = 4 * LAUNCH_APEX * air * (1 - air);
-  const shrink = clamp01((t - AIR_SECONDS - LYING_SECONDS) / SHRINK_SECONDS);
   return {
     dx,
     y,
     flips: launch.flips * air,
     spins: launch.spins * air,
-    scale: 1 - shrink,
     lying: t >= AIR_SECONDS,
   };
 }
@@ -643,17 +741,22 @@ export function hurtPose(pose: Pose, t: number): Pose {
 export const hurtPush = (t: number): number =>
   0.25 * Math.sin(Math.PI * Math.min(1, clamp01(t / HURT_SECONDS) * 1.1));
 
-/** The hero going down: reeling and falling back over 0.6 s. Returns how far the body has tipped (0 to 1). */
+/** The hero going down: bonked, he plops onto the floor and sits dizzy over 0.6 s. Returns how far down he is (0 to 1). */
 export function downPose(pose: Pose, t: number): number {
   const u = clamp01(t / DOWN_SECONDS);
   resetPose(pose);
-  const fall = easeInOut(u);
-  pose.armL.raise = 0.6 * (1 - fall) + 1.4 * fall;
-  pose.armR.raise = 0.6 * (1 - fall) + 1.2 * fall;
-  pose.armL.out = 0.9;
-  pose.armR.out = 0.9;
-  pose.headPitch = 0.4 * fall;
-  pose.legL.raise = 0.3 * fall;
-  pose.legR.raise = -0.2 * fall;
-  return fall;
+  const sit = easeInOut(u);
+  pose.lift = -0.4 * sit;
+  pose.lean = 0.25 * sit;
+  pose.headPitch = -0.25 * sit;
+  pose.roll = 0.08 * Math.sin(t * 4) * sit;
+  pose.armL.raise = 0.5 * (1 - sit) + 0.3 * sit;
+  pose.armR.raise = 0.5 * (1 - sit) + 0.3 * sit;
+  pose.armL.out = 0.9 * (1 - sit) + 0.55 * sit;
+  pose.armR.out = 0.9 * (1 - sit) + 0.55 * sit;
+  pose.legL.raise = 1.5 * sit;
+  pose.legR.raise = 1.4 * sit;
+  pose.legL.out = 0.2 * sit;
+  pose.legR.out = 0.2 * sit;
+  return sit;
 }
