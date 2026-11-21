@@ -1,6 +1,6 @@
 # Typing map (`src/shared/typing/`)
 
-What a typing game (Type Rider, `src/games/type-rider/`; Typo Troopers, `src/games/key-invaders/`, the second; both added later) is built from: the course of 40 levels (28 of keys, two at a time, then 12 of speed), what the player has learned on each key, the lesson that opens a level, the keyboard picture, the level picker and the test-out. Real keyboards only, US QWERTY. The pure files (`course`, `keyboard-layout`, `lines`, `words`, `blocks`, `progress`, `report`) import no DOM.
+What a typing game (Type Rider, `src/games/type-rider/`; Typo Troopers, `src/games/key-invaders/`, the second; Type Brawl, `src/games/type-brawl/`, the third; added later) is built from: the course of 40 levels (28 of keys, two at a time, then 12 of speed), what the player has learned on each key, the lesson that opens a level, the keyboard picture, the level picker and the test-out. Real keyboards only, US QWERTY. The pure files (`course`, `keyboard-layout`, `lines`, `words`, `blocks`, `chunks`, `progress`, `report`) import no DOM.
 
 Voice rule: only the lesson's finger explanations are spoken (`HOME_ROW_LINE`, `HOME_REST_LINE` and the 71 `lessonLine`s, listed in `TYPING_VOICE_LINES`). Every other line (`YOUR_TURN`, `MIX_LINE`, `READY_LINE`, the multiplier and speed lines, the test-out lines) is on-screen text and must never be passed to `speak()`. `scripts/voice/lines.ts` adds `TYPING_VOICE_LINES` to the shared lines; a game's `voice.ts` may list them too.
 
@@ -11,6 +11,7 @@ Voice rule: only the lesson's finger explanations are spoken (`HOME_ROW_LINE`, `
 - `lines.ts`: the lesson's lines and the fixed on-screen lines (`lessonLine`, `TYPING_VOICE_LINES`, `multiplierLine`, `speedLine`, `YOUR_TURN`, `MIX_LINE`, `READY_LINE`, `NEW_KEYS`, `TEST_PASS`, `TEST_FAIL`)
 - `words.ts`: the list of common kid words blocks are made of (`WORDS`)
 - `blocks.ts`: the blocks of keys to type (`planBlock`, `wordsFor`, `BLOCK_KEYS`, `TEST_KEYS`, `FRESH_SHARE`, `MAX_GROUP`, `WORDS_FROM`)
+- `chunks.ts`: one target's chunk of keys for the games that put a block over a target (`planChunk`, `chunkWordsMode`, `targetText`, `ChunkOptions`, `ufoKeys`)
 - `progress.ts`: the first-try history of each key, the open level, seconds per key and the clock (`TypingProgress`, `recordPress`, `skillLearned`, `levelPassed`, `learnedCount`, `nextSpk`, `clockFor` (a key level's Mega ramp and gate blocks get `MEGA_CLOCK_EXTRA` = 2 s more; `SPK_MIN` is 0.9 s a key), `wpm`, `openLevel`, `levelUp`, `normalizeTyping`, `TYPING_LEVEL_ID`)
 - `session.ts`: `startTypingSession(gameId)`: the player, their typing progress, `save()`, `highScore()` and `recordScore()` under `TYPING_LEVEL_ID`
 - `keys.ts`: `onTypingKey(handler)`: one `keydown` listener for single-char keys (ignores repeats and Ctrl, Alt, Meta; cancels the keys it handles; reports Caps Lock)
