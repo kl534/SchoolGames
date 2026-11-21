@@ -8,7 +8,7 @@
  * - `?chunk=<text>` every block is this text (`%20` for a space); the closing space is added.
  * - `?thugs=<1-3>` the size of the first scrap. `?kind=thug|bruiser` the kind of every thug; `kind=boss`
  *   makes the first fight the stage's boss scrap (`thugs=1` is the boss alone).
- * - `?stage=<1-4>` start at that stage, `?loop=<n>` after that many loops of the four. `?scrap=<1-4>` is the
+ * - `?stage=<1-6>` start at that stage, `?loop=<n>` after that many loops of the six. `?scrap=<1-4>` is the
  *   fight in the stage (4 is the boss).
  * - `?item=cola|pizza|star` an item of that type is on the street at the first fight and every drop is that type.
  * - `?win=dance` the first fight is skipped: the stage clears at once and the dance holds for ever
@@ -43,7 +43,7 @@ export interface BrawlDev {
   chunk: string | null;
   thugs: number | null;
   kind: Kind | null;
-  /** Start stage 1-4, after `loop` loops of the four; and the fight in it (1 to STAGE_SCRAPS + 1). */
+  /** Start stage 1-6, after `loop` loops of the six; and the fight in it (1 to STAGE_SCRAPS + 1). */
   stage: number | null;
   loop: number | null;
   item: ItemType | null;

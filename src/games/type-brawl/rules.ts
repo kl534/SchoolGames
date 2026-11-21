@@ -264,7 +264,7 @@ export function resultsText(stats: RunStats, stage: number, opened: readonly num
   return parts.join(' · ');
 }
 
-export type StageId = 'street' | 'docks' | 'dojo' | 'rooftop';
+export type StageId = 'street' | 'docks' | 'dojo' | 'rooftop' | 'jungle' | 'snow';
 export type PropKind =
   | 'lamp'
   | 'bin'
@@ -278,7 +278,19 @@ export type PropKind =
   | 'bonsai'
   | 'vent'
   | 'antenna'
-  | 'tank';
+  | 'tank'
+  | 'car'
+  | 'hydrant'
+  | 'container'
+  | 'torii'
+  | 'sakura'
+  | 'stonelamp'
+  | 'billboard'
+  | 'palm'
+  | 'totem'
+  | 'fern'
+  | 'pine'
+  | 'snowman';
 
 /** Colours of a stage (CSS strings): the sky gradient, the ground, the buildings and the lights. */
 export interface StagePalette {
@@ -309,14 +321,14 @@ export interface StageDef {
   props: PropKind[];
 }
 
-/** The four stages; after the last they loop, each loop harder. */
+/** The six stages; after the last they loop, each loop harder. */
 export const STAGES: readonly StageDef[] = [
   {
     id: 'street',
     title: 'Back Street',
     boss: 'Big Biff',
     bossShirt: 0x5b1a2a,
-    props: ['lamp', 'bin', 'tree', 'fence'],
+    props: ['lamp', 'car', 'bin', 'tree', 'hydrant', 'fence', 'lamp'],
     palette: {
       sky: ['#4ba3ff', '#bfe3ff', '#ffe6c2'],
       ground: '#3d4048',
@@ -338,7 +350,7 @@ export const STAGES: readonly StageDef[] = [
     title: 'The Docks',
     boss: 'Captain Crunch',
     bossShirt: 0x1f4e79,
-    props: ['crate', 'barrel', 'bollard', 'lamp'],
+    props: ['crate', 'container', 'barrel', 'bollard', 'lamp', 'container'],
     palette: {
       sky: ['#ff8a3d', '#ffb870', '#ffe2a8'],
       ground: '#7a5a3a',
@@ -361,7 +373,7 @@ export const STAGES: readonly StageDef[] = [
     title: 'The Dojo',
     boss: 'Sensei Snap',
     bossShirt: 0x2a2a2a,
-    props: ['lantern', 'pillar', 'bonsai'],
+    props: ['lantern', 'sakura', 'torii', 'stonelamp', 'sakura', 'bonsai'],
     palette: {
       sky: ['#2a2145', '#6b3a5a', '#e08a5a'],
       ground: '#9a6a36',
@@ -383,7 +395,7 @@ export const STAGES: readonly StageDef[] = [
     title: 'The Rooftop',
     boss: 'Rooftop Rex',
     bossShirt: 0x2d6a4f,
-    props: ['vent', 'antenna', 'tank'],
+    props: ['vent', 'billboard', 'antenna', 'tank', 'billboard', 'vent'],
     palette: {
       sky: ['#070b24', '#1b2350', '#3b3f7a'],
       ground: '#2b2e3a',
@@ -400,9 +412,53 @@ export const STAGES: readonly StageDef[] = [
       sun: '#c4d2ff',
     },
   },
+  {
+    id: 'jungle',
+    title: 'Temple Ruins',
+    boss: 'Tiki Tom',
+    bossShirt: 0x8a5a14,
+    props: ['palm', 'fern', 'totem', 'palm', 'fern', 'lantern'],
+    palette: {
+      sky: ['#1f7a6a', '#7fd0a0', '#f5f0a8'],
+      ground: '#6d5b3a',
+      walk: '#2f6b35',
+      kerb: '#4a3f2a',
+      paint: '#a6925c',
+      walls: [
+        ['#8a8f78', '#3c4a34', '#ffe28a'],
+        ['#7b8a70', '#34422f', '#ffd36a'],
+        ['#9a9580', '#4a4a38', '#fff0a0'],
+      ],
+      roof: '#4f6a3c',
+      hemi: ['#f2ffd8', '#3f5a30'],
+      sun: '#fff2b8',
+    },
+  },
+  {
+    id: 'snow',
+    title: 'Frosty Peak',
+    boss: 'Frostbite Fred',
+    bossShirt: 0x2b6cb0,
+    props: ['pine', 'snowman', 'lamp', 'pine', 'fence', 'pine'],
+    palette: {
+      sky: ['#5f8fd0', '#bcd8f2', '#fbe3e6'],
+      ground: '#e4eef7',
+      walk: '#bcd6ea',
+      kerb: '#9bb6cc',
+      paint: '#b6cde0',
+      walls: [
+        ['#8a5a3a', '#2d2a38', '#ffd38a'],
+        ['#a06a42', '#2a2834', '#ffe0a0'],
+        ['#6f7f94', '#262a3a', '#ffd89a'],
+      ],
+      roof: '#f4f8ff',
+      hemi: ['#f2f8ff', '#8fa8c4'],
+      sun: '#fff4e8',
+    },
+  },
 ];
 
-/** Where stage `stage` (from 1, counting loops) is: its definition and how many times the four have looped. */
+/** Where stage `stage` (from 1, counting loops) is: its definition and how many times the six have looped. */
 export function stageInfo(stage: number): { def: StageDef; loop: number } {
   const i = Math.max(0, Math.floor(stage) - 1);
   return { def: STAGES[i % STAGES.length], loop: Math.floor(i / STAGES.length) };

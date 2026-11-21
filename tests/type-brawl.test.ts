@@ -153,7 +153,7 @@ describe('parseDev', () => {
 
   it('keeps numbers in range and ignores what is malformed', () => {
     const bad = parseDev(
-      'level=0&spk=-1&thugs=4&kind=king&stage=5&loop=-1&item=milk&win=1&lock=5&typed=x&hp=0&hp=101&scrap=5&ramp=21&ring=1.5&move=headbutt&at=-1&keys=' +
+      'level=0&spk=-1&thugs=4&kind=king&stage=7&loop=-1&item=milk&win=1&lock=5&typed=x&hp=0&hp=101&scrap=5&ramp=21&ring=1.5&move=headbutt&at=-1&keys=' +
         'a'.repeat(13),
     );
     expect(bad.level).toBeNull();
@@ -679,16 +679,25 @@ describe('voice', () => {
 });
 
 describe('stages', () => {
-  it('there are four, with the planned bosses, and each is distinct', () => {
-    expect(STAGES.map((st) => st.id)).toEqual(['street', 'docks', 'dojo', 'rooftop']);
+  it('there are six, with the planned bosses, and each is distinct', () => {
+    expect(STAGES.map((st) => st.id)).toEqual([
+      'street',
+      'docks',
+      'dojo',
+      'rooftop',
+      'jungle',
+      'snow',
+    ]);
     expect(STAGES.map((st) => st.boss)).toEqual([
       'Big Biff',
       'Captain Crunch',
       'Sensei Snap',
       'Rooftop Rex',
+      'Tiki Tom',
+      'Frostbite Fred',
     ]);
-    expect(new Set(STAGES.map((st) => st.palette.sky[0])).size).toBe(4);
-    expect(new Set(STAGES.map((st) => st.palette.ground)).size).toBe(4);
+    expect(new Set(STAGES.map((st) => st.palette.sky[0])).size).toBe(6);
+    expect(new Set(STAGES.map((st) => st.palette.ground)).size).toBe(6);
     for (const st of STAGES) {
       expect(st.props.length).toBeGreaterThanOrEqual(3);
       expect(st.palette.walls.length).toBeGreaterThanOrEqual(3);
@@ -703,18 +712,19 @@ describe('stages', () => {
     }
   });
 
-  it('stageInfo loops through the four, one loop harder each time', () => {
-    expect([1, 2, 3, 4, 5, 6, 8, 9].map((n) => stageInfo(n).def.id)).toEqual([
+  it('stageInfo loops through the six, one loop harder each time', () => {
+    expect([1, 2, 3, 4, 5, 6, 7, 8, 13].map((n) => stageInfo(n).def.id)).toEqual([
       'street',
       'docks',
       'dojo',
       'rooftop',
+      'jungle',
+      'snow',
       'street',
       'docks',
-      'rooftop',
       'street',
     ]);
-    expect([1, 4, 5, 8, 9, 13].map((n) => stageInfo(n).loop)).toEqual([0, 0, 1, 1, 2, 3]);
+    expect([1, 6, 7, 12, 13, 19].map((n) => stageInfo(n).loop)).toEqual([0, 0, 1, 1, 2, 3]);
     expect(stageInfo(0).def.id).toBe('street');
   });
 
