@@ -16,12 +16,16 @@ import {
   spawnOffset,
 } from '../src/games/type-brawl/layout';
 import { labelFontPx, staggerLabels } from '../src/games/type-brawl/labels';
+import { speciesOf, lookFor } from '../src/games/type-brawl/fighters';
 import {
+  AIR_SECONDS,
   LAUNCH_SECONDS,
+  LYING_SECONDS,
   MOVES,
   launchPath,
   mirrorPose,
   moveFrame,
+  moveSpin,
   reactionFrame,
 } from '../src/games/type-brawl/moves';
 import { neutralPose } from '../src/games/type-brawl/person';
@@ -31,6 +35,8 @@ import {
   BOSS_GAP_SECONDS,
   HIT_RING,
   HIT_RING_BOSS,
+  HIT_WORDS,
+  THUG_BODIES,
   ITEM_DROP_CHANCE,
   ITEM_EMOJI,
   ITEM_HEAL,
@@ -63,6 +69,7 @@ import {
   mastered,
   moveClassOf,
   pickMove,
+  pickWord,
   refill,
   resultsText,
   ringSeconds,
@@ -78,6 +85,7 @@ import {
   type Kind,
   type MoveClass,
   type MoveId,
+  type Species,
 } from '../src/games/type-brawl/rules';
 import { VOICE_LINES } from '../src/games/type-brawl/voice';
 import { seededRandom } from '../src/shared/random';
@@ -113,6 +121,9 @@ describe('parseDev', () => {
       at: null,
       levelup: false,
       keys: null,
+      species: null,
+      bonk: false,
+      pop: false,
       hooked: false,
     });
   });
@@ -121,7 +132,7 @@ describe('parseDev', () => {
     const dev = parseDev(
       '?level=7&start=1&lesson=1&spk=1.4&chunk=fj%20k&thugs=2&kind=bruiser&lock=3&typed=2&wrong=1' +
         '&hp=60&scrap=4&ramp=5&ring=0.85&freeze=1&move=flying-kick&at=0.55&levelup=1&keys=fjf%20' +
-        '&stage=3&loop=2&item=pizza&win=dance',
+        '&stage=3&loop=2&item=pizza&win=dance&species=monster&bonk=1&pop=1',
     );
     expect(dev).toEqual({
       level: 7,
@@ -147,13 +158,16 @@ describe('parseDev', () => {
       at: 0.55,
       levelup: true,
       keys: 'fjf ',
+      species: 'monster',
+      bonk: true,
+      pop: true,
       hooked: true,
     });
   });
 
   it('keeps numbers in range and ignores what is malformed', () => {
     const bad = parseDev(
-      'level=0&spk=-1&thugs=4&kind=king&stage=5&loop=-1&item=milk&win=1&lock=5&typed=x&hp=0&hp=101&scrap=5&ramp=21&ring=1.5&move=headbutt&at=-1&keys=' +
+      'level=0&spk=-1&thugs=4&kind=king&stage=5&loop=-1&item=milk&win=1&lock=5&typed=x&hp=0&hp=101&scrap=5&ramp=21&ring=1.5&move=headbite&species=ghost&bonk=2&pop=0&at=-1&keys=' +
         'a'.repeat(13),
     );
     expect(bad.level).toBeNull();
@@ -171,6 +185,9 @@ describe('parseDev', () => {
     expect(bad.ramp).toBeNull();
     expect(bad.ring).toBeNull();
     expect(bad.move).toBeNull();
+    expect(bad.species).toBeNull();
+    expect(bad.bonk).toBe(false);
+    expect(bad.pop).toBe(false);
     expect(bad.at).toBeNull();
     expect(bad.keys).toBeNull();
     expect(bad.hooked).toBe(true);
@@ -185,6 +202,11 @@ describe('parseDev', () => {
     expect(parseDev('?scrap=4').scrap).toBe(4);
     expect(parseDev('?hp=1').hp).toBe(1);
     expect(parseDev('?hp=100').hp).toBe(100);
+    expect(parseDev('?move=headbutt').move).toBe('headbutt');
+    expect(parseDev('?move=knee').move).toBe('knee');
+    expect(parseDev('?move=back-elbow').move).toBe('back-elbow');
+    expect(parseDev('?species=robot').species).toBe('robot');
+    expect(parseDev('?bonk=1&pop=1').hooked).toBe(true);
   });
 
   it('counts a hook with a bad value as hooked, a different query as not', () => {
@@ -229,7 +251,6 @@ describe('moves', () => {
         expect(MOVES[id].cls).toBe(cls);
         expect(MOVES[id].contact).toBeGreaterThan(0);
         expect(MOVES[id].contact).toBeLessThan(MOVES[id].duration);
-        expect(MOVES[id].word.length).toBeGreaterThan(0);
       }
     }
     expect(MOVES.jab.duration).toBe(0.35);
@@ -263,7 +284,7 @@ describe('moves', () => {
     expect(pose.twist).toBe(-twist);
   });
 
-  it('a launch is ballistic: apex 1.2 at 0.4 s, on the ground at 0.8 s, gone at 1.6 s', () => {
+  it('a launch is ballistic: apex 1.2 at 0.4 s, on the ground at 0.8 s, then pops at 1.2 s', () => {
     const launch = MOVES['flying-kick'].launch!;
     expect(launchPath(launch, 0).y).toBe(0);
     expect(launchPath(launch, 0.4).y).toBeCloseTo(1.2, 5);
@@ -271,7 +292,7 @@ describe('moves', () => {
     expect(launchPath(launch, 0.8).dx).toBeCloseTo(4.5, 5);
     expect(launchPath(launch, 0.5).lying).toBe(false);
     expect(launchPath(launch, 1.0).lying).toBe(true);
-    expect(launchPath(launch, LAUNCH_SECONDS).scale).toBe(0);
+    expect(LAUNCH_SECONDS).toBeCloseTo(AIR_SECONDS + LYING_SECONDS + 0.1, 9);
     expect(launchPath(MOVES.throw.launch!, 0.8).dx).toBeCloseTo(-4, 5);
     expect(launchPath(MOVES['spin-kick'].launch!, 0.8).dx).toBeCloseTo(5, 5);
   });
@@ -682,11 +703,19 @@ describe('stages', () => {
   it('there are four, with the planned bosses, and each is distinct', () => {
     expect(STAGES.map((st) => st.id)).toEqual(['street', 'docks', 'dojo', 'rooftop']);
     expect(STAGES.map((st) => st.boss)).toEqual([
-      'Big Biff',
-      'Captain Crunch',
-      'Sensei Snap',
-      'Rooftop Rex',
+      'Giga-Bot',
+      'Fuzzball King',
+      'Slime Duke',
+      'Robo-Rex',
     ]);
+    expect(STAGES.map((st) => st.body)).toEqual([
+      'giga-bot',
+      'fuzzball-king',
+      'slime-duke',
+      'robo-rex',
+    ]);
+    expect(STAGES.map((st) => st.species)).toEqual(['robot', 'monster', 'monster', 'robot']);
+    expect(STAGES.map((st) => st.bossColor)).toEqual([0x8aa4c8, 0x9b5de5, 0x5fd35f, 0x2ec4b6]);
     expect(new Set(STAGES.map((st) => st.palette.sky[0])).size).toBe(4);
     expect(new Set(STAGES.map((st) => st.palette.ground)).size).toBe(4);
     for (const st of STAGES) {
@@ -776,5 +805,110 @@ describe('items', () => {
     expect(lockThug(cands, 'j', 0)).toBe('i3');
     expect(lockThug(cands.slice(0, 1), 'f', 0)).toBe('i0');
     expect(lockThug([...cands].reverse(), 'f', 0)).toBe('t1');
+  });
+});
+
+describe('robots, monsters and their moves', () => {
+  it('has 13 moves, each in exactly one class, with the three new ones as planned', () => {
+    const all = Object.values(MOVES_BY_CLASS).flat();
+    expect(all).toHaveLength(13);
+    expect(new Set(all).size).toBe(13);
+    expect(Object.keys(MOVES)).toHaveLength(13);
+    expect(Object.values(MOVES_BY_CLASS).map((m) => m.length)).toEqual([2, 5, 3, 3]);
+    for (const id of all) {
+      expect(MOVES[id].contact).toBeLessThan(MOVES[id].duration);
+      expect(Object.values(MOVES_BY_CLASS).filter((m) => m.includes(id))).toHaveLength(1);
+    }
+    expect(MOVES.knee).toMatchObject({ cls: 'medium', duration: 0.5, contact: 0.24 });
+    expect(MOVES.knee.reaction).toEqual({ push: 0.2, doubled: true });
+    expect(MOVES.headbutt).toMatchObject({ cls: 'medium', duration: 0.45, contact: 0.22 });
+    expect(MOVES.headbutt.reaction).toEqual({ push: 0.25, snap: true });
+    expect(MOVES['back-elbow']).toMatchObject({
+      cls: 'heavy',
+      duration: 0.6,
+      contact: 0.3,
+      spin: 0.5,
+    });
+    expect(MOVES['back-elbow'].reaction).toEqual({ push: 0.45 });
+  });
+
+  it('pickMove draws every move of a class and never repeats', () => {
+    const random = seededRandom(9);
+    for (const cls of Object.keys(MOVES_BY_CLASS) as MoveClass[]) {
+      const seen = new Set<MoveId>();
+      let last: MoveId | null = null;
+      for (let i = 0; i < 300; i++) {
+        const move = pickMove(cls, last, random);
+        if (MOVES_BY_CLASS[cls].length > 1) expect(move).not.toBe(last);
+        seen.add(move);
+        last = move;
+      }
+      expect(seen.size).toBe(MOVES_BY_CLASS[cls].length);
+    }
+  });
+
+  it('the back-elbow turns half way round and back', () => {
+    expect(moveSpin('back-elbow', 0)).toBeCloseTo(0, 6);
+    expect(moveSpin('back-elbow', 0.3)).toBeCloseTo(Math.PI, 5);
+    expect(moveSpin('back-elbow', 0.6)).toBeCloseTo(0, 5);
+  });
+
+  it('both species have words for every class and pickWord picks one of them', () => {
+    const random = seededRandom(3);
+    for (const species of ['robot', 'monster'] as Species[]) {
+      for (const cls of Object.keys(MOVES_BY_CLASS) as MoveClass[]) {
+        expect(HIT_WORDS[species][cls].length).toBeGreaterThan(0);
+        const seen = new Set<string>();
+        for (let i = 0; i < runs(200, 30); i++) {
+          const word = pickWord(species, cls, random);
+          expect(HIT_WORDS[species][cls]).toContain(word);
+          seen.add(word);
+        }
+        expect(seen.size).toBe(HIT_WORDS[species][cls].length);
+      }
+    }
+    expect(pickWord('robot', 'finisher', () => 0)).toBe('K.O.!');
+    expect(pickWord('monster', 'light', () => 0.999)).toBe('POOF!');
+  });
+
+  it('lookFor: a thug is a toy robot or a monster, a bruiser a box robot or a big monster', () => {
+    const random = seededRandom(11);
+    const thugs = new Set<string>();
+    const bruisers = new Set<string>();
+    for (let i = 0; i < 100; i++) {
+      const thug = lookFor('thug', random);
+      expect(THUG_BODIES.thug).toContain(thug.body);
+      expect(thug.species).toBe(speciesOf(thug.body!));
+      expect(thug.scale).toBe(1);
+      expect(thug.color).toBe(thug.shirt);
+      thugs.add(thug.body!);
+      const bruiser = lookFor('bruiser', random);
+      expect(THUG_BODIES.bruiser).toContain(bruiser.body);
+      expect(bruiser.species).toBe(speciesOf(bruiser.body!));
+      expect(bruiser.scale).toBe(1.2);
+      bruisers.add(bruiser.body!);
+    }
+    expect([...thugs].sort()).toEqual(['monster', 'toy-robot']);
+    expect([...bruisers].sort()).toEqual(['big-monster', 'box-robot']);
+  });
+
+  it('lookFor: a boss is its stage body at scale 1.4, and only= fixes the species', () => {
+    STAGES.forEach((st, i) => {
+      const look = lookFor('boss', seededRandom(1), i);
+      expect(look.body).toBe(st.body);
+      expect(look.species).toBe(st.species);
+      expect(look.color).toBe(st.bossColor);
+      expect(look.scale).toBe(1.4);
+    });
+    expect(lookFor('boss', seededRandom(1), 5).body).toBe(STAGES[1].body);
+    for (let i = 0; i < 30; i++) {
+      expect(lookFor('thug', seededRandom(i), 0, 'robot').species).toBe('robot');
+      expect(lookFor('bruiser', seededRandom(i), 0, 'monster').species).toBe('monster');
+    }
+  });
+
+  it('lookFor is deterministic for a seeded random', () => {
+    expect(lookFor('thug', seededRandom(4))).toEqual(lookFor('thug', seededRandom(4)));
+    expect(lookFor('bruiser', seededRandom(8))).toEqual(lookFor('bruiser', seededRandom(8)));
   });
 });

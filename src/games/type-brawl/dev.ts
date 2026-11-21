@@ -20,6 +20,9 @@
  * - `?freeze=1` the walk, thugs, rings and particles hold; keys still work.
  * - `?move=<id>` the hero always uses this move. `?at=<seconds>` the first move holds at that time.
  * - `?levelup=1` the first scrap clear passes the level.
+ * - `?species=robot|monster` every thug and bruiser is that species (bosses unchanged).
+ * - `?bonk=1` holds the hero's bonk (stars, BONK! and the yellow flash) once the fight starts.
+ * - `?pop=1` the first finisher holds 0.15 s into its pop.
  * - `?keys=<text>` (at most 12 characters, `%20` for a space) once the fight starts, these keys are
  *   typed in order.
  */
@@ -33,6 +36,7 @@ import {
   type ItemType,
   type Kind,
   type MoveId,
+  type Species,
 } from './rules';
 
 export interface BrawlDev {
@@ -60,6 +64,9 @@ export interface BrawlDev {
   at: number | null;
   levelup: boolean;
   keys: string | null;
+  species: Species | null;
+  bonk: boolean;
+  pop: boolean;
   /** Any hook is in the URL: nothing is saved. */
   hooked: boolean;
 }
@@ -88,6 +95,9 @@ const HOOKS = [
   'at',
   'levelup',
   'keys',
+  'species',
+  'bonk',
+  'pop',
 ];
 
 const ALL_MOVES: string[] = Object.values(MOVES_BY_CLASS).flat();
@@ -112,6 +122,7 @@ export function parseDev(search: string): BrawlDev {
   const kind = q.get('kind');
   const move = q.get('move') ?? '';
   const item = q.get('item');
+  const species = q.get('species');
   return {
     level: intIn('level', 1, LEVEL_COUNT),
     start: q.get('start') === '1',
@@ -136,6 +147,9 @@ export function parseDev(search: string): BrawlDev {
     at: Number.isFinite(at) && at >= 0 && at <= 10 ? at : null,
     levelup: q.get('levelup') === '1',
     keys: /^[\x20-\x7e]{1,12}$/.test(keys) ? keys : null,
+    species: species === 'robot' || species === 'monster' ? species : null,
+    bonk: q.get('bonk') === '1',
+    pop: q.get('pop') === '1',
     hooked: HOOKS.some((name) => q.has(name)),
   };
 }

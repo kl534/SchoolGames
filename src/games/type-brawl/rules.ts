@@ -23,13 +23,55 @@ export type MoveId =
   | 'roundhouse'
   | 'flying-kick'
   | 'spin-kick'
-  | 'throw';
+  | 'throw'
+  | 'knee'
+  | 'headbutt'
+  | 'back-elbow';
 export const MOVES_BY_CLASS: Record<MoveClass, MoveId[]> = {
   light: ['jab', 'cross'],
-  medium: ['hook', 'kick', 'elbow'],
-  heavy: ['uppercut', 'roundhouse'],
+  medium: ['hook', 'kick', 'elbow', 'knee', 'headbutt'],
+  heavy: ['uppercut', 'roundhouse', 'back-elbow'],
   finisher: ['flying-kick', 'spin-kick', 'throw'],
 };
+export type Species = 'robot' | 'monster';
+export type Body =
+  | 'toy-robot'
+  | 'box-robot'
+  | 'monster'
+  | 'big-monster'
+  | 'giga-bot'
+  | 'fuzzball-king'
+  | 'slime-duke'
+  | 'robo-rex';
+
+/** The comic words a hit shows, by what was hit and the class of move. */
+export const HIT_WORDS: Record<Species, Record<MoveClass, string[]>> = {
+  robot: {
+    light: ['DING!', 'TINK!'],
+    medium: ['CLANG!', 'BONK!'],
+    heavy: ['KLONK!', 'CRASH!'],
+    finisher: ['K.O.!', 'ZAP!', 'BOING!'],
+  },
+  monster: {
+    light: ['BOP!', 'POOF!'],
+    medium: ['SQUISH!', 'BOING!'],
+    heavy: ['SPLAT!', 'SPROING!'],
+    finisher: ['K.O.!', 'POOF!', 'WHEE!'],
+  },
+};
+
+/** A random comic word for a hit on a robot or monster by a move of this class. */
+export function pickWord(species: Species, cls: MoveClass, random: Random): string {
+  const words = HIT_WORDS[species][cls];
+  return words[Math.min(words.length - 1, Math.floor(random() * words.length))];
+}
+
+/** The thug and bruiser bodies of each species (a boss has its stage's). */
+export const THUG_BODIES: Record<'thug' | 'bruiser', [Body, Body]> = {
+  thug: ['toy-robot', 'monster'],
+  bruiser: ['box-robot', 'big-monster'],
+};
+
 /** Letters before the closing space, one entry per block; the last block is the finisher. */
 export const BLOCKS: Record<Kind, number[]> = { thug: [3], bruiser: [3, 4], boss: [2, 3, 3, 4, 5] };
 export const KIND_POINTS: Record<Kind, number> = { thug: 30, bruiser: 60, boss: 300 };
@@ -302,9 +344,11 @@ export interface StagePalette {
 export interface StageDef {
   id: StageId;
   title: string;
-  /** The boss's name, and the colour of their shirt. */
+  /** The boss's name, what they look like, and their colour. */
   boss: string;
-  bossShirt: number;
+  body: Body;
+  species: Species;
+  bossColor: number;
   palette: StagePalette;
   props: PropKind[];
 }
@@ -314,8 +358,10 @@ export const STAGES: readonly StageDef[] = [
   {
     id: 'street',
     title: 'Back Street',
-    boss: 'Big Biff',
-    bossShirt: 0x5b1a2a,
+    boss: 'Giga-Bot',
+    body: 'giga-bot',
+    species: 'robot',
+    bossColor: 0x8aa4c8,
     props: ['lamp', 'bin', 'tree', 'fence'],
     palette: {
       sky: ['#4ba3ff', '#bfe3ff', '#ffe6c2'],
@@ -336,8 +382,10 @@ export const STAGES: readonly StageDef[] = [
   {
     id: 'docks',
     title: 'The Docks',
-    boss: 'Captain Crunch',
-    bossShirt: 0x1f4e79,
+    boss: 'Fuzzball King',
+    body: 'fuzzball-king',
+    species: 'monster',
+    bossColor: 0x9b5de5,
     props: ['crate', 'barrel', 'bollard', 'lamp'],
     palette: {
       sky: ['#ff8a3d', '#ffb870', '#ffe2a8'],
@@ -359,8 +407,10 @@ export const STAGES: readonly StageDef[] = [
   {
     id: 'dojo',
     title: 'The Dojo',
-    boss: 'Sensei Snap',
-    bossShirt: 0x2a2a2a,
+    boss: 'Slime Duke',
+    body: 'slime-duke',
+    species: 'monster',
+    bossColor: 0x5fd35f,
     props: ['lantern', 'pillar', 'bonsai'],
     palette: {
       sky: ['#2a2145', '#6b3a5a', '#e08a5a'],
@@ -381,8 +431,10 @@ export const STAGES: readonly StageDef[] = [
   {
     id: 'rooftop',
     title: 'The Rooftop',
-    boss: 'Rooftop Rex',
-    bossShirt: 0x2d6a4f,
+    boss: 'Robo-Rex',
+    body: 'robo-rex',
+    species: 'robot',
+    bossColor: 0x2ec4b6,
     props: ['vent', 'antenna', 'tank'],
     palette: {
       sky: ['#070b24', '#1b2350', '#3b3f7a'],
