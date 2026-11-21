@@ -6,6 +6,7 @@ import {
   CylinderGeometry,
   DoubleSide,
   Group,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
@@ -26,6 +27,10 @@ export const PERSON_SCALE = 1.3;
 export const HIP_Y = 0.52;
 const THIGH = 0.26;
 const SHIN = 0.26;
+/** The corners of a shoe's sole, in its knee's frame (the shoe box is 0.13 × 0.08 × 0.25). */
+const SOLE_CORNERS = [-0.065, 0.065].flatMap((x) =>
+  [-0.075, 0.175].map((z) => new Vector3(x, -SHIN - 0.06, z)),
+);
 const SHOULDER_Y = 0.36;
 const SHOULDER_X = 0.2;
 const UPPER_ARM_BASE = 0.17;
@@ -412,6 +417,23 @@ export function createPerson(style: PersonStyle): Person {
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = 0.015;
 
+  const toRoot = new Matrix4();
+  const sole = new Vector3();
+  /** How far the lowest sole is below the ground (0 when both feet are on or above it). */
+  const soleDepth = () => {
+    body.updateMatrix();
+    let lowest = Infinity;
+    for (const leg of [legL, legR]) {
+      leg.hip.updateMatrix();
+      leg.knee.updateMatrix();
+      toRoot.multiplyMatrices(body.matrix, leg.hip.matrix).multiply(leg.knee.matrix);
+      for (const corner of SOLE_CORNERS) {
+        lowest = Math.min(lowest, sole.copy(corner).applyMatrix4(toRoot).y);
+      }
+    }
+    return Math.max(0, -lowest);
+  };
+
   const apply = (pose: Pose) => {
     body.position.y = pose.lift;
     body.rotation.z = -pose.roll;
@@ -431,6 +453,8 @@ export function createPerson(style: PersonStyle): Person {
       leg.hip.rotation.set(-p.raise, 0, side * p.out);
       leg.knee.rotation.set(p.bend, 0, 0);
     }
+    // Never let a foot sink into the street: a crouch with straight legs stands up instead.
+    body.position.y += soleDepth();
   };
   apply(neutralPose());
 
