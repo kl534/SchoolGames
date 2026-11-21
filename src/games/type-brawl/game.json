@@ -1,9 +1,9 @@
 {
   "id": "type-brawl",
   "title": "Type Brawl",
-  "description": "Type the letters to punch your way down the street!",
+  "description": "Type the letters to punch and kick your way past silly robots and monsters!",
   "thumbnail": "thumbnail.svg",
-  "tags": ["typing", "fighting", "keyboard", "3d"],
+  "tags": ["typing", "fighting", "robots", "monsters", "keyboard", "3d"],
   "scoring": "score",
   "section": "typing"
 }
