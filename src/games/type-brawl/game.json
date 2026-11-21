@@ -1,0 +1,9 @@
+{
+  "id": "type-brawl",
+  "title": "Type Brawl",
+  "description": "Type the letters to punch your way down the street!",
+  "thumbnail": "thumbnail.svg",
+  "tags": ["typing", "fighting", "keyboard", "3d"],
+  "scoring": "score",
+  "section": "typing"
+}
