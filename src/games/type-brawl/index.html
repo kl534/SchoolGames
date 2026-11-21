@@ -123,6 +123,10 @@
         background: #ffc928 !important;
         color: #2a1b00;
       }
+      .br-star {
+        background: #7c3aed !important;
+        color: #fff;
+      }
       .br-level {
         background: #facc15 !important;
         color: #1a1400;
@@ -280,6 +284,24 @@
         to {
           scale: 1.18;
         }
+      }
+      /* An item's label: the emoji where the ring is, no pips, a green border. */
+      .br-label[data-item='1'] .br-ring {
+        background: none;
+        -webkit-mask: none;
+        mask: none;
+        opacity: 1;
+        font-size: 1.1em;
+      }
+      .br-label[data-item='1'] .br-ring > span {
+        font-size: 1.3em;
+      }
+      .br-label[data-item='1'] .br-pips {
+        display: none;
+      }
+      .br-fade {
+        transition: opacity 0.35s ease-out;
+        opacity: 0;
       }
       .br-shake {
         animation: br-shake 0.25s linear;

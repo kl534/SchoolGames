@@ -38,9 +38,11 @@ export const MAX_THUGS = 3;
 export const HP_MAX = 100;
 /** A wrong key. */
 export const HIT_WRONG = 8;
-/** A full ring. */
+/** A full ring, and a boss's. */
 export const HIT_RING = 12;
-export const REFILL_SCRAP = 15;
+export const HIT_RING_BOSS = 20;
+/** Health a cleared stage gives back. */
+export const REFILL_STAGE = 40;
 /** Ring seconds per key = seconds per key × slack. */
 export const SLACK_START = 3.0;
 export const SLACK_PER_STEP = 0.92;
@@ -54,6 +56,19 @@ export const READ_SECONDS = 0.8;
 /** All rings freeze this long after any hit on the hero. */
 export const HIT_GRACE = 1.0;
 export const WAVE_BONUS = 50;
+/** The stage-clear bonus is this many scrap bonuses. */
+export const STAGE_BONUS_FACTOR = 3;
+/** Scraps of a stage before its boss scrap. */
+export const STAGE_SCRAPS = 3;
+/** Seconds the "Boss: <name>" banner shows before the boss walks in, and between the boss and each thug after. */
+export const BOSS_BANNER_SECONDS = 1.0;
+export const BOSS_GAP_SECONDS = 2.0;
+/** Most thugs a scrap has in total (6 on the first loop, one more each loop up to 8). */
+export const SCRAP_SIZE_MAX = 8;
+/** Chance a knocked-out thug or bruiser drops an item. */
+export const ITEM_DROP_CHANCE = 0.25;
+/** Knock-outs the star makes perfect. */
+export const STAR_KNOCKOUTS = 3;
 /** Knock-outs per speed-level group; 3 groups in a row at the goal pass the level (SPEED_STREAK). */
 export const SPEED_GROUP = 6;
 
@@ -74,17 +89,34 @@ export function pickMove(cls: MoveClass, last: MoveId | null, random: Random): M
   return pool[Math.min(pool.length - 1, Math.floor(random() * pool.length))];
 }
 
-/** How many thugs scrap `scrap` (from 1) has in total: 3, 4, 5, then 6. */
-export const scrapSize = (scrap: number): number => Math.min(2 + scrap, 6);
+/**
+ * How many thugs scrap `scrap` (from 1) of a stage has in total: 3, 4, 5 on the first loop; each
+ * loop adds one. Never more than 6 on the first loop and 8 at the most.
+ */
+export const scrapSize = (scrap: number, loop = 0): number =>
+  Math.min(2 + scrap + loop, Math.min(6 + loop, SCRAP_SIZE_MAX));
 
-/** The kinds in a scrap; from scrap 3 each is a bruiser with probability 1/3. */
-export function scrapKinds(scrap: number, random: Random): Kind[] {
+/**
+ * The kinds in a scrap: from scrap 3 (from scrap 1 after the first stage) each is a bruiser with
+ * probability 1/3. `stage` counts from 1 across loops.
+ */
+export function scrapKinds(scrap: number, random: Random, loop = 0, stage = 1): Kind[] {
   const out: Kind[] = [];
-  for (let i = 0; i < scrapSize(scrap); i++) {
-    out.push(scrap >= 3 && random() < 1 / 3 ? 'bruiser' : 'thug');
+  const bruisers = scrap >= 3 || stage >= 2;
+  for (let i = 0; i < scrapSize(scrap, loop); i++) {
+    out.push(bruisers && random() < 1 / 3 ? 'bruiser' : 'thug');
   }
   return out;
 }
+
+/** The boss scrap: the boss first, then 2 thugs (one more each loop, 7 at the most). */
+export const bossScrapKinds = (loop = 0): Kind[] => [
+  'boss',
+  ...Array.from({ length: Math.min(2 + loop, SCRAP_SIZE_MAX - 1) }, (): Kind => 'thug'),
+];
+
+/** The ring's hit on the hero: a boss hits harder. */
+export const ringDamage = (kind: Kind): number => (kind === 'boss' ? HIT_RING_BOSS : HIT_RING);
 
 /** Seconds per key the rings are planned with: on a speed level the goal's, else the player's own. */
 export function spkFor(level: number, spk: number): number {
@@ -120,8 +152,18 @@ export const blockPoints = (keys: number, level: number): number => 10 * keys * 
 export const scrapBonus = (scrap: number, level: number): number =>
   WAVE_BONUS * scrap * multiplier(level);
 
+/** The bonus for clearing stage `stage` (from 1, counting loops). */
+export const stageBonus = (stage: number, level: number): number =>
+  STAGE_BONUS_FACTOR * scrapBonus(stage, level);
+
+/** The scrap number the bonus counts: fights run on through the stages (scrap 1 to 3 of each). */
+export const fightNumber = (stage: number, scrap: number): number =>
+  (stage - 1) * STAGE_SCRAPS + scrap;
+
 export interface Candidate {
   id: string;
+  /** An item: a thug is always picked before an item. */
+  item?: boolean;
   /** The block showing (keys and closing space). */
   text: string;
   /** World x. */
@@ -129,13 +171,17 @@ export interface Candidate {
   engaged: boolean;
 }
 
-/** The thug a first key locks onto: engaged, text starts with `char`, nearest to the hero, then lowest id. */
+/** The thug (or else item) a first key locks onto: engaged, text starts with `char`, nearest to the hero, then lowest id. */
 export function lockThug(cands: readonly Candidate[], char: string, heroX: number): string | null {
   let best: Candidate | null = null;
   for (const c of cands) {
     if (!c.engaged || c.text[0] !== char) continue;
     if (best === null) {
       best = c;
+      continue;
+    }
+    if (!!c.item !== !!best.item) {
+      if (!c.item) best = c;
       continue;
     }
     const d = Math.abs(c.x - heroX);
@@ -202,9 +248,9 @@ export function runWpm(stats: RunStats): number {
   return stats.fastSeconds > 0 ? wpm(stats.fastKeys, stats.fastSeconds) : 0;
 }
 
-/** 'Fight 4 · 11 knock-outs · 28 words a minute · 94% right · Level 8 opened!'; empty parts are left out. */
-export function resultsText(stats: RunStats, scrap: number, opened: readonly number[]): string {
-  const parts: string[] = [`Fight ${scrap}`];
+/** 'Stage 4 · 11 knock-outs · 28 words a minute · 94% right · Level 8 opened!'; empty parts are left out. */
+export function resultsText(stats: RunStats, stage: number, opened: readonly number[]): string {
+  const parts: string[] = [`Stage ${stage}`];
   if (stats.knockouts > 0) {
     parts.push(`${stats.knockouts} knock-out${stats.knockouts === 1 ? '' : 's'}`);
   }
@@ -216,4 +262,171 @@ export function resultsText(stats: RunStats, scrap: number, opened: readonly num
     parts.push(`Levels ${opened[0]} to ${opened[opened.length - 1]} opened!`);
   }
   return parts.join(' · ');
+}
+
+export type StageId = 'street' | 'docks' | 'dojo' | 'rooftop';
+export type PropKind =
+  | 'lamp'
+  | 'bin'
+  | 'tree'
+  | 'fence'
+  | 'crate'
+  | 'barrel'
+  | 'bollard'
+  | 'lantern'
+  | 'pillar'
+  | 'bonsai'
+  | 'vent'
+  | 'antenna'
+  | 'tank';
+
+/** Colours of a stage (CSS strings): the sky gradient, the ground, the buildings and the lights. */
+export interface StagePalette {
+  /** Sky top, middle and bottom. */
+  sky: [string, string, string];
+  ground: string;
+  /** The strip behind the lane: a sidewalk, or water on the docks. */
+  walk: string;
+  kerb: string;
+  paint: string;
+  /** [wall, window, lit window] of each building palette. */
+  walls: [string, string, string][];
+  roof: string;
+  /** Hemisphere light from above and below, and the sun. */
+  hemi: [string, string];
+  sun: string;
+  /** The strip behind the lane lies below the ground, like water. */
+  sunken?: boolean;
+}
+
+export interface StageDef {
+  id: StageId;
+  title: string;
+  /** The boss's name, and the colour of their shirt. */
+  boss: string;
+  bossShirt: number;
+  palette: StagePalette;
+  props: PropKind[];
+}
+
+/** The four stages; after the last they loop, each loop harder. */
+export const STAGES: readonly StageDef[] = [
+  {
+    id: 'street',
+    title: 'Back Street',
+    boss: 'Big Biff',
+    bossShirt: 0x5b1a2a,
+    props: ['lamp', 'bin', 'tree', 'fence'],
+    palette: {
+      sky: ['#4ba3ff', '#bfe3ff', '#ffe6c2'],
+      ground: '#3d4048',
+      walk: '#9fa5b0',
+      kerb: '#c9ced6',
+      paint: '#f1f1ea',
+      walls: [
+        ['#8b5e3c', '#3b2a22', '#ffe9a8'],
+        ['#4a6fa5', '#27364f', '#d6ecff'],
+        ['#9c9a8f', '#4b4a45', '#fff3b0'],
+      ],
+      roof: '#555a66',
+      hemi: ['#ffffff', '#8a93a6'],
+      sun: '#fff1d6',
+    },
+  },
+  {
+    id: 'docks',
+    title: 'The Docks',
+    boss: 'Captain Crunch',
+    bossShirt: 0x1f4e79,
+    props: ['crate', 'barrel', 'bollard', 'lamp'],
+    palette: {
+      sky: ['#ff8a3d', '#ffb870', '#ffe2a8'],
+      ground: '#7a5a3a',
+      walk: '#2c7da0',
+      kerb: '#5b4126',
+      paint: '#a98055',
+      walls: [
+        ['#a4472f', '#4a2018', '#ffd27a'],
+        ['#6b7b8c', '#2c3640', '#ffe3a0'],
+        ['#7a4a2a', '#33200f', '#ffcf70'],
+      ],
+      roof: '#4a3a30',
+      hemi: ['#ffd9b0', '#6d5a4a'],
+      sun: '#ffb070',
+      sunken: true,
+    },
+  },
+  {
+    id: 'dojo',
+    title: 'The Dojo',
+    boss: 'Sensei Snap',
+    bossShirt: 0x2a2a2a,
+    props: ['lantern', 'pillar', 'bonsai'],
+    palette: {
+      sky: ['#2a2145', '#6b3a5a', '#e08a5a'],
+      ground: '#9a6a36',
+      walk: '#b8894c',
+      kerb: '#6a4220',
+      paint: '#c99a5c',
+      walls: [
+        ['#f4e8c8', '#8a5a2b', '#fff6d6'],
+        ['#efe0b8', '#7a4a22', '#fff0c4'],
+        ['#f8eed4', '#6a3f1c', '#ffe9b0'],
+      ],
+      roof: '#4a2f22',
+      hemi: ['#ffe9c8', '#7a5a3a'],
+      sun: '#ffd9a0',
+    },
+  },
+  {
+    id: 'rooftop',
+    title: 'The Rooftop',
+    boss: 'Rooftop Rex',
+    bossShirt: 0x2d6a4f,
+    props: ['vent', 'antenna', 'tank'],
+    palette: {
+      sky: ['#070b24', '#1b2350', '#3b3f7a'],
+      ground: '#2b2e3a',
+      walk: '#3d4256',
+      kerb: '#5a6078',
+      paint: '#7c84a0',
+      walls: [
+        ['#1f2540', '#0c1022', '#ffd86b'],
+        ['#252b4d', '#0e1228', '#9ee7ff'],
+        ['#1a2038', '#0a0d1e', '#ffb86b'],
+      ],
+      roof: '#2a2f48',
+      hemi: ['#b8c6ee', '#4a5070'],
+      sun: '#c4d2ff',
+    },
+  },
+];
+
+/** Where stage `stage` (from 1, counting loops) is: its definition and how many times the four have looped. */
+export function stageInfo(stage: number): { def: StageDef; loop: number } {
+  const i = Math.max(0, Math.floor(stage) - 1);
+  return { def: STAGES[i % STAGES.length], loop: Math.floor(i / STAGES.length) };
+}
+
+export type ItemType = 'cola' | 'pizza' | 'star';
+export const ITEM_WEIGHTS: Record<ItemType, number> = { cola: 6, pizza: 3, star: 1 };
+/** Health an item gives back (the star gives none). */
+export const ITEM_HEAL: Record<ItemType, number> = { cola: 20, pizza: 40, star: 0 };
+export const ITEM_EMOJI: Record<ItemType, string> = { cola: '🥤', pizza: '🍕', star: '⭐' };
+/** Letters of an item's block before the closing space. */
+export const ITEM_KEYS = 2;
+
+/** True when a knocked-out thug or bruiser drops an item (bosses never do). */
+export const dropsItem = (kind: Kind, random: Random): boolean =>
+  kind !== 'boss' && random() < ITEM_DROP_CHANCE;
+
+/** A random item by weight (6 cola : 3 pizza : 1 star). */
+export function pickItem(random: Random): ItemType {
+  const total = ITEM_WEIGHTS.cola + ITEM_WEIGHTS.pizza + ITEM_WEIGHTS.star;
+  let roll = random() * total;
+  for (const type of ['cola', 'pizza', 'star'] as const) {
+    roll -= ITEM_WEIGHTS[type];
+    if (roll < 0) return type;
+  }
+  return 'cola';
 }

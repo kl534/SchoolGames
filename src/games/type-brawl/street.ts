@@ -1,5 +1,6 @@
 import {
   AmbientLight,
+  Color,
   BoxGeometry,
   CanvasTexture,
   CylinderGeometry,
@@ -14,18 +15,13 @@ import {
   type Scene,
 } from 'three';
 import { seededRandom } from '../../shared/random';
+import type { StageDef, StagePalette } from './rules';
 
 /** Scenery is spawned in chunks this long (world units) ahead of the camera and recycled behind it. */
 export const CHUNK = 12;
 const BUILDING_Z = -6.5;
 const PROP_Z = -2.5;
-
-/** [wall, window, lit window] of the three building palettes. */
-const PALETTES: [string, string, string][] = [
-  ['#8b5e3c', '#3b2a22', '#ffe9a8'],
-  ['#4a6fa5', '#27364f', '#d6ecff'],
-  ['#9c9a8f', '#4b4a45', '#fff3b0'],
-];
+const QUAY_Z = -1.0;
 
 export interface Street {
   /** The scenery and lights; add it to the scene. */
@@ -62,16 +58,16 @@ function windowTexture(palette: [string, string, string], seed: number): CanvasT
   return texture;
 }
 
-function skyTexture(): CanvasTexture {
+function skyTexture(colors: StagePalette['sky']): CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 2;
   canvas.height = 256;
   const g = canvas.getContext('2d');
   if (g) {
     const gradient = g.createLinearGradient(0, 0, 0, 256);
-    gradient.addColorStop(0, '#4ba3ff');
-    gradient.addColorStop(0.7, '#bfe3ff');
-    gradient.addColorStop(1, '#ffe6c2');
+    gradient.addColorStop(0, colors[0]);
+    gradient.addColorStop(0.7, colors[1]);
+    gradient.addColorStop(1, colors[2]);
     g.fillStyle = gradient;
     g.fillRect(0, 0, 2, 256);
   }
@@ -80,15 +76,16 @@ function skyTexture(): CanvasTexture {
   return texture;
 }
 
-/** The long street: asphalt with a dashed lane line, a sidewalk strip, buildings behind and props along it. */
-export function createStreet(scene: Scene): Street {
+/** The long street of a stage: ground with a dashed line, a strip behind, buildings and props along it. */
+export function createStreet(scene: Scene, stage: StageDef): Street {
+  const pal = stage.palette;
   const object = new Group();
-  const sky = skyTexture();
+  const sky = skyTexture(pal.sky);
   scene.background = sky;
 
-  object.add(new HemisphereLight(0xffffff, 0x8a93a6, 1.5));
-  object.add(new AmbientLight(0xffffff, 0.35));
-  const sun = new DirectionalLight(0xfff1d6, 1.6);
+  object.add(new HemisphereLight(new Color(pal.hemi[0]), new Color(pal.hemi[1]), 1.5));
+  object.add(new AmbientLight(0xffffff, stage.id === 'rooftop' ? 0.5 : 0.35));
+  const sun = new DirectionalLight(new Color(pal.sun), stage.id === 'rooftop' ? 1.5 : 1.6);
   sun.position.set(-4, 9, 10);
   object.add(sun);
 
@@ -96,30 +93,64 @@ export function createStreet(scene: Scene): Street {
   const cylinder = new CylinderGeometry(1, 1, 1, 10);
   const ball = new SphereGeometry(1, 12, 8);
   const flat = new PlaneGeometry(1, 1);
-  const material = (color: number) => new MeshStandardMaterial({ color, roughness: 0.85 });
-  const asphalt = material(0x3d4048);
-  const sidewalk = material(0x9fa5b0);
-  const kerb = material(0xc9ced6);
-  const paint = new MeshStandardMaterial({ color: 0xf1f1ea, roughness: 0.9 });
+  const material = (color: number | string) =>
+    new MeshStandardMaterial({ color: new Color(color), roughness: 0.85 });
+  const asphalt = material(pal.ground);
+  const sidewalk = material(pal.walk);
+  const kerb = material(pal.kerb);
+  const paint = new MeshStandardMaterial({ color: new Color(pal.paint), roughness: 0.9 });
   const metal = material(0x4a4f5a);
   const bin = material(0x2f7d4f);
   const wood = material(0x7a5230);
   const leaf = material(0x3f9d4a);
   const fence = material(0xd9c9a0);
-  const textures = PALETTES.map((p, i) => windowTexture(p, 11 + i));
+  const crateWood = material(0xb07a3c);
+  const barrelBlue = material(0x2a5d9f);
+  const lanternRed = new MeshStandardMaterial({
+    color: 0xe63946,
+    emissive: new Color(0xff5a36),
+    emissiveIntensity: 0.6,
+    roughness: 0.6,
+  });
+  const darkWood = material(0x4a2f1c);
+  const light = new MeshStandardMaterial({
+    color: 0xff3b3b,
+    emissive: new Color(0xff2020),
+    emissiveIntensity: 1,
+  });
+  const textures = pal.walls.map((p, i) => windowTexture(p, 11 + i));
   const walls = textures.map((map) => new MeshStandardMaterial({ map, roughness: 0.9 }));
-  const roof = material(0x555a66);
-  const owned = [asphalt, sidewalk, kerb, paint, metal, bin, wood, leaf, fence, roof, ...walls];
+  const roof = material(pal.roof);
+  const owned = [
+    asphalt,
+    sidewalk,
+    kerb,
+    paint,
+    metal,
+    bin,
+    wood,
+    leaf,
+    fence,
+    roof,
+    crateWood,
+    barrelBlue,
+    lanternRed,
+    darkWood,
+    light,
+    ...walls,
+  ];
 
   // The ground follows the camera; everything with a pattern is in the chunks.
   const road = new Mesh(flat, asphalt);
   road.rotation.x = -Math.PI / 2;
-  road.scale.set(80, 44, 1);
-  road.position.set(0, 0, 10);
+  // On the docks the ground stops at the water's edge.
+  const roadBack = pal.sunken ? -1.2 : -12;
+  road.scale.set(80, 32 - roadBack, 1);
+  road.position.set(0, 0, (32 + roadBack) / 2);
   object.add(road);
   const walk = new Mesh(unit, sidewalk);
   walk.scale.set(80, 0.12, 4);
-  walk.position.set(0, 0.06, -3.2);
+  walk.position.set(0, pal.sunken ? -0.12 : 0.06, -3.2);
   object.add(walk);
   const edge = new Mesh(unit, kerb);
   edge.scale.set(80, 0.13, 0.15);
@@ -163,40 +194,111 @@ export function createStreet(scene: Scene): Street {
       x += width + 0.15 + random() * 0.6;
     }
 
-    // Props on the sidewalk: lamp posts, bins, trees and low fences.
+    // Props along the back of the lane, the stage's own kinds.
     const slots = 4;
     for (let s = 0; s < slots; s++) {
       const px = (s + 0.3 + random() * 0.4) * (CHUNK / slots);
-      const kind = Math.floor(random() * 4);
-      if (kind === 0) {
+      const kind = stage.props[Math.floor(random() * stage.props.length)];
+      // On the docks the props stand on the quay at the lane's edge; the strip behind is water.
+      const z = pal.sunken ? QUAY_Z : PROP_Z;
+      const y0 = 0.12;
+      if (kind === 'lamp') {
         const post = add(cylinder, metal);
         post.scale.set(0.06, 3.2, 0.06);
-        post.position.set(px, 1.6 + 0.12, PROP_Z);
+        post.position.set(px, 1.6 + y0, z);
         const head = add(unit, metal);
         head.scale.set(0.7, 0.1, 0.18);
-        head.position.set(px + 0.25, 3.3, PROP_Z);
-      } else if (kind === 1) {
+        head.position.set(px + 0.25, 3.3, z);
+      } else if (kind === 'bin') {
         const can = add(cylinder, bin);
         can.scale.set(0.24, 0.7, 0.24);
-        can.position.set(px, 0.35 + 0.12, PROP_Z);
+        can.position.set(px, 0.35 + y0, z);
         const lid = add(cylinder, metal);
         lid.scale.set(0.27, 0.06, 0.27);
-        lid.position.set(px, 0.85, PROP_Z);
-      } else if (kind === 2) {
+        lid.position.set(px, 0.85, z);
+      } else if (kind === 'tree') {
         const trunk = add(cylinder, wood);
         trunk.scale.set(0.1, 1.2, 0.1);
-        trunk.position.set(px, 0.6 + 0.12, PROP_Z);
+        trunk.position.set(px, 0.6 + y0, z);
         const crown = add(ball, leaf);
         crown.scale.set(0.7, 0.7, 0.7);
-        crown.position.set(px, 1.7, PROP_Z);
-      } else {
+        crown.position.set(px, 1.7, z);
+      } else if (kind === 'fence') {
         const rail = add(unit, fence);
         rail.scale.set(2.2, 0.08, 0.06);
-        rail.position.set(px, 0.55, PROP_Z);
+        rail.position.set(px, 0.55, z);
         for (let p = 0; p < 4; p++) {
           const stake = add(unit, fence);
           stake.scale.set(0.08, 0.6, 0.08);
-          stake.position.set(px - 1 + p * 0.67, 0.42, PROP_Z);
+          stake.position.set(px - 1 + p * 0.67, 0.42, z);
+        }
+      } else if (kind === 'crate') {
+        const w = 0.7 + random() * 0.3;
+        const lower = add(unit, crateWood);
+        lower.scale.set(w, w, w);
+        lower.position.set(px, w / 2 + 0.1, z);
+        if (random() < 0.6) {
+          const upper = add(unit, crateWood);
+          upper.scale.set(w * 0.8, w * 0.8, w * 0.8);
+          upper.position.set(px + 0.05, w + w * 0.4 + 0.1, z);
+        }
+      } else if (kind === 'barrel') {
+        const drum = add(cylinder, barrelBlue);
+        drum.scale.set(0.3, 0.8, 0.3);
+        drum.position.set(px, 0.5, z);
+        const band = add(cylinder, metal);
+        band.scale.set(0.32, 0.06, 0.32);
+        band.position.set(px, 0.55, z);
+      } else if (kind === 'bollard') {
+        const post = add(cylinder, metal);
+        post.scale.set(0.14, 0.5, 0.14);
+        post.position.set(px, 0.35, z);
+        const top = add(ball, metal);
+        top.scale.set(0.17, 0.12, 0.17);
+        top.position.set(px, 0.62, z);
+      } else if (kind === 'lantern') {
+        const post = add(cylinder, darkWood);
+        post.scale.set(0.07, 2.4, 0.07);
+        post.position.set(px, 1.2 + y0, z);
+        const lamp = add(ball, lanternRed);
+        lamp.scale.set(0.28, 0.36, 0.28);
+        lamp.position.set(px, 2.5, z);
+      } else if (kind === 'pillar') {
+        const pillar = add(cylinder, darkWood);
+        pillar.scale.set(0.22, 4.2, 0.22);
+        pillar.position.set(px, 2.1 + y0, z);
+      } else if (kind === 'bonsai') {
+        const pot = add(cylinder, darkWood);
+        pot.scale.set(0.25, 0.3, 0.25);
+        pot.position.set(px, 0.27, z);
+        const tuft = add(ball, leaf);
+        tuft.scale.set(0.42, 0.28, 0.42);
+        tuft.position.set(px, 0.62, z);
+      } else if (kind === 'vent') {
+        const body = add(unit, metal);
+        body.scale.set(0.9, 0.7, 0.7);
+        body.position.set(px, 0.35 + 0.1, z);
+        const fan = add(cylinder, roof);
+        fan.scale.set(0.28, 0.08, 0.28);
+        fan.position.set(px, 0.85, z);
+      } else if (kind === 'antenna') {
+        const mast = add(cylinder, metal);
+        mast.scale.set(0.04, 3.6, 0.04);
+        mast.position.set(px, 1.8 + 0.1, z);
+        const bar = add(unit, metal);
+        bar.scale.set(0.7, 0.04, 0.04);
+        bar.position.set(px, 3.0, z);
+        const lamp = add(ball, light);
+        lamp.scale.set(0.09, 0.09, 0.09);
+        lamp.position.set(px, 3.65, z);
+      } else {
+        const tank = add(cylinder, wood);
+        tank.scale.set(0.5, 0.9, 0.5);
+        tank.position.set(px, 1.6, z);
+        for (const dx of [-0.3, 0.3]) {
+          const leg = add(unit, metal);
+          leg.scale.set(0.06, 1.1, 0.06);
+          leg.position.set(px + dx, 0.65, z);
         }
       }
     }
@@ -223,6 +325,7 @@ export function createStreet(scene: Scene): Street {
       }
     },
     dispose() {
+      object.removeFromParent();
       sky.dispose();
       for (const t of textures) t.dispose();
       for (const m of owned) m.dispose();
