@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" font-family="system-ui, sans-serif" font-weight="900">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4ba3ff" />
+      <stop offset="1" stop-color="#ffe6c2" />
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" fill="url(#sky)" />
+  <!-- buildings -->
+  <rect x="20" y="70" width="130" height="190" fill="#8b5e3c" />
+  <rect x="160" y="110" width="110" height="150" fill="#4a6fa5" />
+  <rect x="400" y="60" width="120" height="200" fill="#9c9a8f" />
+  <rect x="530" y="100" width="110" height="160" fill="#8b5e3c" />
+  <g fill="#ffe9a8" opacity="0.9">
+    <rect x="40" y="90" width="22" height="22" /><rect x="80" y="90" width="22" height="22" /><rect x="40" y="130" width="22" height="22" />
+    <rect x="180" y="130" width="22" height="22" /><rect x="220" y="170" width="22" height="22" />
+    <rect x="420" y="80" width="22" height="22" /><rect x="460" y="120" width="22" height="22" />
+    <rect x="550" y="120" width="22" height="22" /><rect x="590" y="160" width="22" height="22" />
+  </g>
+  <!-- sidewalk and road -->
+  <rect y="250" width="640" height="26" fill="#9fa5b0" />
+  <rect y="276" width="640" height="84" fill="#3d4048" />
+  <g fill="#f1f1ea"><rect x="30" y="335" width="70" height="7" /><rect x="190" y="335" width="70" height="7" /><rect x="350" y="335" width="70" height="7" /><rect x="510" y="335" width="70" height="7" /></g>
+  <!-- hero -->
+  <g>
+    <ellipse cx="205" cy="322" rx="46" ry="9" fill="#000" opacity="0.28" />
+    <rect x="178" y="250" width="22" height="72" rx="10" fill="#1d4ed8" />
+    <rect x="206" y="256" width="22" height="66" rx="10" fill="#1d4ed8" transform="rotate(-8 217 256)" />
+    <rect x="170" y="318" width="34" height="10" rx="4" fill="#f4f4f4" />
+    <ellipse cx="200" cy="215" rx="36" ry="50" fill="#d7263d" />
+    <rect x="215" y="196" width="104" height="22" rx="11" fill="#f1b48a" />
+    <circle cx="326" cy="207" r="17" fill="#f1b48a" />
+    <rect x="186" y="214" width="46" height="18" rx="9" fill="#f1b48a" transform="rotate(25 186 214)" />
+    <circle cx="206" cy="150" r="32" fill="#f1b48a" />
+    <rect x="174" y="136" width="64" height="9" rx="4" fill="#fff" />
+    <circle cx="220" cy="152" r="4" fill="#1b1b24" /><circle cx="198" cy="152" r="4" fill="#1b1b24" />
+  </g>
+  <!-- thug -->
+  <g>
+    <ellipse cx="470" cy="322" rx="46" ry="9" fill="#000" opacity="0.28" />
+    <rect x="450" y="256" width="22" height="66" rx="10" fill="#2b2d42" transform="rotate(6 461 256)" />
+    <rect x="476" y="256" width="22" height="66" rx="10" fill="#2b2d42" transform="rotate(-6 487 256)" />
+    <ellipse cx="480" cy="215" rx="36" ry="50" fill="#e9c46a" transform="rotate(14 480 215)" />
+    <circle cx="500" cy="152" r="32" fill="#c68642" />
+    <circle cx="488" cy="155" r="4" fill="#1b1b24" /><circle cx="512" cy="155" r="4" fill="#1b1b24" />
+    <path d="M488 172 q12 -10 24 0" stroke="#5b2a22" stroke-width="4" fill="none" />
+  </g>
+  <!-- comic word and keys -->
+  <g transform="rotate(-8 350 120)">
+    <text x="350" y="130" text-anchor="middle" font-size="70" fill="#ffe033" stroke="#d61f2c" stroke-width="12" paint-order="stroke" stroke-linejoin="round">POW!</text>
+  </g>
+  <g transform="translate(405 75)">
+    <rect width="150" height="44" rx="12" fill="#05060f" opacity="0.85" stroke="#facc15" stroke-width="3" />
+    <text x="75" y="31" text-anchor="middle" font-size="26" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#4ade80">fj<tspan fill="#facc15">k</tspan><tspan fill="#fff"> ␣</tspan></text>
+  </g>
+</svg>

@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Type Brawl</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #1b2236;
+      }
+      #game {
+        position: fixed;
+        inset: 0;
+      }
+
+      /* The panel under the shared buttons: health bar, then score, streak, level, fight, best. */
+      .br-hud {
+        position: fixed;
+        z-index: 12;
+        top: max(64px, calc(env(safe-area-inset-top) + 52px));
+        left: 50%;
+        box-sizing: border-box;
+        width: min(94vw, 560px);
+        height: 72px;
+        transform: translateX(-50%);
+        color: #fff;
+        font:
+          800 16px/1 ui-monospace,
+          Menlo,
+          Consolas,
+          monospace;
+        pointer-events: none;
+      }
+      .br-hud[hidden] {
+        display: none;
+      }
+      /* On a wide screen the shared buttons are in the corners, so the panel goes to the very top. */
+      @media (min-width: 760px) {
+        .br-hud {
+          top: max(12px, calc(env(safe-area-inset-top) + 8px));
+        }
+      }
+      .br-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .br-health {
+        height: 34px;
+      }
+      .br-avatar {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 17px;
+        background: rgba(15, 18, 32, 0.8);
+        font-size: 22px;
+      }
+      .br-bar {
+        position: relative;
+        flex: 1;
+        height: 22px;
+        border-radius: 11px;
+        background: rgba(15, 18, 32, 0.85);
+        border: 2px solid rgba(255, 255, 255, 0.85);
+        overflow: hidden;
+        box-sizing: border-box;
+      }
+      .br-fill,
+      .br-ghost {
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100%;
+      }
+      .br-ghost {
+        background: rgba(255, 255, 255, 0.75);
+      }
+      .br-hp {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        color: #fff;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+      }
+      .br-stats {
+        height: 34px;
+        justify-content: center;
+        gap: 6px;
+        white-space: nowrap;
+      }
+      .br-stats > * {
+        display: inline-flex;
+        align-items: center;
+        height: 28px;
+        padding: 0 10px;
+        box-sizing: border-box;
+        border-radius: 14px;
+        background: rgba(15, 18, 32, 0.8);
+      }
+      .br-stats > [hidden] {
+        display: none;
+      }
+      .br-score {
+        min-width: 4.2em;
+        justify-content: center;
+        font-size: 1.15em;
+      }
+      .br-streak {
+        background: #ffc928 !important;
+        color: #2a1b00;
+      }
+      .br-level {
+        background: #facc15 !important;
+        color: #1a1400;
+      }
+      .br-fight,
+      .br-best {
+        font-size: 0.82em;
+        color: #cfd6e8;
+      }
+      .br-best {
+        color: #9aa3b8;
+      }
+      @media (max-width: 440px) {
+        .br-stats {
+          gap: 4px;
+          font-size: 14px;
+        }
+        .br-stats > * {
+          padding: 0 7px;
+        }
+      }
+
+      /* The red flash on the screen's edge when the hero is hit. */
+      .br-flash {
+        position: fixed;
+        inset: 0;
+        z-index: 11;
+        pointer-events: none;
+        opacity: 0;
+        box-shadow: inset 0 0 90px 24px rgba(239, 68, 68, 0.85);
+      }
+      .br-flash.go {
+        animation: br-flash 0.25s ease-out;
+      }
+      @keyframes br-flash {
+        0% {
+          opacity: 1;
+        }
+        100% {
+          opacity: 0;
+        }
+      }
+
+      /* The labels of keys above the thugs. */
+      .br-labels {
+        position: fixed;
+        inset: 0;
+        z-index: 6;
+        overflow: hidden;
+        pointer-events: none;
+      }
+      .br-labels[hidden] {
+        display: none;
+      }
+      .br-label {
+        position: absolute;
+        left: 0;
+        top: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.35em;
+        box-sizing: border-box;
+        padding: 0.15em 0.45em 0.15em 0.3em;
+        border: 2px solid var(--br-color, #fff);
+        border-radius: 0.55em;
+        background: rgba(5, 6, 15, 0.82);
+        color: #fff;
+        font:
+          800 16px/1.15 ui-monospace,
+          Menlo,
+          Consolas,
+          monospace;
+        white-space: pre;
+        transform-origin: 50% 100%;
+      }
+      .br-label[data-locked='1'] {
+        border-color: #facc15;
+        scale: 1.15;
+        z-index: 2;
+      }
+      .br-body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.15em;
+      }
+      .br-keys > span {
+        border-radius: 3px;
+      }
+      .br-space {
+        opacity: 0.7;
+      }
+      .br-keys > [data-state='done'] {
+        color: #4ade80;
+      }
+      .br-keys > [data-state='current'] {
+        background: #facc15;
+        color: #000;
+        opacity: 1;
+      }
+      .br-keys > [data-state='wrong'] {
+        background: rgba(250, 204, 21, 0.25);
+        color: #ef4444;
+        opacity: 1;
+      }
+      .br-pips {
+        display: flex;
+        gap: 0.2em;
+        height: 0.4em;
+      }
+      .br-pips > i {
+        width: 0.4em;
+        height: 0.4em;
+        border-radius: 50%;
+        background: #ffc928;
+        border: 1px solid rgba(255, 255, 255, 0.6);
+        box-sizing: border-box;
+      }
+      .br-pips > i[data-done='1'] {
+        background: transparent;
+        opacity: 0.5;
+      }
+      /* The wind-up ring around a fist: fills with the attacker's time, still and faint for the others. */
+      .br-ring {
+        --p: 0;
+        --ring: #ffc928;
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.7em;
+        height: 1.7em;
+        border-radius: 50%;
+        background: conic-gradient(var(--ring) calc(var(--p) * 360deg), rgba(255, 255, 255, 0.2) 0);
+        -webkit-mask: radial-gradient(circle, #000 62%, transparent 64%);
+        mask: radial-gradient(circle, #000 62%, transparent 64%);
+        opacity: 0.45;
+        font-size: 1em;
+      }
+      .br-ring > span {
+        font-size: 0.85em;
+        line-height: 1;
+      }
+      .br-ring[data-active='1'] {
+        opacity: 1;
+      }
+      .br-ring[data-hot='1'] {
+        --ring: #ef4444;
+        animation: br-pulse 0.4s ease-in-out infinite alternate;
+      }
+      @keyframes br-pulse {
+        from {
+          scale: 1;
+        }
+        to {
+          scale: 1.18;
+        }
+      }
+      .br-shake {
+        animation: br-shake 0.25s linear;
+      }
+      @keyframes br-shake {
+        0%,
+        100% {
+          translate: 0 0;
+        }
+        20% {
+          translate: -4px 0;
+        }
+        40% {
+          translate: 4px 0;
+        }
+        60% {
+          translate: -3px 0;
+        }
+        80% {
+          translate: 3px 0;
+        }
+      }
+
+      /* Pops of text. */
+      .br-pops {
+        position: fixed;
+        inset: 0;
+        z-index: 14;
+        overflow: hidden;
+        pointer-events: none;
+      }
+      .br-pop {
+        position: absolute;
+        color: #fff;
+        font:
+          800 18px/1 ui-monospace,
+          Menlo,
+          Consolas,
+          monospace;
+        text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+        white-space: nowrap;
+      }
+      .br-pop.br-big {
+        font-size: 26px;
+      }
+      .br-pop-centre {
+        left: 50%;
+        top: 38%;
+        font-size: 28px;
+        animation: br-centre 1.2s ease-out forwards;
+      }
+      .br-pop-score {
+        animation: br-score 0.8s ease-out forwards;
+      }
+      @keyframes br-centre {
+        0% {
+          opacity: 0;
+          transform: translate(-50%, 10px) scale(0.8);
+        }
+        15% {
+          opacity: 1;
+          transform: translate(-50%, 0) scale(1.1);
+        }
+        75% {
+          opacity: 1;
+          transform: translate(-50%, -6px) scale(1);
+        }
+        100% {
+          opacity: 0;
+          transform: translate(-50%, -14px) scale(1);
+        }
+      }
+      @keyframes br-score {
+        0% {
+          opacity: 1;
+          transform: translate(-50%, 0);
+        }
+        100% {
+          opacity: 0;
+          transform: translate(-50%, -30px);
+        }
+      }
+
+      /* The comic words of a landed move. */
+      .br-pow {
+        position: fixed;
+        z-index: 13;
+        font:
+          900 clamp(28px, 8vmin, 56px) system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        white-space: nowrap;
+        color: #ffe033;
+        -webkit-text-stroke: 7px #d61f2c;
+        paint-order: stroke fill;
+        text-shadow: 0 4px 0 rgba(90, 10, 20, 0.5);
+        pointer-events: none;
+        transform: translate(-50%, -50%) rotate(-8deg);
+        animation: br-pow 0.9s ease-out forwards;
+      }
+      .br-pow.hold {
+        animation: br-pow-in 0.15s ease-out forwards;
+      }
+      @keyframes br-pow {
+        0% {
+          transform: translate(-50%, -50%) rotate(-8deg) scale(0);
+          opacity: 1;
+        }
+        17% {
+          transform: translate(-50%, -50%) rotate(-8deg) scale(1.2);
+          opacity: 1;
+        }
+        28% {
+          transform: translate(-50%, -50%) rotate(-8deg) scale(1);
+          opacity: 1;
+        }
+        65% {
+          opacity: 1;
+        }
+        100% {
+          transform: translate(-50%, -50%) rotate(-8deg) scale(1);
+          opacity: 0;
+        }
+      }
+      @keyframes br-pow-in {
+        0% {
+          transform: translate(-50%, -50%) rotate(-8deg) scale(0);
+        }
+        70% {
+          transform: translate(-50%, -50%) rotate(-8deg) scale(1.2);
+        }
+        100% {
+          transform: translate(-50%, -50%) rotate(-8deg) scale(1);
+        }
+      }
+
+      .br-note {
+        position: fixed;
+        left: 50%;
+        top: 40%;
+        z-index: 30;
+        box-sizing: border-box;
+        width: min(88vw, 420px);
+        padding: 16px 20px;
+        border-radius: 20px;
+        background: rgba(15, 23, 42, 0.94);
+        border: 2px solid #facc15;
+        color: #fff;
+        font:
+          700 20px/1.35 system-ui,
+          sans-serif;
+        text-align: center;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+      }
+      .br-note strong {
+        display: block;
+        color: #facc15;
+        font-size: 24px;
+      }
+      .br-note[hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
