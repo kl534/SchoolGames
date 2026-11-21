@@ -261,7 +261,7 @@ function run(session: TypingSession): void {
   let picker: LevelPicker | null = null;
   let finished = false;
 
-  /** The stage (from 1, counting loops of the four) and the fight in it (the last is the boss). */
+  /** The stage (from 1, counting loops of the six) and the fight in it (the last is the boss). */
   let stage = 1;
   let fight = 1;
   let firstScrap = true;
@@ -1297,7 +1297,7 @@ function run(session: TypingSession): void {
     for (const d of dying) d.fighter.update(dt);
     effects.update(dt, hold && dev?.at == null);
     hud.update(dt, hold);
-    street.update(anchorX);
+    street.update(anchorX, performance.now() / 1000);
     syncCamera();
     placeLabels();
   };

@@ -167,7 +167,7 @@ describe('parseDev', () => {
 
   it('keeps numbers in range and ignores what is malformed', () => {
     const bad = parseDev(
-      'level=0&spk=-1&thugs=4&kind=king&stage=5&loop=-1&item=milk&win=1&lock=5&typed=x&hp=0&hp=101&scrap=5&ramp=21&ring=1.5&move=headbite&species=ghost&bonk=2&pop=0&at=-1&keys=' +
+      'level=0&spk=-1&thugs=4&kind=king&stage=7&loop=-1&item=milk&win=1&lock=5&typed=x&hp=0&hp=101&scrap=5&ramp=21&ring=1.5&move=headbite&species=ghost&bonk=2&pop=0&at=-1&keys=' +
         'a'.repeat(13),
     );
     expect(bad.level).toBeNull();
@@ -700,24 +700,44 @@ describe('voice', () => {
 });
 
 describe('stages', () => {
-  it('there are four, with the planned bosses, and each is distinct', () => {
-    expect(STAGES.map((st) => st.id)).toEqual(['street', 'docks', 'dojo', 'rooftop']);
+  it('there are six, with the planned bosses, and each is distinct', () => {
+    expect(STAGES.map((st) => st.id)).toEqual([
+      'street',
+      'docks',
+      'dojo',
+      'rooftop',
+      'jungle',
+      'snow',
+    ]);
     expect(STAGES.map((st) => st.boss)).toEqual([
       'Giga-Bot',
       'Fuzzball King',
       'Slime Duke',
       'Robo-Rex',
+      'Tiki Tom',
+      'Frostbite Fred',
     ]);
     expect(STAGES.map((st) => st.body)).toEqual([
       'giga-bot',
       'fuzzball-king',
       'slime-duke',
       'robo-rex',
+      'big-monster',
+      'big-monster',
     ]);
-    expect(STAGES.map((st) => st.species)).toEqual(['robot', 'monster', 'monster', 'robot']);
-    expect(STAGES.map((st) => st.bossColor)).toEqual([0x8aa4c8, 0x9b5de5, 0x5fd35f, 0x2ec4b6]);
-    expect(new Set(STAGES.map((st) => st.palette.sky[0])).size).toBe(4);
-    expect(new Set(STAGES.map((st) => st.palette.ground)).size).toBe(4);
+    expect(STAGES.map((st) => st.species)).toEqual([
+      'robot',
+      'monster',
+      'monster',
+      'robot',
+      'monster',
+      'monster',
+    ]);
+    expect(STAGES.map((st) => st.bossColor)).toEqual([
+      0x8aa4c8, 0x9b5de5, 0x5fd35f, 0x2ec4b6, 0xc98a2b, 0x6ec6ff,
+    ]);
+    expect(new Set(STAGES.map((st) => st.palette.sky[0])).size).toBe(6);
+    expect(new Set(STAGES.map((st) => st.palette.ground)).size).toBe(6);
     for (const st of STAGES) {
       expect(st.props.length).toBeGreaterThanOrEqual(3);
       expect(st.palette.walls.length).toBeGreaterThanOrEqual(3);
@@ -732,18 +752,19 @@ describe('stages', () => {
     }
   });
 
-  it('stageInfo loops through the four, one loop harder each time', () => {
-    expect([1, 2, 3, 4, 5, 6, 8, 9].map((n) => stageInfo(n).def.id)).toEqual([
+  it('stageInfo loops through the six, one loop harder each time', () => {
+    expect([1, 2, 3, 4, 5, 6, 7, 8, 13].map((n) => stageInfo(n).def.id)).toEqual([
       'street',
       'docks',
       'dojo',
       'rooftop',
+      'jungle',
+      'snow',
       'street',
       'docks',
-      'rooftop',
       'street',
     ]);
-    expect([1, 4, 5, 8, 9, 13].map((n) => stageInfo(n).loop)).toEqual([0, 0, 1, 1, 2, 3]);
+    expect([1, 6, 7, 12, 13, 19].map((n) => stageInfo(n).loop)).toEqual([0, 0, 1, 1, 2, 3]);
     expect(stageInfo(0).def.id).toBe('street');
   });
 
@@ -900,7 +921,7 @@ describe('robots, monsters and their moves', () => {
       expect(look.color).toBe(st.bossColor);
       expect(look.scale).toBe(1.4);
     });
-    expect(lookFor('boss', seededRandom(1), 5).body).toBe(STAGES[1].body);
+    expect(lookFor('boss', seededRandom(1), STAGES.length + 1).body).toBe(STAGES[1].body);
     for (let i = 0; i < 30; i++) {
       expect(lookFor('thug', seededRandom(i), 0, 'robot').species).toBe('robot');
       expect(lookFor('bruiser', seededRandom(i), 0, 'monster').species).toBe('monster');
