@@ -9,7 +9,10 @@ export interface HudNumbers {
   /** The streak's points multiplier; the badge is hidden at 1. */
   streak: number;
   level: number;
-  fight: number;
+  /** 'Stage 2 · 1/3' or 'Stage 2 · Boss'. */
+  fight: string;
+  /** Knock-outs the star still makes perfect; the badge is hidden at 0. */
+  stars: number;
   best: number;
 }
 
@@ -59,13 +62,15 @@ export function createHud(avatar: string): Hud {
   score.className = 'br-score';
   const streak = document.createElement('span');
   streak.className = 'br-streak';
+  const star = document.createElement('span');
+  star.className = 'br-star';
   const level = document.createElement('span');
   level.className = 'br-level';
   const fight = document.createElement('span');
   fight.className = 'br-fight';
   const best = document.createElement('span');
   best.className = 'br-best';
-  row.append(score, streak, level, fight, best);
+  row.append(score, streak, star, level, fight, best);
   element.append(top, row);
   document.body.appendChild(element);
 
@@ -98,8 +103,10 @@ export function createHud(avatar: string): Hud {
       score.textContent = fmt(n.score);
       streak.hidden = n.streak <= 1;
       streak.textContent = `🔥×${n.streak}`;
+      star.hidden = n.stars <= 0;
+      star.textContent = `⭐×${n.stars}`;
       level.textContent = `Lv ${n.level}`;
-      fight.textContent = `Fight ${n.fight}`;
+      fight.textContent = n.fight;
       best.textContent = `Best ${fmt(Math.max(n.best, n.score))}`;
     },
     hurt() {

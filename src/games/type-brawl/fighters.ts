@@ -1,4 +1,5 @@
 import { MathUtils } from 'three';
+import { writeDance, type DanceId } from '../../shared/dances';
 import {
   DOWN_SECONDS,
   HURT_SECONDS,
@@ -53,8 +54,11 @@ const THUG_SHIRTS = [0xe76f51, 0x2a9d8f, 0xe9c46a, 0x9b5de5, 0x00a6fb, 0xf15bb5]
 const SKINS = [0xf1b48a, 0xc68642, 0x8d5524, 0xffdbac];
 const HAIRS = [0x5a3416, 0x1b1b1b, 0xb5651d, 0x8a8a8a];
 
-/** How a thug of this kind looks: a random shirt, hat and skin; a bruiser is bigger, darker and wears an eyepatch. */
-export function lookFor(kind: Kind, random: Random): Look {
+/**
+ * How a thug of this kind looks: a random shirt, hat and skin; a bruiser is bigger, darker and wears an
+ * eyepatch; a boss is bigger still, in the stage's colour, with a cape and a crown.
+ */
+export function lookFor(kind: Kind, random: Random, bossShirt = 0x5b1a2a): Look {
   const pick = <T>(items: readonly T[]): T => items[Math.floor(random() * items.length)];
   const base: Look = {
     shirt: pick(THUG_SHIRTS),
@@ -69,7 +73,7 @@ export function lookFor(kind: Kind, random: Random): Look {
     return { ...base, shirt: 0x3a2f4d, pants: 0x1a1a24, scale: 1.2, eyepatch: true, hat: 'none' };
   }
   if (kind === 'boss') {
-    return { ...base, shirt: 0x5b1a2a, scale: 1.4, cape: true, hat: 'crown', hatColor: 0xffc928 };
+    return { ...base, shirt: bossShirt, scale: 1.4, cape: true, hat: 'crown', hatColor: 0xffc928 };
   }
   return base;
 }
@@ -85,7 +89,9 @@ export type Mode =
   | { kind: 'hurt'; t: number }
   | { kind: 'react'; move: MoveId; t: number; away: 1 | -1 }
   | { kind: 'launch'; move: MoveId; t: number; away: 1 | -1 }
-  | { kind: 'down'; t: number };
+  | { kind: 'down'; t: number }
+  /** A victory dance, facing the camera. */
+  | { kind: 'dance'; dance: DanceId; t: number };
 
 export interface Fighter {
   readonly person: Person;
@@ -168,7 +174,7 @@ export function createFighter(look: Look, idleSeed = 0): Fighter {
     worldX: () => fighter.x + offsetX,
     update(delta) {
       clock += delta;
-      const target = facing * (Math.PI / 2);
+      const target = mode.kind === 'dance' ? 0 : facing * (Math.PI / 2);
       const diff = target - yaw;
       yaw += Math.sign(diff) * Math.min(Math.abs(diff), TURN_SPEED * delta);
 
@@ -243,13 +249,17 @@ export function createFighter(look: Look, idleSeed = 0): Fighter {
             }
             break;
           }
+          case 'dance':
+            m.t += delta;
+            writeDance(pose, m.dance, m.t);
+            break;
           case 'down':
             m.t += delta;
             fall = downPose(pose, m.t);
             offsetX = -facing * 0.5 * fall;
             break;
         }
-        const mirrored = facing === -1 && m.kind !== 'launch';
+        const mirrored = facing === -1 && m.kind !== 'launch' && m.kind !== 'dance';
         if (mirrored) mirrorPose(pose);
       });
 

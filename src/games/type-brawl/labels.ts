@@ -34,11 +34,14 @@ export function staggerLabels(boxes: readonly LabelBox[]): number[] {
   return dy;
 }
 
-/** The label font size (px): the text fits one column pitch (`pitchPx`), between 13 and 22 px. */
-export function labelFontPx(pitchPx: number, chars: number): number {
+/** The label font size (px): the text fits one column pitch (`pitchPx`), between `floor` (13) and 22 px. */
+export function labelFontPx(pitchPx: number, chars: number, floor = 13): number {
   const fit = Math.round((pitchPx * 0.95) / (chars * 0.62 + 0.8));
-  return Math.min(Math.max(fit, 13), 22);
+  return Math.min(Math.max(fit, floor), 22);
 }
+
+/** The smallest font a boss's label may have, so the big keys stay easy to read. */
+export const BOSS_FONT_FLOOR = 17;
 
 const SPACE_GLYPH = '␣';
 
@@ -64,20 +67,26 @@ export interface Label {
   setRing(fraction: number, active: boolean): void;
   /** Flashes the current key red and shakes for 250 ms (`hold` keeps the red). */
   flashWrong(hold?: boolean): void;
+  /** The label fades out over 0.35 s and removes itself. */
+  fade(): void;
   /** Moves the label so its top-left is at (x, y) px. */
   place(x: number, y: number): void;
   remove(): void;
 }
 
-/** Makes one label for `text` (a block and its closing space) with a border of `color`. */
-export function createLabel(root: HTMLElement, text: string, color: string): Label {
+/**
+ * Makes one label for `text` (a block and its closing space) with a border of `color`. An item's
+ * label (`icon` an emoji) has no wind-up ring and no pips.
+ */
+export function createLabel(root: HTMLElement, text: string, color: string, icon?: string): Label {
   const element = document.createElement('div');
   element.className = 'br-label';
   element.style.setProperty('--br-color', color);
   const ring = document.createElement('div');
   ring.className = 'br-ring';
   const fist = document.createElement('span');
-  fist.textContent = '🥊';
+  fist.textContent = icon ?? '🥊';
+  if (icon) element.dataset.item = '1';
   ring.appendChild(fist);
   const body = document.createElement('div');
   body.className = 'br-body';
@@ -168,6 +177,11 @@ export function createLabel(root: HTMLElement, text: string, color: string): Lab
           element.classList.remove('br-shake');
         }, 250);
       }
+    },
+    fade() {
+      clearTimeout(wrongTimer);
+      element.classList.add('br-fade');
+      setTimeout(() => element.remove(), 350);
     },
     place(x, y) {
       element.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
