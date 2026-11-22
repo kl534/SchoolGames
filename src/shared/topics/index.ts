@@ -5,7 +5,7 @@ import type { Fact, Topic } from './types';
 import { VOCABULARY_TOPICS } from './vocabulary';
 
 export type { Continent } from './countries';
-export type { DistractorFn, Fact, FactMap, FactVisual, Topic } from './types';
+export type { DistractorFn, Fact, FactMap, FactMeaning, FactVisual, Topic } from './types';
 
 /** Every topic, in menu order. Add new topic lists here. */
 export const TOPICS: Topic[] = [...MATH_TOPICS, ...SOCIAL_STUDIES_TOPICS, ...VOCABULARY_TOPICS];

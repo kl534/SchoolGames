@@ -14,6 +14,7 @@ import { stateCapitals } from '../src/shared/topics/capitals';
 import { showFactMap } from '../src/shared/maps';
 import { stateLocations } from '../src/shared/topics/locations';
 import { mathFact } from '../src/shared/topics/math';
+import { synonymFact } from '../src/shared/topics/vocabulary';
 
 function makeButtons(): HTMLButtonElement[] {
   return Array.from({ length: 4 }, () => {
@@ -420,5 +421,38 @@ describe('tapflow with a picture', () => {
       flow.reveal(buttons, ['13', '12', '14', '15'], sum);
       expect(document.querySelector('.sg-factmap.is-shown')).toBeNull();
     });
+  });
+});
+
+describe('tapflow with a word card', () => {
+  const happy = synonymFact(
+    ['happy', 'adj', ['glad'], ['sad']],
+    ['feeling or showing joy', 'She was *happy* to see her best friend.'],
+  );
+  const options = ['sad', 'glad', 'mad', 'bad'];
+  const spoken = () => vi.mocked(speak).mock.calls.map((call) => call[0]);
+
+  it('shows the card on a miss, says only the trap line and the statement, and the tap removes it', () => {
+    flow.reveal(buttons, options, happy, { chosen: 'sad' });
+    expect(document.querySelectorAll('.sg-wc-card')).toHaveLength(1);
+    expect(spoken()).toEqual(['Sad is an antonym of happy.']);
+    vi.mocked(speak).mock.lastCall![1]!();
+    expect(spoken()).toEqual(['Sad is an antonym of happy.', 'Glad is a synonym of happy.']);
+    flow.update(TAP_GUARD + 1);
+    expect(flow.tap(1)).toBe(true);
+    expect(document.querySelector('.sg-wc-card')).toBeNull();
+  });
+
+  it('shows no card when the picture is switched off', () => {
+    flow.reveal(buttons, options, happy, { picture: false });
+    expect(document.querySelector('.sg-wc-card')).toBeNull();
+  });
+
+  it('shows the card on arm and starts the reminders after the reading', () => {
+    flow.arm(buttons, 1, undefined, happy);
+    expect(document.querySelector('.sg-wc-card')).not.toBeNull();
+    flow.readFinished();
+    flow.update(NUDGE_FIRST);
+    expect(speak).toHaveBeenLastCalledWith(TAP_SPEECH);
   });
 });

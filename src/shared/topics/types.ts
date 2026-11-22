@@ -26,6 +26,18 @@ export type FactMap =
     };
 
 /** One thing to learn: a prompt with a single correct answer. Answers are text, so words work too. */
+/** A vocabulary word explained on the miss card (see `src/shared/wordcard/`). */
+export interface FactMeaning {
+  /** The asked head word, lower case as in the data, e.g. 'happy'. */
+  word: string;
+  partOfSpeech: 'noun' | 'verb' | 'adjective' | 'adverb';
+  definition: string;
+  /** With the word marked once as *word*. */
+  example: string;
+  /** Names the answer on the card's last line: 'Synonym: glad'. */
+  relation: 'Synonym' | 'Antonym';
+}
+
 export interface Fact {
   /** Unique within its topic and stable across releases; progress is stored under it. */
   id: string;
@@ -41,6 +53,8 @@ export interface Fact {
   spokenStatement?: string;
   /** Said after a miss when the player picked this wrong answer, before the statement. */
   wrongLines?: Readonly<Record<string, string>>;
+  /** Shown on the miss card of a word fact. */
+  meaning?: FactMeaning;
   visual?: FactVisual;
   /** Shown as a big map while the fact is asked (see `src/shared/maps/`). */
   map?: FactMap;
