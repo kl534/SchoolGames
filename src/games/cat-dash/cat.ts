@@ -257,7 +257,9 @@ export function createCat(initial: CatLook): Cat {
   const eyeMat = new MeshStandardMaterial({ roughness: 0.3 });
   const noseMat = new MeshStandardMaterial({ roughness: 0.5 });
   const coatMat = new MeshStandardMaterial({ roughness: 1, transparent: true, opacity: 0.88 });
-  kit.materials.push(furMat, bellyMat, pawMat, stripeMat, eyeMat, noseMat, coatMat);
+  // The head is fur or, under a coat, the coat's colour (so the eyes and nose stay in view).
+  const headMat = new MeshStandardMaterial({ roughness: 0.85 });
+  kit.materials.push(furMat, bellyMat, pawMat, stripeMat, eyeMat, noseMat, coatMat, headMat);
   const patchMats = [0, 1, 2, 3].map(() => {
     const m = new MeshStandardMaterial({ roughness: 0.9 });
     kit.materials.push(m);
@@ -307,9 +309,7 @@ export function createCat(initial: CatLook): Cat {
   head.position.set(0.66, 0.26, 0);
   head.rotation.y = -0.5;
   rig.add(head);
-  sphere(0.28, 1.02, 0.94, 1.05, furMat, head);
-  const coatHead = sphere(0.3, 1.1, 1.02, 1.12, coatMat, head);
-  coatHead.visible = false;
+  sphere(0.28, 1.02, 0.94, 1.05, headMat, head);
   const muzzle = sphere(0.12, 1.1, 0.8, 1, bellyMat, head);
   muzzle.position.set(0.22, -0.08, 0);
   const headPatch = sphere(0.2, 0.9, 0.7, 1.1, patchMats[2], head);
@@ -462,10 +462,10 @@ export function createCat(initial: CatLook): Cat {
     if (i > 0) seg.position.x = -SEGMENT;
     parent.add(seg);
     const r = 0.085 - i * 0.006;
-    const part = sphere(r, 1.3, 1, 1, furMat, seg);
+    const part = sphere(r, 2.0, 1, 1, furMat, seg);
     part.position.x = -SEGMENT * 0.35;
     if (i === 2) {
-      tailPatch = sphere(r * 1.08, 1.4, 1.02, 1.02, patchMats[3], seg);
+      tailPatch = sphere(r * 1.08, 2.0, 1.02, 1.02, patchMats[3], seg);
       tailPatch.position.x = -SEGMENT * 0.35;
     }
     // Rings on a tabby tail.
@@ -514,6 +514,7 @@ export function createCat(initial: CatLook): Cat {
     furBase.r = furMat.color.r;
     furBase.g = furMat.color.g;
     furBase.b = furMat.color.b;
+    headMat.color.copy(furMat.color);
     bellyMat.color.setHex(look.belly);
     const whitePaws = look.id === 'tuxedo' || look.id === 'calico';
     pawMat.color.setHex(whitePaws ? look.belly : look.fur);
@@ -540,12 +541,11 @@ export function createCat(initial: CatLook): Cat {
     const none = coat === 'none';
     const wet = coat === 'wet';
     const puff = coat === 'puff';
-    coatBody.visible = coatHead.visible = !none && !wet;
+    coatBody.visible = !none && !wet;
     spikes.visible = puff;
     beard.visible = coat === 'foam';
     const shellScale = puff ? 1.25 : 1;
     coatBody.scale.set(0.7 * shellScale, 0.4 * shellScale, 0.4 * shellScale);
-    coatHead.scale.setScalar(1.1 * shellScale);
     if (!none && !wet) {
       const c = puff ? look.fur : COAT_COLORS[coat as keyof typeof COAT_COLORS];
       coatMat.color.setHex(c);
@@ -554,6 +554,7 @@ export function createCat(initial: CatLook): Cat {
     // A wet cat is dark and thin.
     const k = wet ? 0.55 : 1;
     furMat.color.setRGB(furBase.r * k, furBase.g * k, furBase.b * k);
+    headMat.color.copy(none || wet ? furMat.color : coatMat.color);
     torso.scale.set(0.64, wet ? 0.29 : 0.33, wet ? 0.3 : 0.34);
   };
 

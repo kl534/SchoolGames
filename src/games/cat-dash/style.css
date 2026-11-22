@@ -1,0 +1,860 @@
+.cd-hud,
+.cd-lives,
+.cd-score,
+.cd-answers,
+.cd-banner,
+.cd-count,
+.cd-word,
+.cd-pop {
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  color: #fff;
+}
+
+/* The question and the place strip, centred at the top. */
+.cd-hud {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  max-width: calc(100vw - 300px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* Leave room for the menu, sound and pause buttons, and the lives and score, on a narrow screen. */
+@media (max-width: 640px) {
+  .cd-hud {
+    top: calc(max(12px, env(safe-area-inset-top)) + 132px);
+    max-width: calc(100vw - 24px);
+  }
+}
+
+/* A short landscape phone: everything is squeezed towards the edges. */
+@media (max-height: 460px) {
+  .cd-hud {
+    top: 6px;
+    gap: 3px;
+    max-width: calc(100vw - 330px);
+  }
+}
+
+.cd-hud[hidden],
+.cd-answers[hidden],
+.cd-answer[hidden],
+.cd-banner[hidden],
+.cd-banner-detail[hidden],
+.cd-mult[hidden],
+.cd-count[hidden],
+.cd-word[hidden] {
+  display: none;
+}
+
+.cd-problem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 22px;
+  border-radius: 20px;
+  max-width: 100%;
+  background: rgba(20, 30, 70, 0.84);
+  border: 2px solid rgba(255, 224, 102, 0.7);
+  pointer-events: auto;
+}
+
+/* A long word prompt (\"Antonym of INDISPENSABLE\") wraps instead of running off a narrow screen. */
+.cd-problem-text {
+  min-width: 0;
+  font-size: clamp(26px, 6.5vmin, 54px);
+  font-weight: 800;
+  text-align: center;
+}
+
+@media (max-height: 460px) {
+  .cd-problem {
+    padding: 2px 6px 2px 16px;
+  }
+
+  .cd-problem-text {
+    font-size: 30px;
+  }
+}
+
+.cd-hear {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+@media (max-height: 460px) {
+  .cd-hear {
+    width: 48px;
+    height: 48px;
+  }
+}
+
+/* The place strip: the place's name, six dots for the visit, the next door, and a thin clock. */
+.cd-place {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  width: 100%;
+  min-width: 220px;
+  padding: 4px 10px 5px;
+  border-radius: 14px;
+  background: rgba(20, 30, 70, 0.72);
+}
+
+.cd-place-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cd-place-name {
+  flex: none;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #ffe066;
+  white-space: nowrap;
+}
+
+.cd-dots {
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  gap: 6px;
+}
+
+.cd-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  box-sizing: border-box;
+}
+
+.cd-dot.now {
+  border-color: #ffe066;
+  background: rgba(255, 224, 102, 0.35);
+}
+
+.cd-dot.clear {
+  background: #5cf2b0;
+  border-color: #5cf2b0;
+}
+
+.cd-dot.fail {
+  background: #ffd43b;
+  border-color: #ffd43b;
+}
+
+.cd-door {
+  flex: none;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.cd-clock {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+}
+
+.cd-clock-fill {
+  height: 100%;
+  width: 100%;
+  background: #5cf2b0;
+  transform-origin: left;
+  transform: scaleX(0);
+}
+
+.cd-place.urgent .cd-clock-fill {
+  background: #ff9f1c;
+}
+
+.cd-place.waiting .cd-clock {
+  animation: cd-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes cd-pulse {
+  50% {
+    background: rgba(255, 224, 102, 0.5);
+  }
+}
+
+@media (max-height: 460px) {
+  .cd-place {
+    min-width: 200px;
+    padding: 2px 8px 3px;
+  }
+
+  .cd-place-name {
+    font-size: 11px;
+  }
+
+  .cd-dot {
+    width: 10px;
+    height: 10px;
+  }
+
+  .cd-door {
+    font-size: 16px;
+  }
+}
+
+/* Three cat faces for the lives, the score, the streak badge and the best score, under the menu button. */
+.cd-lives {
+  position: fixed;
+  top: calc(max(12px, env(safe-area-inset-top)) + 58px);
+  left: max(12px, env(safe-area-inset-left));
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px 5px 8px;
+  border-radius: 16px;
+  background: rgba(20, 30, 70, 0.72);
+  pointer-events: none;
+}
+
+@media (max-height: 460px) {
+  .cd-lives {
+    top: calc(max(12px, env(safe-area-inset-top)) + 54px);
+    padding: 3px 10px 3px 6px;
+    gap: 4px;
+  }
+}
+
+.cd-life {
+  display: block;
+  width: 36px;
+  height: 36px;
+}
+
+@media (max-height: 460px) {
+  .cd-life {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+.cd-life svg,
+.cd-card-face svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.cd-life.lost {
+  opacity: 0.85;
+  animation: cd-wobble 0.6s ease-out;
+}
+
+@keyframes cd-wobble {
+  0% {
+    transform: rotate(0) scale(1.35);
+  }
+  25% {
+    transform: rotate(-18deg) scale(1.2);
+  }
+  50% {
+    transform: rotate(14deg) scale(1.1);
+  }
+  75% {
+    transform: rotate(-8deg);
+  }
+  100% {
+    transform: rotate(0) scale(1);
+  }
+}
+
+.cd-score {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin-left: 4px;
+  text-align: right;
+}
+
+.cd-score-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.cd-score-value {
+  font-size: clamp(26px, 6.5vmin, 36px);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  color: #ffe066;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+}
+
+.cd-score-value.on {
+  animation: cd-score 0.3s ease-out;
+}
+
+@keyframes cd-score {
+  0% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.cd-mult {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #ff9f1c;
+  color: #1a0f3d;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.cd-best {
+  font-size: 13px;
+  font-weight: 700;
+  color: #cfd8ff;
+}
+
+/* The four answers along the bottom: two rows of two on a narrow phone. */
+.cd-answers {
+  position: fixed;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 50%;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  width: min(760px, calc(100vw - 24px));
+  transform: translateX(-50%);
+}
+
+@media (max-width: 560px) {
+  .cd-answers {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.cd-answer {
+  min-width: 0;
+  height: 72px;
+  padding: 0 8px;
+  border: 3px solid #fff;
+  border-radius: 20px;
+  background: linear-gradient(#ff8a3c, #e8501f);
+  color: #fff;
+  font:
+    800 clamp(26px, 6vmin, 40px) system-ui,
+    sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+  box-shadow: 0 6px 18px rgba(20, 30, 70, 0.45);
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    opacity 0.3s;
+}
+
+@media (max-width: 560px) {
+  .cd-answer {
+    height: 68px;
+  }
+}
+
+@media (max-height: 460px) {
+  .cd-answer {
+    height: 56px;
+  }
+}
+
+.cd-answer:active:not([aria-disabled='true']) {
+  scale: 0.96;
+}
+
+.cd-answer:focus-visible {
+  outline: 4px solid #ffd43b;
+  outline-offset: 2px;
+}
+
+.cd-answer[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.cd-answer.chosen {
+  opacity: 1;
+  border-color: #ffe066;
+}
+
+.cd-answer.right {
+  opacity: 1;
+  border-color: #1b6b2b;
+  background: #5cf2b0;
+  color: #0c3a1d;
+  text-shadow: none;
+  box-shadow:
+    0 0 0 5px rgba(92, 242, 176, 0.5),
+    0 0 26px 8px rgba(92, 242, 176, 0.7);
+}
+
+.cd-answer.wrong {
+  opacity: 1;
+  border-color: #8c1d1d;
+  background: #ff8787;
+  color: #4a0c0c;
+  text-shadow: none;
+}
+
+.cd-answer.gone {
+  opacity: 0.25;
+}
+
+/* Big messages directly under the question, so the crash stays in view. */
+.cd-banner {
+  position: fixed;
+  left: 50%;
+  top: 140px;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: max-content;
+  max-width: min(92vw, 680px);
+  max-height: 108px;
+  padding: 6px 22px;
+  border-radius: 20px;
+  background: rgba(20, 30, 70, 0.9);
+  border: 2px solid rgba(255, 224, 102, 0.7);
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+  overflow: hidden;
+  animation: cd-banner 0.35s ease-out;
+}
+
+@media (max-width: 640px) {
+  .cd-banner {
+    max-height: 84px;
+  }
+}
+
+@media (max-height: 460px) {
+  .cd-banner {
+    max-height: 64px;
+    padding: 3px 18px;
+  }
+}
+
+.cd-banner-title {
+  font-size: clamp(26px, 7vmin, 52px);
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.cd-banner.hit .cd-banner-title {
+  color: #ffe066;
+}
+
+.cd-banner.miss .cd-banner-title,
+.cd-banner.out .cd-banner-title {
+  color: #ffd98a;
+}
+
+.cd-banner.place .cd-banner-title {
+  color: #ffe066;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cd-banner-detail {
+  font-size: clamp(16px, 4.4vmin, 30px);
+  font-weight: 800;
+  line-height: 1.15;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@media (max-height: 460px) {
+  .cd-banner-title {
+    font-size: 24px;
+  }
+
+  .cd-banner-detail {
+    font-size: 16px;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
+}
+
+@keyframes cd-banner {
+  from {
+    transform: translateX(-50%) scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(-50%) scale(1);
+    opacity: 1;
+  }
+}
+
+/* 3, 2, 1, Go! */
+.cd-count {
+  position: fixed;
+  left: 50%;
+  top: 40%;
+  z-index: 12;
+  font-size: clamp(90px, 26vmin, 200px);
+  font-weight: 900;
+  color: #ffe066;
+  text-shadow:
+    0 6px 0 rgba(0, 0, 0, 0.3),
+    0 0 40px rgba(255, 224, 102, 0.6);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.cd-count.on {
+  animation: cd-count 0.7s ease-out;
+}
+
+@keyframes cd-count {
+  from {
+    transform: translate(-50%, -50%) scale(1.8);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+/* The comic word over the stunt: BOING, SPLAT, KABOOM. */
+.cd-word {
+  position: fixed;
+  z-index: 13;
+  font-size: clamp(34px, 9vmin, 76px);
+  font-weight: 900;
+  font-style: italic;
+  white-space: nowrap;
+  color: #fff;
+  -webkit-text-stroke: 0.09em #1a1030;
+  paint-order: stroke fill;
+  transform: translate(-50%, -50%) rotate(var(--tilt, -4deg));
+  pointer-events: none;
+  opacity: 0;
+}
+
+.cd-word.good {
+  text-shadow:
+    0.06em 0.06em 0 #ffd43b,
+    0.12em 0.12em 0 #ff9f1c;
+}
+
+.cd-word.bad {
+  text-shadow:
+    0.06em 0.06em 0 #ff6b4a,
+    0.12em 0.12em 0 #c0261e;
+}
+
+.cd-word.on {
+  animation: cd-word 1.1s cubic-bezier(0.2, 1.6, 0.4, 1) forwards;
+}
+
+@keyframes cd-word {
+  0% {
+    transform: translate(-50%, -50%) rotate(var(--tilt, -4deg)) scale(0.2);
+    opacity: 0;
+  }
+  18% {
+    transform: translate(-50%, -50%) rotate(var(--tilt, -4deg)) scale(1.18);
+    opacity: 1;
+  }
+  32% {
+    transform: translate(-50%, -50%) rotate(var(--tilt, -4deg)) scale(1);
+    opacity: 1;
+  }
+  80% {
+    transform: translate(-50%, -62%) rotate(var(--tilt, -4deg)) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -80%) rotate(var(--tilt, -4deg)) scale(1);
+    opacity: 0;
+  }
+}
+
+/* Points floating up from where they were scored. */
+.cd-pop {
+  position: fixed;
+  z-index: 14;
+  font-size: clamp(26px, 6.5vmin, 42px);
+  font-weight: 900;
+  white-space: nowrap;
+  text-shadow:
+    0 3px 0 rgba(0, 0, 0, 0.5),
+    0 0 12px rgba(0, 0, 0, 0.5);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: cd-rise 1.3s ease-out forwards;
+}
+
+.cd-pop.good {
+  color: #ffe066;
+}
+
+.cd-pop.bad {
+  color: #ff8787;
+}
+
+.cd-pop.plain {
+  color: #fff;
+}
+
+@keyframes cd-rise {
+  0% {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0;
+  }
+  15% {
+    transform: translate(-50%, -80%) scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -260%) scale(1);
+    opacity: 0;
+  }
+}
+
+/* A yellow flash round the edges when the cat bonks (never red). */
+.cd-bonk {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  opacity: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(255, 214, 59, 0) 30%,
+    rgba(255, 214, 59, 0.6)
+  );
+}
+
+.cd-bonk.on {
+  animation: cd-bonk 0.25s ease-out;
+}
+
+@keyframes cd-bonk {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* The iris wipe between places: the picture shows through a circle that closes and opens. */
+.cd-iris {
+  position: fixed;
+  inset: 0;
+  z-index: 11;
+  pointer-events: none;
+}
+
+.cd-iris[hidden] {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cd-banner,
+  .cd-count.on,
+  .cd-pop,
+  .cd-place.waiting .cd-clock {
+    animation: none;
+  }
+
+  .cd-word.on {
+    animation: none;
+    opacity: 1;
+  }
+
+  .cd-bonk.on {
+    animation: none;
+    opacity: 0.4;
+  }
+}
+
+/* The dev-only move lab shows nothing but the cat and its comic word. */
+.cd-lab .cd-lives {
+  display: none;
+}
+
+.cd-lab .cd-word.on {
+  animation: none;
+  opacity: 1;
+}
+
+/* The cat picker: four cards and a Go button, before every run. */
+.cd-picker {
+  position: fixed;
+  inset: 0;
+  z-index: 18;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 16px;
+  overflow-y: auto;
+  background: linear-gradient(#5b3fa0, #2a1b5c);
+  color: #fff;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+}
+
+.cd-picker-title {
+  margin: 0;
+  font-size: clamp(30px, 8vmin, 54px);
+  font-weight: 900;
+  text-align: center;
+  color: #ffe066;
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.3);
+}
+
+.cd-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 14px;
+  width: min(900px, 100%);
+}
+
+@media (max-width: 560px) {
+  .cd-cards {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+    width: min(380px, 100%);
+  }
+}
+
+@media (max-height: 460px) {
+  .cd-picker {
+    gap: 8px;
+    padding: 8px 16px;
+  }
+
+  .cd-picker-title {
+    font-size: 28px;
+  }
+
+  .cd-cards {
+    gap: 10px;
+  }
+}
+
+.cd-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 120px;
+  min-height: 48px;
+  padding: 12px 8px 10px;
+  border: 3px solid rgba(255, 255, 255, 0.35);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font:
+    800 18px system-ui,
+    sans-serif;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform 0.15s,
+    background 0.15s;
+}
+
+.cd-card-face {
+  width: 96px;
+  height: 96px;
+}
+
+@media (max-height: 460px) {
+  .cd-card {
+    padding: 6px 6px 6px;
+  }
+
+  .cd-card-face {
+    width: 72px;
+    height: 72px;
+  }
+}
+
+.cd-card.selected {
+  border: 4px solid #ffe066;
+  background: rgba(255, 224, 102, 0.22);
+  transform: translateY(-6px);
+}
+
+.cd-card:focus-visible,
+.cd-go:focus-visible {
+  outline: 4px solid #ffd43b;
+  outline-offset: 2px;
+}
+
+.cd-go {
+  min-width: 220px;
+  height: 64px;
+  padding: 0 40px;
+  border: 3px solid #fff;
+  border-radius: 24px;
+  background: linear-gradient(#5cf2b0, #1fbf7a);
+  color: #0c3a1d;
+  font:
+    900 32px system-ui,
+    sans-serif;
+  cursor: pointer;
+  touch-action: manipulation;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.cd-go:active {
+  scale: 0.96;
+}
