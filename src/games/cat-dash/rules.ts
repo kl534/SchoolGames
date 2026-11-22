@@ -22,7 +22,9 @@ export const STREAK_X3 = 10;
 export const FISH_POINTS = 25;
 export const FISH_TRAIL = [3, 4, 5] as const;
 export const FISH_GAP = 1.6;
-export const FISH_Y = 1.1;
+export const FISH_Y = 2.0;
+/** Extra height at the middle of a trail, so it floats on an arc. */
+export const FISH_ARC = 0.6;
 /** The trot (u/s), the speed at the obstacle, and the sprint that gets there after an answer. */
 export const RUN_SPEED = 5;
 export const ENTRY_SPEED = 8;
