@@ -177,16 +177,45 @@ describe('approach and sprint', () => {
 describe('places', () => {
   it('has unique ids, three obstacles each and every obstacle in exactly one place', () => {
     expect(new Set(PLACE_IDS).size).toBe(PLACES.length);
-    expect(PLACES).toHaveLength(8);
+    expect(PLACES).toHaveLength(16);
     const all = PLACES.flatMap((p) => [...p.obstacles]);
-    expect(all).toHaveLength(24);
-    expect(new Set(all).size).toBe(24);
+    expect(all).toHaveLength(48);
+    expect(new Set(all).size).toBe(48);
     expect([...OBSTACLE_IDS].sort()).toEqual([...all].sort());
     for (const p of PLACES) {
       expect(p.obstacles).toHaveLength(3);
       for (const o of p.obstacles) expect(placeOf(o).id).toBe(p.id);
       expect(p.speech).toBe(`The ${p.name.replace(/^The /, '').toLowerCase()}!`);
     }
+  });
+
+  it('has four places in each of the four groups, indoors or outdoors as designed', () => {
+    for (const group of ['house', 'town', 'busy', 'adventure'] as const) {
+      expect(PLACES.filter((p) => p.group === group)).toHaveLength(4);
+    }
+    const indoor = PLACES.filter((p) => p.look.indoor).map((p) => p.id);
+    for (const id of ['grocery', 'library', 'fish-market', 'space-station']) {
+      expect(indoor).toContain(id);
+    }
+    for (const id of ['construction', 'beach', 'snowy-forest', 'desert']) {
+      expect(indoor).not.toContain(id);
+    }
+    expect(PLACES.find((p) => p.id === 'space-station')?.look.floorPattern).toBe('metal');
+    expect(PLACES.find((p) => p.id === 'snowy-forest')?.look.floorPattern).toBe('snow');
+  });
+
+  it('speaks the exact lines of the design for the busy and adventure places', () => {
+    const lines = Object.fromEntries(PLACES.map((p) => [p.id, p.speech]));
+    expect(lines).toMatchObject({
+      grocery: 'The grocery store!',
+      library: 'The library!',
+      'fish-market': 'The fish market!',
+      construction: 'The construction site!',
+      beach: 'The beach!',
+      'snowy-forest': 'The snowy forest!',
+      desert: 'The desert!',
+      'space-station': 'The space station!',
+    });
   });
 
   it('speaks every place name', () => {
@@ -246,6 +275,24 @@ describe('parseDev', () => {
     expect(d.obstacle).toBe('roof-gap');
     expect(d.lab).toEqual({ obstacle: 'pond', outcome: 'clear', variant: 1 });
     expect(d.door).toBe('backyard');
+  });
+
+  it('reads the busy and adventure places and obstacles', () => {
+    const d = parseDev(
+      '?place=space-station&places=grocery,beach,fish-market&obstacle=airlock&lab=net:clear:1&door=library&at=2.4',
+    );
+    expect(d.place).toBe('space-station');
+    expect(d.places).toEqual(['grocery', 'beach', 'fish-market']);
+    expect(d.obstacle).toBe('airlock');
+    expect(d.lab).toEqual({ obstacle: 'net', outcome: 'clear', variant: 1 });
+    expect(d.door).toBe('library');
+    expect(d.at).toBe(2.4);
+    expect(parseDev('?lab=wave:fail:0').lab).toEqual({
+      obstacle: 'wave',
+      outcome: 'fail',
+      variant: 0,
+    });
+    expect(parseDev('?door=beach').door).toBe('beach');
   });
 
   it('ignores unknown or malformed values', () => {

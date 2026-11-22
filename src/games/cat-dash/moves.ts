@@ -7,6 +7,8 @@ import type { ObstacleId } from './places';
 import type { Outcome, Variant } from './rules';
 import { HOUSE_MOVES } from './moves/house';
 import { TOWN_MOVES } from './moves/town';
+import { BUSY_MOVES } from './moves/busy';
+import { ADVENTURE_MOVES } from './moves/adventure';
 import {
   EASE,
   arc,
@@ -26,7 +28,12 @@ import {
 
 export * from './moves/toolkit';
 
-const ALL: Record<ObstacleId, ObstacleMoves> = { ...HOUSE_MOVES, ...TOWN_MOVES };
+const ALL: Record<ObstacleId, ObstacleMoves> = {
+  ...HOUSE_MOVES,
+  ...TOWN_MOVES,
+  ...BUSY_MOVES,
+  ...ADVENTURE_MOVES,
+};
 
 export const MOVE_SPECS: Record<ObstacleId, MoveSpec> = Object.fromEntries(
   Object.entries(ALL).map(([id, m]) => [id, m.spec]),

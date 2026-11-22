@@ -10,6 +10,7 @@ import {
   Mesh,
   MeshStandardMaterial,
   SphereGeometry,
+  TorusGeometry,
   type Material,
 } from 'three';
 import { Kit } from './kit';
@@ -388,6 +389,9 @@ export function createCat(initial: CatLook): Cat {
     lid: new Group(),
     banana: new Group(),
     sheet: new Group(),
+    box: new Group(),
+    bucket: new Group(),
+    seaweed: new Group(),
   };
   for (const g of Object.values(hats)) {
     g.position.set(0, 0.3, 0);
@@ -451,6 +455,48 @@ export function createCat(initial: CatLook): Cat {
   drape.position.set(-0.02, 0.04, 0);
   for (const z of [-0.3, 0.3])
     kit.box(0.4, 0.28, 0.06, kit.lit(0xffffff, 0.9), hats.sheet, -0.04, -0.12, z);
+
+  // A cereal box, a sand bucket and a drape of seaweed.
+  const cardboard = kit.lit(0xe8b04a, 0.7);
+  kit.box(0.56, 0.42, 0.5, cardboard, hats.box, 0, 0.14, 0);
+  kit.box(0.4, 0.26, 0.02, kit.lit(0xe0504a, 0.6), hats.box, 0.0, 0.14, 0.26);
+  kit.box(0.5, 0.03, 0.16, cardboard, hats.box, 0, 0.36, 0.1).rotation.x = -0.5;
+  kit.box(0.5, 0.03, 0.16, cardboard, hats.box, 0, 0.36, -0.1).rotation.x = 0.5;
+  kit.mesh(
+    new CylinderGeometry(0.17, 0.27, 0.34, 14),
+    kit.lit(0x3f8fd8, 0.5),
+    hats.bucket,
+    0,
+    0.1,
+    0,
+  );
+  kit.mesh(
+    new CylinderGeometry(0.28, 0.28, 0.05, 14),
+    kit.lit(0xf2c230, 0.5),
+    hats.bucket,
+    0,
+    -0.06,
+    0,
+  );
+  kit.mesh(
+    new TorusGeometry(0.14, 0.015, 6, 12, Math.PI),
+    kit.lit(0x9aa5ad, 0.4),
+    hats.bucket,
+    0,
+    0.27,
+    0,
+  );
+  const kelp = kit.lit(0x2f8a46, 0.8);
+  sphere(0.2, 1, 0.55, 1, kelp, hats.seaweed).position.set(0, 0.06, 0);
+  for (const [x, z, h] of [
+    [-0.12, -0.22, 0.5],
+    [0.1, -0.24, 0.42],
+    [-0.1, 0.22, 0.46],
+    [0.12, 0.24, 0.55],
+    [0.26, 0.0, 0.3],
+  ] as const) {
+    kit.box(0.07, h, 0.03, kelp, hats.seaweed, x, 0.02 - h / 2, z);
+  }
 
   // ----- Legs -----
   const makeLeg = (x: number, z: number): Leg => {
