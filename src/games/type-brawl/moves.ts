@@ -28,6 +28,8 @@ export interface Reaction {
   snap?: boolean;
   /** Doubled over. */
   doubled?: boolean;
+  /** The feet are knocked out from under the enemy. */
+  swept?: boolean;
 }
 
 export interface Launch {
@@ -37,6 +39,8 @@ export interface Launch {
   /** Whole-body somersaults (positive back, negative forward) and whole-body spins about the head-to-toe axis. */
   flips: number;
   spins: number;
+  /** Height of the flight (default `LAUNCH_APEX`). */
+  apex?: number;
 }
 
 export interface MoveDef {
@@ -51,6 +55,8 @@ export interface MoveDef {
   launch?: Launch;
   /** Whole-body turns of the hero during the move. */
   spin?: number;
+  /** How far (world units) the hero lunges toward the enemy. */
+  dash?: number;
 }
 
 export const MOVES: Record<MoveId, MoveDef> = {
@@ -127,6 +133,30 @@ export const MOVES: Record<MoveId, MoveDef> = {
     contact: 0.5,
     reaction: { push: 0 },
     launch: { dist: 4, dir: -1, flips: 1, spins: 0 },
+  },
+  backfist: {
+    id: 'backfist',
+    cls: 'light',
+    duration: 0.55,
+    contact: 0.45,
+    reaction: { push: 0.2, snap: true },
+    spin: 1,
+  },
+  sweep: {
+    id: 'sweep',
+    cls: 'heavy',
+    duration: 0.65,
+    contact: 0.32,
+    reaction: { push: 0.15, lift: 0.35, swept: true },
+  },
+  charge: {
+    id: 'charge',
+    cls: 'finisher',
+    duration: 0.9,
+    contact: 0.4,
+    reaction: { push: 0 },
+    launch: { dist: 5.5, dir: 1, flips: 0.2, spins: 0, apex: 0.5 },
+    dash: 0.8,
   },
   knee: {
     id: 'knee',
@@ -500,6 +530,82 @@ function keysFor(id: MoveId, c: number): Keys {
         ],
         [1, {}],
       ];
+    case 'backfist': {
+      const contact: Spec = {
+        armR: [1.45, 1.2, 0.15],
+        armL: [0.8, 0.2, 1.9],
+        twist: 0.3,
+        lean: 0.15,
+        headYaw: 0.3,
+        lift: -0.06,
+      };
+      return [
+        [0, {}],
+        [wind, { armR: [0.9, 0.1, 2.4], twist: -0.4, lean: 0.05 }],
+        [c, contact],
+        [after, { ...contact, armR: [1.4, 1.1, 0.2] }],
+        [1, {}],
+      ];
+    }
+    case 'sweep': {
+      const contact: Spec = {
+        lift: -0.4,
+        lean: 0.35,
+        twist: 0.9,
+        legL: [0.9, 0.1, 1.6],
+        legR: [1.2, 1.1, 0.1],
+        armL: [-0.2, 0.8, 0.3],
+        armR: [0.4, 1.0, 0.4],
+      };
+      return [
+        [0, {}],
+        [
+          wind,
+          {
+            lift: -0.35,
+            lean: 0.3,
+            twist: -0.5,
+            legL: [0.9, 0.1, 1.6],
+            legR: [-0.2, 0.6, 0.6],
+            armL: [0.3, 0.9, 0.5],
+            armR: [0.3, 0.9, 0.5],
+          },
+        ],
+        [c, contact],
+        [after, { ...contact, twist: 0.8, legR: [1.1, 1.0, 0.2] }],
+        [1, {}],
+      ];
+    }
+    case 'charge': {
+      const contact: Spec = {
+        lean: 0.75,
+        lift: -0.15,
+        twist: -0.9,
+        headPitch: -0.2,
+        armR: [0.3, 0.2, 2.0],
+        armL: [0.9, 0.2, 2.0],
+        legL: [-0.5, 0.1, 0.3],
+        legR: [0.8, 0.1, 1.0],
+      };
+      return [
+        [0, {}],
+        [
+          wind,
+          {
+            lean: 0.6,
+            lift: -0.2,
+            twist: -0.6,
+            armR: [0.4, 0.1, 1.9],
+            armL: [0.9, 0.2, 2.0],
+            legL: [0.7, 0.1, 1.0],
+            legR: [-0.6, 0.1, 0.8],
+          },
+        ],
+        [c, contact],
+        [after, { ...contact, lean: 0.6 }],
+        [1, {}],
+      ];
+    }
     case 'throw':
       return [
         [0, {}],
@@ -583,6 +689,20 @@ export function moveSpin(id: MoveId, t: number): number {
   return def.spin * Math.PI * 2 * easeInOut(u);
 }
 
+/** How far (world units) the hero lunges toward the enemy `t` seconds into move `id`; 0 for a move with no `dash`. */
+export function moveDash(id: MoveId, t: number): number {
+  const def = MOVES[id];
+  if (!def.dash) return 0;
+  const u = clamp01(t / def.duration);
+  const c = def.contact / def.duration;
+  const half = c * 0.5;
+  if (u <= half) return 0;
+  if (u <= c) return def.dash * easeOut(clamp01((u - half) / half));
+  const hold = c + (1 - c) * 0.4;
+  if (u <= hold) return def.dash;
+  return def.dash * (1 - easeInOut(clamp01((u - hold) / (1 - hold))));
+}
+
 /** Swaps left and right (arms, legs, twist, roll, head yaw): the same move as seen when facing the other way. */
 export function mirrorPose(pose: Pose): Pose {
   const arm = { ...pose.armL };
@@ -620,6 +740,18 @@ export function reactionFrame(
   pose.legL.raise = 0.25 * k;
   pose.legR.raise = -0.25 * k;
   if (reaction.snap) pose.headYaw = 1.0 * k;
+  if (reaction.swept) {
+    pose.lean = -0.9 * k;
+    pose.headPitch = 0.5 * k;
+    pose.legL.raise = 1.3 * k;
+    pose.legR.raise = 1.1 * k;
+    pose.legL.bend = 0.2 * k;
+    pose.legR.bend = 0.2 * k;
+    pose.armL.raise = 1.6 * k;
+    pose.armR.raise = 1.5 * k;
+    pose.armL.out = 1.0 * k;
+    pose.armR.out = 1.0 * k;
+  }
   if (reaction.doubled) {
     pose.lean = 1.0 * k;
     pose.headPitch = -0.2 * k;
@@ -660,7 +792,7 @@ export interface LaunchState {
 export function launchPath(launch: Launch, t: number): LaunchState {
   const air = clamp01(t / AIR_SECONDS);
   const dx = launch.dist * launch.dir * easeOut(air) * 0.85 + launch.dist * launch.dir * 0.15 * air;
-  const y = 4 * LAUNCH_APEX * air * (1 - air);
+  const y = 4 * (launch.apex ?? LAUNCH_APEX) * air * (1 - air);
   return {
     dx,
     y,

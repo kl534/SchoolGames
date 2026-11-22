@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" font-family="system-ui, sans-serif" font-weight="800">
+  <rect width="640" height="360" fill="#f2d9b0"/>
+  <g fill="#e2c28f">
+    <rect x="40" width="40" height="250"/>
+    <rect x="160" width="40" height="250"/>
+    <rect x="280" width="40" height="250"/>
+    <rect x="400" width="40" height="250"/>
+    <rect x="520" width="40" height="250"/>
+  </g>
+  <!-- window -->
+  <rect x="60" y="60" width="130" height="120" rx="6" fill="#fff"/>
+  <rect x="72" y="72" width="106" height="96" fill="#9ad4f5"/>
+  <rect x="122" y="72" width="6" height="96" fill="#fff"/>
+  <rect x="72" y="116" width="106" height="6" fill="#fff"/>
+  <rect x="48" y="58" width="30" height="130" rx="6" fill="#d64550"/>
+  <rect x="172" y="58" width="30" height="130" rx="6" fill="#d64550"/>
+  <!-- floor -->
+  <rect y="250" width="640" height="110" fill="#b07a45"/>
+  <rect y="250" width="640" height="8" fill="#8a5a33"/>
+  <g stroke="#8a5a33" stroke-width="3">
+    <path d="M120 258v102M300 258v102M480 258v102"/>
+  </g>
+  <!-- couch -->
+  <rect x="270" y="150" width="300" height="70" rx="14" fill="#8e3328"/>
+  <rect x="250" y="190" width="50" height="76" rx="14" fill="#8e3328"/>
+  <rect x="540" y="190" width="50" height="76" rx="14" fill="#8e3328"/>
+  <rect x="296" y="210" width="130" height="46" rx="10" fill="#b5483a"/>
+  <rect x="428" y="210" width="130" height="46" rx="10" fill="#b5483a"/>
+  <!-- the cat leaping over it -->
+  <g transform="translate(330 70) rotate(-12)">
+    <path d="M0 52C-34 44-52 14-34-6" fill="none" stroke="#e8892e" stroke-width="14" stroke-linecap="round"/>
+    <path d="M-30 4C-30-22 30-24 60 4 66 24 24 34-8 32-30 30-34 22-30 4Z" fill="#e8892e"/>
+    <g stroke="#b85c14" stroke-width="7" stroke-linecap="round"><path d="M-6 -8l6 16M14 -10l5 18M32 -6l4 16"/></g>
+    <path d="M-20 24l-34 18M-6 26l-30 26" stroke="#e8892e" stroke-width="12" stroke-linecap="round"/>
+    <path d="M44 14l36 14M56 8l34 6" stroke="#e8892e" stroke-width="12" stroke-linecap="round"/>
+    <ellipse cx="66" cy="-10" rx="30" ry="27" fill="#e8892e"/>
+    <path d="M44-30 46-56 64-38ZM82-38 92-58 98-30Z" fill="#e8892e"/>
+    <ellipse cx="58" cy="-14" rx="6" ry="8" fill="#6fbf3a"/>
+    <ellipse cx="78" cy="-14" rx="6" ry="8" fill="#6fbf3a"/>
+    <ellipse cx="58" cy="-14" rx="2.4" ry="6" fill="#1b1226"/>
+    <ellipse cx="78" cy="-14" rx="2.4" ry="6" fill="#1b1226"/>
+    <path d="M64 -2h8l-4 5Z" fill="#f48fa8"/>
+  </g>
+  <text x="320" y="338" text-anchor="middle" font-size="40" fill="#fff" stroke="#4a2c12" stroke-width="8" paint-order="stroke">CAT DASH</text>
+</svg>
