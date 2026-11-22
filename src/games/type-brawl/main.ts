@@ -301,6 +301,8 @@ function run(session: TypingSession): void {
   /** The thug the hero is locked on, and how many keys of its block are typed. */
   let locked: Thug | null = null;
   let pos = 0;
+  /** Every thug whose block still matches the keys typed (the locked one is among them). */
+  let fits: Thug[] = [];
   let blockStart: number | null = null;
   /** Dev `at`: the first move holds at this time. */
   let holding = false;
@@ -400,7 +402,8 @@ function run(session: TypingSession): void {
 
   const paintLabel = (t: Thug) => {
     const isLocked = locked === t;
-    t.label.setState({ typed: isLocked ? pos : 0, locked: isLocked, wrong: false });
+    const typed = isLocked || fits.includes(t) ? pos : 0;
+    t.label.setState({ typed, locked: isLocked, wrong: false });
     t.label.setPips(t.block, t.plan.length);
   };
 
@@ -722,16 +725,18 @@ function run(session: TypingSession): void {
   // ---------- Keys ----------
   const lockOn = (t: Thug) => {
     locked = t;
-    pos = 0;
+    if (!fits.includes(t)) fits = [t];
     hero.face(sideOf(t.fighter));
-    paintLabel(t);
+    for (const f of fits) paintLabel(f);
   };
 
   const unlock = () => {
-    const old = locked;
+    const old = [...fits];
+    if (locked && !old.includes(locked)) old.push(locked);
     locked = null;
+    fits = [];
     pos = 0;
-    if (old) paintLabel(old);
+    for (const f of old) paintLabel(f);
   };
 
   const landBlock = (t: Thug) => {
@@ -886,16 +891,32 @@ function run(session: TypingSession): void {
         sfx.wrongKey();
         return;
       }
+      pos = 0;
+      fits = thugs.filter((x) => x.engaged && x.text[0] === char);
       lockOn(t);
+    } else if (t.text[pos] !== char) {
+      // The key fits another thug that is still in play: aim at the nearest of those instead.
+      const alt = fits.filter((x) => x !== t && x.text[pos] === char);
+      if (alt.length > 0) {
+        const hx = hero.x;
+        alt.sort((p, q) => Math.abs(p.fighter.worldX() - hx) - Math.abs(q.fighter.worldX() - hx));
+        t = alt[0];
+        lockOn(t);
+      }
     }
     const expected = t.text[pos];
+    if (char === expected && fits.length > 1) {
+      const was = fits;
+      fits = was.filter((x) => x.text[pos] === char);
+      for (const f of was) if (!fits.includes(f)) paintLabel(f);
+    }
     if (char === expected) {
       if (pos === 0) blockStart = activeTime;
       if (!t.mistakes.has(pos)) recordPress(typing, expected, true);
       sfx.key();
       pos++;
       if (pos >= t.text.length) landBlock(t);
-      else paintLabel(t);
+      else for (const f of fits) paintLabel(f);
     } else {
       t.label.flashWrong();
       sfx.wrongKey();
