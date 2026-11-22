@@ -1,11 +1,12 @@
 /**
- * The 48 cat moves (12 obstacles, each with two clears and two fails) as authored animations in
+ * The 96 cat moves (24 obstacles, each with two clears and two fails) as authored animations in
  * obstacle-local coordinates. Pure data and maths: `moveFrame(id, outcome, variant, t, out)` says
  * where the cat is and how it looks. The moves of each place group live in `moves/<group>.ts`.
  */
 import type { ObstacleId } from './places';
 import type { Outcome, Variant } from './rules';
 import { HOUSE_MOVES } from './moves/house';
+import { TOWN_MOVES } from './moves/town';
 import {
   EASE,
   arc,
@@ -25,7 +26,7 @@ import {
 
 export * from './moves/toolkit';
 
-const ALL: Record<ObstacleId, ObstacleMoves> = { ...HOUSE_MOVES };
+const ALL: Record<ObstacleId, ObstacleMoves> = { ...HOUSE_MOVES, ...TOWN_MOVES };
 
 export const MOVE_SPECS: Record<ObstacleId, MoveSpec> = Object.fromEntries(
   Object.entries(ALL).map(([id, m]) => [id, m.spec]),

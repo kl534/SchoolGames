@@ -37,8 +37,8 @@ export type Coat =
   | 'cement'
   | 'snow'
   | 'puff';
-/** A prop stuck on the head. Later milestones add `lid`, `banana`, `sheet`, `box`, `bucket`, `seaweed`. */
-export type Hat = 'none' | 'cushion' | 'sock' | 'duck' | 'sweater';
+/** A prop stuck on the head. Later milestones add `box`, `bucket`, `seaweed`. */
+export type Hat = 'none' | 'cushion' | 'sock' | 'duck' | 'sweater' | 'lid' | 'banana' | 'sheet';
 
 export interface CatFrame {
   /** Obstacle-local position of the cat's base (where its feet are when it stands). */
