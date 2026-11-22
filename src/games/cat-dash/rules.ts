@@ -25,6 +25,17 @@ export const FISH_GAP = 1.6;
 export const FISH_Y = 2.0;
 /** Extra height at the middle of a trail, so it floats on an arc. */
 export const FISH_ARC = 0.6;
+/** How far ahead (u) of a fish the cat starts to leap for it. */
+export const LEAP_REACH = 2.2;
+/**
+ * The lift of a leap for a fish `dx` ahead of the cat (negative once passed) and `rise` above its
+ * chest: a smooth hump that peaks at the fish and is 0 when it is out of reach.
+ */
+export function leapLift(dx: number, rise: number): number {
+  if (Math.abs(dx) >= LEAP_REACH || rise <= 0) return 0;
+  const k = Math.cos((Math.PI / 2) * (dx / LEAP_REACH));
+  return rise * k * k;
+}
 /** The trot (u/s), the speed at the obstacle, and the sprint that gets there after an answer. */
 export const RUN_SPEED = 5;
 export const ENTRY_SPEED = 8;

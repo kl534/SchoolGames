@@ -1,7 +1,7 @@
-/** The four cats: colours, saved choice and the face picture for the picker and the lives. Pure. */
+/** The five cats: colours, saved choice and the face picture for the picker and the lives. Pure. */
 
-export type CatId = 'orange' | 'black' | 'tuxedo' | 'calico';
-export const CAT_IDS: readonly CatId[] = ['orange', 'black', 'tuxedo', 'calico'];
+export type CatId = 'orange' | 'black' | 'tuxedo' | 'calico' | 'grey-tabby';
+export const CAT_IDS: readonly CatId[] = ['orange', 'black', 'tuxedo', 'calico', 'grey-tabby'];
 
 export interface CatLook {
   id: CatId;
@@ -46,6 +46,16 @@ export const CAT_LOOKS: Record<CatId, CatLook> = {
     patches: [],
     eyes: 0x4fa3e0,
     nose: 0xf48fa8,
+  },
+  'grey-tabby': {
+    id: 'grey-tabby',
+    name: 'Grey Tabby',
+    fur: 0x9aa0a8,
+    stripes: 0x4b5058,
+    belly: 0xe4e6e9,
+    patches: [],
+    eyes: 0xd9b43a,
+    nose: 0xf0a0b0,
   },
   calico: {
     id: 'calico',
