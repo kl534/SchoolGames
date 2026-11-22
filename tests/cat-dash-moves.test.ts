@@ -79,3 +79,33 @@ describe('cat moves', () => {
     }
   }
 });
+
+describe('cat move hats and coats', () => {
+  it('uses every new hat, and each fail ends with the coat and hat gone', () => {
+    const hats = new Set<string>();
+    const f = createFrame();
+    for (const id of OBSTACLE_IDS) {
+      for (const variant of VARIANTS) {
+        const d = moveDuration(id, 'fail', variant);
+        for (let t = 0; t <= d; t += 1 / 30) {
+          moveFrame(id, 'fail', variant, t, f);
+          hats.add(f.hat);
+        }
+      }
+    }
+    for (const hat of ['box', 'bucket', 'seaweed', 'cushion', 'lid']) expect(hats).toContain(hat);
+  });
+
+  it('keeps the cat out of the floor in every busy and adventure fail (pits are flat)', () => {
+    const f = createFrame();
+    for (const id of OBSTACLE_IDS) {
+      expect(MOVE_SPECS[id].floorY, id).toBe(0);
+      for (const variant of VARIANTS) {
+        const d = moveDuration(id, 'fail', variant);
+        for (let t = 0; t <= d; t += 1 / 60) {
+          expect(moveFrame(id, 'fail', variant, t, f).y).toBeGreaterThanOrEqual(-1e-6);
+        }
+      }
+    }
+  });
+});

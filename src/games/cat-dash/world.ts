@@ -20,6 +20,8 @@ import { Kit } from './kit';
 import type { Place } from './places';
 import { HOUSE_SCENERY, WALL_Z } from './props/house-scenery';
 import { TOWN_SCENERY, buildOutdoorFar } from './props/town-scenery';
+import { BUSY_SCENERY } from './props/busy-scenery';
+import { ADVENTURE_SCENERY } from './props/adventure-scenery';
 
 /** The scenery repeats every this many units. */
 export const TILE_W = 24;
@@ -145,12 +147,73 @@ export function buildScenery(place: Place, kit: Kit): Group {
       for (let i = 0; i < TILE_W; i += 1.2) kit.box(0.04, 0.012, 3.3, line, tile, i, 0.011, -0.5);
       break;
     }
+    case 'sand': {
+      // Ripples along the top and little dunes drawn on the front face.
+      for (let z = -2.6; z < 1.4; z += 0.55) {
+        kit.box(TILE_W, 0.012, 0.06, line, tile, TILE_W / 2, 0.011, z + 0.1 * Math.sin(z * 9));
+      }
+      for (let i = 0; i < TILE_W; i += 1.6) {
+        kit.box(
+          0.9,
+          0.05,
+          0.02,
+          i % 3.2 === 0 ? light : line,
+          tile,
+          i + 0.6,
+          -0.2 - (i % 3.2) * 0.15,
+          FLOOR_Z_FRONT + 0.01,
+        );
+      }
+      for (let i = 0; i < TILE_W; i += 4.3) {
+        kit.mesh(new SphereGeometry(0.6, 10, 6), light, tile, i + 1, 0, -2.2).scale.set(2, 0.18, 1);
+      }
+      break;
+    }
+    case 'snow': {
+      // Soft lumps along the front edge and blue shadow lines in the snow.
+      for (let i = 0; i < TILE_W; i += 1.8) {
+        kit
+          .mesh(new SphereGeometry(0.5, 10, 6), light, tile, i + 0.9, -0.02, FLOOR_Z_FRONT - 0.1)
+          .scale.set(1.6, 0.35, 0.9);
+      }
+      for (let z = -2.4; z < 1.4; z += 0.8) {
+        kit.box(TILE_W, 0.012, 0.05, line, tile, TILE_W / 2, 0.011, z);
+      }
+      for (let i = 0; i < TILE_W; i += 5)
+        kit.box(1.4, 0.04, 0.02, line, tile, i + 1, -0.4, FLOOR_Z_FRONT + 0.01);
+      break;
+    }
+    case 'metal': {
+      // Panel seams, rivets and a hazard stripe along the edge.
+      for (let i = 0; i < TILE_W; i += 2)
+        kit.box(0.05, 6, 0.02, line, tile, i, -3, FLOOR_Z_FRONT + 0.01);
+      for (let z = -2.6; z < 1.4; z += 0.8)
+        kit.box(TILE_W, 0.012, 0.05, line, tile, TILE_W / 2, 0.011, z);
+      for (let i = 0; i < TILE_W; i += 2) kit.box(0.04, 0.012, 3.3, line, tile, i, 0.011, -0.5);
+      const hazard = kit.lit(0xf2c230, 0.6);
+      const black = kit.lit(0x222222, 0.6);
+      for (let i = 0; i < TILE_W; i += 0.8) {
+        kit.box(
+          0.4,
+          0.2,
+          0.02,
+          (i / 0.8) % 2 === 0 ? hazard : black,
+          tile,
+          i + 0.2,
+          -0.12,
+          FLOOR_Z_FRONT + 0.012,
+        );
+      }
+      break;
+    }
     default:
       break;
   }
   const decor =
     HOUSE_SCENERY[place.id as keyof typeof HOUSE_SCENERY] ??
-    TOWN_SCENERY[place.id as keyof typeof TOWN_SCENERY];
+    TOWN_SCENERY[place.id as keyof typeof TOWN_SCENERY] ??
+    BUSY_SCENERY[place.id as keyof typeof BUSY_SCENERY] ??
+    ADVENTURE_SCENERY[place.id as keyof typeof ADVENTURE_SCENERY];
   decor?.(kit, tile, look);
   return tile;
 }
@@ -214,6 +277,15 @@ export function createWorld(scene: Scene): World {
       far = new Group();
       if (!look.indoor) {
         buildOutdoorFar(place.id, next, far, 5, 8);
+        root.add(far);
+        return;
+      }
+      if (place.id === 'space-station') {
+        // Glowing light strips along the ceiling instead of pendant lamps.
+        const strip = next.basic(0xdff4ff);
+        for (let j = -3; j <= 5; j++) {
+          next.box(3, 0.25, 0.4, strip, far, j * 8, 16, WALL_Z + 1.2);
+        }
         root.add(far);
         return;
       }
