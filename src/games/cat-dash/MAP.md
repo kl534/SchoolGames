@@ -1,6 +1,6 @@
 # Cat Dash map
 
-A side-view endless run: pick one of four cats, then run through places (M1: living room, kitchen, bathroom, bedroom). Each place has three obstacles of its own and a visit is six of them (each twice). Answer right for a stylish move, wrong for a silly flop and a lost life (3 lives). After six obstacles the cat runs through a doorway into a new place.
+A side-view endless run: pick one of four cats, then run through places (house: living room, kitchen, bathroom, bedroom; town: backyard, park, street, rooftops). Each place has three obstacles of its own and a visit is six of them (each twice). Answer right for a stylish move, wrong for a silly flop and a lost life (3 lives). After six obstacles the cat runs through a doorway into a new place.
 
 ## Files
 
@@ -9,16 +9,19 @@ A side-view endless run: pick one of four cats, then run through places (M1: liv
 - `places.ts`: the places and their obstacles as data (`PLACES`, `placeOf`, `PlaceLook`)
 - `looks.ts`: the four cats' colours, the saved choice (`CAT_SETTING`, `savedCat`) and the face SVG (`catFaceSvg`)
 - `layout.ts`: side-view screen fitting (`fitView`, `playBand`, `riseFor`, `FOV`)
-- `moves.ts`: the 48 cat moves: the frame sampler (`moveFrame`, `moveDuration`, `moveEvents`, `MOVE_SPECS`, `MOVE_WORDS`) over the groups' move tables
+- `moves.ts`: the 96 cat moves: the frame sampler (`moveFrame`, `moveDuration`, `moveEvents`, `MOVE_SPECS`, `MOVE_WORDS`) over the groups' move tables
 - `moves/toolkit.ts`: pure animation toolkit: poses, `CatFrame`, segments (`Seg`), `arc`, `follow`, `failEnd`
 - `moves/house.ts`: the 12 house obstacles' moves and the shared motions the props use (`shelfAngle`, `mopAngle`, `towelAngle`, `yarnX`, `closetDoor`)
+- `moves/town.ts`: the 12 town obstacles' moves and the shared motions the props use (`swingAngle`, `padX`, `canX`, `skateX`, `snapAngle`, ...)
 - `kit.ts`: prop-building helpers that remember what to dispose (`Kit`, `Prop`)
 - `cat.ts`: the cat rig and its poses, faces, coats and hats (`createCat`)
 - `props/house.ts`: the 12 house obstacles as meshes posed by `update(outcome, variant, t)`
 - `props/house-scenery.ts`: the decor of the four house places (`HOUSE_SCENERY`, `WALL_Z`)
+- `props/town.ts`: the 12 town obstacles as meshes
+- `props/town-scenery.ts`: the outdoor decor of the four town places and their far layer (`TOWN_SCENERY`, `buildOutdoorFar`)
 - `props/pool.ts`: one built prop per obstacle, pruned when a place is left (`createPropPool`, `PROP_BUILDERS`)
 - `world.ts`: wall, floor pattern, lights, far layer and blob shadow of the current place (`createWorld`, `buildScenery`)
-- `door.ts`: the doorway between places (`createDoorway`, `DOOR_ICONS`)
+- `door.ts`: the doorways between places: house `door`, town `gate` (`createDoorway`, `DOOR_ICONS`)
 - `effects.ts`: dust, splash, stars, poof, bubbles, feathers, sparkle, confetti as one pooled `Points` (`createEffects`)
 - `hud.ts`: question panel, place strip, lives, banner, comic words, bonk flash and iris wipe (`createHud`)
 - `picker.ts`: the cat picker overlay (`showCatPicker`)
@@ -28,14 +31,14 @@ A side-view endless run: pick one of four cats, then run through places (M1: liv
 ## Dev hooks
 
 - `?cat=<orange|black|tuxedo|calico>`: skip the picker with that cat. `?lives=1|2|3`.
-- `?place=<id>`: start in that place (`living-room`, `kitchen`, `bathroom`, `bedroom`). `?places=a,b`: the places come in this order, then repeat. `?obstacle=<id>`: every obstacle is that one (its place is used).
+- `?place=<id>`: start in that place (`living-room`, `kitchen`, `bathroom`, `bedroom`, `backyard`, `park`, `street`, `rooftops`). `?places=a,b`: the places come in this order, then repeat. `?obstacle=<id>`: every obstacle is that one (its place is used).
 - `?lab=<obstacle>:<clear|fail>:<0|1>`: move lab, loops one move with the HUD hidden. `&at=<seconds>` freezes it there (prop and effects included).
 - `?door=<place>&at=<0..2.4>`: the doorway into that place frozen at that time (0 door in view, 1.2 iris closed, 1.55 open again, 2.4 banner).
 - Example: `npm run shots -- "cat-dash?lab=couch:clear:0&at=0.9" "cat-dash?door=kitchen&at=1.2"`
 
 ## Where changes go
 
-- A new obstacle: its id in `places.ts`, its moves in `moves/<group>.ts` (`HOUSE_MOVES`), its builder in `props/<group>.ts` and `props/pool.ts`.
+- A new obstacle: its id in `places.ts`, its moves in `moves/<group>.ts` (`HOUSE_MOVES`, `TOWN_MOVES`), its builder in `props/<group>.ts` and `props/pool.ts`.
 - A new place: a `Place` in `places.ts`, decor in `props/<group>-scenery.ts`, its speech line (then `npm run voice`).
 - Scoring, lives, order or approach timing: `rules.ts`. A new cat: `looks.ts` (and `cat.ts` for new parts).
 - A new state that is hard to reach: extend `parseDev` in `dev.ts` and its test.
@@ -43,6 +46,6 @@ A side-view endless run: pick one of four cats, then run through places (M1: liv
 ## Tests
 
 - `tests/cat-dash.test.ts`
-- `tests/cat-dash-moves.test.ts` (all 48 moves sampled every 1/60 s)
+- `tests/cat-dash-moves.test.ts` (all 96 moves sampled every 1/60 s)
 - `tests/cat-dash-sounds.test.ts` (every `sfx:` event names a sound in `src/shared/audio.ts`)
 - `tests/tap-to-continue.test.ts` (tap-to-continue flow in `main.ts`)

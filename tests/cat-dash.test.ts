@@ -177,10 +177,10 @@ describe('approach and sprint', () => {
 describe('places', () => {
   it('has unique ids, three obstacles each and every obstacle in exactly one place', () => {
     expect(new Set(PLACE_IDS).size).toBe(PLACES.length);
-    expect(PLACES).toHaveLength(4);
+    expect(PLACES).toHaveLength(8);
     const all = PLACES.flatMap((p) => [...p.obstacles]);
-    expect(all).toHaveLength(12);
-    expect(new Set(all).size).toBe(12);
+    expect(all).toHaveLength(24);
+    expect(new Set(all).size).toBe(24);
     expect([...OBSTACLE_IDS].sort()).toEqual([...all].sort());
     for (const p of PLACES) {
       expect(p.obstacles).toHaveLength(3);
@@ -235,6 +235,17 @@ describe('parseDev', () => {
     expect(d.lab).toEqual({ obstacle: 'couch', outcome: 'fail', variant: 1 });
     expect(d.at).toBe(1.5);
     expect(d.door).toBe('bathroom');
+  });
+
+  it('reads the town places and obstacles', () => {
+    const d = parseDev(
+      '?place=rooftops&places=park,street&obstacle=roof-gap&lab=pond:clear:1&door=backyard',
+    );
+    expect(d.place).toBe('rooftops');
+    expect(d.places).toEqual(['park', 'street']);
+    expect(d.obstacle).toBe('roof-gap');
+    expect(d.lab).toEqual({ obstacle: 'pond', outcome: 'clear', variant: 1 });
+    expect(d.door).toBe('backyard');
   });
 
   it('ignores unknown or malformed values', () => {

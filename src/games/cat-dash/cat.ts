@@ -385,6 +385,9 @@ export function createCat(initial: CatLook): Cat {
     sock: new Group(),
     duck: new Group(),
     sweater: new Group(),
+    lid: new Group(),
+    banana: new Group(),
+    sheet: new Group(),
   };
   for (const g of Object.values(hats)) {
     g.position.set(0, 0.3, 0);
@@ -426,6 +429,28 @@ export function createCat(initial: CatLook): Cat {
     );
     sleeve.rotation.z = 0.9;
   }
+  // A dented bin lid, a banana peel and a ghost-sheet drape.
+  const lidDisc = kit.mesh(
+    new CylinderGeometry(0.3, 0.3, 0.05, 16),
+    kit.lit(0x9aa5ad, 0.4),
+    hats.lid,
+    0,
+    0.05,
+    0,
+  );
+  lidDisc.rotation.z = 0.25;
+  kit.mesh(new CylinderGeometry(0.05, 0.05, 0.1, 8), kit.lit(0x555d63, 0.4), hats.lid, 0, 0.12, 0);
+  const peel = kit.lit(0xffd93b, 0.6);
+  for (const a of [0, 1, 2, 3]) {
+    const flap = kit.box(0.3, 0.05, 0.1, peel, hats.banana, 0.02, 0.07, 0);
+    flap.rotation.y = (a * Math.PI) / 4;
+    flap.rotation.z = a % 2 ? 0.5 : -0.5;
+  }
+  sphere(0.04, 1, 1, 1, kit.lit(0x6b4a2b, 0.8), hats.banana).position.set(0, 0.12, 0);
+  const drape = sphere(0.32, 1, 0.8, 1, kit.lit(0xffffff, 0.9), hats.sheet);
+  drape.position.set(-0.02, 0.04, 0);
+  for (const z of [-0.3, 0.3])
+    kit.box(0.4, 0.28, 0.06, kit.lit(0xffffff, 0.9), hats.sheet, -0.04, -0.12, z);
 
   // ----- Legs -----
   const makeLeg = (x: number, z: number): Leg => {

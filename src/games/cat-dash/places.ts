@@ -1,7 +1,8 @@
 /** The places the cat runs through and the obstacles each one has: pure data. */
 
 export type PlaceGroup = 'house' | 'town' | 'busy' | 'adventure';
-export type PlaceId = 'living-room' | 'kitchen' | 'bathroom' | 'bedroom';
+export type PlaceId =
+  'living-room' | 'kitchen' | 'bathroom' | 'bedroom' | 'backyard' | 'park' | 'street' | 'rooftops';
 export type ObstacleId =
   | 'couch'
   | 'bookshelf'
@@ -14,7 +15,19 @@ export type ObstacleId =
   | 'towel'
   | 'bed'
   | 'closet'
-  | 'yarn';
+  | 'yarn'
+  | 'fence'
+  | 'sprinkler'
+  | 'flowers'
+  | 'slide'
+  | 'pond'
+  | 'swings'
+  | 'mailbox'
+  | 'trash-can'
+  | 'hopscotch'
+  | 'chimney'
+  | 'roof-gap'
+  | 'clothesline';
 
 export type FloorPattern =
   'planks' | 'tiles' | 'carpet' | 'grass' | 'pavement' | 'roof' | 'sand' | 'snow' | 'metal';
@@ -105,6 +118,70 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'carpet',
       sky: [0xd9ccf7, 0xf1eaff],
       light: 0xffeedd,
+    },
+  },
+  {
+    id: 'backyard',
+    group: 'town',
+    name: 'The Backyard',
+    speech: 'The backyard!',
+    obstacles: ['fence', 'sprinkler', 'flowers'],
+    look: {
+      indoor: false,
+      wall: 0x6fb85a,
+      trim: 0xffffff,
+      floor: 0x5cae4a,
+      floorPattern: 'grass',
+      sky: [0x6ec6ff, 0xdff3ff],
+      light: 0xfff6e0,
+    },
+  },
+  {
+    id: 'park',
+    group: 'town',
+    name: 'The Park',
+    speech: 'The park!',
+    obstacles: ['slide', 'pond', 'swings'],
+    look: {
+      indoor: false,
+      wall: 0x4a9a52,
+      trim: 0xffffff,
+      floor: 0x68b954,
+      floorPattern: 'grass',
+      sky: [0x7fd0ff, 0xe8f7ff],
+      light: 0xfffbe8,
+    },
+  },
+  {
+    id: 'street',
+    group: 'town',
+    name: 'The Street',
+    speech: 'The street!',
+    obstacles: ['mailbox', 'trash-can', 'hopscotch'],
+    look: {
+      indoor: false,
+      wall: 0xd9a577,
+      trim: 0xf4ede0,
+      floor: 0x8d9199,
+      floorPattern: 'pavement',
+      sky: [0x9cd3ff, 0xeaf5ff],
+      light: 0xfff4e0,
+    },
+  },
+  {
+    id: 'rooftops',
+    group: 'town',
+    name: 'The Rooftops',
+    speech: 'The rooftops!',
+    obstacles: ['chimney', 'roof-gap', 'clothesline'],
+    look: {
+      indoor: false,
+      wall: 0x5a4a6a,
+      trim: 0x3d3350,
+      floor: 0x9a5a48,
+      floorPattern: 'roof',
+      sky: [0x3a4a8a, 0xf6a46f],
+      light: 0xffd2a8,
     },
   },
 ];

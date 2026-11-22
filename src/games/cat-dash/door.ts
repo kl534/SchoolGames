@@ -1,9 +1,9 @@
 /**
- * The doorway the cat runs through between places. M1 has the house `door` (a wooden door in a
- * wall); the town `gate`, the busy `shop-doors` and the adventure `portal` arrive with their
- * places. The doorway shows the colours of the place it leads to.
+ * The doorway the cat runs through between places: the house `door` (a wooden door in a wall)
+ * and the town `gate` (a garden gate in a fence); the busy `shop-doors` and the adventure
+ * `portal` arrive with their places. The doorway shows the colours of the place it leads to.
  */
-import { Group, SphereGeometry } from 'three';
+import { CylinderGeometry, Group, SphereGeometry } from 'three';
 import { Kit } from './kit';
 import type { PlaceGroup, PlaceLook } from './places';
 
@@ -24,9 +24,70 @@ export const DOOR_ICONS: Record<PlaceGroup, string> = {
 /** Where the doorway's wall stands: in front of the scenery, behind the cat. */
 export const DOOR_Z = -0.9;
 
-export function createDoorway(_group: PlaceGroup, next: PlaceLook): Doorway {
+/** A garden gate: stone posts, a white picket fence and the gate swung open on the next place. */
+function buildGate(kit: Kit, object: Group, next: PlaceLook) {
+  const picket = kit.lit(0xfaf4e6, 0.7);
+  const stone = kit.lit(0xb9b5ac, 0.9);
+  // The place beyond, framed by the gateway.
+  kit.box(3.0, 5.2, 0.3, kit.basic(next.sky[1]), object, 0, 2.6, DOOR_Z + 0.04);
+  kit.box(3.0, 0.5, 0.34, kit.basic(next.floor), object, 0, 0.25, DOOR_Z + 0.08);
+  // The fence on both sides.
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 6; i++) {
+      const x = side * (1.9 + i * 0.5);
+      kit.box(0.38, 3.2 - i * 0.05, 0.12, picket, object, x, 1.6, DOOR_Z + 0.1);
+    }
+    kit.box(3.2, 0.16, 0.16, picket, object, side * 3.5, 2.4, DOOR_Z + 0.04);
+    kit.box(3.2, 0.16, 0.16, picket, object, side * 3.5, 0.8, DOOR_Z + 0.04);
+  }
+  // Stone posts with round caps, and an arch of leaves and flowers over the top.
+  for (const side of [-1, 1]) {
+    kit.box(0.7, 4.4, 0.7, stone, object, side * 1.75, 2.2, DOOR_Z + 0.12);
+    kit.box(0.9, 0.2, 0.9, kit.lit(0x8f8b82, 0.9), object, side * 1.75, 4.5, DOOR_Z + 0.12);
+    kit.mesh(new SphereGeometry(0.38, 12, 10), stone, object, side * 1.75, 4.9, DOOR_Z + 0.12);
+  }
+  const leaf = kit.lit(0x3e9a4a, 0.85);
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 8) * Math.PI;
+    const x = -Math.cos(a) * 1.75;
+    const y = 4.6 + Math.sin(a) * 0.9;
+    kit.mesh(new SphereGeometry(0.3, 10, 8), leaf, object, x, y, DOOR_Z + 0.2);
+    if (i % 2 === 0) {
+      kit.mesh(
+        new SphereGeometry(0.17, 8, 6),
+        kit.lit(i % 4 === 0 ? 0xff6f91 : 0xf2d34a, 0.6),
+        object,
+        x,
+        y + 0.12,
+        DOOR_Z + 0.46,
+      );
+    }
+  }
+  // The gate leaf, swung open to one side, with a round knob.
+  const hinge = new Group();
+  hinge.position.set(-1.35, 0, DOOR_Z + 0.35);
+  hinge.rotation.y = -1.2;
+  object.add(hinge);
+  for (let i = 0; i < 5; i++)
+    kit.box(0.4, 2.6 - (i === 2 ? -0.3 : 0), 0.1, picket, hinge, 0.25 + i * 0.5, 1.5, 0);
+  kit.box(2.6, 0.14, 0.12, picket, hinge, 1.45, 2.3, 0);
+  kit.box(2.6, 0.14, 0.12, picket, hinge, 1.45, 0.8, 0);
+  kit.mesh(new CylinderGeometry(0.07, 0.07, 0.2, 8), kit.lit(0x555555, 0.4), hinge, 2.5, 1.6, 0.1);
+}
+
+export function createDoorway(group: PlaceGroup, next: PlaceLook): Doorway {
   const kit = new Kit();
   const object = new Group();
+  if (group === 'town') {
+    buildGate(kit, object, next);
+    return {
+      object,
+      dispose() {
+        kit.dispose();
+        object.removeFromParent();
+      },
+    };
+  }
   // Wall around the opening, in the next place's colour.
   kit.box(6, 9.5, 0.3, kit.lit(next.wall, 0.9), object, 0, 4.75, DOOR_Z);
   kit.box(6, 0.5, 0.36, kit.lit(next.trim, 0.6), object, 0, 0.25, DOOR_Z + 0.02);
