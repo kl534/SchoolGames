@@ -13,7 +13,7 @@ export const OBSTACLE_MAX_H = 5.2;
 /** Floor face shown below the ground line (u). */
 export const GROUND_MARGIN = 1.0;
 /** Least width the screen shows (u), which is the limit on a portrait phone. */
-export const MIN_VIEW_W = 11;
+export const MIN_VIEW_W = 7.5;
 /** The cat sits this fraction of the width from the left. */
 export const CAT_COL = 0.28;
 
