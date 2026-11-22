@@ -665,7 +665,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
         if (lab) break;
         lives = loseLife(lives);
         hud.setLives(lives, true);
-        beginResult();
+        // The green answer and the miss picture wait for the flop to finish (finishMove).
         break;
       }
       default:
@@ -693,9 +693,11 @@ function run(session: GameSession, dev: DevOptions | null): void {
       askNext();
       return;
     }
-    // A fail: the cat trots on while the game waits for the tap on the green answer.
+    // A fail: the flop has played out, so now the green answer and the miss picture show, and
+    // the cat trots on while the game waits for the tap on it.
     speed = RUN_SPEED;
     if (phase === 'move') phase = outOfLives(lives) ? 'ending' : 'result';
+    if (!lab) beginResult();
   };
 
   /** A clear: any points still owed are paid and a trail of fish is laid for the next stretch. */
@@ -725,7 +727,6 @@ function run(session: GameSession, dev: DevOptions | null): void {
         avoid: [hud.top, hud.banner],
         problem: current.prompt,
         chosen: options[chosen],
-        delay: 0.6,
       });
     } else {
       after(1.2, advance);
