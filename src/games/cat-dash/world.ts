@@ -19,6 +19,7 @@ import {
 import { Kit } from './kit';
 import type { Place } from './places';
 import { HOUSE_SCENERY, WALL_Z } from './props/house-scenery';
+import { TOWN_SCENERY, buildOutdoorFar } from './props/town-scenery';
 
 /** The scenery repeats every this many units. */
 export const TILE_W = 24;
@@ -62,22 +63,24 @@ export function buildScenery(place: Place, kit: Kit): Group {
   const look = place.look;
   const mid = (x: number, y: number, z: number) => ({ x, y, z });
   void mid;
-  // Wall, with faint stripes so the motion shows, and the trim along its foot.
-  kit.box(
-    TILE_W,
-    WALL_H,
-    0.3,
-    kit.lit(look.wall, 0.95),
-    tile,
-    TILE_W / 2,
-    WALL_H / 2 - 1,
-    WALL_Z - 0.15,
-  );
-  const stripe = kit.lit(look.wall ^ 0x0c0c0c, 0.95);
-  for (let i = 0; i < TILE_W; i += 2) {
-    kit.box(0.5, WALL_H, 0.04, stripe, tile, i + 1, WALL_H / 2 - 1, WALL_Z + 0.02);
+  if (look.indoor) {
+    // Wall, with faint stripes so the motion shows, and the trim along its foot.
+    kit.box(
+      TILE_W,
+      WALL_H,
+      0.3,
+      kit.lit(look.wall, 0.95),
+      tile,
+      TILE_W / 2,
+      WALL_H / 2 - 1,
+      WALL_Z - 0.15,
+    );
+    const stripe = kit.lit(look.wall ^ 0x0c0c0c, 0.95);
+    for (let i = 0; i < TILE_W; i += 2) {
+      kit.box(0.5, WALL_H, 0.04, stripe, tile, i + 1, WALL_H / 2 - 1, WALL_Z + 0.02);
+    }
+    kit.box(TILE_W, 0.55, 0.2, kit.lit(look.trim, 0.6), tile, TILE_W / 2, 0.28, WALL_Z + 0.1);
   }
-  kit.box(TILE_W, 0.55, 0.2, kit.lit(look.trim, 0.6), tile, TILE_W / 2, 0.28, WALL_Z + 0.1);
   // The floor slab and its pattern on the front face and the top.
   const floor = kit.lit(look.floor, 0.85);
   const depth = FLOOR_Z_FRONT - FLOOR_Z_BACK;
@@ -119,10 +122,35 @@ export function buildScenery(place: Place, kit: Kit): Group {
         kit.box(0.08, 0.28, 0.03, line, tile, i, -0.15, FLOOR_Z_FRONT + 0.012);
       break;
     }
+    case 'grass': {
+      // Lighter blades along the edge and the top, and a darker soil band.
+      kit.box(TILE_W, 0.35, 0.03, light, tile, TILE_W / 2, -0.175, FLOOR_Z_FRONT + 0.01);
+      for (let i = 0; i < TILE_W; i += 1.2) {
+        kit.box(0.6, 0.012, 3.3, i % 2.4 === 0 ? light : line, tile, i + 0.6, 0.011, -0.5);
+      }
+      break;
+    }
+    case 'pavement': {
+      for (let i = 0; i < TILE_W; i += 3)
+        kit.box(0.05, 6, 0.02, line, tile, i, -3, FLOOR_Z_FRONT + 0.01);
+      kit.box(TILE_W, 0.05, 0.02, line, tile, TILE_W / 2, -0.8, FLOOR_Z_FRONT + 0.01);
+      for (let i = 0; i < TILE_W; i += 3) kit.box(0.04, 0.012, 3.3, line, tile, i, 0.011, -0.5);
+      break;
+    }
+    case 'roof': {
+      for (let j = 0; j < 6; j++)
+        kit.box(TILE_W, 0.05, 0.02, line, tile, TILE_W / 2, -0.35 - j * 0.6, FLOOR_Z_FRONT + 0.01);
+      for (let z = -2.6; z < 1.4; z += 0.6)
+        kit.box(TILE_W, 0.012, 0.05, line, tile, TILE_W / 2, 0.011, z);
+      for (let i = 0; i < TILE_W; i += 1.2) kit.box(0.04, 0.012, 3.3, line, tile, i, 0.011, -0.5);
+      break;
+    }
     default:
       break;
   }
-  const decor = HOUSE_SCENERY[place.id as keyof typeof HOUSE_SCENERY];
+  const decor =
+    HOUSE_SCENERY[place.id as keyof typeof HOUSE_SCENERY] ??
+    TOWN_SCENERY[place.id as keyof typeof TOWN_SCENERY];
   decor?.(kit, tile, look);
   return tile;
 }
@@ -182,8 +210,13 @@ export function createWorld(scene: Scene): World {
         root.add(tile);
         return tile;
       });
-      // The far layer: pendant lights hanging from the ceiling, in the place's colours.
+      // The far layer: pendant lights indoors; a sun and clouds (or a dusk sky) outdoors.
       far = new Group();
+      if (!look.indoor) {
+        buildOutdoorFar(place.id, next, far, 5, 8);
+        root.add(far);
+        return;
+      }
       const cord = next.lit(0x444444, 0.6);
       const bulb = next.basic(0xfff3c2);
       for (let j = -3; j <= 5; j++) {
