@@ -475,7 +475,7 @@ export const ADVENTURE_MOVES: Record<AdventureId, ObstacleMoves> = {
         ],
         [
           [0.6, 'sfx:thud', 6, 1.8],
-          [0.9, 'sfx:roll', 5, 0.9],
+          [0.9, 'sfx:whoosh', 5, 0.9],
           [1.2, 'sfx:wobble', 6, 2],
           [1.95, 'sfx:splat', 6.5, 0.2],
           [1.95, 'bonk', 6.5, 1],
@@ -512,7 +512,7 @@ export const ADVENTURE_MOVES: Record<AdventureId, ObstacleMoves> = {
         [
           [0.5, 'sfx:thud', 4.4, 2.2],
           [0.8, 'word', 4, 3.6],
-          [0.85, 'sfx:roll', 3.8, 1.2],
+          [0.85, 'sfx:whoosh', 3.8, 1.2],
           [1.4, 'dust', 6.6, 0.1],
         ],
       ),
@@ -534,7 +534,7 @@ export const ADVENTURE_MOVES: Record<AdventureId, ObstacleMoves> = {
         [
           [0.6, 'sfx:thud', 3.4, 1],
           [0.65, 'bonk', 3.4, 1.2],
-          [1.0, 'sfx:roll', 6, 1],
+          [1.0, 'sfx:whoosh', 6, 1],
           [1.9, 'poof', 10.5, 1, 0xffffff],
           [1.95, 'sfx:squeak', 10.8, 1.2],
           [2.0, 'stars', 10.8, 1.5],
@@ -732,7 +732,7 @@ export const ADVENTURE_MOVES: Record<AdventureId, ObstacleMoves> = {
         [
           [0.5, 'sfx:whoosh', 4.3, 0.8],
           [0.9, 'word', 6.5, 2.4],
-          [1.0, 'sfx:roll', 7, 0.4],
+          [1.0, 'sfx:whoosh', 7, 0.4],
           [1.75, 'dust', 10.6, 0.1],
         ],
       ),
@@ -752,7 +752,7 @@ export const ADVENTURE_MOVES: Record<AdventureId, ObstacleMoves> = {
         [
           [0.55, 'sfx:wobble', 4.3, 1],
           [0.6, 'bonk', 4.3, 1.1],
-          [1.0, 'sfx:roll', 6, 1],
+          [1.0, 'sfx:whoosh', 6, 1],
           [1.85, 'poof', 10.8, 1, 0x9a7a4a],
           [2.0, 'stars', 10.9, 1.4],
         ],

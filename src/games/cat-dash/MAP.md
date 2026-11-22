@@ -9,7 +9,7 @@ A side-view endless run: pick one of four cats, then run through places (house: 
 - `places.ts`: the places and their obstacles as data (`PLACES`, `placeOf`, `PlaceLook`)
 - `looks.ts`: the four cats' colours, the saved choice (`CAT_SETTING`, `savedCat`) and the face SVG (`catFaceSvg`)
 - `layout.ts`: side-view screen fitting (`fitView`, `playBand`, `riseFor`, `FOV`)
-- `moves.ts`: the 96 cat moves: the frame sampler (`moveFrame`, `moveDuration`, `moveEvents`, `MOVE_SPECS`, `MOVE_WORDS`) over the groups' move tables
+- `moves.ts`: the 192 cat moves: the frame sampler (`moveFrame`, `moveDuration`, `moveEvents`, `MOVE_SPECS`, `MOVE_WORDS`) over the groups' move tables
 - `moves/toolkit.ts`: pure animation toolkit: poses, `CatFrame`, segments (`Seg`), `arc`, `follow`, `failEnd`
 - `moves/house.ts`: the 12 house obstacles' moves and the shared motions the props use (`shelfAngle`, `mopAngle`, `towelAngle`, `yarnX`, `closetDoor`)
 - `moves/town.ts`: the 12 town obstacles' moves and the shared motions the props use (`swingAngle`, `padX`, `canX`, `skateX`, `snapAngle`, ...)
@@ -53,6 +53,6 @@ A side-view endless run: pick one of four cats, then run through places (house: 
 ## Tests
 
 - `tests/cat-dash.test.ts`
-- `tests/cat-dash-moves.test.ts` (all 96 moves sampled every 1/60 s)
+- `tests/cat-dash-moves.test.ts` (all 192 moves sampled every 1/60 s)
 - `tests/cat-dash-sounds.test.ts` (every `sfx:` event names a sound in `src/shared/audio.ts`)
 - `tests/tap-to-continue.test.ts` (tap-to-continue flow in `main.ts`)

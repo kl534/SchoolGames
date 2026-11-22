@@ -223,7 +223,7 @@ export const BUSY_MOVES: Record<BusyId, ObstacleMoves> = {
         [
           [0.45, 'sfx:boing', 5.2, 1.5],
           [0.9, 'word', 6.5, 3],
-          [1.1, 'sfx:roll', 7.5, 1.5],
+          [1.1, 'sfx:whoosh', 7.5, 1.5],
           [1.5, 'dust', 10, 0.1],
         ],
       ),
@@ -273,7 +273,7 @@ export const BUSY_MOVES: Record<BusyId, ObstacleMoves> = {
           ...failEnd(11),
         ],
         [
-          [0.9, 'sfx:roll', 6.5, 0.5],
+          [0.9, 'sfx:whoosh', 6.5, 0.5],
           [1.25, 'sfx:crash', 8.8, 1.2],
           [1.25, 'bonk', 8.8, 1.2],
           [1.7, 'sfx:splat', 9.9, 0.2],
@@ -512,7 +512,7 @@ export const BUSY_MOVES: Record<BusyId, ObstacleMoves> = {
         ],
         [
           [0.5, 'sfx:squeak', 5.5, 1.9],
-          [0.8, 'sfx:roll', 6.5, 0.4],
+          [0.8, 'sfx:whoosh', 6.5, 0.4],
           [1.0, 'word', 7.2, 3.4],
           [1.6, 'dust', 10.3, 0.1],
         ],
@@ -545,7 +545,7 @@ export const BUSY_MOVES: Record<BusyId, ObstacleMoves> = {
           ...failEnd(11),
         ],
         [
-          [0.7, 'sfx:roll', 7, 0.3],
+          [0.7, 'sfx:whoosh', 7, 0.3],
           [1.0, 'sfx:squeak', 8, 2.5],
           [1.6, 'sfx:thud', 9, 0.2],
           [1.6, 'bonk', 9, 1],
@@ -610,7 +610,7 @@ export const BUSY_MOVES: Record<BusyId, ObstacleMoves> = {
         ],
         [
           [0.5, 'sfx:boing', 5.6, 2.2],
-          [0.8, 'sfx:roll', 6.5, 0.4],
+          [0.8, 'sfx:whoosh', 6.5, 0.4],
           [1.0, 'word', 7.5, 3.6],
           [1.55, 'dust', 10.4, 0.1],
         ],
@@ -629,7 +629,7 @@ export const BUSY_MOVES: Record<BusyId, ObstacleMoves> = {
           ...failEnd(11),
         ],
         [
-          [0.7, 'sfx:roll', 6.5, 0.4],
+          [0.7, 'sfx:whoosh', 6.5, 0.4],
           [1.0, 'sfx:squeak', 8, 2.4],
           [1.85, 'sfx:thud', 11, 0.2],
           [1.85, 'bonk', 11, 1],
@@ -764,7 +764,7 @@ export const BUSY_MOVES: Record<BusyId, ObstacleMoves> = {
         ],
         [
           [0.5, 'sfx:thud', 4.6, 1.5],
-          [1.0, 'sfx:roll', 7.5, 1.5],
+          [1.0, 'sfx:whoosh', 7.5, 1.5],
           [1.2, 'word', 8.4, 3],
           [1.85, 'dust', 10.6, 0.1],
         ],
@@ -800,7 +800,7 @@ export const BUSY_MOVES: Record<BusyId, ObstacleMoves> = {
         ],
         [
           [0.85, 'sfx:wobble', 7, 1.5],
-          [1.1, 'sfx:roll', 8, 1],
+          [1.1, 'sfx:whoosh', 8, 1],
           [2.15, 'sfx:thud', 10.6, 0.2],
           [2.15, 'bonk', 10.6, 1],
           [2.3, 'stars', 10.6, 1.4],
@@ -986,7 +986,7 @@ export const BUSY_MOVES: Record<BusyId, ObstacleMoves> = {
         [
           [0.55, 'sfx:thud', 5.4, 2.8],
           [0.9, 'word', 6, 4],
-          [1.0, 'sfx:roll', 5.8, 2.8],
+          [1.0, 'sfx:whoosh', 5.8, 2.8],
           [1.65, 'dust', 9.8, 0.1],
         ],
       ),
@@ -1021,7 +1021,7 @@ export const BUSY_MOVES: Record<BusyId, ObstacleMoves> = {
         ],
         [
           [0.55, 'sfx:thud', 5.4, 2.8],
-          [0.9, 'sfx:roll', 5.5, 2.8],
+          [0.9, 'sfx:whoosh', 5.5, 2.8],
           [1.15, 'sfx:whoosh', 6, 3],
           [1.6, 'sfx:thud', 9.1, 0.2],
           [1.6, 'bonk', 9.1, 1],

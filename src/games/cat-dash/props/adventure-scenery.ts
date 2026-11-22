@@ -106,7 +106,7 @@ const snowyForest: Decor = (kit, tile) => {
     [11, 5.5],
     [19, 4.4],
   ] as const)
-    kit.mesh(new SphereGeometry(r, 16, 10), hill, tile, x, -r * 0.3, -3.2);
+    kit.mesh(new SphereGeometry(r, 16, 10), hill, tile, x, -r * 0.3, -3.2).scale.z = 0.15;
   for (const [x, s, z] of [
     [1.4, 1.2, -2.3],
     [4.6, 1.5, -2.5],

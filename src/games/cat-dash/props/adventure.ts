@@ -181,7 +181,7 @@ function crab(): Prop {
 
 function wave(): Prop {
   return prop((kit, root) => {
-    const water = kit.glass(0x2f9be8, 0.75);
+    const water = kit.glass(0x5fd0ff, 0.92);
     const body = new Group();
     root.add(body);
     profileSlab(kit, water, body, WAVE.x0, WAVE.x1, waveY, -0.9, 0.6);
@@ -284,7 +284,7 @@ function snowball(): Prop {
 
 function ice(): Prop {
   return prop((kit, root) => {
-    kit.box(4.6, 0.04, 2.6, kit.lit(0xbfe4ff, 0.2), root, 6.2, 0.03, 0.0);
+    kit.box(4.6, 0.04, 2.6, kit.lit(0x7fc8f0, 0.2), root, 6.2, 0.03, 0.0);
     for (let i = 0; i < 6; i++) {
       kit.box(
         0.6 + hash(i) * 0.6,
@@ -517,9 +517,9 @@ function airlock(): Prop {
       const g = new Group();
       g.position.set(x, 0, 0.1);
       root.add(g);
-      const slab = kit.box(0.3, 3.8, 1.6, slabMat, g, 0, 1.9, 0);
+      const slab = kit.box(0.5, 3.8, 1.6, slabMat, g, 0, 1.9, 0);
       for (let i = 0; i < 5; i++)
-        kit.box(0.34, 0.28, 1.6, i % 2 ? slabMat : stripe, g, 0, 0.3 + i * 0.62, 0);
+        kit.box(0.54, 0.28, 1.6, i % 2 ? slabMat : stripe, g, 0, 0.3 + i * 0.62, 0);
       sphere(kit, 0.16, kit.basic(0x5cff8a), g, 0, 3.95, 0.8);
       return { g, slab };
     });

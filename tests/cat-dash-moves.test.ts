@@ -70,6 +70,8 @@ describe('cat moves', () => {
             expect(e.at).toBeLessThanOrEqual(duration);
             if (e.type.startsWith('sfx:')) {
               expect(typeof kit[e.type.slice(4)], e.type).toBe('function');
+              // The game plays it with no arguments.
+              expect((kit[e.type.slice(4)] as () => void).length, e.type).toBe(0);
             }
           }
           expect(events.some((e) => e.type === 'word')).toBe(outcome === 'clear');
