@@ -46,6 +46,7 @@ import { showCatPicker, type CatPicker } from './picker';
 import { createPropPool } from './props/pool';
 import {
   FIRST_PLACE,
+  FISH_ARC,
   FISH_GAP,
   FISH_POINTS,
   FISH_Y,
@@ -155,6 +156,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
   const fishTail = new ConeGeometry(0.2, 0.34, 6);
   const fishMaterial = new MeshStandardMaterial({ color: 0xff9f1c, roughness: 0.4 });
   const tailMaterial = new MeshStandardMaterial({ color: 0x3f8fd8, roughness: 0.4 });
+  const CAT_CHEST = 1.0;
   const fish = Array.from({ length: 16 }, () => {
     const group = new Group();
     const body = new Mesh(fishBody, fishMaterial);
@@ -956,24 +958,38 @@ function run(session: GameSession, dev: DevOptions | null): void {
       if (f.visible) continue;
       f.visible = true;
       f.position.set(x0 + placed * FISH_GAP, FISH_Y, 0);
+      f.userData.grab = false;
+      f.userData.arc = count > 1 ? Math.sin((Math.PI * placed) / (count - 1)) * FISH_ARC : 0;
       if (++placed >= count) break;
     }
   };
 
-  const updateFish = (time: number, collecting: boolean) => {
+  /** Fish are only won by a right answer: then every fish not yet passed flies to the cat. */
+  const updateFish = (time: number, delta: number, grabbing: boolean) => {
     for (const f of fish) {
       if (!f.visible) continue;
-      f.position.y = FISH_Y + Math.sin(time * 3 + f.position.x) * 0.12;
+      const grab = f.userData.grab === true;
+      if (grab) {
+        const dx = catX - f.position.x;
+        const dy = CAT_CHEST - f.position.y;
+        const step = Math.min(1, delta * 9);
+        f.position.x += dx * step;
+        f.position.y += dy * step;
+        f.rotation.z = 0;
+        if (Math.hypot(dx, dy) < 0.6) {
+          f.visible = false;
+          score += FISH_POINTS;
+          setScoreHud(true);
+          effects.sparkle(f.position.x, f.position.y);
+          sfx.purr();
+          hud.pop(`+${FISH_POINTS}`, toScreen(f.position.x, f.position.y + 0.8), 'good');
+        }
+        continue;
+      }
+      f.position.y = FISH_Y + (f.userData.arc as number) + Math.sin(time * 3 + f.position.x) * 0.12;
       f.rotation.z = Math.sin(time * 4 + f.position.x) * 0.25;
       if (f.position.x < camX - fit.viewW * 0.4) f.visible = false;
-      else if (collecting && Math.abs(f.position.x - catX) < 0.9) {
-        f.visible = false;
-        score += FISH_POINTS;
-        setScoreHud(true);
-        effects.sparkle(f.position.x, f.position.y);
-        sfx.purr();
-        hud.pop(`+${FISH_POINTS}`, toScreen(f.position.x, f.position.y + 0.8), 'good');
-      }
+      else if (grabbing && f.position.x >= catX - 0.3) f.userData.grab = true;
     }
   };
 
@@ -1064,7 +1080,12 @@ function run(session: GameSession, dev: DevOptions | null): void {
       catAt(catX, 'sit', delta);
     }
 
-    updateFish(elapsed, phase === 'riding' || phase === 'sprint' || phase === 'result');
+    const rightAnswer = chosen >= 0 && options[chosen] === fact?.answer;
+    updateFish(
+      elapsed,
+      delta,
+      (phase === 'sprint' || phase === 'move') && rightAnswer && !timedOut,
+    );
     // The shadow.
     const grounded = focus.y < 1.2 && (phase !== 'move' || frame.visible);
     world.setShadow(focus.x, grounded && cat.object.visible, 1 - Math.min(focus.y * 0.12, 0.5));
