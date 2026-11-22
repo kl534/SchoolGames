@@ -1,0 +1,81 @@
+/** Screen fitting for the side view, free of three.js so it is easy to test. */
+
+/** CSS pixels: the space between the question panel at the top and the answers at the bottom. */
+export interface PlayBand {
+  top: number;
+  bottom: number;
+}
+
+/** Vertical field of view in degrees; a narrow view reads as flat, side-on. */
+export const FOV = 28;
+/** The tallest move, a flip over the bookshelf with the cat on top (u). */
+export const OBSTACLE_MAX_H = 5.2;
+/** Floor face shown below the ground line (u). */
+export const GROUND_MARGIN = 1.0;
+/** Least width the screen shows (u), which is the limit on a portrait phone. */
+export const MIN_VIEW_W = 11;
+/** The cat sits this fraction of the width from the left. */
+export const CAT_COL = 0.28;
+
+/**
+ * The part of the screen the HUD leaves clear, in CSS pixels. Mirrors the HUD in style.css: on a
+ * portrait phone the question and the place strip sit below the menu buttons and the answers wrap
+ * into two rows; in a short landscape phone everything is squeezed to the edges.
+ */
+export function playBand(width: number, height: number): PlayBand {
+  if (height <= 460) return { top: 96, bottom: height - 84 };
+  if (width <= 640) return { top: 250, bottom: height - 170 };
+  return { top: 118, bottom: height - 100 };
+}
+
+export interface Fit {
+  /** Pixels per world unit at the cat's depth. */
+  ppu: number;
+  /** Width and height of the screen in world units at the cat's depth. */
+  viewW: number;
+  viewH: number;
+  /** Screen row (px from the top) of the floor. */
+  groundRow: number;
+  /** Camera distance from the z = 0 plane, and the camera's height above the floor. */
+  distance: number;
+  camY: number;
+  /** How much floor the screen shows in front of the cat: viewW * (1 - CAT_COL). */
+  ahead: number;
+}
+
+/**
+ * ppu = min(bandHeight / (OBSTACLE_MAX_H + GROUND_MARGIN), width / MIN_VIEW_W). The action area
+ * (OBSTACLE_MAX_H + GROUND_MARGIN tall) is centred in the band, so the floor sits at
+ * `groundRow`. The camera looks horizontally from `camY` above the floor, which puts the floor at
+ * that row of the screen.
+ */
+export function fitView(width: number, height: number): Fit {
+  const w = Math.max(width, 1);
+  const h = Math.max(height, 1);
+  const band = playBand(w, h);
+  const bandHeight = Math.max(band.bottom - band.top, 1);
+  const ppu = Math.min(bandHeight / (OBSTACLE_MAX_H + GROUND_MARGIN), w / MIN_VIEW_W);
+  const viewW = w / ppu;
+  const viewH = h / ppu;
+  const used = (OBSTACLE_MAX_H + GROUND_MARGIN) * ppu;
+  const slack = bandHeight - used;
+  const groundRow = band.top + slack / 2 + OBSTACLE_MAX_H * ppu;
+  const distance = viewH / 2 / Math.tan((FOV * Math.PI) / 360);
+  // The floor is (groundRow - h / 2) / ppu below the middle of the screen, where the camera looks.
+  const camY = (groundRow - h / 2) / ppu;
+  return { ppu, viewW, viewH, groundRow, distance, camY, ahead: viewW * (1 - CAT_COL) };
+}
+
+/** The camera starts rising once the highest point of the action is above this (u). */
+export const RISE_FROM = OBSTACLE_MAX_H - 0.8; // 4.4
+
+/**
+ * How far to raise the camera for a move that climbs above the usual view: (top - RISE_FROM),
+ * never below 0 or above `max`, and never so far that `low` (the lowest point of the cat)
+ * drops within 0.5 u of the screen's bottom edge (so at most low + GROUND_MARGIN - 0.5).
+ */
+export function riseFor(top: number, low: number, max: number): number {
+  if (![top, low, max].every(Number.isFinite)) return 0;
+  const limit = Math.min(max, low + GROUND_MARGIN - 0.5);
+  return Math.max(0, Math.min(top - RISE_FROM, limit));
+}

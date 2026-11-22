@@ -329,6 +329,41 @@ function noise(
   source.start(start);
 }
 
+/** A cat's voice: a sawtooth through a bandpass, pitch through `pitches`, optional vibrato (Hz). */
+function catVoice(
+  ctx: AudioContext,
+  start: number,
+  pitches: [number, number, number],
+  duration: number,
+  vibratoHz: number,
+): void {
+  const osc = ctx.createOscillator();
+  const filter = ctx.createBiquadFilter();
+  const gain = ctx.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(pitches[0], start);
+  osc.frequency.linearRampToValueAtTime(pitches[1], start + duration * 0.45);
+  osc.frequency.linearRampToValueAtTime(pitches[2], start + duration);
+  filter.type = 'bandpass';
+  filter.frequency.value = 900;
+  filter.Q.value = 2;
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.linearRampToValueAtTime(0.3, start + 0.05);
+  gain.gain.linearRampToValueAtTime(0, start + duration);
+  osc.connect(filter).connect(gain).connect(ctx.destination);
+  osc.start(start);
+  osc.stop(start + duration + 0.02);
+  if (vibratoHz > 0) {
+    const lfo = ctx.createOscillator();
+    const depth = ctx.createGain();
+    lfo.frequency.value = vibratoHz;
+    depth.gain.value = 40;
+    lfo.connect(depth).connect(osc.frequency);
+    lfo.start(start);
+    lfo.stop(start + duration + 0.02);
+  }
+}
+
 /** A low, wobbly moan: a sawtooth sliding down with a slow vibrato. */
 function moan(ctx: AudioContext, start: number, duration: number, volume: number): void {
   const osc = ctx.createOscillator();
@@ -656,6 +691,40 @@ export const sfx = {
       tone(ctx, 'triangle', 1150, 800, t + 0.3, 0.11, 0.14);
       tone(ctx, 'triangle', 1150, 800, t + 0.42, 0.11, 0.14);
     }),
+  /** A cat's meow: a sawtooth through a 900 Hz bandpass, pitch 520 to 880 to 600 over 0.45 s. */
+  meow: () => play((ctx, t) => catVoice(ctx, t, [520, 880, 600], 0.45, 0)),
+  /** A yowl: the same voice, 420 to 1100 to 360 over 0.9 s with a 7 Hz vibrato. */
+  yowl: () => play((ctx, t) => catVoice(ctx, t, [420, 1100, 360], 0.9, 7)),
+  /** A purr: a sine chime over a low noise pulsed at 25 Hz. */
+  purr: () =>
+    play((ctx, t) => {
+      tone(ctx, 'sine', 1320, 1320, t, 0.12, 0.18);
+      const length = Math.floor(ctx.sampleRate * 0.4);
+      const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 300;
+      const pulse = ctx.createGain();
+      pulse.gain.value = 0.5;
+      const lfo = ctx.createOscillator();
+      const depth = ctx.createGain();
+      lfo.frequency.value = 25;
+      depth.gain.value = 0.5;
+      lfo.connect(depth).connect(pulse.gain);
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.5, t);
+      gain.gain.linearRampToValueAtTime(0, t + 0.4);
+      source.connect(filter).connect(pulse).connect(gain).connect(ctx.destination);
+      source.start(t);
+      lfo.start(t);
+      lfo.stop(t + 0.42);
+    }),
+  /** An angry hiss: high-passed noise sliding from 3000 to 7000 Hz over 0.45 s. */
+  hiss: () => play((ctx, t) => noise(ctx, 'highpass', 3000, 7000, t, 0.45, 0.3)),
   /** A school bell ringing for 1.6 s. */
   bell: () =>
     play((ctx, t) => {

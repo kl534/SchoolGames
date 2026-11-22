@@ -1,0 +1,8 @@
+{
+  "id": "cat-dash",
+  "title": "Cat Dash",
+  "description": "Run, jump and pounce through houses, parks and more. Answer right to clear each obstacle — you have 3 lives!",
+  "thumbnail": "thumbnail.svg",
+  "tags": ["cat", "action", "3d"],
+  "scoring": "score"
+}
