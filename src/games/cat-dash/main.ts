@@ -60,6 +60,7 @@ import {
   approachProgress,
   easeToward,
   fishTrailLength,
+  leapLift,
   hitPoints,
   loseLife,
   multiplierFor,
@@ -357,9 +358,9 @@ function run(session: GameSession, dev: DevOptions | null): void {
   };
 
   /** The cat on the floor at `x`, in `pose`. */
-  const catAt = (x: number, pose: CatFrame['pose'], dt: number) => {
+  const catAt = (x: number, pose: CatFrame['pose'], dt: number, y = 0) => {
     frame.x = x;
-    frame.y = 0;
+    frame.y = y;
     frame.rot = 0;
     frame.z = 0;
     frame.sx = frame.sy = 1;
@@ -948,6 +949,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
   window.addEventListener('keydown', onKey);
 
   // ---------- Fish ----------
+  const rightNow = () => chosen >= 0 && options[chosen] === fact?.answer && !timedOut;
   const spawnTrail = () => {
     const count = fishTrailLength(Math.random());
     const x0 = camX + fit.viewW * 0.5 + 1.5;
@@ -964,10 +966,29 @@ function run(session: GameSession, dev: DevOptions | null): void {
     }
   };
 
-  /** Fish are only won by a right answer: then every fish not yet passed flies to the cat. */
+  /** How high the cat is lifted while it leaps for the fish near it (0 when none is in reach). */
+  const leapHeight = (): number => {
+    let best = 0;
+    for (const f of fish) {
+      if (!f.visible) continue;
+      best = Math.max(best, leapLift(f.position.x - catX, f.position.y - CAT_CHEST));
+    }
+    return best;
+  };
+
+  /** Fish are only won by a right answer: the cat leaps for the ones on the straight, and any
+   *  still out when the obstacle move starts fly to it. */
   const updateFish = (time: number, delta: number, grabbing: boolean) => {
     for (const f of fish) {
       if (!f.visible) continue;
+      if (phase === 'sprint' && grabbing && f.userData.grab !== true) {
+        // Caught by the leap: the cat is up there when it passes the fish.
+        if (Math.abs(f.position.x - catX) < 0.5 && frame.y >= f.position.y - CAT_CHEST - 0.7) {
+          f.userData.grab = true;
+          f.position.x = catX;
+          f.position.y = frame.y + CAT_CHEST;
+        }
+      }
       const grab = f.userData.grab === true;
       if (grab) {
         const dx = catX - f.position.x;
@@ -989,7 +1010,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
       f.position.y = FISH_Y + (f.userData.arc as number) + Math.sin(time * 3 + f.position.x) * 0.12;
       f.rotation.z = Math.sin(time * 4 + f.position.x) * 0.25;
       if (f.position.x < camX - fit.viewW * 0.4) f.visible = false;
-      else if (grabbing && f.position.x >= catX - 0.3) f.userData.grab = true;
+      else if (grabbing && phase !== 'sprint' && f.position.x >= catX - 0.3) f.userData.grab = true;
     }
   };
 
@@ -1074,13 +1095,19 @@ function run(session: GameSession, dev: DevOptions | null): void {
       if (phase === 'done') catAt(catX, 'sit', delta);
     } else if (phase !== 'picker') {
       const pose = phase === 'preview' || phase === 'countdown' ? 'trot' : 'run';
-      catAt(catX, phase === 'preview' || phase === 'countdown' ? 'sit' : pose, delta);
+      const lift = phase === 'sprint' && rightNow() ? leapHeight() : 0;
+      catAt(
+        catX,
+        phase === 'preview' || phase === 'countdown' ? 'sit' : lift > 0.15 ? 'leap' : pose,
+        delta,
+        lift,
+      );
       if (phase === 'riding' && prop && obstaclePlaced) prop.update(null, 0, elapsed);
     } else {
       catAt(catX, 'sit', delta);
     }
 
-    const rightAnswer = chosen >= 0 && options[chosen] === fact?.answer;
+    const rightAnswer = rightNow();
     updateFish(
       elapsed,
       delta,

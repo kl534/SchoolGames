@@ -19,6 +19,8 @@ import {
   VISIT_LENGTH,
   approach,
   fishTrailLength,
+  leapLift,
+  LEAP_REACH,
   hitPoints,
   loseLife,
   multiplierFor,
@@ -309,5 +311,14 @@ describe('parseDev', () => {
     });
     expect(parseDev('').lab).toBeNull();
     expect(parseDev('?lab=couch:clear').lab).toBeNull();
+  });
+
+  it('lifts the cat to a fish, peaking at it and 0 out of reach', () => {
+    expect(leapLift(0, 1.2)).toBeCloseTo(1.2);
+    expect(leapLift(LEAP_REACH, 1.2)).toBe(0);
+    expect(leapLift(-LEAP_REACH - 1, 1.2)).toBe(0);
+    expect(leapLift(0, 0)).toBe(0);
+    expect(leapLift(-1, 1.2)).toBeGreaterThan(0);
+    expect(leapLift(1, 1.2)).toBeLessThan(1.2);
   });
 });

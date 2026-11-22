@@ -761,9 +761,9 @@
 
 .cd-cards {
   display: grid;
-  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
   gap: 14px;
-  width: min(900px, 100%);
+  width: min(1000px, 100%);
 }
 
 @media (max-width: 560px) {
