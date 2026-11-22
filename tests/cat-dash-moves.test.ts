@@ -16,8 +16,8 @@ const OUTCOMES = ['clear', 'fail'] as const;
 const VARIANTS = [0, 1] as const;
 
 describe('cat moves', () => {
-  it('has 48 obstacles with a spec, two words and a prop builder each', () => {
-    expect(OBSTACLE_IDS.length).toBe(48);
+  it('has 54 obstacles with a spec, two words and a prop builder each', () => {
+    expect(OBSTACLE_IDS.length).toBe(54);
     for (const id of OBSTACLE_IDS) {
       expect(MOVE_SPECS[id], id).toBeDefined();
       expect(MOVE_WORDS[id], id).toHaveLength(2);

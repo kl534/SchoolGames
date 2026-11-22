@@ -179,10 +179,10 @@ describe('approach and sprint', () => {
 describe('places', () => {
   it('has unique ids, three obstacles each and every obstacle in exactly one place', () => {
     expect(new Set(PLACE_IDS).size).toBe(PLACES.length);
-    expect(PLACES).toHaveLength(16);
+    expect(PLACES).toHaveLength(18);
     const all = PLACES.flatMap((p) => [...p.obstacles]);
-    expect(all).toHaveLength(48);
-    expect(new Set(all).size).toBe(48);
+    expect(all).toHaveLength(54);
+    expect(new Set(all).size).toBe(54);
     expect([...OBSTACLE_IDS].sort()).toEqual([...all].sort());
     for (const p of PLACES) {
       expect(p.obstacles).toHaveLength(3);
@@ -191,15 +191,19 @@ describe('places', () => {
     }
   });
 
-  it('has four places in each of the four groups, indoors or outdoors as designed', () => {
+  it('has four places in each group, plus the farm (town) and the jungle (adventure)', () => {
+    const counts = { house: 4, town: 5, busy: 4, adventure: 5 };
     for (const group of ['house', 'town', 'busy', 'adventure'] as const) {
-      expect(PLACES.filter((p) => p.group === group)).toHaveLength(4);
+      expect(PLACES.filter((p) => p.group === group)).toHaveLength(counts[group]);
+    }
+    for (const id of ['farm', 'jungle']) {
+      expect(PLACES.find((p) => p.id === id)?.look.indoor).toBe(false);
     }
     const indoor = PLACES.filter((p) => p.look.indoor).map((p) => p.id);
     for (const id of ['grocery', 'library', 'fish-market', 'space-station']) {
       expect(indoor).toContain(id);
     }
-    for (const id of ['construction', 'beach', 'snowy-forest', 'desert']) {
+    for (const id of ['construction', 'beach', 'snowy-forest', 'desert', 'farm', 'jungle']) {
       expect(indoor).not.toContain(id);
     }
     expect(PLACES.find((p) => p.id === 'space-station')?.look.floorPattern).toBe('metal');

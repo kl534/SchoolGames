@@ -17,7 +17,9 @@ export type PlaceId =
   | 'beach'
   | 'snowy-forest'
   | 'desert'
-  | 'space-station';
+  | 'space-station'
+  | 'farm'
+  | 'jungle';
 export type ObstacleId =
   | 'couch'
   | 'bookshelf'
@@ -66,7 +68,13 @@ export type ObstacleId =
   | 'dune'
   | 'boxes'
   | 'lasers'
-  | 'airlock';
+  | 'airlock'
+  | 'hay'
+  | 'scarecrow'
+  | 'chickens'
+  | 'vine'
+  | 'stones'
+  | 'mud';
 
 export type FloorPattern =
   'planks' | 'tiles' | 'carpet' | 'grass' | 'pavement' | 'roof' | 'sand' | 'snow' | 'metal';
@@ -93,7 +101,7 @@ export interface Place {
   look: PlaceLook;
 }
 
-/** All 16 places, in four groups of four. */
+/** All 18 places: four groups of four, then the farm (town) and the jungle (adventure). */
 export const PLACES: readonly Place[] = [
   {
     id: 'living-room',
@@ -349,6 +357,38 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'metal',
       sky: [0x151a33, 0x2a3358],
       light: 0xcfe0ff,
+    },
+  },
+  {
+    id: 'farm',
+    group: 'town',
+    name: 'The Farm',
+    speech: 'The farm!',
+    obstacles: ['hay', 'scarecrow', 'chickens'],
+    look: {
+      indoor: false,
+      wall: 0x9bc86a,
+      trim: 0xc0392b,
+      floor: 0x6fae45,
+      floorPattern: 'grass',
+      sky: [0x74c0f2, 0xe2f5ff],
+      light: 0xfff5d8,
+    },
+  },
+  {
+    id: 'jungle',
+    group: 'adventure',
+    name: 'The Jungle',
+    speech: 'The jungle!',
+    obstacles: ['vine', 'stones', 'mud'],
+    look: {
+      indoor: false,
+      wall: 0x1f6b3a,
+      trim: 0x8bd36a,
+      floor: 0x4f8a3a,
+      floorPattern: 'grass',
+      sky: [0x5fb89a, 0xcdeec0],
+      light: 0xf4ffd8,
     },
   },
 ];
