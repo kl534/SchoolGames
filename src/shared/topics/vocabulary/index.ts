@@ -1,5 +1,5 @@
 import { shuffle, type Random } from '../../random';
-import type { Fact, Topic } from '../types';
+import type { Fact, FactMeaning, Topic } from '../types';
 import { GRADE_2 } from './grade-2';
 import { GRADE_3 } from './grade-3';
 import { GRADE_4 } from './grade-4';
@@ -12,9 +12,13 @@ import { GRADE_10 } from './grade-10';
 import { GRADE_11 } from './grade-11';
 import { GRADE_12 } from './grade-12';
 import { GRADE_COLLEGE } from './grade-college';
-import type { VocabRow } from './types';
+import { MEANINGS_GRADE_2 } from './meanings-grade-2';
+import { MEANINGS_GRADE_3 } from './meanings-grade-3';
+import { MEANINGS_GRADE_4 } from './meanings-grade-4';
+import { MEANINGS_GRADE_5 } from './meanings-grade-5';
+import type { PartOfSpeech, VocabRow, WordMeaning } from './types';
 
-export type { PartOfSpeech, VocabRow } from './types';
+export type { PartOfSpeech, VocabRow, WordMeaning } from './types';
 
 export type GradeId =
   '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | '11' | '12' | 'college';
@@ -24,14 +28,16 @@ export interface VocabGrade {
   /** 'Grade 2' … 'Grade 12', 'College'. */
   title: string;
   rows: readonly VocabRow[];
+  /** Definitions and example sentences by head word (grades without them show no word card). */
+  meanings?: Readonly<Record<string, WordMeaning>>;
 }
 
 /** Easiest first. Later milestones append grades here; never reorder (levels follow this order). */
 export const VOCAB_GRADES: VocabGrade[] = [
-  { id: '2', title: 'Grade 2', rows: GRADE_2 },
-  { id: '3', title: 'Grade 3', rows: GRADE_3 },
-  { id: '4', title: 'Grade 4', rows: GRADE_4 },
-  { id: '5', title: 'Grade 5', rows: GRADE_5 },
+  { id: '2', title: 'Grade 2', rows: GRADE_2, meanings: MEANINGS_GRADE_2 },
+  { id: '3', title: 'Grade 3', rows: GRADE_3, meanings: MEANINGS_GRADE_3 },
+  { id: '4', title: 'Grade 4', rows: GRADE_4, meanings: MEANINGS_GRADE_4 },
+  { id: '5', title: 'Grade 5', rows: GRADE_5, meanings: MEANINGS_GRADE_5 },
   { id: '6', title: 'Grade 6', rows: GRADE_6 },
   { id: '7', title: 'Grade 7', rows: GRADE_7 },
   { id: '8', title: 'Grade 8', rows: GRADE_8 },
@@ -48,7 +54,46 @@ export type VocabKind = 'synonym' | 'antonym';
 
 const cap = (word: string): string => word.charAt(0).toUpperCase() + word.slice(1);
 
-function buildFact(row: VocabRow, kind: VocabKind): Fact {
+export const POS_NAMES: Record<PartOfSpeech, FactMeaning['partOfSpeech']> = {
+  noun: 'noun',
+  verb: 'verb',
+  adj: 'adjective',
+  adv: 'adverb',
+};
+
+/** Splits an example at its *word* span: ['She was ', 'happy', ' to see her best friend.']. */
+export function exampleParts(example: string): [before: string, word: string, after: string] {
+  const parts = example.split('*');
+  if (parts.length !== 3) throw new Error(`Example needs exactly one *word* span: ${example}`);
+  return [parts[0], parts[1], parts[2]];
+}
+
+const VOWELS = 'aeiou';
+
+/** True when `span` is `word` or a regular form of it (s, es, d, ed, ing, er, est, ly, y to i, doubled consonant). */
+export function isFormOf(span: string, word: string): boolean {
+  const s = span.toLowerCase();
+  const w = word.toLowerCase();
+  if (s === w) return true;
+  const last = w.slice(-1);
+  const bases = [w];
+  if (last === 'e') bases.push(w.slice(0, -1));
+  if (last === 'y' && !VOWELS.includes(w.slice(-2, -1))) bases.push(w.slice(0, -1) + 'i');
+  if (
+    w.length >= 2 &&
+    !VOWELS.includes(last) &&
+    'wxy'.indexOf(last) < 0 &&
+    VOWELS.includes(w.slice(-2, -1))
+  ) {
+    bases.push(w + last);
+  }
+  const endings = ['s', 'es', 'd', 'ed', 'ing', 'er', 'est', 'ly', 'ies', 'ied', 'ier', 'iest'];
+  return bases.some(
+    (base) => s.startsWith(base) && endings.includes(s.slice(base.length)) && s !== base,
+  );
+}
+
+function buildFact(row: VocabRow, kind: VocabKind, meaning?: WordMeaning): Fact {
   const [word, , synonyms, antonyms] = row;
   const syn = kind === 'synonym';
   const answer = syn ? synonyms[0] : antonyms[0];
@@ -64,17 +109,28 @@ function buildFact(row: VocabRow, kind: VocabKind): Fact {
     answer,
     statement: statementOf(answer, kind),
     spokenPrompt: `What is ${article} ${noun} of ${word}?`,
+    ...(meaning
+      ? {
+          meaning: {
+            word,
+            partOfSpeech: POS_NAMES[row[1]],
+            definition: meaning[0],
+            example: meaning[1],
+            relation: syn ? ('Synonym' as const) : ('Antonym' as const),
+          },
+        }
+      : {}),
     ...(hasBoth ? { wrongLines: { [trap]: statementOf(trap, syn ? 'antonym' : 'synonym') } } : {}),
   };
 }
 
-export function synonymFact(row: VocabRow): Fact {
-  return buildFact(row, 'synonym');
+export function synonymFact(row: VocabRow, meaning?: WordMeaning): Fact {
+  return buildFact(row, 'synonym', meaning);
 }
 
 /** Undefined when the row has no antonyms. */
-export function antonymFact(row: VocabRow): Fact | undefined {
-  return row[3].length > 0 ? buildFact(row, 'antonym') : undefined;
+export function antonymFact(row: VocabRow, meaning?: WordMeaning): Fact | undefined {
+  return row[3].length > 0 ? buildFact(row, 'antonym', meaning) : undefined;
 }
 
 // ---- Word relations ----
@@ -210,7 +266,7 @@ export function synonymTopic(grade: VocabGrade): Topic {
     title: `${grade.title} synonyms`,
     subject: 'Synonyms',
     description: 'Pick the word that means the same.',
-    facts: grade.rows.map(synonymFact),
+    facts: grade.rows.map((row) => synonymFact(row, grade.meanings?.[row[0]])),
     distractors: vocabDistractors,
   };
 }
@@ -221,7 +277,7 @@ export function antonymTopic(grade: VocabGrade): Topic {
     title: `${grade.title} antonyms`,
     subject: 'Antonyms',
     description: 'Pick the word that means the opposite.',
-    facts: grade.rows.flatMap((row) => antonymFact(row) ?? []),
+    facts: grade.rows.flatMap((row) => antonymFact(row, grade.meanings?.[row[0]]) ?? []),
     distractors: vocabDistractors,
   };
 }

@@ -5,6 +5,8 @@ import { answerOptions, validateTopic } from '../src/shared/topics';
 import {
   ANTONYM_TOPICS,
   antonymFact,
+  exampleParts,
+  isFormOf,
   SYNONYM_TOPICS,
   synonymFact,
   VOCAB_GRADES,
@@ -61,23 +63,38 @@ describe('vocabulary data', () => {
 
 describe('vocabulary facts', () => {
   const happy = rowOf('happy');
+  const happyMeaning = VOCAB_GRADES[0].meanings!.happy;
+  const meaningOf = (relation: 'Synonym' | 'Antonym') => ({
+    word: 'happy',
+    partOfSpeech: 'adjective',
+    definition: happyMeaning[0],
+    example: happyMeaning[1],
+    relation,
+  });
+
+  it('has no meaning key when none is given', () => {
+    expect('meaning' in synonymFact(happy)).toBe(false);
+    expect('meaning' in antonymFact(happy)!).toBe(false);
+  });
 
   it('builds the happy facts', () => {
-    expect(synonymFact(happy)).toEqual({
+    expect(synonymFact(happy, happyMeaning)).toEqual({
       id: 'syn-happy',
       prompt: 'Synonym of HAPPY',
       answer: 'glad',
       statement: 'Glad is a synonym of happy.',
       spokenPrompt: 'What is a synonym of happy?',
       wrongLines: { sad: 'Sad is an antonym of happy.' },
+      meaning: meaningOf('Synonym'),
     });
-    expect(antonymFact(happy)).toEqual({
+    expect(antonymFact(happy, happyMeaning)).toEqual({
       id: 'ant-happy',
       prompt: 'Antonym of HAPPY',
       answer: 'sad',
       statement: 'Sad is an antonym of happy.',
       spokenPrompt: 'What is an antonym of happy?',
       wrongLines: { glad: 'Glad is a synonym of happy.' },
+      meaning: meaningOf('Antonym'),
     });
   });
 
@@ -217,5 +234,80 @@ describe('vocabulary distractors', () => {
         expect(b).not.toContain(w);
       }
     }
+  });
+});
+
+describe('word meanings', () => {
+  const headOf = (id: string): string => id.slice(id.indexOf('-') + 1);
+  const wordsOf = (text: string): string[] => text.toLowerCase().match(/[a-z']+/g) ?? [];
+
+  for (const grade of VOCAB_GRADES.filter((g) => g.meanings)) {
+    describe(grade.title, () => {
+      const meanings = grade.meanings!;
+      it('has an entry for every head word, in order, and no others', () => {
+        expect(Object.keys(meanings)).toEqual(grade.rows.map((r) => r[0]));
+      });
+      it('has definitions that follow the rules', () => {
+        for (const [word, [definition]] of Object.entries(meanings)) {
+          expect(definition.length, word).toBeLessThanOrEqual(60);
+          expect(definition, word).toMatch(/^[a-z]/);
+          expect(definition, word).not.toMatch(/[.!?]$/);
+          expect(wordsOf(definition), word).not.toContain(word);
+        }
+      });
+      it('has examples that follow the rules', () => {
+        for (const [word, [, example]] of Object.entries(meanings)) {
+          expect(example.length, word).toBeLessThanOrEqual(90);
+          expect(example, word).toMatch(/^\*?[A-Z]/);
+          expect(example, word).toMatch(/[.!?]$/);
+          const count = example.replace(/\*/g, '').split(/\s+/).length;
+          expect(count, word).toBeGreaterThanOrEqual(5);
+          expect(count, word).toBeLessThanOrEqual(15);
+          const [, span] = exampleParts(example);
+          expect(isFormOf(span, word), `${word}: ${span}`).toBe(true);
+        }
+      });
+      it('gives every fact its meaning, and no definition is just the answer', () => {
+        const topics = VOCABULARY_TOPICS.filter((t) =>
+          t.id.endsWith(grade.id === 'college' ? 'college' : `grade-${grade.id}`),
+        );
+        expect(topics).toHaveLength(2);
+        for (const topic of topics) {
+          for (const fact of topic.facts) {
+            expect(fact.meaning, fact.id).toBeDefined();
+            expect(fact.meaning!.word, fact.id).toBe(headOf(fact.id));
+            expect(fact.meaning!.definition, fact.id).not.toBe(fact.answer);
+          }
+        }
+      });
+    });
+  }
+});
+
+describe('exampleParts', () => {
+  it('splits an example at its word', () => {
+    expect(exampleParts('She was *happy* to see her best friend.')).toEqual([
+      'She was ',
+      'happy',
+      ' to see her best friend.',
+    ]);
+  });
+  it('throws without exactly one span', () => {
+    expect(() => exampleParts('No span here.')).toThrow();
+    expect(() => exampleParts('*Two* spans *here*.')).toThrow();
+  });
+});
+
+describe('isFormOf', () => {
+  it.each([
+    ['happy', 'happy', true],
+    ['happier', 'happy', true],
+    ['hurried', 'hurry', true],
+    ['admiring', 'admire', true],
+    ['stopped', 'stop', true],
+    ['ran', 'run', false],
+    ['unhappy', 'happy', false],
+  ])('%s of %s is %s', (span, word, expected) => {
+    expect(isFormOf(span, word)).toBe(expected);
   });
 });

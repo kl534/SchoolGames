@@ -1,6 +1,7 @@
 import { preloadSpeech, speak, stopSpeaking } from './audio';
 import { hideFactMap, showFactMap } from './maps';
 import { createMissPicture, type MissPicture } from './pictures';
+import { createWordCard } from './wordcard';
 import { createTapGate, TAP_SPEECH } from './tapgate';
 import { createTapMarks } from './tapmarks';
 import { missSpeech, type Fact } from './topics';
@@ -72,6 +73,11 @@ export interface TapFlow {
   dispose(): void;
 }
 
+/** The card of a missed fact: a math picture, else a word card, else null (the plain caption). */
+function missCard(fact: Fact): MissPicture | null {
+  return createMissPicture(fact) ?? createWordCard(fact);
+}
+
 /**
  * After a wrong answer or a time-out a game waits for the player to tap the green answer.
  * This is the part games use: it joins the rules (`tapgate`) to the look (`tapmarks`).
@@ -117,7 +123,7 @@ export function createTapFlow(container?: HTMLElement): TapFlow {
 
   const arm: TapFlow['arm'] = (buttons, correctIndex, avoid, problem) => {
     const fact = typeof problem === 'object' ? problem : undefined;
-    const next = fact ? createMissPicture(fact) : null;
+    const next = fact ? missCard(fact) : null;
     armWith(
       buttons,
       correctIndex,
@@ -149,13 +155,7 @@ export function createTapFlow(container?: HTMLElement): TapFlow {
       fact,
       { avoid, problem, lead, chosen, delay = 0, onRead, picture: show = true } = {},
     ) {
-      armWith(
-        buttons,
-        options.indexOf(fact.answer),
-        avoid,
-        problem,
-        show ? createMissPicture(fact) : null,
-      );
+      armWith(buttons, options.indexOf(fact.answer), avoid, problem, show ? missCard(fact) : null);
       if (fact.map) mapShown = showFactMap(fact, { wrong: chosen });
       const id = armId;
       const parts: ((next: () => void) => void)[] = [];
