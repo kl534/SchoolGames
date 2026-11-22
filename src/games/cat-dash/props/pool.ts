@@ -6,8 +6,15 @@ import type { ObstacleId } from '../places';
 import type { Prop } from '../kit';
 import { HOUSE_PROPS } from './house';
 import { TOWN_PROPS } from './town';
+import { BUSY_PROPS } from './busy';
+import { ADVENTURE_PROPS } from './adventure';
 
-export const PROP_BUILDERS: Record<ObstacleId, () => Prop> = { ...HOUSE_PROPS, ...TOWN_PROPS };
+export const PROP_BUILDERS: Record<ObstacleId, () => Prop> = {
+  ...HOUSE_PROPS,
+  ...TOWN_PROPS,
+  ...BUSY_PROPS,
+  ...ADVENTURE_PROPS,
+};
 
 export interface PropPool {
   get(id: ObstacleId): Prop;
