@@ -329,39 +329,305 @@ function noise(
   source.start(start);
 }
 
-/** A cat's voice: a sawtooth through a bandpass, pitch through `pitches`, optional vibrato (Hz). */
-function catVoice(
+/** How one cat call is shaped: its pitch path (Hz), length (s), vibrato and loudness. */
+export interface CatCall {
+  /** Pitch at the start, at the peak and at the end (Hz). */
+  pitches: [number, number, number];
+  duration: number;
+  /** Where the pitch and the open mouth peak, as a fraction of the call. */
+  peakAt: number;
+  vibratoHz: number;
+  /** Vibrato depth as a fraction of the pitch. */
+  vibratoDepth: number;
+  volume: number;
+}
+
+/** Curve samples per second for the pitch, mouth and loudness paths. */
+const CAT_CURVE_RATE = 200;
+
+const ease = (x: number) => 0.5 - 0.5 * Math.cos(Math.PI * Math.min(Math.max(x, 0), 1));
+
+/**
+ * The paths of one cat call, sampled `CAT_CURVE_RATE` times a second: the pitch (Hz, with
+ * vibrato and a little wobble from `random`), how open the mouth is (0 shut for the "m", 1 wide
+ * for the "a", back to almost shut for the "ow") and the loudness (0 to 1).
+ */
+export function catCallCurves(
+  call: CatCall,
+  random: () => number = Math.random,
+): { pitch: Float32Array; mouth: Float32Array; loud: Float32Array } {
+  const n = Math.max(Math.ceil(call.duration * CAT_CURVE_RATE), 8);
+  const pitch = new Float32Array(n);
+  const mouth = new Float32Array(n);
+  const loud = new Float32Array(n);
+  const [p0, p1, p2] = call.pitches;
+  // A slow random wobble so no two calls are quite the same (a real voice is never steady).
+  let wobble = 0;
+  let wobbleTarget = 0;
+  for (let i = 0; i < n; i++) {
+    const x = i / (n - 1);
+    const t = x * call.duration;
+    const rise = x < call.peakAt ? ease(x / call.peakAt) : 1;
+    const fall = x < call.peakAt ? 0 : ease((x - call.peakAt) / (1 - call.peakAt));
+    const base = x < call.peakAt ? p0 + (p1 - p0) * rise : p1 + (p2 - p1) * fall;
+    if (i % 10 === 0) wobbleTarget = (random() * 2 - 1) * 0.025;
+    wobble += (wobbleTarget - wobble) * 0.12;
+    // The vibrato grows in after the onset, as a cat's does when it holds a note.
+    const vib = call.vibratoDepth * Math.sin(2 * Math.PI * call.vibratoHz * t) * ease(x * 3);
+    pitch[i] = base * (1 + wobble + vib);
+    // The mouth opens quickly a little after the "m" and closes slowly into the "ow".
+    const open = ease((x - 0.04) / (call.peakAt * 0.9));
+    const close = ease((x - call.peakAt) / (1 - call.peakAt));
+    mouth[i] = open * (1 - 0.85 * close);
+    // Loud as the mouth opens, a soft hum before it, and a tail that fades out.
+    const attack = ease(x / 0.12);
+    const release = 1 - ease((x - 0.7) / 0.3);
+    loud[i] = attack * release * (0.35 + 0.65 * open);
+  }
+  return { pitch, mouth, loud };
+}
+
+/** A glottal-like buzz: every harmonic, each a little quieter than the last. */
+function catSource(ctx: AudioContext): PeriodicWave {
+  const count = 40;
+  const real = new Float32Array(count + 1);
+  const imag = new Float32Array(count + 1);
+  for (let k = 1; k <= count; k++) imag[k] = 1 / k ** 1.15;
+  return ctx.createPeriodicWave(real, imag);
+}
+
+/** The formants of a cat's mouth (Hz) when shut (`mouth` 0) and wide open (1), and their gain. */
+const CAT_FORMANTS = [
+  { shut: 650, open: 1400, q: 5, gain: 1 },
+  { shut: 1700, open: 2700, q: 7, gain: 0.55 },
+  { shut: 3400, open: 4300, q: 9, gain: 0.25 },
+];
+
+/**
+ * A cat's voice: a buzz with a wobbling pitch through three formants that sweep as the mouth
+ * opens and closes ("mi-a-ow"), a lowpass that muffles the "m", and a breath of noise.
+ */
+function catVoice(ctx: AudioContext, start: number, call: CatCall): void {
+  const { pitch, mouth, loud } = catCallCurves(call);
+  const end = start + call.duration;
+  const osc = ctx.createOscillator();
+  osc.setPeriodicWave(catSource(ctx));
+  osc.frequency.setValueCurveAtTime(pitch, start, call.duration);
+  const amp = ctx.createGain();
+  amp.gain.value = 0;
+  amp.gain.setValueCurveAtTime(
+    loud.map((v) => v * call.volume),
+    start,
+    call.duration,
+  );
+  // The lips: shut they let only the low hum through, open they let the bright harmonics out.
+  const lips = ctx.createBiquadFilter();
+  lips.type = 'lowpass';
+  lips.Q.value = 0.7;
+  lips.frequency.value = 900;
+  lips.frequency.setValueCurveAtTime(
+    mouth.map((m) => 900 + 5100 * m),
+    start,
+    call.duration,
+  );
+  osc.connect(lips);
+  const mix = ctx.createGain();
+  mix.gain.value = 2.4;
+  for (const f of CAT_FORMANTS) {
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.Q.value = f.q;
+    band.frequency.value = f.shut;
+    band.frequency.setValueCurveAtTime(
+      mouth.map((m) => f.shut + (f.open - f.shut) * m),
+      start,
+      call.duration,
+    );
+    const level = ctx.createGain();
+    level.gain.value = f.gain;
+    lips.connect(band).connect(level).connect(mix);
+  }
+  // A little of the plain buzz keeps the body of the voice under the formants.
+  const body = ctx.createGain();
+  body.gain.value = 0.12;
+  lips.connect(body).connect(mix);
+  // Breath: soft high noise that rides the loudness.
+  const length = Math.floor(ctx.sampleRate * call.duration);
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+  const breath = ctx.createBufferSource();
+  breath.buffer = buffer;
+  const hiss = ctx.createBiquadFilter();
+  hiss.type = 'bandpass';
+  hiss.frequency.value = 3500;
+  hiss.Q.value = 0.8;
+  const breathLevel = ctx.createGain();
+  breathLevel.gain.value = 0.05;
+  breath.connect(hiss).connect(breathLevel).connect(mix);
+  mix.connect(amp).connect(ctx.destination);
+  osc.start(start);
+  breath.start(start);
+  osc.stop(end + 0.02);
+  breath.stop(end + 0.02);
+}
+
+/** A cat call `base` with its pitch and length nudged at random so each one sounds a bit new. */
+function varied(base: CatCall): CatCall {
+  const tune = 0.92 + Math.random() * 0.16;
+  return {
+    ...base,
+    pitches: base.pitches.map((p) => p * tune) as [number, number, number],
+    duration: base.duration * (0.9 + Math.random() * 0.2),
+  };
+}
+
+/** A friendly meow: "mi-a-ow" rising to about 780 Hz and falling, 0.55 s. */
+export const MEOW: CatCall = {
+  pitches: [560, 780, 520],
+  duration: 0.55,
+  peakAt: 0.35,
+  vibratoHz: 0,
+  vibratoDepth: 0,
+  volume: 0.35,
+};
+
+/** A yowl of pain: a long wavering "mrrraaow", higher and with a wide vibrato, 0.95 s. */
+export const YOWL: CatCall = {
+  pitches: [480, 980, 420],
+  duration: 0.95,
+  peakAt: 0.45,
+  vibratoHz: 6.5,
+  vibratoDepth: 0.05,
+  volume: 0.4,
+};
+
+/** A purr's breaths: out (louder, faster pulses), a pause, then in (softer, slower). */
+export const PURR_BREATHS = [
+  { from: 0, to: 0.5, rate: 26, level: 1 },
+  { from: 0.56, to: 0.86, rate: 22, level: 0.55 },
+];
+/** How long a purr lasts (s). */
+export const PURR_SECONDS = 0.9;
+
+/**
+ * The raw samples of a purr: a train of short rattles about 25 a second (a cat's larynx
+ * snapping open and shut), each a decaying burst of noise and a low hum, swelling and fading
+ * over each breath. `random` gives values in [0, 1).
+ */
+export function purrSamples(sampleRate: number, random: () => number = Math.random): Float32Array {
+  const out = new Float32Array(Math.ceil(PURR_SECONDS * sampleRate));
+  const decay = 0.007 * sampleRate;
+  const burst = Math.ceil(decay * 5);
+  for (const breath of PURR_BREATHS) {
+    const span = breath.to - breath.from;
+    let t = breath.from;
+    while (t < breath.to) {
+      const x = (t - breath.from) / span;
+      // Each breath swells in and fades out; each pulse is a little louder or softer.
+      const level = breath.level * Math.sin(Math.PI * x) ** 0.6 * (0.75 + 0.5 * random());
+      const hum = 90 + random() * 40;
+      const at = Math.floor(t * sampleRate);
+      for (let j = 0; j < burst && at + j < out.length; j++) {
+        const env = Math.exp(-j / decay);
+        const tone = Math.sin((2 * Math.PI * hum * j) / sampleRate);
+        out[at + j] += level * env * (0.6 * (random() * 2 - 1) + 0.5 * tone);
+      }
+      // The pulses are never quite even.
+      t += (1 / breath.rate) * (0.9 + 0.2 * random());
+    }
+  }
+  return out;
+}
+
+/** How long a hiss lasts (s). */
+export const HISS_SECONDS = 0.75;
+
+/**
+ * The raw samples of a hiss: a sharp spit, then rough breathy noise that holds and fades.
+ * The roughness is a loudness that flutters at random, as air rushing past teeth does.
+ */
+export function hissSamples(sampleRate: number, random: () => number = Math.random): Float32Array {
+  const n = Math.ceil(HISS_SECONDS * sampleRate);
+  const out = new Float32Array(n);
+  let flutter = 1;
+  let target = 1;
+  const step = Math.floor(sampleRate / 60);
+  for (let i = 0; i < n; i++) {
+    const t = i / sampleRate;
+    if (i % step === 0) target = 0.55 + 0.45 * random();
+    flutter += (target - flutter) * 0.004;
+    // The spit: a loud crack in the first 40 ms.
+    const spit = t < 0.04 ? 1.6 * Math.exp(-t / 0.012) : 0;
+    // The breath rises fast, holds and fades out over the last half.
+    const rise = Math.min(t / 0.05, 1);
+    const fade =
+      t < HISS_SECONDS * 0.45 ? 1 : 1 - (t - HISS_SECONDS * 0.45) / (HISS_SECONDS * 0.55);
+    out[i] = (random() * 2 - 1) * (spit + 0.8 * rise * fade ** 1.5 * flutter);
+  }
+  return out;
+}
+
+/** Plays `samples` through `filters` (made fresh for this sound) at `volume`. */
+function playSamples(
   ctx: AudioContext,
   start: number,
-  pitches: [number, number, number],
-  duration: number,
-  vibratoHz: number,
+  samples: Float32Array,
+  filters: BiquadFilterNode[],
+  volume: number,
 ): void {
-  const osc = ctx.createOscillator();
-  const filter = ctx.createBiquadFilter();
+  const buffer = ctx.createBuffer(1, samples.length, ctx.sampleRate);
+  buffer.getChannelData(0).set(samples);
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
   const gain = ctx.createGain();
-  osc.type = 'sawtooth';
-  osc.frequency.setValueAtTime(pitches[0], start);
-  osc.frequency.linearRampToValueAtTime(pitches[1], start + duration * 0.45);
-  osc.frequency.linearRampToValueAtTime(pitches[2], start + duration);
-  filter.type = 'bandpass';
-  filter.frequency.value = 900;
-  filter.Q.value = 2;
-  gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.linearRampToValueAtTime(0.3, start + 0.05);
-  gain.gain.linearRampToValueAtTime(0, start + duration);
-  osc.connect(filter).connect(gain).connect(ctx.destination);
-  osc.start(start);
-  osc.stop(start + duration + 0.02);
-  if (vibratoHz > 0) {
-    const lfo = ctx.createOscillator();
-    const depth = ctx.createGain();
-    lfo.frequency.value = vibratoHz;
-    depth.gain.value = 40;
-    lfo.connect(depth).connect(osc.frequency);
-    lfo.start(start);
-    lfo.stop(start + duration + 0.02);
-  }
+  gain.gain.value = volume;
+  let node: AudioNode = source;
+  for (const f of filters) node = node.connect(f);
+  node.connect(gain).connect(ctx.destination);
+  source.start(start);
+}
+
+/** A biquad filter of `type` at `frequency` Hz with quality `q` (and `gain` dB for a peak). */
+function biquad(
+  ctx: BaseAudioContext,
+  type: BiquadFilterType,
+  frequency: number,
+  q: number,
+  gain = 0,
+): BiquadFilterNode {
+  const f = ctx.createBiquadFilter();
+  f.type = type;
+  f.frequency.value = frequency;
+  f.Q.value = q;
+  f.gain.value = gain;
+  return f;
+}
+
+/** A purr (see `purrSamples`): the chest rumble kept, the top rolled off. */
+function playPurr(ctx: AudioContext, t: number): void {
+  playSamples(
+    ctx,
+    t,
+    purrSamples(ctx.sampleRate),
+    [biquad(ctx, 'lowpass', 1200, 0.7), biquad(ctx, 'peaking', 220, 1.2, 6)],
+    0.9,
+  );
+}
+
+/** A hiss (see `hissSamples`): bright, with the sharp edges of a cat's mouth at 3 and 6 kHz. */
+function playHiss(ctx: AudioContext, t: number): void {
+  playSamples(
+    ctx,
+    t,
+    hissSamples(ctx.sampleRate),
+    [
+      biquad(ctx, 'highpass', 1400, 0.7),
+      biquad(ctx, 'peaking', 3000, 2, 7),
+      biquad(ctx, 'peaking', 6000, 2, 5),
+    ],
+    0.3,
+  );
 }
 
 /** A low, wobbly moan: a sawtooth sliding down with a slow vibrato. */
@@ -691,40 +957,14 @@ export const sfx = {
       tone(ctx, 'triangle', 1150, 800, t + 0.3, 0.11, 0.14);
       tone(ctx, 'triangle', 1150, 800, t + 0.42, 0.11, 0.14);
     }),
-  /** A cat's meow: a sawtooth through a 900 Hz bandpass, pitch 520 to 880 to 600 over 0.45 s. */
-  meow: () => play((ctx, t) => catVoice(ctx, t, [520, 880, 600], 0.45, 0)),
-  /** A yowl: the same voice, 420 to 1100 to 360 over 0.9 s with a 7 Hz vibrato. */
-  yowl: () => play((ctx, t) => catVoice(ctx, t, [420, 1100, 360], 0.9, 7)),
-  /** A purr: a sine chime over a low noise pulsed at 25 Hz. */
-  purr: () =>
-    play((ctx, t) => {
-      tone(ctx, 'sine', 1320, 1320, t, 0.12, 0.18);
-      const length = Math.floor(ctx.sampleRate * 0.4);
-      const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.value = 300;
-      const pulse = ctx.createGain();
-      pulse.gain.value = 0.5;
-      const lfo = ctx.createOscillator();
-      const depth = ctx.createGain();
-      lfo.frequency.value = 25;
-      depth.gain.value = 0.5;
-      lfo.connect(depth).connect(pulse.gain);
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.5, t);
-      gain.gain.linearRampToValueAtTime(0, t + 0.4);
-      source.connect(filter).connect(pulse).connect(gain).connect(ctx.destination);
-      source.start(t);
-      lfo.start(t);
-      lfo.stop(t + 0.42);
-    }),
-  /** An angry hiss: high-passed noise sliding from 3000 to 7000 Hz over 0.45 s. */
-  hiss: () => play((ctx, t) => noise(ctx, 'highpass', 3000, 7000, t, 0.45, 0.3)),
+  /** A cat's meow ("mi-a-ow", see `MEOW`), a little different in pitch and length each time. */
+  meow: () => play((ctx, t) => catVoice(ctx, t, varied(MEOW))),
+  /** A yowl: a long wavering cry (see `YOWL`), a little different each time. */
+  yowl: () => play((ctx, t) => catVoice(ctx, t, varied(YOWL))),
+  /** A purr: about 25 soft rattles a second, breathing out then in, 0.9 s (see `purrSamples`). */
+  purr: () => play(playPurr),
+  /** An angry hiss: a sharp spit, then rough breathy noise that fades, 0.75 s (see `hissSamples`). */
+  hiss: () => play(playHiss),
   /** A school bell ringing for 1.6 s. */
   bell: () =>
     play((ctx, t) => {
