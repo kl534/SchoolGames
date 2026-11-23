@@ -905,8 +905,8 @@ describe('Vocabulary path', () => {
   const path = VOCABULARY_PATH;
   const level1 = VOCABULARY_LEVELS[0].facts;
 
-  it('has 104 levels: eight sets for Grades 2 and 3, ten for Grades 4 to 10, six for the rest', () => {
-    expect(VOCABULARY_LEVELS).toHaveLength(104);
+  it('has 116 levels: eight sets for Grades 2 and 3, ten for every grade from 4 up', () => {
+    expect(VOCABULARY_LEVELS).toHaveLength(116);
     expect(VOCABULARY_LEVELS.map((l) => l.title)).toEqual(
       VOCAB_GRADES.flatMap((grade) =>
         Array.from({ length: setsOf(grade) }, (_, s) => `${grade.title} · Set ${s + 1}`),
@@ -918,8 +918,8 @@ describe('Vocabulary path', () => {
     ]);
   });
 
-  it('ends with College set 6 and has the College topics', () => {
-    expect(VOCABULARY_LEVELS[103].title).toBe('College · Set 6');
+  it('ends with College set 10 and has the College topics', () => {
+    expect(VOCABULARY_LEVELS[115].title).toBe('College · Set 10');
     expect(getTopic('antonyms-college')).toBeDefined();
   });
 
@@ -966,7 +966,7 @@ describe('Vocabulary path', () => {
   });
 
   it('labels a level', () => {
-    expect(levelLabel(1, path)).toBe('Level 1 of 104: Grade 2 · Set 1');
+    expect(levelLabel(1, path)).toBe('Level 1 of 116: Grade 2 · Set 1');
   });
 
   const topicIdOf = (fact: { id: string }) =>
