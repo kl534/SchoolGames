@@ -60,7 +60,6 @@ import {
   RACE_METRES,
   REACTION,
   RIVAL_FACTORS,
-  RIVAL_NAMES,
   SURGE_PERIOD,
   blockOutcome,
   easeSpeed,
@@ -77,6 +76,7 @@ import {
   placePoints,
   resultsText,
   rivalSpeed,
+  pickRivalNames,
   shuffleLanes,
   speedStreak,
   stepStride,
@@ -120,7 +120,7 @@ const clamp = (n: number, low: number, high: number): number => Math.min(Math.ma
 interface Racer {
   runner: Runner;
   lane: number;
-  /** Index into `RIVAL_FACTORS` and `RIVAL_NAMES`; -1 for the player. */
+  /** Index into `RIVAL_FACTORS` and this heat's names; -1 for the player. */
   index: number;
   name: string;
   factor: number;
@@ -277,6 +277,7 @@ function run(session: TypingSession): void {
   const buildField = () => {
     clearField();
     const lanes = shuffleLanes(Math.random);
+    const names = pickRivalNames(Math.random);
     const make = (index: number, lane: number): Racer => {
       const style = index < 0 ? playerLook() : rivalLook(index, lane, Math.random);
       const runner = createRunner(style);
@@ -287,7 +288,7 @@ function run(session: TypingSession): void {
         runner,
         lane,
         index,
-        name: index < 0 ? 'You' : RIVAL_NAMES[index],
+        name: index < 0 ? 'You' : names[index],
         factor: index < 0 ? 1 : RIVAL_FACTORS[index],
         period: lo + Math.random() * (hi - lo),
         surgePhase: Math.random() * Math.PI * 2,
