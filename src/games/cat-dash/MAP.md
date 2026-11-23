@@ -1,13 +1,13 @@
 # Cat Dash map
 
-A side-view endless run: pick one of five cats, then run through places (house: living room, kitchen, bathroom, bedroom; town: backyard, park, street, rooftops; busy: grocery store, library, fish market, construction site; adventure: beach, snowy forest, desert, space station; plus the farm in town, the jungle in adventure, the toy store in busy and the pirate ship in adventure). Each place has three obstacles of its own and a visit is six of them (each twice). Answer right for a stylish move, wrong for a silly flop and a lost life (3 lives). After six obstacles the cat runs through a doorway into a new place.
+A side-view endless run: pick one of ten cats, then run through places (house: living room, kitchen, bathroom, bedroom; town: backyard, park, street, rooftops; busy: grocery store, library, fish market, construction site; adventure: beach, snowy forest, desert, space station; plus the farm in town, the jungle in adventure, the toy store in busy and the pirate ship in adventure). Each place has three obstacles of its own and a visit is six of them (each twice). Answer right for a stylish move, wrong for a silly flop and a lost life (3 lives). After six obstacles the cat runs through a doorway into a new place.
 
 ## Files
 
 - `main.ts`: the game loop, learning loop, picker, moves, doorway and wiring of everything below
 - `rules.ts`: pure scoring, lives, `visitPlan`, `nextPlace`, approach and sprint maths, fish trails, spoken lines
 - `places.ts`: the places and their obstacles as data (`PLACES`, `placeOf`, `PlaceLook`)
-- `looks.ts`: the five cats' colours, the saved choice (`CAT_SETTING`, `savedCat`) and the face SVG (`catFaceSvg`)
+- `looks.ts`: the ten cats' colours, their builds, the saved choice (`CAT_SETTING`, `savedCat`) and the face SVG (`catFaceSvg`)
 - `layout.ts`: side-view screen fitting (`fitView`, `playBand`, `riseFor`, `FOV`)
 - `moves.ts`: the 240 cat moves: the frame sampler (`moveFrame`, `moveDuration`, `moveEvents`, `MOVE_SPECS`, `MOVE_WORDS`) over the groups' move tables
 - `moves/toolkit.ts`: pure animation toolkit: poses, `CatFrame`, segments (`Seg`), `arc`, `follow`, `failEnd`
@@ -47,7 +47,7 @@ A side-view endless run: pick one of five cats, then run through places (house: 
 
 ## Dev hooks
 
-- `?cat=<orange|black|tuxedo|calico|grey-tabby>`: skip the picker with that cat. `?lives=1|2|3`.
+- `?cat=<orange|black|tuxedo|calico|grey-tabby|british-shorthair|siamese|white|ginger-white|tortoiseshell>`: skip the picker with that cat. `?lives=1|2|3`.
 - `?place=<id>`: start in that place (`living-room`, `kitchen`, `bathroom`, `bedroom`, `backyard`, `park`, `street`, `rooftops`, `farm`, `grocery`, `library`, `fish-market`, `construction`, `beach`, `snowy-forest`, `desert`, `space-station`, `jungle`, `toy-store`, `pirate-ship`). `?places=a,b`: the places come in this order, then repeat. `?obstacle=<id>`: every obstacle is that one (its place is used).
 - `?lab=<obstacle>:<clear|fail>:<0|1>`: move lab, loops one move with the HUD hidden. `&at=<seconds>` freezes it there (prop and effects included).
 - `?door=<place>&at=<0..2.4>`: the doorway into that place frozen at that time (0 door in view, 1.2 iris closed, 1.55 open again, 2.4 banner).

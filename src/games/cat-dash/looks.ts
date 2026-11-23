@@ -1,7 +1,41 @@
-/** The five cats: colours, saved choice and the face picture for the picker and the lives. Pure. */
+/** The ten cats: colours, saved choice and the face picture for the picker and the lives. Pure. */
 
-export type CatId = 'orange' | 'black' | 'tuxedo' | 'calico' | 'grey-tabby';
-export const CAT_IDS: readonly CatId[] = ['orange', 'black', 'tuxedo', 'calico', 'grey-tabby'];
+export type CatId =
+  | 'orange'
+  | 'black'
+  | 'tuxedo'
+  | 'calico'
+  | 'grey-tabby'
+  | 'british-shorthair'
+  | 'siamese'
+  | 'white'
+  | 'ginger-white'
+  | 'tortoiseshell';
+export const CAT_IDS: readonly CatId[] = [
+  'orange',
+  'black',
+  'tuxedo',
+  'calico',
+  'grey-tabby',
+  'british-shorthair',
+  'siamese',
+  'white',
+  'ginger-white',
+  'tortoiseshell',
+];
+
+/** How the rig is shaped; 1 is the normal cat. */
+export interface CatBuild {
+  /** Body width (x and z scale of the torso, belly and coat shell). */
+  body: number;
+  /** Head scale on top of HEAD_SCALE. */
+  head: number;
+  /** Cheek puff scale (the two muzzle puffs, and the face SVG's cheeks). */
+  cheeks: number;
+  /** Ear height scale; below 1 also rounds the tips. */
+  ears: number;
+}
+export const NORMAL_BUILD: CatBuild = { body: 1, head: 1, cheeks: 1, ears: 1 };
 
 export interface CatLook {
   id: CatId;
@@ -14,6 +48,13 @@ export interface CatLook {
   patches: { color: number; where: 'back' | 'head' | 'tail' }[];
   eyes: number;
   nose: number;
+  /** Second eye's colour for odd eyes (the far eye on the rig, the right eye in the SVG); null = same. */
+  eyes2: number | null;
+  /** Belly-coloured paws. */
+  whitePaws: boolean;
+  /** Siamese points: face mask, ears, paws and tail in this colour; null for none. */
+  points: number | null;
+  build: CatBuild;
 }
 
 export const CAT_LOOKS: Record<CatId, CatLook> = {
@@ -26,6 +67,10 @@ export const CAT_LOOKS: Record<CatId, CatLook> = {
     patches: [],
     eyes: 0x6fbf3a,
     nose: 0xf48fa8,
+    eyes2: null,
+    whitePaws: false,
+    points: null,
+    build: NORMAL_BUILD,
   },
   black: {
     id: 'black',
@@ -36,6 +81,10 @@ export const CAT_LOOKS: Record<CatId, CatLook> = {
     patches: [],
     eyes: 0xf2d33a,
     nose: 0xd9788f,
+    eyes2: null,
+    whitePaws: false,
+    points: null,
+    build: NORMAL_BUILD,
   },
   tuxedo: {
     id: 'tuxedo',
@@ -46,6 +95,10 @@ export const CAT_LOOKS: Record<CatId, CatLook> = {
     patches: [],
     eyes: 0x4fa3e0,
     nose: 0xf48fa8,
+    eyes2: null,
+    whitePaws: true,
+    points: null,
+    build: NORMAL_BUILD,
   },
   'grey-tabby': {
     id: 'grey-tabby',
@@ -56,6 +109,10 @@ export const CAT_LOOKS: Record<CatId, CatLook> = {
     patches: [],
     eyes: 0xd9b43a,
     nose: 0xf0a0b0,
+    eyes2: null,
+    whitePaws: false,
+    points: null,
+    build: NORMAL_BUILD,
   },
   calico: {
     id: 'calico',
@@ -71,6 +128,85 @@ export const CAT_LOOKS: Record<CatId, CatLook> = {
     ],
     eyes: 0xd9a23a,
     nose: 0xf48fa8,
+    eyes2: null,
+    whitePaws: true,
+    points: null,
+    build: NORMAL_BUILD,
+  },
+  'british-shorthair': {
+    id: 'british-shorthair',
+    name: 'British Shorthair',
+    fur: 0x8a96a8,
+    stripes: null,
+    belly: 0xa3aebd,
+    patches: [],
+    eyes: 0xe08a2e,
+    nose: 0x7d8494,
+    eyes2: null,
+    whitePaws: false,
+    points: null,
+    build: { body: 1.15, head: 1.1, cheeks: 1.45, ears: 0.7 },
+  },
+  siamese: {
+    id: 'siamese',
+    name: 'Siamese',
+    fur: 0xf3e6cf,
+    stripes: null,
+    belly: 0xfaf2e2,
+    patches: [],
+    eyes: 0x4fa8f0,
+    nose: 0x4a3328,
+    eyes2: null,
+    whitePaws: false,
+    points: 0x5a3f30,
+    build: NORMAL_BUILD,
+  },
+  white: {
+    id: 'white',
+    name: 'White Cat',
+    fur: 0xfbfbfd,
+    stripes: null,
+    belly: 0xffffff,
+    patches: [],
+    eyes: 0x4fa8f0,
+    nose: 0xf6a0b4,
+    eyes2: 0xe8b83a,
+    whitePaws: false,
+    points: null,
+    build: NORMAL_BUILD,
+  },
+  'ginger-white': {
+    id: 'ginger-white',
+    name: 'Ginger & White',
+    fur: 0xec8f3a,
+    stripes: 0xc4661c,
+    belly: 0xffffff,
+    patches: [],
+    eyes: 0x7cc04a,
+    nose: 0xf48fa8,
+    eyes2: null,
+    whitePaws: true,
+    points: null,
+    build: NORMAL_BUILD,
+  },
+  tortoiseshell: {
+    id: 'tortoiseshell',
+    name: 'Tortoiseshell',
+    fur: 0x2f2622,
+    stripes: null,
+    belly: 0x3a2e28,
+    patches: [
+      { color: 0xd9772e, where: 'back' },
+      { color: 0xb85a22, where: 'back' },
+      { color: 0xe08a3a, where: 'head' },
+      { color: 0xd9772e, where: 'tail' },
+    ],
+    eyes: 0xe0a83a,
+    nose: 0x8a5a4a,
+    eyes2: null,
+    whitePaws: false,
+    points: null,
+    build: NORMAL_BUILD,
   },
 };
 
@@ -92,13 +228,27 @@ export function catFaceSvg(look: CatLook, lost = false): string {
   const belly = lost ? '#c9c9d0' : hex(look.belly);
   const stripe = look.stripes === null || lost ? null : hex(look.stripes);
   const ink = '#1b1226';
+  const { build } = look;
+  const points = look.points === null || lost ? null : hex(look.points);
+  const earFill = points ?? fur;
   const parts: string[] = [];
-  // Ears behind the head, with a pink inside.
-  parts.push(`<path d="M10 30 12 5 29 15Z" fill="${fur}"/>`);
-  parts.push(`<path d="M54 30 52 5 35 15Z" fill="${fur}"/>`);
-  parts.push(`<path d="M14 24 15 11 24 17Z" fill="#f6a5b8"/>`);
-  parts.push(`<path d="M50 24 49 11 40 17Z" fill="#f6a5b8"/>`);
-  parts.push(`<ellipse cx="32" cy="36" rx="25" ry="22" fill="${fur}"/>`);
+  // Ears behind the head, with a pink inside. Short ears have rounded tips.
+  if (build.ears < 1) {
+    const tip = 5 + (1 - build.ears) * 30;
+    const inner = tip + 6;
+    parts.push(`<path d="M10 30Q9 ${tip} 14 ${tip}Q24 ${tip} 29 15Z" fill="${earFill}"/>`);
+    parts.push(`<path d="M54 30Q55 ${tip} 50 ${tip}Q40 ${tip} 35 15Z" fill="${earFill}"/>`);
+    parts.push(`<path d="M14 26Q14 ${inner} 17 ${inner}Q21 ${inner} 24 18Z" fill="#f6a5b8"/>`);
+    parts.push(`<path d="M50 26Q50 ${inner} 47 ${inner}Q43 ${inner} 40 18Z" fill="#f6a5b8"/>`);
+  } else {
+    parts.push(`<path d="M10 30 12 5 29 15Z" fill="${earFill}"/>`);
+    parts.push(`<path d="M54 30 52 5 35 15Z" fill="${earFill}"/>`);
+    parts.push(`<path d="M14 24 15 11 24 17Z" fill="#f6a5b8"/>`);
+    parts.push(`<path d="M50 24 49 11 40 17Z" fill="#f6a5b8"/>`);
+  }
+  const faceRx = build.head > 1 ? 27 : 25;
+  const faceRy = build.head > 1 ? 22 : 22;
+  parts.push(`<ellipse cx="32" cy="36" rx="${faceRx}" ry="${faceRy}" fill="${fur}"/>`);
   if (!lost) {
     for (const p of look.patches) {
       if (p.where === 'head') {
@@ -116,15 +266,21 @@ export function catFaceSvg(look: CatLook, lost = false): string {
       `<path d="M8 34h8M9 41h7M56 34h-8M55 41h-7" stroke="${stripe}" stroke-width="3" stroke-linecap="round"/>`,
     );
   }
-  parts.push(`<ellipse cx="32" cy="45" rx="12" ry="9" fill="${belly}"/>`);
+  const muzzleRx = Math.min(12 * build.cheeks, 20);
+  const muzzleRy = (9 * (1 + build.cheeks)) / 2;
+  parts.push(`<ellipse cx="32" cy="45" rx="${muzzleRx}" ry="${muzzleRy}" fill="${belly}"/>`);
+  if (points) {
+    parts.push(`<ellipse cx="32" cy="40" rx="13" ry="11" fill="${points}" opacity="0.9"/>`);
+  }
   if (lost) {
     parts.push(
       `<path d="M17 28l10 10M27 28 17 38M37 28l10 10M47 28 37 38" stroke="${ink}" stroke-width="3" stroke-linecap="round"/>`,
     );
   } else {
     const eye = hex(look.eyes);
+    const eye2 = hex(look.eyes2 ?? look.eyes);
     parts.push(`<ellipse cx="22" cy="33" rx="6" ry="7" fill="${eye}"/>`);
-    parts.push(`<ellipse cx="42" cy="33" rx="6" ry="7" fill="${eye}"/>`);
+    parts.push(`<ellipse cx="42" cy="33" rx="6" ry="7" fill="${eye2}"/>`);
     parts.push(`<ellipse cx="22" cy="33" rx="2.4" ry="5" fill="${ink}"/>`);
     parts.push(`<ellipse cx="42" cy="33" rx="2.4" ry="5" fill="${ink}"/>`);
     parts.push(
