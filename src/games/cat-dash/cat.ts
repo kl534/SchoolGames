@@ -1,7 +1,7 @@
 /**
- * The cat: a rounded body, a head with ears, big eyes, a nose and whiskers, four two-part legs and
- * a seven-segment tail, all built from simple shapes. It faces +x, seen from the side with the
- * head turned a little towards the camera. `apply` poses it from a move's frame.
+ * The cat: a round body, a big head with soft ears, big shiny eyes, rosy cheeks, a little smile and
+ * whiskers, four chunky two-part legs and a smooth seven-segment tail, all built from simple
+ * shapes. It faces +x, seen from the side with the head turned well towards the camera. `apply` poses it from a move's frame.
  */
 import {
   ConeGeometry,
@@ -20,7 +20,10 @@ import type { CatFace, CatFrame, CatPose, Coat, Hat } from './moves';
 /** Where the body's centre is above the floor when the cat stands. */
 export const BODY_Y = 0.5;
 const TAIL_SEGMENTS = 7;
-const SEGMENT = 0.17;
+const SEGMENT = 0.15;
+/** The body's half length, height and depth, and how big the head is drawn. */
+const TORSO = [0.54, 0.35, 0.37] as const;
+const HEAD_SCALE = 1.3;
 
 const COAT_COLORS: Record<Exclude<Coat, 'none' | 'wet' | 'puff'>, number> = {
   flour: 0xffffff,
@@ -269,6 +272,14 @@ export function createCat(initial: CatLook): Cat {
   const white = kit.lit(0xffffff, 0.4);
   const ink = kit.lit(0x1b1226, 0.5);
   const pink = kit.lit(0xf6a5b8, 0.7);
+  const blushMat = new MeshStandardMaterial({
+    color: 0xff7f9e,
+    roughness: 0.9,
+    transparent: true,
+    opacity: 0.7,
+    depthWrite: false,
+  });
+  kit.materials.push(blushMat);
 
   const sphere = (r: number, sx: number, sy: number, sz: number, mat: Material, parent: Group) => {
     const m = kit.mesh(new SphereGeometry(r, 18, 14), mat, parent);
@@ -285,86 +296,109 @@ export function createCat(initial: CatLook): Cat {
   spin.add(rig);
 
   // ----- Body -----
-  const torso = sphere(1, 0.64, 0.33, 0.34, furMat, rig);
-  const belly = sphere(1, 0.5, 0.2, 0.3, bellyMat, rig);
-  belly.position.set(0.08, -0.13, 0.05);
-  const coatBody = sphere(1, 0.7, 0.4, 0.4, coatMat, rig);
+  const torso = sphere(1, TORSO[0], TORSO[1], TORSO[2], furMat, rig);
+  const belly = sphere(1, 0.42, 0.22, 0.31, bellyMat, rig);
+  belly.position.set(0.08, -0.12, 0.05);
+  const coatBody = sphere(1, 0.62, 0.42, 0.42, coatMat, rig);
   coatBody.visible = false;
-  // Stripes across the back.
+  // Stripes that wrap over the back: thin slices standing just proud of the fur.
   const stripes: Mesh[] = [];
-  for (let i = 0; i < 5; i++) {
-    const x = -0.42 + i * 0.2;
-    const stripe = kit.box(0.07, 0.12, 0.5, stripeMat, rig, x, 0.25 - 0.18 * (x / 0.64) ** 2, 0);
-    stripe.rotation.z = -x * 0.45;
+  for (let i = 0; i < 4; i++) {
+    const x = -0.3 + i * 0.18;
+    const k = Math.sqrt(1 - (x / TORSO[0]) ** 2);
+    const stripe = sphere(1, 0.05, TORSO[1] * k - 0.09, TORSO[2] * k * 0.98, stripeMat, rig);
+    stripe.position.set(x, 0.1, 0);
     stripes.push(stripe);
   }
   // Calico patches: two on the back (one on each side of the middle), one on the head, one on the tail.
   const backPatches = [0, 1].map((i) => {
-    const m = sphere(1, 0.2, 0.17, 0.36, patchMats[i], rig);
-    m.position.set(i === 0 ? -0.15 : 0.22, 0.14, 0.02);
+    const m = sphere(1, 0.19, 0.17, 0.36, patchMats[i], rig);
+    m.position.set(i === 0 ? -0.17 : 0.18, 0.16, 0.02);
     return m;
   });
 
   // ----- Head -----
+  // A big round head turned towards the camera, so both eyes show.
   const head = new Group();
-  head.position.set(0.66, 0.26, 0);
-  head.rotation.y = -0.5;
+  head.scale.setScalar(HEAD_SCALE);
+  head.rotation.y = -0.85;
   rig.add(head);
-  sphere(0.28, 1.02, 0.94, 1.05, headMat, head);
-  const muzzle = sphere(0.12, 1.1, 0.8, 1, bellyMat, head);
-  muzzle.position.set(0.22, -0.08, 0);
+  sphere(0.28, 1.04, 0.92, 1.08, headMat, head);
+  // Two cheek puffs under the nose.
+  for (const z of [-0.065, 0.065]) {
+    sphere(0.085, 0.85, 0.72, 1, bellyMat, head).position.set(0.215, -0.1, z);
+  }
   const headPatch = sphere(0.2, 0.9, 0.7, 1.1, patchMats[2], head);
   headPatch.position.set(0.0, 0.12, 0.08);
-  const nose = sphere(0.045, 1, 0.8, 1.2, noseMat, head);
-  nose.position.set(0.31, -0.03, 0);
+  const nose = sphere(0.035, 0.8, 0.7, 1.25, noseMat, head);
+  nose.position.set(0.29, -0.045, 0);
+  // A little :3 smile, and an open mouth for a shout or a sneeze.
+  const smile = new Group();
+  smile.position.set(0.287, -0.115, 0);
+  smile.rotation.y = Math.PI / 2;
+  head.add(smile);
+  for (const x of [-0.032, 0.032]) {
+    const arc = kit.mesh(new TorusGeometry(0.03, 0.007, 6, 14, Math.PI), ink, smile, x, 0, 0);
+    arc.rotation.z = Math.PI;
+  }
   const mouth = sphere(0.06, 0.9, 1, 1.4, ink, head);
-  mouth.position.set(0.28, -0.13, 0);
+  mouth.position.set(0.25, -0.15, 0);
   mouth.visible = false;
+  // Rosy cheeks.
+  for (const z of [-1, 1]) {
+    const blush = sphere(0.062, 0.3, 0.62, 1, blushMat, head);
+    const a = 0.82 * z;
+    blush.position.set(Math.cos(a) * 0.255, -0.06, Math.sin(a) * 0.27);
+    blush.rotation.y = -a;
+  }
   const ears: Group[] = [];
-  for (const z of [-0.17, 0.17]) {
+  for (const z of [-0.15, 0.15]) {
     const ear = new Group();
-    ear.position.set(-0.02, 0.22, z);
-    ear.rotation.x = z > 0 ? -0.3 : 0.3;
+    ear.position.set(-0.03, 0.17, z);
     head.add(ear);
-    kit.mesh(new ConeGeometry(0.11, 0.24, 4), furMat, ear, 0, 0.1, 0);
-    const inner = kit.mesh(new ConeGeometry(0.065, 0.16, 4), pink, ear, 0.03, 0.08, 0);
-    inner.rotation.y = 0;
+    const outer = kit.mesh(new ConeGeometry(0.125, 0.24, 16), furMat, ear, 0, 0.12, 0);
+    outer.scale.x = 0.55;
+    const inner = kit.mesh(new ConeGeometry(0.075, 0.16, 16), pink, ear, 0.035, 0.1, 0);
+    inner.scale.x = 0.3;
     ears.push(ear);
   }
-  // Eyes: white, an iris, a pupil, a glint and an X for a dizzy face.
-  const irises: Mesh[] = [];
+  // Eyes: big and round, a coloured iris, a big pupil, two glints and an X for a dizzy face.
+  const eyeParts: Mesh[] = [];
   const eyeGroups: Group[] = [];
   const crosses: Group[] = [];
-  for (const z of [-0.14, 0.14]) {
+  for (const side of [-1, 1]) {
+    const a = side * 0.43;
     const eye = new Group();
-    eye.position.set(0.2, 0.07, z);
-    eye.rotation.y = z > 0 ? 0.55 : -0.55;
+    eye.position.set(Math.cos(a) * 0.272, 0.04, Math.sin(a) * 0.29);
+    eye.rotation.y = -a;
     head.add(eye);
     eyeGroups.push(eye);
-    sphere(0.085, 0.5, 1, 1, white, eye);
-    const iris = sphere(0.07, 0.4, 0.85, 0.85, eyeMat, eye);
-    iris.position.x = 0.03;
-    irises.push(iris);
-    const pupil = sphere(0.04, 0.4, 1.3, 0.5, ink, eye);
-    pupil.position.x = 0.055;
-    const glint = sphere(0.018, 0.5, 1, 1, white, eye);
-    glint.position.set(0.062, 0.035, 0.015);
+    const rim = sphere(0.1, 0.3, 1.12, 0.9, ink, eye);
+    const iris = sphere(0.09, 0.34, 1.1, 0.86, eyeMat, eye);
+    iris.position.x = 0.006;
+    const pupil = sphere(0.062, 0.34, 1.1, 0.8, ink, eye);
+    pupil.position.set(0.022, -0.006, 0);
+    const glint = sphere(0.027, 0.5, 1, 1, white, eye);
+    glint.position.set(0.04, 0.045, 0.022);
+    const glint2 = sphere(0.012, 0.5, 1, 1, white, eye);
+    glint2.position.set(0.04, -0.035, -0.024);
+    eyeParts.push(rim, iris, pupil, glint, glint2);
     const cross = new Group();
-    cross.position.x = 0.06;
-    for (const a of [Math.PI / 4, -Math.PI / 4]) {
-      const bar = kit.box(0.02, 0.2, 0.04, ink, cross);
-      bar.rotation.x = a;
+    cross.position.x = 0.03;
+    for (const r of [Math.PI / 4, -Math.PI / 4]) {
+      const bar = kit.box(0.02, 0.18, 0.04, ink, cross);
+      bar.rotation.x = r;
     }
     cross.visible = false;
     eye.add(cross);
     crosses.push(cross);
   }
-  // Whiskers.
+  // Whiskers, two on each side from the cheek puffs.
   for (const z of [-1, 1]) {
-    for (const a of [-0.25, 0, 0.25]) {
-      const w = kit.box(0.3, 0.012, 0.012, white, head, 0.3, -0.07 + a * 0.1, z * 0.12);
-      w.rotation.y = z * (0.5 + a);
-      w.rotation.z = a * 0.6;
+    for (const a of [-0.12, 0.12]) {
+      const w = kit.box(0.24, 0.008, 0.008, white, head, 0.24, -0.09 + a * 0.25, z * 0.17);
+      w.rotation.y = -z * 0.9;
+      w.rotation.z = a;
     }
   }
   // Foam beard (a coat of foam also gets bubbles on the chin).
@@ -503,49 +537,69 @@ export function createCat(initial: CatLook): Cat {
     const upper = new Group();
     upper.position.set(x, -0.1, z);
     rig.add(upper);
-    const thigh = kit.mesh(new CylinderGeometry(0.085, 0.07, 0.22, 10), furMat, upper, 0, -0.1, 0);
-    thigh.scale.z = 0.95;
+    sphere(0.105, 1, 1, 1, furMat, upper);
+    kit.mesh(new CylinderGeometry(0.1, 0.08, 0.22, 14), furMat, upper, 0, -0.1, 0);
     const lower = new Group();
     lower.position.y = -0.2;
     upper.add(lower);
-    kit.mesh(new CylinderGeometry(0.065, 0.055, 0.2, 10), furMat, lower, 0, -0.08, 0);
-    const paw = sphere(0.085, 1.25, 0.8, 1, pawMat, lower);
+    sphere(0.08, 1, 1, 1, furMat, lower);
+    kit.mesh(new CylinderGeometry(0.075, 0.07, 0.18, 14), pawMat, lower, 0, -0.08, 0);
+    const paw = sphere(0.1, 1.2, 0.72, 1, pawMat, lower);
     paw.position.set(0.03, -0.17, 0);
     return { upper, lower };
   };
   // Far legs first so the near ones draw over them.
   const legs = {
-    farFront: makeLeg(0.38, -0.17),
-    farBack: makeLeg(-0.38, -0.17),
-    nearFront: makeLeg(0.38, 0.17),
-    nearBack: makeLeg(-0.38, 0.17),
+    farFront: makeLeg(0.3, -0.16),
+    farBack: makeLeg(-0.3, -0.16),
+    nearFront: makeLeg(0.3, 0.16),
+    nearBack: makeLeg(-0.3, 0.16),
   };
 
   // ----- Tail -----
+  // A smooth, fluffy tube: a ball at each joint, a tube to the next and a round tip.
   const tailRoot = new Group();
-  tailRoot.position.set(-0.6, 0.04, 0);
+  tailRoot.position.set(-0.48, 0.06, 0);
   rig.add(tailRoot);
   const tail: Group[] = [];
   let parent: Group = tailRoot;
   let tailPatch: Mesh | null = null;
+  const tailRadius = (i: number) => 0.072 - i * 0.002;
   for (let i = 0; i < TAIL_SEGMENTS; i++) {
     const seg = new Group();
     if (i > 0) seg.position.x = -SEGMENT;
     parent.add(seg);
-    const r = 0.085 - i * 0.006;
-    const part = sphere(r, 2.0, 1, 1, furMat, seg);
-    part.position.x = -SEGMENT * 0.35;
+    const r = tailRadius(i);
+    const r2 = tailRadius(i + 1);
+    sphere(r, 1, 1, 1, furMat, seg);
+    const tube = kit.mesh(
+      new CylinderGeometry(r2, r, SEGMENT, 14),
+      furMat,
+      seg,
+      -SEGMENT / 2,
+      0,
+      0,
+    );
+    tube.rotation.z = Math.PI / 2;
+    if (i === TAIL_SEGMENTS - 1) sphere(r2 * 1.2, 1.3, 1, 1, furMat, seg).position.x = -SEGMENT;
     if (i === 2) {
-      tailPatch = sphere(r * 1.08, 2.0, 1.02, 1.02, patchMats[3], seg);
-      tailPatch.position.x = -SEGMENT * 0.35;
+      tailPatch = kit.mesh(
+        new CylinderGeometry(r2 * 1.06, r * 1.06, SEGMENT * 1.3, 14),
+        patchMats[3],
+        seg,
+        -SEGMENT / 2,
+        0,
+        0,
+      );
+      tailPatch.rotation.z = Math.PI / 2;
     }
     // Rings on a tabby tail.
     if (i % 2 === 1) {
       const ring = kit.mesh(
-        new CylinderGeometry(r * 1.03, r * 1.03, 0.05, 10),
+        new CylinderGeometry(r * 1.04, r * 1.04, 0.05, 14),
         stripeMat,
         seg,
-        -SEGMENT * 0.35,
+        -SEGMENT * 0.5,
         0,
         0,
       );
@@ -562,7 +616,7 @@ export function createCat(initial: CatLook): Cat {
   for (let i = 0; i < 12; i++) {
     const a = (i / 12) * Math.PI * 2;
     const spike = kit.mesh(new ConeGeometry(0.06, 0.2, 5), coatMat, spikes);
-    spike.position.set(Math.cos(a) * 0.55, Math.sin(a) * 0.32, 0.0);
+    spike.position.set(Math.cos(a) * 0.5, Math.sin(a) * 0.34, 0.0);
     spike.rotation.z = a - Math.PI / 2;
   }
   spikes.visible = false;
@@ -616,7 +670,7 @@ export function createCat(initial: CatLook): Cat {
     spikes.visible = puff;
     beard.visible = coat === 'foam';
     const shellScale = puff ? 1.25 : 1;
-    coatBody.scale.set(0.7 * shellScale, 0.4 * shellScale, 0.4 * shellScale);
+    coatBody.scale.set(0.62 * shellScale, 0.42 * shellScale, 0.42 * shellScale);
     if (!none && !wet) {
       const c = puff ? look.fur : COAT_COLORS[coat as keyof typeof COAT_COLORS];
       coatMat.color.setHex(c);
@@ -626,7 +680,7 @@ export function createCat(initial: CatLook): Cat {
     const k = wet ? 0.55 : 1;
     furMat.color.setRGB(furBase.r * k, furBase.g * k, furBase.b * k);
     headMat.color.copy(none || wet ? furMat.color : coatMat.color);
-    torso.scale.set(0.64, wet ? 0.29 : 0.33, wet ? 0.3 : 0.34);
+    torso.scale.set(TORSO[0], TORSO[1] * (wet ? 0.86 : 1), TORSO[2] * (wet ? 0.86 : 1));
   };
 
   const applyHat = () => {
@@ -638,13 +692,11 @@ export function createCat(initial: CatLook): Cat {
     const scaleY = face === 'wide' ? 1.35 : face === 'squint' || face === 'sneeze' ? 0.3 : 1;
     eyeGroups.forEach((g, i) => {
       g.scale.set(1, scaleY, face === 'wide' ? 1.3 : 1);
-      g.children.forEach((c, k) => {
-        if (k < 4) c.visible = !dizzy;
-      });
       crosses[i].visible = dizzy;
     });
-    void irises;
+    eyeParts.forEach((m) => (m.visible = !dizzy));
     mouth.visible = face === 'wide' || face === 'sneeze';
+    smile.visible = !mouth.visible;
     mouth.scale.set(0.9, face === 'sneeze' ? 1.8 : 1.2, 1.4);
   };
   applyFace();
@@ -676,7 +728,7 @@ export function createCat(initial: CatLook): Cat {
     set(legs.nearBack, spec.back, fb, Math.max(0, Math.cos(phase)));
     set(legs.farBack, spec.back, fa, Math.max(0, -Math.cos(phase)));
     head.rotation.z = spec.head + (pose === 'dizzy' ? Math.sin(elapsed * 7) * 0.25 : 0);
-    head.position.set(spec.curl ? 0.5 : 0.66, spec.curl ? 0.1 : 0.26, 0);
+    head.position.set(spec.curl ? 0.42 : 0.56, spec.curl ? 0.14 : 0.3, 0);
     // Tail: raised by `tail`, waved along its length.
     for (let i = 0; i < TAIL_SEGMENTS; i++) {
       const wave = Math.sin(elapsed * (pose === 'flail' ? 14 : 4) - i * 0.7) * spec.wave;
@@ -684,7 +736,7 @@ export function createCat(initial: CatLook): Cat {
     }
     const earFlat = pose === 'leap' || pose === 'slide' || pose === 'splat' ? 1.1 : 0;
     ears.forEach((ear, i) => {
-      ear.rotation.x = (i === 1 ? -0.3 : 0.3) * (1 + earFlat);
+      ear.rotation.x = (i === 1 ? 0.28 : -0.28) * (1 + earFlat);
     });
     void swing;
   };

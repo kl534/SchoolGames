@@ -131,6 +131,11 @@ export function catFaceSvg(look: CatLook, lost = false): string {
       `<circle cx="24" cy="30" r="1.6" fill="#fff"/><circle cx="44" cy="30" r="1.6" fill="#fff"/>`,
     );
   }
+  if (!lost) {
+    parts.push(
+      `<ellipse cx="14" cy="43" rx="4.5" ry="3" fill="#ff7f9e" opacity="0.55"/><ellipse cx="50" cy="43" rx="4.5" ry="3" fill="#ff7f9e" opacity="0.55"/>`,
+    );
+  }
   parts.push(`<path d="M28 42h8l-4 4Z" fill="${lost ? '#b8b8c0' : hex(look.nose)}"/>`);
   parts.push(
     `<path d="M32 46v2M32 48c-2 3-6 3-8 1M32 48c2 3 6 3 8 1" fill="none" stroke="${ink}" stroke-width="1.6" stroke-linecap="round"/>`,
