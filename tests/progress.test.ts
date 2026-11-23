@@ -708,7 +708,7 @@ describe('migrateSocialStudiesOrder', () => {
 });
 
 describe('moveVocabOpen', () => {
-  const [v1, v2] = VOCAB_LAYOUTS;
+  const [v1, v2, v3] = VOCAB_LAYOUTS;
   const sum = (a: readonly number[]) => a.reduce((x, y) => x + y, 0);
 
   it('moves a player past a grown grade back to its first new set (v1 to v2)', () => {
@@ -724,7 +724,6 @@ describe('moveVocabOpen', () => {
   });
 
   it('keeps the same grade and set when no earlier grade grew (v2 to v3)', () => {
-    const v3 = [8, 8, 10, 10, 10, 10, 6, 6, 6, 6, 6, 6];
     expect(moveVocabOpen(9, v2, v3)).toBe(9);
     expect(moveVocabOpen(27, v2, v3)).toBe(27);
     expect(moveVocabOpen(40, v2, v3)).toBe(8 + 8 + 10 + 6 + 1);
