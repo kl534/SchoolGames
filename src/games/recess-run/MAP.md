@@ -1,4 +1,6 @@
-# Recess Run map
+# Recess Race map
+
+The game is called Recess Race; its folder and id stay `recess-run` (saved high scores and links use the id).
 
 A sports-day sprint for typing. Ten painted lanes on the school blacktop, the player in lane 5 and nine cartoon kid rivals, seen from behind and above. A block of 8 keys from the player's typing level sits under the HUD; every right key pushes the runner on, and the runner's speed is the player's live typing speed against the heat's pace (heat 1 is 5 words a minute, +1 each heat; typing at the pace runs 100 m in 45 s, up to 2.5 times faster). A wrong key stumbles for half a second (speed x0.3, the rate x0.85); five wrong in a row is a face-plant for 2 s (stars, "SPLAT!", keys ignored), then half the rate. The rivals run at fixed speeds (0.76 to 1.24 of the pace, each wobbling by 8%), so a heat always takes them about 45 s. Finish 1st to 3rd to go on (a podium, a victory dance for 1st, then the next heat from the space bar or the Race button); 4th or lower ends the run ("You came 6th - out!", then the results). Points: 1 per right key and a heat's place bonus (300, 200, 100 x heat), all times level x level (the gold badge). It is the fourth game of the Typing path (`"section": "typing"` in `game.json`).
 

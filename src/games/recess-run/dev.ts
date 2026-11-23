@@ -1,5 +1,5 @@
 /**
- * Dev-only hooks of Recess Run, for checking every state by eye. With any hook in the URL
+ * Dev-only hooks of Recess Race, for checking every state by eye. With any hook in the URL
  * nothing is saved. They compile away in production builds.
  *
  * - `?level=<1-40>` play that level (open in memory; the keys of the levels before it count as learned).
