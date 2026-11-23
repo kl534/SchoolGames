@@ -1,12 +1,22 @@
 /**
  * The doorway the cat runs through between places: the house `door` (a wooden door in a wall),
- * the town `gate` (a garden gate in a fence), the busy `shop-doors` (sliding glass doors under a
+ * the town `gate` (a garden gate in a fence), the zoo's own `zoo-arch` (a big arch with a ZOO sign
+ * and animals on top), the busy `shop-doors` (sliding glass doors under a
  * striped awning with a sign) and the adventure `portal` (a glowing swirl ring). The doorway
  * shows the colours of the place it leads to.
  */
-import { CylinderGeometry, Group, SphereGeometry, TorusGeometry } from 'three';
+import {
+  ConeGeometry,
+  CylinderGeometry,
+  Group,
+  MeshBasicMaterial,
+  PlaneGeometry,
+  SphereGeometry,
+  TorusGeometry,
+  type Material,
+} from 'three';
 import { Kit } from './kit';
-import type { PlaceGroup, PlaceLook } from './places';
+import type { DoorKind, PlaceLook } from './places';
 
 export interface Doorway {
   /** Its origin is on the floor at the middle of the opening. */
@@ -14,12 +24,13 @@ export interface Doorway {
   dispose(): void;
 }
 
-/** The door icon on the place strip for each group. */
-export const DOOR_ICONS: Record<PlaceGroup, string> = {
-  house: '🚪',
-  town: '🏡',
-  busy: '🏪',
-  adventure: '🌀',
+/** The door icon on the place strip for each kind of doorway. */
+export const DOOR_ICONS: Record<DoorKind, string> = {
+  door: '🚪',
+  gate: '🏡',
+  'shop-doors': '🏪',
+  portal: '🌀',
+  'zoo-arch': '🦒',
 };
 
 /** Where the doorway's wall stands: in front of the scenery, behind the cat. */
@@ -193,12 +204,95 @@ function buildPortal(kit: Kit, object: Group, next: PlaceLook) {
   }
 }
 
-export function createDoorway(group: PlaceGroup, next: PlaceLook): Doorway {
+/** The zoo arch: two tree-trunk posts, a beam with a ZOO sign and animals standing on top. */
+function buildZooArch(kit: Kit, object: Group, next: PlaceLook) {
+  const bark = kit.lit(0x8a5a30, 0.9);
+  const barkDark = kit.lit(0x6a4222, 0.9);
+  const leaf = kit.lit(0x3e9a4a, 0.85);
+  const z = DOOR_Z + 0.12;
+  // The place beyond, framed by the opening.
+  kit.box(3.4, 5.0, 0.3, kit.basic(next.sky[1]), object, 0, 2.5, DOOR_Z + 0.04);
+  kit.box(3.4, 0.5, 0.34, kit.basic(next.floor), object, 0, 0.25, DOOR_Z + 0.08);
+  // Posts painted like tree trunks, with bark rings and a root flare.
+  for (const side of [-1, 1]) {
+    const x = side * 2.1;
+    kit.mesh(new CylinderGeometry(0.5, 0.62, 5.2, 14), bark, object, x, 2.6, z);
+    for (let i = 0; i < 5; i++) {
+      kit.mesh(
+        new TorusGeometry(0.53, 0.04, 6, 14),
+        barkDark,
+        object,
+        x,
+        0.8 + i * 0.9,
+        z,
+      ).rotation.x = Math.PI / 2;
+    }
+    kit.mesh(new SphereGeometry(0.46, 10, 8), leaf, object, x, 5.4, z).scale.set(1.2, 0.8, 1.1);
+  }
+  // The beam and the sign: a canvas texture with big letters (a plain board without a canvas).
+  kit.box(5.2, 0.7, 0.6, bark, object, 0, 5.0, z);
+  kit.box(3.6, 1.4, 0.2, kit.lit(0x2f6b3a, 0.6), object, 0, 6.05, z + 0.1);
+  const letters = kit.paint(256, 96, (g) => {
+    g.fillStyle = '#2f6b3a';
+    g.fillRect(0, 0, 256, 96);
+    g.fillStyle = '#ffe9a8';
+    g.font = 'bold 80px sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('ZOO', 128, 52);
+  });
+  if (letters) {
+    const sign = new MeshBasicMaterial({ map: letters });
+    kit.materials.push(sign);
+    kit.mesh(new PlaneGeometry(3.4, 1.275), sign, object, 0, 6.05, z + 0.22);
+  } else {
+    kit.box(2.4, 0.7, 0.04, kit.basic(0xffe9a8), object, 0, 6.05, z + 0.22);
+  }
+  // On top, from the left: an elephant, a giraffe's head and neck, a penguin.
+  const grey = kit.lit(0x9aa6b2, 0.7);
+  const gold = kit.lit(0xf2c14a, 0.7);
+  const navy = kit.lit(0x2b3550, 0.6);
+  const white = kit.lit(0xf6f8fc, 0.6);
+  const top = 6.75;
+  const sph = (r: number, m: Material, x: number, y: number, zz: number) =>
+    kit.mesh(new SphereGeometry(r, 12, 10), m, object, x, y, zz);
+  // Elephant.
+  sph(0.6, grey, -1.6, top + 0.55, z).scale.set(1.3, 1, 0.8);
+  sph(0.38, grey, -0.95, top + 0.85, z);
+  kit.mesh(new CylinderGeometry(0.1, 0.14, 0.7, 8), grey, object, -0.68, top + 0.55, z).rotation.z =
+    0.25;
+  sph(0.3, grey, -1.2, top + 0.95, z + 0.3).scale.set(0.3, 1, 1);
+  // Giraffe.
+  kit.mesh(new CylinderGeometry(0.17, 0.22, 1.9, 10), gold, object, 0.1, top + 0.95, z);
+  sph(0.28, gold, 0.18, top + 1.95, z).scale.set(1.3, 1, 0.9);
+  sph(0.15, gold, 0.5, top + 1.9, z);
+  for (const [sx, sy] of [
+    [0.1, 0.5],
+    [0.12, 1.1],
+  ] as const)
+    sph(0.09, kit.lit(0xa8662a, 0.8), sx - 0.04, top + sy, z + 0.2).scale.z = 0.3;
+  // Penguin.
+  sph(0.45, navy, 1.7, top + 0.5, z).scale.set(0.85, 1.15, 0.8);
+  sph(0.3, white, 1.78, top + 0.45, z + 0.14).scale.set(0.8, 1.1, 0.6);
+  sph(0.28, navy, 1.7, top + 1.2, z);
+  kit.mesh(
+    new ConeGeometry(0.08, 0.22, 6),
+    kit.lit(0xf2a22e, 0.5),
+    object,
+    1.98,
+    top + 1.18,
+    z,
+  ).rotation.z = -Math.PI / 2;
+  sph(0.05, kit.basic(0xffffff), 1.82, top + 1.28, z + 0.24);
+}
+
+export function createDoorway(kind: DoorKind, next: PlaceLook): Doorway {
   const kit = new Kit();
   const object = new Group();
-  if (group === 'town' || group === 'busy' || group === 'adventure') {
-    if (group === 'town') buildGate(kit, object, next);
-    else if (group === 'busy') buildShopDoors(kit, object, next);
+  if (kind !== 'door') {
+    if (kind === 'gate') buildGate(kit, object, next);
+    else if (kind === 'zoo-arch') buildZooArch(kit, object, next);
+    else if (kind === 'shop-doors') buildShopDoors(kit, object, next);
     else buildPortal(kit, object, next);
     return {
       object,

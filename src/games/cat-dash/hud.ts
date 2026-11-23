@@ -6,7 +6,7 @@
 import { fillAnswers, lockAnswers } from '../../shared/answers';
 import { DOOR_ICONS } from './door';
 import { CAT_LOOKS, catFaceSvg, type CatId } from './looks';
-import type { PlaceGroup } from './places';
+import type { DoorKind } from './places';
 import { LIVES, VISIT_LENGTH, multiplierFor } from './rules';
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -39,7 +39,7 @@ export interface Hud {
   /** The thin clock under the dots: 0 when it starts, 1 when the cat arrives. */
   setClock(progress: number, state: { urgent: boolean; waiting: boolean }): void;
   /** The place name, the dots of the visit and the next door's icon. */
-  setPlace(name: string, next: PlaceGroup): void;
+  setPlace(name: string, next: DoorKind): void;
   setDots(dots: readonly DotState[], current: number): void;
   showBanner(title: string, detail: string, kind: 'hit' | 'miss' | 'place' | 'out'): void;
   hideBanner(): void;

@@ -21,7 +21,8 @@ export type PlaceId =
   | 'farm'
   | 'jungle'
   | 'toy-store'
-  | 'pirate-ship';
+  | 'pirate-ship'
+  | 'zoo';
 export type ObstacleId =
   | 'couch'
   | 'bookshelf'
@@ -82,7 +83,10 @@ export type ObstacleId =
   | 'ball-pit'
   | 'cannon'
   | 'rigging'
-  | 'chest';
+  | 'chest'
+  | 'elephant'
+  | 'giraffe'
+  | 'penguins';
 
 export type FloorPattern =
   'planks' | 'tiles' | 'carpet' | 'grass' | 'pavement' | 'roof' | 'sand' | 'snow' | 'metal';
@@ -106,12 +110,27 @@ export interface Place {
   /** Spoken as the cat arrives. */
   speech: string;
   obstacles: readonly [ObstacleId, ObstacleId, ObstacleId];
+  /** Its own doorway instead of the group's. */
+  door?: DoorKind;
   look: PlaceLook;
 }
 
+/** The doorway kinds between places. */
+export type DoorKind = 'door' | 'gate' | 'shop-doors' | 'portal' | 'zoo-arch';
+export const GROUP_DOORS: Record<PlaceGroup, DoorKind> = {
+  house: 'door',
+  town: 'gate',
+  busy: 'shop-doors',
+  adventure: 'portal',
+};
+/** The doorway into a place. */
+export function doorOf(place: Place): DoorKind {
+  return place.door ?? GROUP_DOORS[place.group];
+}
+
 /**
- * All 20 places: four groups of four, then the farm (town), the jungle (adventure), the toy store
- * (busy) and the pirate ship (adventure).
+ * All 21 places: four groups of four, then the farm (town), the jungle (adventure), the toy store
+ * (busy), the pirate ship (adventure) and the zoo (town, with its own zoo arch doorway).
  */
 export const PLACES: readonly Place[] = [
   {
@@ -432,6 +451,23 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'planks',
       sky: [0x5fb2ee, 0xdff2ff],
       light: 0xfff3d6,
+    },
+  },
+  {
+    id: 'zoo',
+    group: 'town',
+    name: 'The Zoo',
+    speech: 'The zoo!',
+    obstacles: ['elephant', 'giraffe', 'penguins'],
+    door: 'zoo-arch',
+    look: {
+      indoor: false,
+      wall: 0x8ccf6a,
+      trim: 0xd9a05b,
+      floor: 0x74b84e,
+      floorPattern: 'grass',
+      sky: [0x6cbcf0, 0xe4f6ff],
+      light: 0xfff6dc,
     },
   },
 ];

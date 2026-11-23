@@ -10,6 +10,7 @@ import { BUSY_PROPS } from './busy';
 import { ADVENTURE_PROPS } from './adventure';
 import { EXTRA_PROPS } from './extra';
 import { TOYS_PIRATES_PROPS } from './toys-pirates';
+import { ZOO_PROPS } from './zoo';
 
 export const PROP_BUILDERS: Record<ObstacleId, () => Prop> = {
   ...HOUSE_PROPS,
@@ -18,6 +19,7 @@ export const PROP_BUILDERS: Record<ObstacleId, () => Prop> = {
   ...ADVENTURE_PROPS,
   ...EXTRA_PROPS,
   ...TOYS_PIRATES_PROPS,
+  ...ZOO_PROPS,
 };
 
 export interface PropPool {

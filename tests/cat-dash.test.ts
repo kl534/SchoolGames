@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DOOR_ICONS } from '../src/games/cat-dash/door';
 import { parseDev } from '../src/games/cat-dash/dev';
 import {
   CAT_IDS,
@@ -9,10 +10,13 @@ import {
   savedCat,
 } from '../src/games/cat-dash/looks';
 import {
+  GROUP_DOORS,
   OBSTACLE_IDS,
   PLACES,
   PLACE_IDS,
+  doorOf,
   placeOf,
+  type DoorKind,
   type PlaceId,
 } from '../src/games/cat-dash/places';
 import {
@@ -186,10 +190,10 @@ describe('approach and sprint', () => {
 describe('places', () => {
   it('has unique ids, three obstacles each and every obstacle in exactly one place', () => {
     expect(new Set(PLACE_IDS).size).toBe(PLACES.length);
-    expect(PLACES).toHaveLength(20);
+    expect(PLACES).toHaveLength(21);
     const all = PLACES.flatMap((p) => [...p.obstacles]);
-    expect(all).toHaveLength(60);
-    expect(new Set(all).size).toBe(60);
+    expect(all).toHaveLength(63);
+    expect(new Set(all).size).toBe(63);
     expect([...OBSTACLE_IDS].sort()).toEqual([...all].sort());
     for (const p of PLACES) {
       expect(p.obstacles).toHaveLength(3);
@@ -198,12 +202,12 @@ describe('places', () => {
     }
   });
 
-  it('has house 4, town 5, busy 5 and adventure 6 places', () => {
-    const counts = { house: 4, town: 5, busy: 5, adventure: 6 };
+  it('has house 4, town 6, busy 5 and adventure 6 places', () => {
+    const counts = { house: 4, town: 6, busy: 5, adventure: 6 };
     for (const group of ['house', 'town', 'busy', 'adventure'] as const) {
       expect(PLACES.filter((p) => p.group === group)).toHaveLength(counts[group]);
     }
-    for (const id of ['farm', 'jungle', 'pirate-ship']) {
+    for (const id of ['farm', 'jungle', 'pirate-ship', 'zoo']) {
       expect(PLACES.find((p) => p.id === id)?.look.indoor).toBe(false);
     }
     const indoor = PLACES.filter((p) => p.look.indoor).map((p) => p.id);
@@ -218,6 +222,7 @@ describe('places', () => {
       'farm',
       'jungle',
       'pirate-ship',
+      'zoo',
     ]) {
       expect(indoor).not.toContain(id);
     }
@@ -247,6 +252,25 @@ describe('places', () => {
     });
     expect(PLACES.find((p) => p.id === 'toy-store')?.group).toBe('busy');
     expect(PLACES.find((p) => p.id === 'pirate-ship')?.group).toBe('adventure');
+  });
+
+  it('speaks the exact line of the zoo', () => {
+    expect(PLACES.find((p) => p.id === 'zoo')).toMatchObject({
+      group: 'town',
+      name: 'The Zoo',
+      speech: 'The zoo!',
+      obstacles: ['elephant', 'giraffe', 'penguins'],
+    });
+  });
+
+  it('gives the zoo its own doorway and every other place its group door', () => {
+    for (const p of PLACES) {
+      expect(doorOf(p), p.id).toBe(p.id === 'zoo' ? 'zoo-arch' : GROUP_DOORS[p.group]);
+    }
+    expect(PLACES.filter((p) => p.door).map((p) => p.id)).toEqual(['zoo']);
+    const kinds: DoorKind[] = ['door', 'gate', 'shop-doors', 'portal', 'zoo-arch'];
+    for (const kind of kinds) expect(DOOR_ICONS[kind], kind).toBeTruthy();
+    expect(Object.keys(DOOR_ICONS).sort()).toEqual([...kinds].sort());
   });
 
   it('speaks every place name', () => {
@@ -369,6 +393,12 @@ describe('parseDev', () => {
       variant: 0,
     });
     expect(parseDev('?door=beach').door).toBe('beach');
+  });
+
+  it('reads the zoo', () => {
+    expect(parseDev('?place=zoo').place).toBe('zoo');
+    expect(parseDev('?door=zoo&at=1').door).toBe('zoo');
+    expect(parseDev('?lab=giraffe:clear:0').lab?.obstacle).toBe('giraffe');
   });
 
   it('ignores unknown or malformed values', () => {

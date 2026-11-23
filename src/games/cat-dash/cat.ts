@@ -459,6 +459,7 @@ export function createCat(initial: CatLook): Cat {
     seaweed: new Group(),
     block: new Group(),
     crown: new Group(),
+    fish: new Group(),
   };
   for (const g of Object.values(hats)) {
     g.position.set(0, 0.3, 0);
@@ -601,6 +602,18 @@ export function createCat(initial: CatLook): Cat {
       z * 1.02,
     );
   }
+
+  // A blue-silver fish lying along the head, its tail sticking out behind.
+  const scale = kit.lit(0x3f9be8, 0.3);
+  hats.fish.scale.setScalar(1.5);
+  sphere(0.2, 1.3, 0.5, 0.55, scale, hats.fish).position.set(0, 0.06, 0);
+  sphere(0.12, 1, 0.5, 0.6, kit.lit(0xdfeaf2, 0.35), hats.fish).position.set(0.04, 0.0, 0);
+  // The tail fin: two flat blades in a V.
+  kit.box(0.04, 0.22, 0.05, scale, hats.fish, -0.36, 0.1, 0).rotation.z = 0.5;
+  kit.box(0.04, 0.22, 0.05, scale, hats.fish, -0.36, 0.02, 0).rotation.z = -0.5;
+  sphere(0.035, 1, 1, 1, kit.lit(0xffffff, 0.2), hats.fish).position.set(0.2, 0.1, 0.1);
+  sphere(0.018, 1, 1, 1, kit.lit(0x111111, 0.2), hats.fish).position.set(0.22, 0.1, 0.12);
+  kit.box(0.2, 0.12, 0.02, kit.lit(0xe8f2f8, 0.3), hats.fish, 0.0, 0.17, 0.0);
 
   // ----- Legs -----
   const makeLeg = (x: number, z: number): Leg => {
