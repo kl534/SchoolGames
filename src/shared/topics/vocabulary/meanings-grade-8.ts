@@ -171,7 +171,7 @@ export const MEANINGS_GRADE_8: Readonly<Record<string, WordMeaning>> = {
   edict: ['an order given by a ruler', 'The king issued an *edict* about the new tax.'],
   efficient: ['doing a job well without waste', 'The *efficient* cook made dinner in ten minutes.'],
   elite: ['the best or top group', 'Only the *elite* of the team played in the final.'],
-  emancipate: ['to set someone free', 'Lincoln wanted to *emancipate* the slaves.'],
+  emancipate: ['to set someone free', 'The farmer will *emancipate* the caged birds at dawn.'],
   embody: ['to be a perfect example of an idea', 'The kind nurse seems to *embody* caring.'],
   encumber: ['to weigh down or slow someone', 'Heavy boots *encumber* him as he hikes.'],
   endow: [
