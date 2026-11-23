@@ -16,6 +16,7 @@ import { MEANINGS_GRADE_2 } from './meanings-grade-2';
 import { MEANINGS_GRADE_3 } from './meanings-grade-3';
 import { MEANINGS_GRADE_4 } from './meanings-grade-4';
 import { MEANINGS_GRADE_5 } from './meanings-grade-5';
+import { MEANINGS_GRADE_6 } from './meanings-grade-6';
 import type { PartOfSpeech, VocabRow, WordMeaning } from './types';
 
 export type { PartOfSpeech, VocabRow, WordMeaning } from './types';
@@ -38,7 +39,7 @@ export const VOCAB_GRADES: VocabGrade[] = [
   { id: '3', title: 'Grade 3', rows: GRADE_3, meanings: MEANINGS_GRADE_3 },
   { id: '4', title: 'Grade 4', rows: GRADE_4, meanings: MEANINGS_GRADE_4 },
   { id: '5', title: 'Grade 5', rows: GRADE_5, meanings: MEANINGS_GRADE_5 },
-  { id: '6', title: 'Grade 6', rows: GRADE_6 },
+  { id: '6', title: 'Grade 6', rows: GRADE_6, meanings: MEANINGS_GRADE_6 },
   { id: '7', title: 'Grade 7', rows: GRADE_7 },
   { id: '8', title: 'Grade 8', rows: GRADE_8 },
   { id: '9', title: 'Grade 9', rows: GRADE_9 },
