@@ -144,7 +144,7 @@ function disposeTree(root: Object3D): void {
 }
 
 /**
- * Recess Run: ten kids sprint 100 m on the blacktop. Every right key pushes the player on; their
+ * Recess Race: ten kids sprint 100 m on the blacktop. Every right key pushes the player on; their
  * speed is how fast they type, against the heat's pace. Top three go on to a faster heat. Only
  * the lesson reads aloud; nothing else here does.
  */
@@ -197,7 +197,7 @@ function run(session: TypingSession): void {
   note.className = 'rr-note';
   note.hidden = true;
   const noteTitle = document.createElement('strong');
-  noteTitle.textContent = 'Recess Run needs a keyboard ⌨️';
+  noteTitle.textContent = 'Recess Race needs a keyboard ⌨️';
   note.append(noteTitle, 'Plug one in or open it, then press the space bar.');
   document.body.appendChild(note);
 

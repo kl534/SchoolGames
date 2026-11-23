@@ -1,5 +1,5 @@
 /**
- * The DOM of Recess Run: the panel under the buttons (heat, place, speed, score, best), the race
+ * The DOM of Recess Race: the panel under the buttons (heat, place, speed, score, best), the race
  * bar, the slot for the block of keys, the big centre texts, the YOU label, the comic word, the
  * pops and the podium card. Styles are `rr-*` in `index.html`.
  */

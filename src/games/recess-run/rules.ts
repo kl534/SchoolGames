@@ -1,5 +1,5 @@
 /**
- * The pure rules of Recess Run: the heat's pace, the rivals' speeds, how the player's typing
+ * The pure rules of Recess Race: the heat's pace, the rivals' speeds, how the player's typing
  * becomes running speed, mistakes (stumble and face-plant), places, points, the speed levels'
  * streak and the results line. No DOM, no three.js.
  */
