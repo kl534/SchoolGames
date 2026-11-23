@@ -36,8 +36,8 @@ export interface VocabGrade {
   /** 'Grade 2' … 'Grade 12', 'College'. */
   title: string;
   rows: readonly VocabRow[];
-  /** Definitions and example sentences by head word (grades without them show no word card). */
-  meanings?: Readonly<Record<string, WordMeaning>>;
+  /** Definitions and example sentences by head word (every grade has them). */
+  meanings: Readonly<Record<string, WordMeaning>>;
 }
 
 /** Easiest first. Later milestones append grades here; never reorder (levels follow this order). */
@@ -274,7 +274,7 @@ export function synonymTopic(grade: VocabGrade): Topic {
     title: `${grade.title} synonyms`,
     subject: 'Synonyms',
     description: 'Pick the word that means the same.',
-    facts: grade.rows.map((row) => synonymFact(row, grade.meanings?.[row[0]])),
+    facts: grade.rows.map((row) => synonymFact(row, grade.meanings[row[0]])),
     distractors: vocabDistractors,
   };
 }
@@ -285,7 +285,7 @@ export function antonymTopic(grade: VocabGrade): Topic {
     title: `${grade.title} antonyms`,
     subject: 'Antonyms',
     description: 'Pick the word that means the opposite.',
-    facts: grade.rows.flatMap((row) => antonymFact(row, grade.meanings?.[row[0]]) ?? []),
+    facts: grade.rows.flatMap((row) => antonymFact(row, grade.meanings[row[0]]) ?? []),
     distractors: vocabDistractors,
   };
 }

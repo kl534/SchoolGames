@@ -63,7 +63,7 @@ describe('vocabulary data', () => {
 
 describe('vocabulary facts', () => {
   const happy = rowOf('happy');
-  const happyMeaning = VOCAB_GRADES[0].meanings!.happy;
+  const happyMeaning = VOCAB_GRADES[0].meanings.happy;
   const meaningOf = (relation: 'Synonym' | 'Antonym') => ({
     word: 'happy',
     partOfSpeech: 'adjective',
@@ -241,9 +241,9 @@ describe('word meanings', () => {
   const headOf = (id: string): string => id.slice(id.indexOf('-') + 1);
   const wordsOf = (text: string): string[] => text.toLowerCase().match(/[a-z']+/g) ?? [];
 
-  for (const grade of VOCAB_GRADES.filter((g) => g.meanings)) {
+  for (const grade of VOCAB_GRADES) {
     describe(grade.title, () => {
-      const meanings = grade.meanings!;
+      const meanings = grade.meanings;
       it('has an entry for every head word, in order, and no others', () => {
         expect(Object.keys(meanings)).toEqual(grade.rows.map((r) => r[0]));
       });
