@@ -521,4 +521,540 @@ export const MEANINGS_GRADE_5: Readonly<Record<string, WordMeaning>> = {
     'The *inquisitive* child asked why the sky is blue.',
   ],
   ravenous: ['extremely hungry', 'After the long hike, we were *ravenous*.'],
+  abnormal: [
+    'different from what is usual or expected',
+    "The vet checked why the puppy's breathing sounded *abnormal*.",
+  ],
+  accidental: [
+    'happening by mistake, not on purpose',
+    'The *accidental* spill left a puddle of juice on the floor.',
+  ],
+  adaptable: [
+    'able to change to fit new things',
+    'An *adaptable* player can learn a new position quickly.',
+  ],
+  adorable: [
+    'so sweet and lovely that people smile at it',
+    'The *adorable* kitten curled up in a tiny ball.',
+  ],
+  agreeable: [
+    'pleasant and easy to get along with',
+    'Our *agreeable* neighbor always waves and says hello.',
+  ],
+  alarming: [
+    'causing sudden fear or worry',
+    'The *alarming* noise from the basement made everyone jump.',
+  ],
+  amusing: [
+    'funny in a way that makes you smile',
+    'Dad told an *amusing* story about our silly goat.',
+  ],
+  artificial: [
+    'made by people, not found in nature',
+    'The shop had *artificial* flowers that never wilted.',
+  ],
+  ashamed: [
+    'feeling bad about something you did',
+    "He felt *ashamed* after he broke his friend's toy.",
+  ],
+  beloved: ['loved very much by someone', 'She read her *beloved* book again and again.'],
+  bizarre: [
+    'very strange and hard to explain',
+    'The *bizarre* hat had a feather, a bell and a spoon.',
+  ],
+  boundless: ['having no limit or end', 'The toddler ran around with *boundless* energy.'],
+  brutal: [
+    'very harsh and without any mercy',
+    'The hikers faced *brutal* cold on top of the mountain.',
+  ],
+  careless: [
+    'not paying enough attention to what you do',
+    'A *careless* mistake made him spill the paint.',
+  ],
+  casual: ['relaxed and not formal', 'We wore *casual* clothes to the picnic.'],
+  civil: [
+    'polite and respectful, even when annoyed',
+    'Even when they disagreed, they stayed *civil* to each other.',
+  ],
+  comical: ['funny in a silly way', "The clown's *comical* walk made the children giggle."],
+  compact: [
+    'small and neatly packed into little space',
+    'Her *compact* car fits easily into tight parking spots.',
+  ],
+  convenient: [
+    'easy to use and saving time or trouble',
+    'The bus stop is *convenient* because it is right by our door.',
+  ],
+  countless: ['too many to count', 'We saw *countless* stars on the clear night.'],
+  crafty: [
+    'clever at tricking others to get what you want',
+    'The *crafty* fox found a way into the henhouse.',
+  ],
+  daring: ['willing to take risks', 'The *daring* climber scaled the tall, steep cliff.'],
+  deceptive: [
+    'giving a false idea of what is true',
+    'The calm pond looked safe, but it was *deceptive*.',
+  ],
+  decent: ['good enough and of fair quality', 'He earned a *decent* grade on the spelling test.'],
+  defective: [
+    'having a fault so that it does not work well',
+    'The *defective* toy stopped working after one day.',
+  ],
+  deliberate: [
+    'done on purpose and not by accident',
+    'The bump was *deliberate*, so the referee blew the whistle.',
+  ],
+  dependable: [
+    'able to be trusted to do what is needed',
+    'Our *dependable* bus driver is never late.',
+  ],
+  dingy: ['dark, dull and a bit dirty', 'The *dingy* attic smelled of dust and old boxes.'],
+  dishonest: [
+    'not telling the truth or playing fair',
+    'The *dishonest* player cheated to win the game.',
+  ],
+  disloyal: [
+    'not staying true to a friend or team',
+    'It felt *disloyal* to tell his secret to others.',
+  ],
+  disorderly: [
+    'messy or badly behaved, with no order',
+    'The *disorderly* crowd pushed and shouted at the gate.',
+  ],
+  doubtful: [
+    'not sure or probably not true',
+    'It is *doubtful* that the game will start in the heavy rain.',
+  ],
+  downcast: ['sad and looking down', 'He walked home *downcast* after losing the race.'],
+  dual: [
+    'having two parts or doing two jobs',
+    'The pen has a *dual* purpose: it writes and it lights up.',
+  ],
+  effective: [
+    'working well and doing what was wanted',
+    'The new bug spray was *effective* against mosquitoes.',
+  ],
+  elaborate: [
+    'having many small, careful details',
+    'She drew an *elaborate* map of the whole island.',
+  ],
+  elderly: [
+    'old, usually said about a person',
+    'An *elderly* man smiled and waved from his porch.',
+  ],
+  fabulous: ['extremely good and wonderful', 'We had a *fabulous* time at the beach party.'],
+  faithful: ['staying loyal and true', 'The *faithful* dog waited at the gate every day.'],
+  faulty: ['having a mistake or flaw', 'A *faulty* wire made the lamp flicker on and off.'],
+  fiery: ['burning or full of strong feeling', 'The *fiery* sunset turned the sky red and orange.'],
+  flawless: ['perfect, with no mistakes or marks', 'The skater gave a *flawless* performance.'],
+  fleeting: ['lasting only a very short time', 'She caught a *fleeting* glimpse of the deer.'],
+  foolproof: [
+    'so simple that it cannot go wrong',
+    'The recipe is *foolproof*, so anyone can bake it.',
+  ],
+  forgetful: [
+    'often failing to remember things',
+    'My *forgetful* uncle left his keys in the fridge again.',
+  ],
+  formal: [
+    'following strict rules of manners or dress',
+    'The *formal* dinner required a jacket and a tie.',
+  ],
+  foul: ['very dirty or bad-smelling', 'A *foul* odor came from the old garbage can.'],
+  fragrant: [
+    'having a sweet and pleasant smell',
+    'The *fragrant* roses filled the whole garden with scent.',
+  ],
+  frank: [
+    'honest and open about what you think',
+    'She gave a *frank* answer about the broken window.',
+  ],
+  frequent: ['happening often', 'We make *frequent* trips to the library.'],
+  fundamental: [
+    'forming the basic and most important part',
+    'Learning to read is *fundamental* to doing well in school.',
+  ],
+  fussy: ['hard to please about small things', 'The *fussy* baby cried at every little sound.'],
+  ghastly: ['very bad, shocking or frightening', 'The old house had a *ghastly* smell of mold.'],
+  giddy: [
+    'feeling dizzy or silly with excitement',
+    'She felt *giddy* with joy on the last day of school.',
+  ],
+  hardy: [
+    'strong and able to handle cold and hard times',
+    'The *hardy* ponies stayed outside all winter.',
+  ],
+  heartless: ['having no pity or kindness', 'It was *heartless* to laugh at his mistake.'],
+  hesitant: [
+    'slow to act because you are not sure',
+    'He was *hesitant* to jump into the cold lake.',
+  ],
+  hoarse: ['sounding rough and scratchy', 'After the game, her voice was *hoarse* from cheering.'],
+  hopeful: [
+    'feeling that good things may happen',
+    'We are *hopeful* that the sun will come out soon.',
+  ],
+  hopeless: [
+    'having no chance of getting better',
+    'The lost boy felt *hopeless* until he saw the lights.',
+  ],
+  horrid: ['very unpleasant and bad', 'We ate a *horrid* soup that tasted like soap.'],
+  humdrum: ['dull and always the same', 'Each *humdrum* day was just like the one before.'],
+  hurtful: ["causing sadness or pain to someone's feelings", 'His *hurtful* words made her cry.'],
+  airy: [
+    'having plenty of fresh air and space',
+    'The *airy* room had big windows that let in a breeze.',
+  ],
+  alive: ['having life and not dead', 'The tiny plant is still *alive* and growing.'],
+  assorted: ['made up of different kinds', 'She gave us a box of *assorted* cookies.'],
+  astonished: ['very surprised', 'We were *astonished* when the magician made the dove vanish.'],
+  baffled: [
+    'so confused that you cannot work it out',
+    'The *baffled* student stared at the strange puzzle.',
+  ],
+  bare: ['not covered or having nothing on it', 'The *bare* walls needed a few pictures.'],
+  blameless: [
+    'not at fault for something bad',
+    'The crew was *blameless* because the storm was sudden.',
+  ],
+  blank: [
+    'having nothing written or drawn on it',
+    'She stared at the *blank* page and began to write.',
+  ],
+  boring: [
+    'not interesting and making you tired',
+    'The *boring* movie put half the audience to sleep.',
+  ],
+  breathless: [
+    'out of breath from running or excitement',
+    'She arrived *breathless* after racing up the hill.',
+  ],
+  bustling: ['full of busy activity', 'The *bustling* market was full of shoppers and sellers.'],
+  comfortable: [
+    'giving a feeling of ease and rest',
+    'The soft chair was very *comfortable* to sit in.',
+  ],
+  confused: [
+    'not able to think clearly or understand',
+    'He felt *confused* by the long, tricky directions.',
+  ],
+  convinced: [
+    'completely sure that something is true',
+    'She was *convinced* that she had left her bag here.',
+  ],
+  creative: [
+    'good at thinking up new ideas',
+    'The *creative* boy built a castle from cardboard boxes.',
+  ],
+  damaged: [
+    'harmed so that it no longer works or looks right',
+    'The storm left the *damaged* fence leaning to one side.',
+  ],
+  deserted: ['empty because everyone has left', 'At night the *deserted* street was silent.'],
+  disgusted: [
+    'feeling that something is very unpleasant',
+    'He was *disgusted* by the rotten smell of the egg.',
+  ],
+  dissatisfied: [
+    'not happy with how things turned out',
+    'The *dissatisfied* customer asked for her money back.',
+  ],
+  elastic: [
+    'able to stretch and then spring back',
+    'The *elastic* band stretched far and snapped back.',
+  ],
+  eventual: [
+    'coming at the end after a long time',
+    'After many tries, her *eventual* success surprised no one.',
+  ],
+  exceptional: ['much better than the usual', 'He showed *exceptional* skill on the piano.'],
+  extreme: ['much greater than usual', 'The desert has *extreme* heat in the summer.'],
+  fair: ['treating everyone the same, without favorites', 'The judge was *fair* to both teams.'],
+  false: ['not true or not real', 'The detective proved that his story was *false*.'],
+  fearful: ['feeling afraid or worried', 'The *fearful* puppy hid under the bed during the storm.'],
+  fearsome: ['very scary to look at or meet', 'The *fearsome* roar of the lion shook the zoo.'],
+  flat: ['smooth and level with no bumps', 'We found a *flat* rock and sat down to rest.'],
+  fond: ['liking someone or something very much', 'She is *fond* of her little brother.'],
+  freezing: ['extremely cold', 'We ran inside from the *freezing* wind.'],
+  hardworking: [
+    'putting a lot of effort into work',
+    'The *hardworking* farmer was up before dawn.',
+  ],
+  homesick: [
+    'sad because you are away from home',
+    'He felt *homesick* during his first night at camp.',
+  ],
+  accept: [
+    'to take something that is offered',
+    'She was happy to *accept* the invitation to the party.',
+  ],
+  adjust: [
+    'to change something a little to make it fit',
+    'He had to *adjust* the seat so he could reach the pedals.',
+  ],
+  alarm: ['to make someone suddenly afraid or worried', 'Loud thunder can *alarm* small children.'],
+  amuse: [
+    'to make someone smile or laugh',
+    "The monkey's tricks *amuse* every visitor at the zoo.",
+  ],
+  amplify: [
+    'to make a sound or feeling louder or stronger',
+    'The speaker will *amplify* her voice for the crowd.',
+  ],
+  appoint: [
+    'to choose someone for a job or role',
+    'The class will *appoint* a leader for the project.',
+  ],
+  approve: [
+    'to agree that something is good or may happen',
+    'Mom will *approve* the plan if we finish our chores.',
+  ],
+  arrange: ['to put things in a neat order', 'Please *arrange* the books by size on the shelf.'],
+  astound: [
+    'to surprise someone very much',
+    "The magician's trick will *astound* the whole audience.",
+  ],
+  attach: ['to fasten one thing to another', 'Please *attach* the photo to the card with tape.'],
+  attract: ['to pull something closer toward you', 'Sweet flowers *attract* bees and butterflies.'],
+  avoid: ['to keep away from something', 'He tried to *avoid* the puddle on the sidewalk.'],
+  awaken: ['to wake up or wake someone up', "The rooster's crow will *awaken* the whole farm."],
+  befriend: ['to become a friend to someone', 'She chose to *befriend* the new girl in class.'],
+  blare: ['to make a very loud sound', 'The horns *blare* when the parade comes down the street.'],
+  blurt: [
+    'to say something suddenly without thinking',
+    'Try not to *blurt* out the answer before others can think.',
+  ],
+  bulge: [
+    'to swell out in a round shape',
+    'His pockets *bulge* with rocks and shells from the beach.',
+  ],
+  cancel: [
+    'to decide that something will not happen',
+    'They had to *cancel* the picnic because of the storm.',
+  ],
+  challenge: [
+    'to invite someone to a contest or test',
+    'I *challenge* you to a race to the fence.',
+  ],
+  clasp: ['to hold something tightly', "She will *clasp* her mother's hand in the crowd."],
+  clog: ['to block something so nothing can pass', 'Leaves can *clog* the drain after a storm.'],
+  collide: [
+    'to crash into something with force',
+    'The two bikes will *collide* if no one slows down.',
+  ],
+  combine: ['to put things together into one', '*Combine* the flour and sugar in the large bowl.'],
+  compress: [
+    'to press something into a smaller space',
+    'He had to *compress* the clothes to fit in the bag.',
+  ],
+  confess: [
+    'to say that you did something wrong',
+    'The boy decided to *confess* that he ate the cookies.',
+  ],
+  confirm: [
+    'to show that something is true or certain',
+    'Please *confirm* that you are coming to the party.',
+  ],
+  confront: ['to face a problem or person bravely', 'She had to *confront* her fear of the dark.'],
+  console: [
+    'to comfort someone who feels sad',
+    'He tried to *console* his friend who lost the game.',
+  ],
+  consider: [
+    'to think carefully about something',
+    'Take time to *consider* each choice before you pick.',
+  ],
+  contain: [
+    'to have something inside',
+    'This jar will *contain* enough cookies for the whole class.',
+  ],
+  cram: [
+    'to push too many things into a small space',
+    'He had to *cram* all his books into the little bag.',
+  ],
+  crave: ['to want something very badly', 'After the long hike, we *crave* a cold drink.'],
+  dampen: ['to make slightly wet', 'A light drizzle will *dampen* the sidewalk.'],
+  decrease: [
+    'to become smaller in size or number',
+    'The noise began to *decrease* as the bus drove away.',
+  ],
+  deflate: ['to let the air out of something', 'The sharp thorn made the ball *deflate*.'],
+  detach: ['to take one thing off another', 'Carefully *detach* the label from the box.'],
+  discard: [
+    'to throw something away because it is not wanted',
+    'Please *discard* the empty box in the bin.',
+  ],
+  dismiss: [
+    'to tell someone they may leave',
+    'The teacher will *dismiss* the class when the bell rings.',
+  ],
+  disguise: [
+    'to change how something looks to hide what it is',
+    'He wore a wig to *disguise* himself at the costume party.',
+  ],
+  dispatch: [
+    'to send something off to a place',
+    'The post office will *dispatch* the package today.',
+  ],
+  display: [
+    'to put something out for people to see',
+    'They will *display* the best paintings in the hallway.',
+  ],
+  disturb: ['to interrupt or bother someone', 'Please do not *disturb* the baby while she sleeps.'],
+  divide: [
+    'to split something into smaller parts',
+    'We will *divide* the pizza into eight slices.',
+  ],
+  donate: [
+    'to give something to help others',
+    'The family will *donate* old coats to the shelter.',
+  ],
+  doubt: [
+    'to feel unsure that something is true',
+    'I *doubt* that it will stop raining before lunch.',
+  ],
+  drain: [
+    'to make liquid flow out of something',
+    'Pull the plug to *drain* the water from the tub.',
+  ],
+  dwell: ['to live in a place', 'Bats *dwell* in the dark cave near the river.'],
+  elevate: [
+    'to lift something up higher',
+    'The jack will *elevate* the car so we can fix the tire.',
+  ],
+  embarrass: [
+    'to make someone feel awkward and ashamed',
+    'Please do not *embarrass* me in front of my friends.',
+  ],
+  employ: [
+    'to give someone a job and pay them',
+    'The bakery will *employ* three more workers this summer.',
+  ],
+  enable: [
+    'to give someone the power to do something',
+    'A ramp will *enable* the wheelchair to reach the door.',
+  ],
+  enchant: ['to fill someone with delight', "The singer's soft voice will *enchant* the audience."],
+  endanger: ['to put something in danger', 'Litter can *endanger* the birds and fish in the lake.'],
+  enforce: [
+    'to make sure a rule is obeyed',
+    'The lifeguard will *enforce* the rule about no running.',
+  ],
+  enlarge: ['to make something bigger', 'They plan to *enlarge* the garden next spring.'],
+  entertain: [
+    'to keep people interested and having fun',
+    'The puppets *entertain* the children at the library.',
+  ],
+  equip: [
+    'to give someone the things needed for a job',
+    'We will *equip* each hiker with a map and a flashlight.',
+  ],
+  erupt: ['to burst out suddenly with force', 'The volcano began to *erupt* with smoke and ash.'],
+  evaporate: ['to change from a liquid into a gas', 'On a hot day, puddles *evaporate* quickly.'],
+  exhale: ['to breathe air out of your lungs', '*Exhale* slowly to help you stay calm.'],
+  exhaust: [
+    'to make someone very tired',
+    'The long climb will *exhaust* even the strongest hikers.',
+  ],
+  expire: ['to come to an end', 'The coupon will *expire* at the end of the month.'],
+  extend: [
+    'to make something longer or larger',
+    'They will *extend* the bridge across the whole river.',
+  ],
+  fade: ['to slowly lose color or strength', 'The jeans began to *fade* after many washes.'],
+  fidget: [
+    'to move around because you are restless',
+    'Try not to *fidget* during the long speech.',
+  ],
+  flatter: [
+    'to praise someone too much to please them',
+    'He tried to *flatter* the teacher to get a better grade.',
+  ],
+  flinch: ['to jerk back because of fear or pain', 'The dog did not *flinch* at the loud noise.'],
+  fluster: [
+    'to make someone nervous and confused',
+    'The noisy crowd began to *fluster* the new speaker.',
+  ],
+  frustrate: [
+    'to make someone feel angry because they cannot do something',
+    'The tangled string will *frustrate* anyone who tries to fix it.',
+  ],
+  fulfill: [
+    'to do or finish what was promised',
+    'She worked hard to *fulfill* her dream of becoming a nurse.',
+  ],
+  fumble: ['to handle something clumsily', "Don't *fumble* the ball when you catch it."],
+  grant: ['to give someone what they ask for', 'The king will *grant* the boy his wish.'],
+  greet: ['to say hello to someone', 'We always *greet* our teacher with a smile.'],
+  heighten: [
+    'to make something stronger or higher',
+    'Spooky music can *heighten* the fear in a movie.',
+  ],
+  hobble: ['to walk with difficulty and pain', 'The hurt dog could only *hobble* back home.'],
+  hustle: ['to move or work quickly', 'We must *hustle* if we want to catch the bus.'],
+  ailment: ['a sickness that is not very serious', 'Rest and warm soup cured her small *ailment*.'],
+  alliance: [
+    'a group joined together for a shared goal',
+    'The two towns formed an *alliance* to build a new bridge.',
+  ],
+  bonus: [
+    'something extra that is added to what you expect',
+    'We got a *bonus* of ten extra minutes at recess.',
+  ],
+  citizen: [
+    'a person who lawfully belongs to a country or town',
+    'Each *citizen* of the town can vote for the mayor.',
+  ],
+  cluster: ['a small group of things close together', 'A *cluster* of grapes hung from the vine.'],
+  crisis: [
+    'a time of great danger or trouble',
+    'The town faced a *crisis* when the river overflowed.',
+  ],
+  debt: ['money that one person owes to another', 'He worked every weekend to pay off his *debt*.'],
+  defect: [
+    'a fault that stops something from being perfect',
+    'The toy had a *defect*, so it was sent back.',
+  ],
+  defense: [
+    'something used to guard against attack',
+    'The tall wall was a good *defense* against enemies.',
+  ],
+  device: ['a tool made for one special job', 'This *device* measures how fast the wind blows.'],
+  discipline: [
+    'training that teaches self-control and obedience',
+    'It takes *discipline* to practice every day.',
+  ],
+  disorder: ['a state of mess and confusion', 'Toys lay in *disorder* all over the floor.'],
+  drawback: [
+    'something that makes a plan less good',
+    'The only *drawback* of the plan is the cost.',
+  ],
+  drought: ['a long time with very little rain', 'The *drought* left the fields dry and brown.'],
+  expense: [
+    'the money spent on something',
+    'The *expense* of the trip was higher than we planned.',
+  ],
+  fame: ['being known by many people', 'The young singer rose to *fame* overnight.'],
+  farewell: ['a way of saying goodbye', 'We waved a sad *farewell* as the ship left.'],
+  fault: ['the blame for something that went wrong', 'It was my *fault* that the glass broke.'],
+  feud: ['a long and bitter quarrel', 'A *feud* between the two families lasted for years.'],
+  folly: ['a foolish act or idea', 'It was *folly* to swim in the stormy sea.'],
+  fuss: [
+    'needless worry or excitement about small things',
+    'There was a big *fuss* over a missing mitten.',
+  ],
+  gale: ['a very strong wind', 'A *gale* blew the hats off our heads.'],
+  gloom: [
+    'a feeling of sadness or a dark place',
+    'A feeling of *gloom* settled over the cold, rainy camp.',
+  ],
+  glory: [
+    'great honor and praise for doing something grand',
+    'The team won *glory* by taking first place.',
+  ],
+  grief: ['deep sadness, often when someone is lost', 'She felt great *grief* when her pet died.'],
+  guilt: ['the bad feeling of having done wrong', 'He felt *guilt* about breaking the rule.'],
+  hike: ['a long walk in the countryside', 'We went on a *hike* up the tall hill.'],
+  hub: ['the busy center of a place or activity', 'The train station is the *hub* of the city.'],
+  humor: ['the quality of being funny', 'Her sense of *humor* makes everyone laugh.'],
 };
