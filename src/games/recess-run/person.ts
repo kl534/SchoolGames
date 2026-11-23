@@ -46,6 +46,8 @@ export interface PersonStyle {
   pants: number;
   skin?: number;
   hair?: number;
+  /** Girls: a long back of hair and a ponytail (boys have short hair). */
+  girl?: boolean;
   hat?: HatStyle;
   hatColor?: number;
   shoe?: number;
@@ -260,6 +262,18 @@ export function createPerson(style: PersonStyle): Person {
     0.0,
     -0.015,
   );
+  if (style.girl) {
+    mesh(
+      new SphereGeometry(HEAD_R + 0.014, 20, 14, 0, Math.PI * 2, 0.5, 1.6),
+      hair,
+      headWear,
+      0,
+      -0.04,
+      -0.05,
+    );
+    mesh(new CapsuleGeometry(0.05, 0.2, 4, 10), hair, headWear, 0, -0.1, -HEAD_R - 0.05);
+    mesh(new SphereGeometry(0.035, 8, 6), hat, headWear, 0, 0.06, -HEAD_R - 0.01);
+  }
   if (style.hat === 'cap') {
     mesh(
       new SphereGeometry(HEAD_R + 0.02, 20, 10, 0, Math.PI * 2, 0, 1.2),

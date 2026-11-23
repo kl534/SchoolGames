@@ -25,6 +25,9 @@ import {
   RIVAL_FACTORS,
   RIVAL_NAME_POOL,
   pickRivalNames,
+  pickRivals,
+  RIVAL_GIRL_NAMES,
+  RIVAL_BOY_NAMES,
   STUMBLE_SECONDS,
   STUMBLE_SPEED,
   SURGE,
@@ -165,6 +168,17 @@ describe('the heat and its rivals', () => {
     expect(names).toHaveLength(9);
     expect(new Set(names).size).toBe(9);
     expect(pickRivalNames(() => 0.1)).not.toEqual(pickRivalNames(() => 0.9));
+  });
+
+  it('gives girl figures girl names and boy figures boy names', () => {
+    expect(RIVAL_GIRL_NAMES.some((n) => RIVAL_BOY_NAMES.includes(n))).toBe(false);
+    for (let i = 0; i < runs(500, 50); i++) {
+      const rivals = pickRivals(Math.random);
+      expect(new Set(rivals.map((r) => r.name)).size).toBe(9);
+      for (const r of rivals) {
+        expect((r.girl ? RIVAL_GIRL_NAMES : RIVAL_BOY_NAMES).includes(r.name)).toBe(true);
+      }
+    }
   });
 
   it('keeps a rival within its surge', () => {
