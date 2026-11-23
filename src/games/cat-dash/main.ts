@@ -41,7 +41,15 @@ import {
   type CatFrame,
   type MoveEvent,
 } from './moves';
-import { PLACES, PLACE_IDS, placeOf, type ObstacleId, type Place, type PlaceId } from './places';
+import {
+  PLACES,
+  PLACE_IDS,
+  doorOf,
+  placeOf,
+  type ObstacleId,
+  type Place,
+  type PlaceId,
+} from './places';
 import { showCatPicker, type CatPicker } from './picker';
 import { createPropPool } from './props/pool';
 import {
@@ -390,7 +398,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
       if (fresh.length === 0) visited = new Set<PlaceId>();
       visited.add(nextId);
     }
-    hud.setPlace(place.name, placeById(nextId).group);
+    hud.setPlace(place.name, doorOf(placeById(nextId)));
   };
 
   const placeById = (id: PlaceId): Place => PLACES.find((p) => p.id === id) ?? PLACES[0];
@@ -465,7 +473,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     hud.showCount(null);
     hud.hideWord();
     hud.setIris(null);
-    hud.setPlace(place.name, placeById(nextId).group);
+    hud.setPlace(place.name, doorOf(placeById(nextId)));
     if (!withPreview) {
       startCountdown();
       return;
@@ -813,7 +821,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     const target = placeById(nextId);
     props.get(target.obstacles[0]);
     doorway?.dispose();
-    doorway = createDoorway(target.group, target.look);
+    doorway = createDoorway(doorOf(target), target.look);
     const distance = dev && doorLab ? 6.8 : fit.ahead + 6;
     doorPlan = {
       runTime: dev && doorLab ? 0.85 : 1.2,
@@ -828,7 +836,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     phase = 'door';
     hud.setTopVisible(false, 0);
     hud.hideBanner();
-    hud.setPlace(target.name, target.group);
+    hud.setPlace(target.name, doorOf(target));
   };
 
   /** Poses everything of the doorway at time `t`; each step fires once. */
@@ -873,7 +881,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
       place = target;
       showPlaceScenery(target);
       newVisit();
-      hud.setPlace(place.name, placeById(nextId).group);
+      hud.setPlace(place.name, doorOf(placeById(nextId)));
       frame.x = catX;
       frame.y = 0;
       frame.z = 0;
