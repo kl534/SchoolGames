@@ -68,6 +68,13 @@ describe('mergeProgress', () => {
     expect(m.pathLevelsOpen).toEqual({ social: 9, other: 1 });
   });
 
+  it('takes the larger vocabulary layout version', () => {
+    expect(mergeProgress(prog({ vocabLevelsVersion: 2 }), prog()).vocabLevelsVersion).toBe(2);
+    expect(mergeProgress(prog(), prog()).vocabLevelsVersion).toBeUndefined();
+    const m = mergeProgress(prog({ vocabLevelsVersion: 1 }), prog({ vocabLevelsVersion: 2 }));
+    expect(m.vocabLevelsVersion).toBe(2);
+  });
+
   it('takes ladders, homePath and recent from the side saved last', () => {
     const a = prog({ ladders: { t: { g: 5 } }, homePath: 'math', recent: ['a'], savedAt: 10 });
     const b = prog({

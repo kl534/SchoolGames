@@ -55,8 +55,12 @@ export const VOCAB_GRADES: VocabGrade[] = [
   { id: '12', title: 'Grade 12', rows: GRADE_12, meanings: MEANINGS_GRADE_12 },
   { id: 'college', title: 'College', rows: GRADE_COLLEGE, meanings: MEANINGS_GRADE_COLLEGE },
 ];
-export const SETS_PER_GRADE = 6;
 export const WORDS_PER_SET = 50;
+
+/** How many sets of `WORDS_PER_SET` a grade has: 8 for Grades 2–3, 10 from Grade 4 up. */
+export function setsOf(grade: VocabGrade): number {
+  return grade.rows.length / WORDS_PER_SET;
+}
 
 export type VocabKind = 'synonym' | 'antonym';
 
