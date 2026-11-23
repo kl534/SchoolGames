@@ -379,7 +379,7 @@ export const VOCAB_LAYOUTS: readonly (readonly number[])[] = [
   [8, 8, 10, 6, 6, 6, 6, 6, 6, 6, 6, 6], // v2: M1, Grades 2–4
   [8, 8, 10, 10, 10, 10, 6, 6, 6, 6, 6, 6], // v3: M2, Grades 5–7
   [8, 8, 10, 10, 10, 10, 10, 10, 10, 6, 6, 6], // v4: M3, Grades 8–10
-  // M4 appends [8, 8, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10].
+  [8, 8, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10], // v5: M4, Grades 11, 12 and College
 ];
 export const VOCAB_LEVELS_VERSION = VOCAB_LAYOUTS.length;
 

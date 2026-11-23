@@ -32,9 +32,9 @@ const WORDS: Record<string, number> = {
   '8': 500,
   '9': 500,
   '10': 500,
-  '11': 300,
-  '12': 300,
-  college: 300,
+  '11': 500,
+  '12': 500,
+  college: 500,
 };
 /** FNV-1a, to pin the first 300 head words of each grade as they were on main. */
 const fnv1a = (text: string): string => {
