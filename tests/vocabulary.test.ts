@@ -73,7 +73,8 @@ describe('vocabulary data', () => {
       it('has the right number of rows, in whole sets, at least half with antonyms', () => {
         expect(grade.rows).toHaveLength(WORDS[grade.id]);
         expect(grade.rows.length % 50).toBe(0);
-        const withAntonyms = (rows: readonly VocabRow[]) => rows.filter((r) => r[3].length > 0).length;
+        const withAntonyms = (rows: readonly VocabRow[]) =>
+          rows.filter((r) => r[3].length > 0).length;
         expect(withAntonyms(grade.rows)).toBeGreaterThanOrEqual(grade.rows.length / 2);
         const added = grade.rows.slice(300);
         expect(withAntonyms(added)).toBeGreaterThanOrEqual(added.length / 2);
