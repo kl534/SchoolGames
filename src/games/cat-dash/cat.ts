@@ -4,6 +4,7 @@
  * shapes. It faces +x, seen from the side with the head turned well towards the camera. `apply` poses it from a move's frame.
  */
 import {
+  Color,
   ConeGeometry,
   CylinderGeometry,
   Group,
@@ -261,11 +262,29 @@ export function createCat(initial: CatLook): Cat {
   const pawMat = new MeshStandardMaterial({ roughness: 0.85 });
   const stripeMat = new MeshStandardMaterial({ roughness: 0.9 });
   const eyeMat = new MeshStandardMaterial({ roughness: 0.3 });
+  const eyeMat2 = new MeshStandardMaterial({ roughness: 0.3 });
+  // Ears, tail and the face mask copy the fur colour, or take the Siamese points colour.
+  const earMat = new MeshStandardMaterial({ roughness: 0.85 });
+  const tailMat = new MeshStandardMaterial({ roughness: 0.85 });
+  const pointMat = new MeshStandardMaterial({ roughness: 0.85 });
   const noseMat = new MeshStandardMaterial({ roughness: 0.5 });
   const coatMat = new MeshStandardMaterial({ roughness: 1, transparent: true, opacity: 0.88 });
   // The head is fur or, under a coat, the coat's colour (so the eyes and nose stay in view).
   const headMat = new MeshStandardMaterial({ roughness: 0.85 });
-  kit.materials.push(furMat, bellyMat, pawMat, stripeMat, eyeMat, noseMat, coatMat, headMat);
+  kit.materials.push(
+    furMat,
+    bellyMat,
+    pawMat,
+    stripeMat,
+    eyeMat,
+    eyeMat2,
+    earMat,
+    tailMat,
+    pointMat,
+    noseMat,
+    coatMat,
+    headMat,
+  );
   const patchMats = [0, 1, 2, 3].map(() => {
     const m = new MeshStandardMaterial({ roughness: 0.9 });
     kit.materials.push(m);
@@ -310,6 +329,8 @@ export function createCat(initial: CatLook): Cat {
     const k = Math.sqrt(1 - (x / TORSO[0]) ** 2);
     const stripe = sphere(1, 0.05, TORSO[1] * k - 0.09, TORSO[2] * k * 0.98, stripeMat, rig);
     stripe.position.set(x, 0.1, 0);
+    stripe.userData.baseX = x;
+    stripe.userData.baseZ = stripe.scale.z;
     stripes.push(stripe);
   }
   // Calico patches: two on the back (one on each side of the middle), one on the head, one on the tail.
@@ -327,9 +348,16 @@ export function createCat(initial: CatLook): Cat {
   rig.add(head);
   sphere(0.28, 1.04, 0.92, 1.08, headMat, head);
   // Two cheek puffs under the nose.
+  const cheeks: Mesh[] = [];
   for (const z of [-0.065, 0.065]) {
-    sphere(0.085, 0.85, 0.72, 1, bellyMat, head).position.set(0.215, -0.1, z);
+    const puff = sphere(0.085, 0.85, 0.72, 1, bellyMat, head);
+    puff.position.set(0.215, -0.1, z);
+    cheeks.push(puff);
   }
+  // The Siamese mask, just under the eyes (only with points).
+  const mask = sphere(0.2, 0.75, 0.7, 1.15, pointMat, head);
+  mask.position.set(0.16, -0.06, 0);
+  mask.visible = false;
   const headPatch = sphere(0.2, 0.9, 0.7, 1.1, patchMats[2], head);
   headPatch.position.set(0.0, 0.12, 0.08);
   const nose = sphere(0.035, 0.8, 0.7, 1.25, noseMat, head);
@@ -358,7 +386,7 @@ export function createCat(initial: CatLook): Cat {
     const ear = new Group();
     ear.position.set(-0.03, 0.17, z);
     head.add(ear);
-    const outer = kit.mesh(new ConeGeometry(0.125, 0.24, 16), furMat, ear, 0, 0.12, 0);
+    const outer = kit.mesh(new ConeGeometry(0.125, 0.24, 16), earMat, ear, 0, 0.12, 0);
     outer.scale.x = 0.55;
     const inner = kit.mesh(new ConeGeometry(0.075, 0.16, 16), pink, ear, 0.035, 0.1, 0);
     inner.scale.x = 0.3;
@@ -376,7 +404,8 @@ export function createCat(initial: CatLook): Cat {
     head.add(eye);
     eyeGroups.push(eye);
     const rim = sphere(0.1, 0.3, 1.12, 0.9, ink, eye);
-    const iris = sphere(0.09, 0.34, 1.1, 0.86, eyeMat, eye);
+    // The near eye (side 1, z > 0) is `eyes`, the far one `eyes2`.
+    const iris = sphere(0.09, 0.34, 1.1, 0.86, side === 1 ? eyeMat : eyeMat2, eye);
     iris.position.x = 0.006;
     const pupil = sphere(0.062, 0.34, 1.1, 0.8, ink, eye);
     pupil.position.set(0.022, -0.006, 0);
@@ -612,17 +641,17 @@ export function createCat(initial: CatLook): Cat {
     parent.add(seg);
     const r = tailRadius(i);
     const r2 = tailRadius(i + 1);
-    sphere(r, 1, 1, 1, furMat, seg);
+    sphere(r, 1, 1, 1, tailMat, seg);
     const tube = kit.mesh(
       new CylinderGeometry(r2, r, SEGMENT, 14),
-      furMat,
+      tailMat,
       seg,
       -SEGMENT / 2,
       0,
       0,
     );
     tube.rotation.z = Math.PI / 2;
-    if (i === TAIL_SEGMENTS - 1) sphere(r2 * 1.2, 1.3, 1, 1, furMat, seg).position.x = -SEGMENT;
+    if (i === TAIL_SEGMENTS - 1) sphere(r2 * 1.2, 1.3, 1, 1, tailMat, seg).position.x = -SEGMENT;
     if (i === 2) {
       tailPatch = kit.mesh(
         new CylinderGeometry(r2 * 1.06, r * 1.06, SEGMENT * 1.3, 14),
@@ -682,9 +711,12 @@ export function createCat(initial: CatLook): Cat {
     furBase.b = furMat.color.b;
     headMat.color.copy(furMat.color);
     bellyMat.color.setHex(look.belly);
-    const whitePaws = look.id === 'tuxedo' || look.id === 'calico';
-    pawMat.color.setHex(whitePaws ? look.belly : look.fur);
+    const pointsOn = look.points !== null;
+    pawMat.color.setHex(pointsOn ? look.points! : look.whitePaws ? look.belly : look.fur);
+    pointMat.color.setHex(look.points ?? look.fur);
+    mask.visible = pointsOn;
     eyeMat.color.setHex(look.eyes);
+    eyeMat2.color.setHex(look.eyes2 ?? look.eyes);
     noseMat.color.setHex(look.nose);
     stripeMat.color.setHex(look.stripes ?? look.fur);
     stripes.forEach((s) => (s.visible = look.stripes !== null));
@@ -711,7 +743,8 @@ export function createCat(initial: CatLook): Cat {
     spikes.visible = puff;
     beard.visible = coat === 'foam';
     const shellScale = puff ? 1.25 : 1;
-    coatBody.scale.set(0.62 * shellScale, 0.42 * shellScale, 0.42 * shellScale);
+    const bw = look.build.body;
+    coatBody.scale.set(0.62 * shellScale * bw, 0.42 * shellScale, 0.42 * shellScale * bw);
     if (!none && !wet) {
       const c = puff ? look.fur : COAT_COLORS[coat as keyof typeof COAT_COLORS];
       coatMat.color.setHex(c);
@@ -721,8 +754,36 @@ export function createCat(initial: CatLook): Cat {
     const k = wet ? 0.55 : 1;
     furMat.color.setRGB(furBase.r * k, furBase.g * k, furBase.b * k);
     headMat.color.copy(none || wet ? furMat.color : coatMat.color);
-    torso.scale.set(TORSO[0], TORSO[1] * (wet ? 0.86 : 1), TORSO[2] * (wet ? 0.86 : 1));
+    // Siamese points: dark, but the mask and ears go under a coat with the head.
+    if (look.points !== null) {
+      const dark = new Color(look.points).multiplyScalar(k);
+      tailMat.color.copy(dark);
+      earMat.color.copy(none || wet ? dark : coatMat.color);
+      pointMat.color.copy(none || wet ? dark : coatMat.color);
+    } else {
+      tailMat.color.copy(furMat.color);
+      earMat.color.copy(furMat.color);
+    }
+    torso.scale.set(TORSO[0] * bw, TORSO[1] * (wet ? 0.86 : 1), TORSO[2] * bw * (wet ? 0.86 : 1));
   };
+
+  // The build: body width, head size, cheek puffs and ears.
+  const applyBuild = () => {
+    const b = look.build;
+    belly.scale.set(0.42 * b.body, 0.22, 0.31 * b.body);
+    for (const s of stripes) {
+      if (s.userData.stripe) continue;
+      s.position.x = s.userData.baseX * b.body;
+      s.scale.z = s.userData.baseZ * b.body;
+    }
+    head.scale.setScalar(HEAD_SCALE * b.head);
+    cheeks.forEach((c) => c.scale.set(0.85 * b.cheeks, 0.72 * b.cheeks, b.cheeks));
+    const wide = 1 + (1 - b.ears) * 0.4;
+    ears.forEach((ear) => ear.scale.set(wide, b.ears, wide));
+  };
+
+  applyBuild();
+  applyCoat();
 
   const applyHat = () => {
     for (const [name, g] of Object.entries(hats)) g.visible = name === hat;
@@ -789,6 +850,7 @@ export function createCat(initial: CatLook): Cat {
     setLook(next) {
       look = next;
       paintFur();
+      applyBuild();
       applyCoat();
     },
     setPose(next, nextFace = 'happy') {

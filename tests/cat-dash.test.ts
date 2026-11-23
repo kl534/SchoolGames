@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { parseDev } from '../src/games/cat-dash/dev';
-import { CAT_IDS, CAT_LOOKS, CAT_SETTING, catFaceSvg, savedCat } from '../src/games/cat-dash/looks';
+import {
+  CAT_IDS,
+  CAT_LOOKS,
+  CAT_SETTING,
+  NORMAL_BUILD,
+  catFaceSvg,
+  savedCat,
+} from '../src/games/cat-dash/looks';
 import {
   OBSTACLE_IDS,
   PLACES,
@@ -255,6 +262,7 @@ describe('cats', () => {
     expect(savedCat(null)).toBe('orange');
     expect(savedCat('dog')).toBe('orange');
     expect(savedCat('calico')).toBe('calico');
+    expect(savedCat('british-shorthair')).toBe('british-shorthair');
     expect(CAT_SETTING('abc')).toBe('cat-dash:cat:abc');
     expect(CAT_SETTING(null)).toBe('cat-dash:cat:guest');
   });
@@ -272,6 +280,40 @@ describe('cats', () => {
         expect(closed).toBe(opened);
       }
     }
+  });
+});
+
+describe('the ten cats', () => {
+  it('has ten unique ids that match the looks', () => {
+    expect(CAT_IDS.length).toBe(10);
+    expect(new Set(CAT_IDS).size).toBe(10);
+    expect(new Set(CAT_IDS)).toEqual(new Set(Object.keys(CAT_LOOKS)));
+    for (const id of CAT_IDS) expect(CAT_LOOKS[id].id).toBe(id);
+    expect(CAT_IDS.slice(0, 5)).toEqual(['orange', 'black', 'tuxedo', 'calico', 'grey-tabby']);
+  });
+
+  it('gives each odd feature to the right cats', () => {
+    const ids = (f: (l: (typeof CAT_LOOKS)[keyof typeof CAT_LOOKS]) => boolean) =>
+      CAT_IDS.filter((id) => f(CAT_LOOKS[id]));
+    expect(ids((l) => l.build !== NORMAL_BUILD)).toEqual(['british-shorthair']);
+    expect(ids((l) => l.points !== null)).toEqual(['siamese']);
+    expect(ids((l) => l.eyes2 !== null)).toEqual(['white']);
+    expect(ids((l) => l.whitePaws)).toEqual(['tuxedo', 'calico', 'ginger-white']);
+  });
+
+  it('shows the points, both eye colours and the chubby face in the picture', () => {
+    const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
+    expect(catFaceSvg(CAT_LOOKS.siamese)).toContain(hex(CAT_LOOKS.siamese.points!));
+    const white = catFaceSvg(CAT_LOOKS.white);
+    expect(white).toContain(hex(CAT_LOOKS.white.eyes));
+    expect(white).toContain(hex(CAT_LOOKS.white.eyes2!));
+    const faceRx = (id: (typeof CAT_IDS)[number]) =>
+      Number(/<ellipse cx="32" cy="36" rx="([\d.]+)"/.exec(catFaceSvg(CAT_LOOKS[id]))![1]);
+    expect(faceRx('british-shorthair')).toBeGreaterThan(faceRx('orange'));
+  });
+
+  it('reads ?cat= for a new cat', () => {
+    expect(parseDev('?cat=tortoiseshell').cat).toBe('tortoiseshell');
   });
 });
 

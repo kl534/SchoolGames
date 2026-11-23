@@ -761,15 +761,69 @@
 
 .cd-cards {
   display: grid;
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 14px;
   width: min(1000px, 100%);
 }
 
+.cd-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 12px 8px 10px;
+  border: 3px solid rgba(255, 255, 255, 0.35);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font:
+    800 17px system-ui,
+    sans-serif;
+  text-align: center;
+  line-height: 1.1;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform 0.15s,
+    background 0.15s;
+}
+
+.cd-card-face {
+  flex: none;
+  width: 96px;
+  height: 96px;
+}
+
+@media (max-height: 800px) {
+  .cd-card-face {
+    width: 80px;
+    height: 80px;
+  }
+}
+
 @media (max-width: 560px) {
   .cd-cards {
-    grid-template-columns: repeat(2, minmax(120px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
     width: min(380px, 100%);
+  }
+
+  .cd-card {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 6px;
+    min-height: 56px;
+    padding: 6px;
+    font-size: 15px;
+    text-align: left;
+  }
+
+  .cd-card-face {
+    width: 56px;
+    height: 56px;
   }
 }
 
@@ -780,50 +834,22 @@
   }
 
   .cd-picker-title {
-    font-size: 28px;
+    font-size: 24px;
   }
 
   .cd-cards {
-    gap: 10px;
+    gap: 8px;
   }
-}
 
-.cd-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  min-width: 120px;
-  min-height: 48px;
-  padding: 12px 8px 10px;
-  border: 3px solid rgba(255, 255, 255, 0.35);
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  font:
-    800 18px system-ui,
-    sans-serif;
-  cursor: pointer;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  transition:
-    transform 0.15s,
-    background 0.15s;
-}
-
-.cd-card-face {
-  width: 96px;
-  height: 96px;
-}
-
-@media (max-height: 460px) {
   .cd-card {
-    padding: 6px 6px 6px;
+    gap: 2px;
+    padding: 4px;
+    font-size: 13px;
   }
 
   .cd-card-face {
-    width: 72px;
-    height: 72px;
+    width: 48px;
+    height: 48px;
   }
 }
 

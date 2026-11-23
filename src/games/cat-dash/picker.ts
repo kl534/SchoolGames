@@ -1,4 +1,4 @@
-/** The cat picker shown before every run: four cards and a Go button. */
+/** The cat picker shown before every run: ten cards and a Go button. */
 import { CAT_IDS, CAT_LOOKS, catFaceSvg, type CatId } from './looks';
 
 export interface CatPicker {
