@@ -36,6 +36,10 @@ import {
   keyPoints,
   liveRate,
   nextRate,
+  sustainedWpm,
+  easeWpm,
+  WPM_WINDOW,
+  WPM_MIN_SPAN,
   onMiss,
   ordinal,
   placeOf,
@@ -428,5 +432,56 @@ describe('voice', () => {
     const main = readFileSync(resolve(dir, 'main.ts'), 'utf8');
     expect(main.match(/\bspeak\b/g)?.length).toBe(2);
     expect(main).toMatch(/showKeyLesson\(\{[^}]*\bspeak\b/s);
+  });
+});
+
+describe('the sustained words a minute on the HUD', () => {
+  /** Right keys every `gap` s from `start` to `end`. */
+  const keys = (gap: number, start: number, end: number): number[] => {
+    const out: number[] = [];
+    for (let at = start; at <= end + 1e-9; at += gap) out.push(at);
+    return out;
+  };
+
+  it('is 0 before the first right key', () => {
+    expect(sustainedWpm([], null, 5)).toBe(0);
+  });
+
+  it('matches steady typing once the window is full, whatever the speed', () => {
+    for (const kps of [0.4, 1, 2.5, 6]) {
+      const times = keys(1 / kps, 1, 30);
+      expect(sustainedWpm(times, 1, 30)).toBeCloseTo(kps * 12, 0);
+    }
+  });
+
+  it('holds steady between keys, unlike the key-to-key rate', () => {
+    // Uneven typing: quick pairs, then a long gap, averaging 1 key a second.
+    const times: number[] = [];
+    for (let at = 1; at < 40; at += 2) times.push(at, at + 0.2);
+    const seen: number[] = [];
+    for (let now = 20; now < 40; now += 0.05) seen.push(sustainedWpm(times, 1, now));
+    expect(Math.max(...seen) - Math.min(...seen)).toBeLessThan(3);
+    for (const w of seen) expect(w).toBeGreaterThan(9);
+  });
+
+  it('falls when the player stops and reaches 0 after a whole window', () => {
+    const times = keys(0.5, 1, 20);
+    const typing = sustainedWpm(times, 1, 20);
+    expect(sustainedWpm(times, 1, 25)).toBeLessThan(typing * 0.6);
+    expect(sustainedWpm(times, 1, 20 + WPM_WINDOW + 0.1)).toBe(0);
+  });
+
+  it('counts the first seconds over at least WPM_MIN_SPAN', () => {
+    expect(sustainedWpm([1], 1, 1)).toBeCloseTo(1 / 5 / (WPM_MIN_SPAN / 60));
+  });
+
+  it('eases the shown number towards the sustained one without overshooting', () => {
+    for (let i = 0; i < runs(200, 40); i++) {
+      const shown = Math.random() * 60;
+      const target = Math.random() * 60;
+      const next = easeWpm(shown, target, Math.random() * 0.2);
+      expect(Math.abs(target - next)).toBeLessThanOrEqual(Math.abs(target - shown) + 1e-9);
+    }
+    expect(easeWpm(3, 20, 5)).toBe(20);
   });
 });
