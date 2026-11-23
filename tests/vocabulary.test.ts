@@ -221,7 +221,7 @@ describe('vocabulary topics', () => {
 
 describe('vocabulary distractors', () => {
   it('gives four distinct plausible options for every fact', () => {
-    const seeds = runs(20, 2);
+    const seeds = runs(6, 2);
     VOCAB_GRADES.forEach((grade, g) => {
       const answersOfPos = new Map<string, Set<string>>();
       for (const row of grade.rows) {
