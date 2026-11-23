@@ -369,7 +369,7 @@ export const GRADE_2: VocabRow[] = [
   ['squeeze', 'verb', ['press', 'pinch', 'squash'], ['release', 'let go']],
   ['snatch', 'verb', ['grab', 'seize', 'take'], []],
   ['drag', 'verb', ['pull', 'haul', 'tow'], ['carry', 'lift']],
-  ['borrow', 'verb', ['get', 'take'], ['lend', 'return', 'give']],
+  ['rise', 'verb', ['climb', 'lift', 'ascend'], ['fall', 'sink', 'drop']],
   ['lend', 'verb', ['loan', 'give'], ['borrow', 'take']],
   ['shrink', 'verb', ['get smaller', 'shrivel', 'dwindle'], ['grow', 'stretch', 'swell']],
   ['frighten', 'verb', ['scare', 'startle', 'alarm'], ['calm', 'comfort', 'soothe']],

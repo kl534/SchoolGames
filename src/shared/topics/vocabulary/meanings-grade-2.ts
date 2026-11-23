@@ -342,7 +342,7 @@ export const MEANINGS_GRADE_2: Readonly<Record<string, WordMeaning>> = {
   squeeze: ['to press hard on something', 'Please *squeeze* the lemon into the glass.'],
   snatch: ['to take something quickly', 'The seagull will *snatch* a chip from the table.'],
   drag: ['to pull something heavy along the ground', 'We had to *drag* the sled up the hill.'],
-  borrow: ['to take something and give it back later', 'May I *borrow* your pencil for a minute?'],
+  rise: ['to go up', "The sun will *rise* at six o'clock."],
   lend: ['to let someone use something for a while', 'I will *lend* you my new book.'],
   shrink: ['to become smaller', 'Wool socks can *shrink* in hot water.'],
   frighten: ['to make someone feel afraid', 'Loud thunder can *frighten* small puppies.'],
