@@ -50,12 +50,12 @@ export function podiumSpot(place: number): { x: number; y: number; z: number } {
   return { x, y: PODIUM_HEIGHTS[i], z: PODIUM_Z };
 }
 
-/** Where the others (places 4 and lower, 0-based `index`) stand in a loose row behind the podium. */
+/** Where the others (places 4 and lower, 0-based `index`) stand in two loose rows behind the podium. */
 export function backRowSpot(index: number, count: number): { x: number; z: number } {
   const per = Math.ceil(count / 2) || 1;
   const row = Math.floor(index / per);
   const col = index % per;
-  const x = (col - (per - 1) / 2) * 1.5 + (row ? 0.7 : 0);
+  const x = (col - (per - 1) / 2) * 1.7 + (row ? 0.8 : 0);
   return { x, z: PODIUM_Z - 1.8 - row * 1.4 };
 }
 
