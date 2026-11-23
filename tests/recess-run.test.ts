@@ -23,7 +23,8 @@ import {
   RACE_METRES,
   RACE_SPEED,
   RIVAL_FACTORS,
-  RIVAL_NAMES,
+  RIVAL_NAME_POOL,
+  pickRivalNames,
   STUMBLE_SECONDS,
   STUMBLE_SPEED,
   SURGE,
@@ -158,8 +159,12 @@ describe('the heat and its rivals', () => {
   it('has nine sorted rivals with nine different names', () => {
     expect(RIVAL_FACTORS).toHaveLength(9);
     expect([...RIVAL_FACTORS].sort((a, b) => a - b)).toEqual(RIVAL_FACTORS);
-    expect(RIVAL_NAMES).toHaveLength(9);
-    expect(new Set(RIVAL_NAMES).size).toBe(9);
+    expect(new Set(RIVAL_NAME_POOL).size).toBe(RIVAL_NAME_POOL.length);
+    expect(RIVAL_NAME_POOL.length).toBeGreaterThanOrEqual(60);
+    const names = pickRivalNames(Math.random);
+    expect(names).toHaveLength(9);
+    expect(new Set(names).size).toBe(9);
+    expect(pickRivalNames(() => 0.1)).not.toEqual(pickRivalNames(() => 0.9));
   });
 
   it('keeps a rival within its surge', () => {
