@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Recess Run</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #9fd8ff;
+      }
+      #game {
+        position: fixed;
+        inset: 0;
+      }
+
+      /* The column under the buttons: panel, race bar and the block of keys. */
+      .rr-top {
+        position: fixed;
+        z-index: 12;
+        top: max(64px, calc(env(safe-area-inset-top) + 52px));
+        left: 50%;
+        box-sizing: border-box;
+        width: min(94vw, 640px);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        transform: translateX(-50%);
+        color: #fff;
+        font:
+          800 16px/1 ui-monospace,
+          Menlo,
+          Consolas,
+          monospace;
+        pointer-events: none;
+      }
+      .rr-top[hidden] {
+        display: none;
+      }
+      /* On a wide screen the shared buttons are in the corners, so the column goes to the top. */
+      @media (min-width: 760px) {
+        .rr-top {
+          top: max(12px, calc(env(safe-area-inset-top) + 8px));
+          width: min(calc(100vw - 260px), 640px);
+        }
+      }
+      .rr-hud {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 4px 10px;
+        min-height: 34px;
+        padding: 4px 10px;
+        border-radius: 14px;
+        background: rgba(15, 18, 32, 0.78);
+      }
+      .rr-heat {
+        font-size: 0.82em;
+        color: #cfd6e8;
+      }
+      .rr-place {
+        font-size: 28px;
+        font-weight: 900;
+        color: #ffd23f;
+        text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+      }
+      .rr-you-speed {
+        display: inline-flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 7.5em;
+        font-size: 0.9em;
+      }
+      .rr-you-bar {
+        display: block;
+        height: 6px;
+        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.2);
+        overflow: hidden;
+      }
+      .rr-you-fill {
+        display: block;
+        height: 100%;
+        width: 0;
+        border-radius: 3px;
+        background: #4ade80;
+      }
+      .rr-scorebox {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 1.15em;
+      }
+      .rr-badge {
+        padding: 3px 8px;
+        border-radius: 10px;
+        background: #ffc928;
+        color: #2a1b00;
+        font-size: 0.85em;
+      }
+      .rr-badge[hidden] {
+        display: none;
+      }
+      .rr-best {
+        font-size: 0.82em;
+        color: #cfd6e8;
+      }
+      /* A narrow screen: place and score on top, the rest under. */
+      @media (max-width: 559px) {
+        .rr-place {
+          order: 1;
+        }
+        .rr-scorebox {
+          order: 2;
+        }
+        .rr-heat {
+          order: 3;
+        }
+        .rr-you-speed {
+          order: 4;
+        }
+        .rr-best {
+          order: 5;
+        }
+      }
+
+      .rr-race {
+        position: relative;
+        height: 24px;
+        margin: 0 16px;
+      }
+      .rr-line {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 10px;
+        height: 4px;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.75);
+        box-shadow: 0 0 0 1px rgba(15, 18, 32, 0.5);
+      }
+      .rr-flag {
+        position: absolute;
+        right: -8px;
+        top: -2px;
+        font-size: 18px;
+        line-height: 1;
+      }
+      .rr-dot {
+        position: absolute;
+        top: 7px;
+        left: -5px;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        box-shadow: 0 0 0 1.5px rgba(15, 18, 32, 0.7);
+      }
+      .rr-me {
+        top: 5px;
+        width: 14px;
+        height: 14px;
+        left: -7px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffc928;
+        color: #5b3a00;
+        font-size: 10px;
+        line-height: 1;
+        z-index: 1;
+      }
+
+      .rr-block {
+        box-sizing: border-box;
+        height: 64px;
+        display: flex;
+        align-items: center;
+        padding: 0 10px;
+        border-radius: 16px;
+        background: rgba(15, 23, 42, 0.74);
+        overflow: hidden;
+      }
+      .rr-block .tb {
+        font-size: 40px;
+      }
+      @media (max-width: 640px) {
+        .rr-block .tb {
+          font-size: 30px;
+        }
+      }
+
+      /* The keyboard strip: the next key lights up while it is not learned yet. */
+      .tk.rr-kb {
+        position: fixed;
+        left: 50%;
+        bottom: max(12px, env(safe-area-inset-bottom));
+        z-index: 12;
+        width: min(94vw, 620px, 80vh);
+        transform: translateX(-50%);
+        pointer-events: none;
+      }
+      .tk.rr-kb[data-hidden] {
+        visibility: hidden;
+      }
+
+      /* Big texts and pops. */
+      .rr-big {
+        position: fixed;
+        left: 50%;
+        top: var(--rr-mid, 50%);
+        z-index: 14;
+        transform: translate(-50%, -50%);
+        width: max-content;
+        max-width: 92vw;
+        text-align: center;
+        color: #fff;
+        font:
+          900 56px/1.1 system-ui,
+          -apple-system,
+          sans-serif;
+        -webkit-text-stroke: 3px #0f172a;
+        paint-order: stroke fill;
+        text-shadow: 0 4px 0 rgba(15, 23, 42, 0.5);
+        pointer-events: none;
+      }
+      .rr-big[hidden] {
+        display: none;
+      }
+      @media (max-width: 480px) {
+        .rr-big {
+          font-size: 40px;
+        }
+      }
+      .rr-big.rr-fade {
+        animation: rr-fade 0.6s ease-in forwards;
+      }
+      @keyframes rr-fade {
+        0% {
+          opacity: 1;
+          transform: translate(-50%, -50%) scale(1);
+        }
+        100% {
+          opacity: 0;
+          transform: translate(-50%, -70%) scale(1.3);
+        }
+      }
+      .rr-layer {
+        position: fixed;
+        inset: 0;
+        z-index: 13;
+        overflow: hidden;
+        pointer-events: none;
+      }
+      .rr-pop {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        color: #fff;
+        font:
+          800 22px system-ui,
+          sans-serif;
+        text-shadow: 0 2px 0 rgba(15, 23, 42, 0.8);
+        animation: rr-pop 1.2s ease-out forwards;
+      }
+      .rr-good {
+        color: #4ade80;
+        font-size: 24px;
+      }
+      @keyframes rr-pop {
+        0% {
+          opacity: 0;
+          margin-top: 10px;
+        }
+        15% {
+          opacity: 1;
+        }
+        75% {
+          opacity: 1;
+        }
+        100% {
+          opacity: 0;
+          margin-top: -24px;
+        }
+      }
+      .rr-splat {
+        position: absolute;
+        transform: translate(-50%, -100%);
+        color: #ffe066;
+        font:
+          900 clamp(30px, 8vmin, 54px) system-ui,
+          sans-serif;
+        -webkit-text-stroke: 3px #1e293b;
+        paint-order: stroke fill;
+        animation: rr-splat 0.8s ease-out forwards;
+      }
+      .rr-splat.hold {
+        animation: none;
+      }
+      @keyframes rr-splat {
+        0% {
+          opacity: 0;
+          transform: translate(-50%, -80%) scale(0.5);
+        }
+        20% {
+          opacity: 1;
+          transform: translate(-50%, -100%) scale(1.15);
+        }
+        80% {
+          opacity: 1;
+        }
+        100% {
+          opacity: 0;
+          transform: translate(-50%, -120%) scale(1);
+        }
+      }
+      .rr-you {
+        position: fixed;
+        z-index: 11;
+        transform: translate(-50%, -100%);
+        color: #ffc928;
+        font:
+          800 16px system-ui,
+          sans-serif;
+        -webkit-text-stroke: 3px #1e293b;
+        paint-order: stroke fill;
+        white-space: nowrap;
+        pointer-events: none;
+      }
+      .rr-you[hidden] {
+        display: none;
+      }
+
+      /* The podium card. */
+      .rr-card {
+        position: fixed;
+        left: 50%;
+        top: 60%;
+        z-index: 15;
+        box-sizing: border-box;
+        width: min(88vw, 420px);
+        max-height: 92vh;
+        overflow-y: auto;
+        padding: 14px 18px 18px;
+        border-radius: 22px;
+        background: rgba(15, 23, 42, 0.94);
+        border: 3px solid #ffc928;
+        color: #fff;
+        font-family: system-ui, sans-serif;
+        text-align: center;
+        transform: translate(-50%, -50%);
+      }
+      .rr-card-title {
+        margin: 0 0 6px;
+        color: #ffd23f;
+        font-size: 30px;
+      }
+      .rr-card-names {
+        margin: 0 0 8px;
+        padding: 0;
+        list-style: none;
+        font-size: 20px;
+        font-weight: 700;
+        line-height: 1.5;
+      }
+      .rr-card-heat {
+        margin: 0 0 4px;
+        color: #cfd6e8;
+        font-size: 17px;
+        font-weight: 700;
+      }
+      .rr-card-space {
+        margin: 0 0 10px;
+        color: #cfd6e8;
+        font-size: 15px;
+      }
+      .rr-card-button {
+        min-width: 160px;
+        height: 56px;
+        padding: 0 28px;
+        border: 0;
+        border-radius: 28px;
+        background: #22c55e;
+        color: #fff;
+        font:
+          800 24px system-ui,
+          sans-serif;
+        cursor: pointer;
+      }
+      @media (max-height: 460px) {
+        .rr-card {
+          padding: 8px 14px 10px;
+        }
+        .rr-card-title {
+          font-size: 22px;
+          margin: 0 0 2px;
+        }
+        .rr-card-names {
+          font-size: 16px;
+          line-height: 1.3;
+          margin: 0 0 4px;
+        }
+        .rr-card-heat,
+        .rr-card-space {
+          font-size: 14px;
+          margin: 0 0 2px;
+        }
+        .rr-card-button {
+          height: 56px;
+        }
+      }
+
+      .rr-note {
+        position: fixed;
+        left: 50%;
+        top: 40%;
+        z-index: 30;
+        box-sizing: border-box;
+        width: min(88vw, 420px);
+        padding: 16px 20px;
+        border-radius: 20px;
+        background: rgba(15, 23, 42, 0.94);
+        border: 2px solid #facc15;
+        color: #fff;
+        font:
+          700 20px/1.35 system-ui,
+          sans-serif;
+        text-align: center;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+      }
+      .rr-note strong {
+        display: block;
+        color: #facc15;
+        font-size: 24px;
+      }
+      .rr-note[hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
