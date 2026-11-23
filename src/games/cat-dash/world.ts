@@ -24,6 +24,7 @@ import { BUSY_SCENERY } from './props/busy-scenery';
 import { ADVENTURE_SCENERY } from './props/adventure-scenery';
 import { EXTRA_SCENERY } from './props/extra-scenery';
 import { TOYS_PIRATES_SCENERY } from './props/toys-pirates-scenery';
+import { ZOO_SCENERY } from './props/zoo-scenery';
 
 /** The scenery repeats every this many units. */
 export const TILE_W = 24;
@@ -217,7 +218,8 @@ export function buildScenery(place: Place, kit: Kit): Group {
     BUSY_SCENERY[place.id as keyof typeof BUSY_SCENERY] ??
     ADVENTURE_SCENERY[place.id as keyof typeof ADVENTURE_SCENERY] ??
     EXTRA_SCENERY[place.id as keyof typeof EXTRA_SCENERY] ??
-    TOYS_PIRATES_SCENERY[place.id as keyof typeof TOYS_PIRATES_SCENERY];
+    TOYS_PIRATES_SCENERY[place.id as keyof typeof TOYS_PIRATES_SCENERY] ??
+    ZOO_SCENERY[place.id as keyof typeof ZOO_SCENERY];
   decor?.(kit, tile, look);
   return tile;
 }
