@@ -1,0 +1,9 @@
+{
+  "id": "recess-run",
+  "title": "Recess Run",
+  "description": "Type fast to sprint past the class at recess!",
+  "thumbnail": "thumbnail.svg",
+  "tags": ["typing", "race", "keyboard", "3d"],
+  "scoring": "score",
+  "section": "typing"
+}
