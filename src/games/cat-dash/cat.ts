@@ -8,7 +8,9 @@ import {
   CylinderGeometry,
   Group,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
+  PlaneGeometry,
   SphereGeometry,
   TorusGeometry,
   type Material,
@@ -426,6 +428,8 @@ export function createCat(initial: CatLook): Cat {
     box: new Group(),
     bucket: new Group(),
     seaweed: new Group(),
+    block: new Group(),
+    crown: new Group(),
   };
   for (const g of Object.values(hats)) {
     g.position.set(0, 0.3, 0);
@@ -530,6 +534,43 @@ export function createCat(initial: CatLook): Cat {
     [0.26, 0.0, 0.3],
   ] as const) {
     kit.box(0.07, h, 0.03, kelp, hats.seaweed, x, 0.02 - h / 2, z);
+  }
+
+  // A letter block and a gold crown.
+  const blockMat = kit.lit(0xff7a3d, 0.6);
+  kit.box(0.34, 0.34, 0.34, blockMat, hats.block, 0, 0.1, 0);
+  const letter = kit.paint(64, 64, (g) => {
+    g.fillStyle = '#ffe9a8';
+    g.fillRect(0, 0, 64, 64);
+    g.fillStyle = '#3f8fd8';
+    g.font = 'bold 48px sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('A', 32, 36);
+  });
+  const letterFace = letter ? new MeshBasicMaterial({ map: letter }) : kit.lit(0xffe9a8, 0.6);
+  if (letter) kit.materials.push(letterFace);
+  for (const [x, z, ry] of [
+    [0, 0.172, 0],
+    [0, -0.172, Math.PI],
+    [0.172, 0, Math.PI / 2],
+    [-0.172, 0, -Math.PI / 2],
+  ] as const) {
+    kit.mesh(new PlaneGeometry(0.28, 0.28), letterFace, hats.block, x, 0.1, z).rotation.y = ry;
+  }
+  const gold = kit.lit(0xf2c230, 0.35);
+  kit.mesh(new CylinderGeometry(0.19, 0.17, 0.12, 16, 1, true), gold, hats.crown, 0, 0.06, 0);
+  kit.mesh(new CylinderGeometry(0.19, 0.17, 0.03, 16), gold, hats.crown, 0, 0.0, 0);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    const x = Math.cos(a) * 0.18;
+    const z = Math.sin(a) * 0.18;
+    kit.mesh(new ConeGeometry(0.05, 0.14, 6), gold, hats.crown, x, 0.19, z);
+    sphere(0.035, 1, 1, 1, kit.lit(0xe0304a, 0.3), hats.crown).position.set(
+      x * 1.02,
+      0.07,
+      z * 1.02,
+    );
   }
 
   // ----- Legs -----
