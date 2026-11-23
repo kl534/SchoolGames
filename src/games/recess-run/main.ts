@@ -76,7 +76,7 @@ import {
   placePoints,
   resultsText,
   rivalSpeed,
-  pickRivalNames,
+  pickRivals,
   shuffleLanes,
   speedStreak,
   stepStride,
@@ -277,9 +277,10 @@ function run(session: TypingSession): void {
   const buildField = () => {
     clearField();
     const lanes = shuffleLanes(Math.random);
-    const names = pickRivalNames(Math.random);
+    const rivals = pickRivals(Math.random);
     const make = (index: number, lane: number): Racer => {
-      const style = index < 0 ? playerLook() : rivalLook(index, lane, Math.random);
+      const style =
+        index < 0 ? playerLook() : rivalLook(index, lane, Math.random, rivals[index].girl);
       const runner = createRunner(style);
       ctx.scene.add(runner.person.root);
       const [lo, hi] = SURGE_PERIOD;
@@ -288,7 +289,7 @@ function run(session: TypingSession): void {
         runner,
         lane,
         index,
-        name: index < 0 ? 'You' : names[index],
+        name: index < 0 ? 'You' : rivals[index].name,
         factor: index < 0 ? 1 : RIVAL_FACTORS[index],
         period: lo + Math.random() * (hi - lo),
         surgePhase: Math.random() * Math.PI * 2,

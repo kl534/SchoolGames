@@ -36,13 +36,19 @@ export const playerLook = (): PersonStyle => ({
 });
 
 /** Rival `index` (0 to 8) in `lane`: its own shirt, and a skin, hair and shorts picked by `random`. */
-export function rivalLook(index: number, lane: number, random: () => number): PersonStyle {
+export function rivalLook(
+  index: number,
+  lane: number,
+  random: () => number,
+  girl = false,
+): PersonStyle {
   const pick = <T>(list: readonly T[]): T => list[Math.floor(random() * list.length) % list.length];
   return {
     shirt: RIVAL_SHIRTS[index % RIVAL_SHIRTS.length],
     pants: pick(SHORTS),
     skin: pick(SKINS),
     hair: pick(HAIRS),
+    girl,
     bib: lane,
   };
 }

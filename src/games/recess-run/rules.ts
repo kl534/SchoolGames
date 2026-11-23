@@ -16,106 +16,119 @@ export const heatWpm = (heat: number): number => START_WPM + (heat - 1);
 
 /** The rivals' pace next to the heat's (slowest to fastest). To go on you must beat 7 of them. */
 export const RIVAL_FACTORS = [0.76, 0.82, 0.88, 0.94, 1.0, 1.06, 1.12, 1.18, 1.24];
-/** Where the rivals' names come from; each race picks 9 different ones. */
-export const RIVAL_NAME_POOL = [
+/** Where the rivals' names come from: girls' names for the girl figures, boys' for the boys. */
+export const RIVAL_GIRL_NAMES = [
   'Mia',
-  'Leo',
   'Zara',
-  'Sam',
   'Ava',
-  'Kai',
-  'Noor',
-  'Ben',
   'Lily',
-  'Max',
   'Ella',
-  'Omar',
   'Ruby',
-  'Finn',
   'Maya',
-  'Jack',
   'Nina',
-  'Theo',
   'Chloe',
-  'Eli',
   'Priya',
-  'Diego',
   'Hana',
-  'Owen',
   'Isla',
-  'Luca',
   'Tara',
-  'Noah',
   'Aisha',
-  'Cole',
-  'Rosa',
-  'Jude',
-  'Mei',
-  'Ivan',
-  'Skye',
-  'Tomas',
-  'Ana',
-  'Rex',
-  'Lena',
-  'Milo',
-  'Yara',
-  'Gus',
-  'Cleo',
-  'Hugo',
-  'Dani',
-  'Nico',
-  'Faith',
-  'Jay',
-  'Pia',
-  'Zane',
-  'Ivy',
-  'Raj',
-  'Willa',
-  'Amir',
-  'Bella',
-  'Cruz',
-  'Daisy',
-  'Enzo',
-  'Fern',
-  'Gabe',
-  'Holly',
-  'Ike',
-  'Jada',
-  'Kofi',
-  'Lola',
-  'Marco',
-  'Nora',
-  'Otis',
-  'Poppy',
-  'Quinn',
-  'Remy',
-  'Stella',
-  'Toby',
-  'Uma',
-  'Vince',
-  'Wren',
-  'Xavi',
-  'Yusuf',
+  'Carmen',
+  'Esme',
+  'Gia',
+  'Sofia',
+  'Emma',
+  'Grace',
   'Zoe',
+  'Lucy',
+  'Rosa',
+  'Amara',
+  'Yuki',
+  'Daisy',
+  'Freya',
+  'Leila',
+  'Jada',
+  'Nora',
+  'Willow',
+  'Piper',
+  'Stella',
+  'Tess',
+  'Anya',
+  'Mei',
+  'Cora',
+  'Bella',
+  'Dana',
+  'Elsa',
+];
+export const RIVAL_BOY_NAMES = [
+  'Leo',
+  'Ben',
+  'Max',
+  'Omar',
+  'Finn',
+  'Jack',
+  'Theo',
+  'Eli',
+  'Diego',
+  'Owen',
+  'Luca',
+  'Noah',
+  'Cole',
   'Andre',
   'Bao',
-  'Carmen',
   'Dev',
-  'Esme',
   'Felix',
-  'Gia',
   'Hank',
+  'Liam',
+  'Mateo',
+  'Jonah',
+  'Ravi',
+  'Hugo',
+  'Ezra',
+  'Milo',
+  'Arlo',
+  'Jasper',
+  'Kofi',
+  'Tomas',
+  'Wes',
+  'Zane',
+  'Ian',
+  'Nico',
+  'Oscar',
+  'Pablo',
+  'Yusuf',
+  'Rafa',
+  'Bruno',
+  'Dean',
+  'Gus',
 ];
+export const RIVAL_NAME_POOL = [...RIVAL_GIRL_NAMES, ...RIVAL_BOY_NAMES];
+
+export interface RivalId {
+  name: string;
+  girl: boolean;
+}
+
+/** `count` different rivals; each is a girl or a boy by `random` and has a name of that kind. */
+export function pickRivals(random: () => number, count = RIVAL_FACTORS.length): RivalId[] {
+  const shuffled = (list: readonly string[]): string[] => {
+    const pool = [...list];
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    return pool;
+  };
+  const girls = shuffled(RIVAL_GIRL_NAMES);
+  const boys = shuffled(RIVAL_BOY_NAMES);
+  return Array.from({ length: count }, () => {
+    const girl = random() < 0.5;
+    return { name: (girl ? girls : boys).pop() as string, girl };
+  });
+}
 
 /** `count` different names from the pool, chosen by `random`. */
-export function pickRivalNames(random: () => number, count = RIVAL_FACTORS.length): string[] {
-  const pool = [...RIVAL_NAME_POOL];
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    [pool[i], pool[j]] = [pool[j], pool[i]];
-  }
-  return pool.slice(0, count);
-}
+export const pickRivalNames = (random: () => number, count = RIVAL_FACTORS.length): string[] =>
+  pickRivals(random, count).map((r) => r.name);
 /** Each rival's speed wobbles ±SURGE with a sine of its own period and phase, so places swap. */
 export const SURGE = 0.08;
 export const SURGE_PERIOD: [number, number] = [6, 10]; // s, random per rival per heat
