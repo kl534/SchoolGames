@@ -887,4 +887,705 @@ export const MEANINGS_GRADE_12: Readonly<Record<string, WordMeaning>> = {
     'so clear that no one can argue',
     'The photo was *incontrovertible* proof that the cat took the fish.',
   ],
+  agglomerate: [
+    'to gather into one big mass',
+    'Tiny bits of dust *agglomerate* into larger clumps under the bed.',
+  ],
+  aphorism: [
+    'a short saying that holds a wise idea',
+    'My grandmother loves to repeat the *aphorism* about slow and steady wins.',
+  ],
+  askance: [
+    'in a way that shows you do not trust it',
+    'The clerk looked *askance* at the torn dollar bill.',
+  ],
+  belie: [
+    'to give a false picture of something',
+    'His calm voice tried to *belie* how nervous he felt.',
+  ],
+  euphonious: [
+    'pleasant to hear',
+    "The choir's *euphonious* voices drifted across the quiet valley.",
+  ],
+  ineptitude: ['a lack of skill', 'His *ineptitude* with a hammer left the shelf crooked.'],
+  insurmountable: [
+    'too big or hard to get past',
+    'The snow piled up into an *insurmountable* wall across the road.',
+  ],
+  oracle: [
+    'a person said to give wise answers about the future',
+    'The village *oracle* was asked when the rains would come.',
+  ],
+  remunerate: [
+    'to pay someone for work',
+    'The town will *remunerate* each volunteer for the hours they gave.',
+  ],
+  amalgamate: [
+    'to join into one thing',
+    'The two small schools will *amalgamate* into a single big one.',
+  ],
+  arboreal: [
+    'living in or among trees',
+    'The *arboreal* monkeys swung from branch to branch all day.',
+  ],
+  heretical: [
+    'against what most people firmly believe',
+    'His *heretical* idea that the Earth was round shocked the old town.',
+  ],
+  pastiche: [
+    'a work made by mixing pieces of other works',
+    'The play was a *pastiche* of old songs and well-known tales.',
+  ],
+  sunder: [
+    'to break apart by force',
+    'The lightning strike seemed to *sunder* the old oak in two.',
+  ],
+  antecedent: [
+    'something that came before another',
+    'The old telegraph was an *antecedent* of the modern phone.',
+  ],
+  attrition: [
+    'a slow wearing away by steady pressure',
+    'Years of *attrition* by wind and rain smoothed the stone steps.',
+  ],
+  averse: [
+    'having a strong dislike for something',
+    'Mia is *averse* to loud crowds and prefers a quiet corner.',
+  ],
+  comport: [
+    'to behave in a certain way',
+    'Students should *comport* themselves politely during the school trip.',
+  ],
+  confidant: [
+    'a close friend you share secrets with',
+    "Jon's older sister was his trusted *confidant* all through the year.",
+  ],
+  conglomerate: [
+    'a mixture of many different things',
+    'The cliff is a *conglomerate* of pebbles pressed into hard rock.',
+  ],
+  consign: [
+    "to give something over to another's care",
+    'He chose to *consign* the old letters to the museum for safe keeping.',
+  ],
+  detractor: [
+    'a person who finds fault with someone',
+    "Even the film's *detractors* admitted that the music was lovely.",
+  ],
+  disclaim: [
+    'to say you have no part in something',
+    'The mayor did *disclaim* any link to the unfair rule.',
+  ],
+  disseminate: [
+    'to spread information far and wide',
+    'The school will *disseminate* the new schedule by email today.',
+  ],
+  enrapture: [
+    'to fill with great joy',
+    "The magician's final trick will *enrapture* the whole audience.",
+  ],
+  espy: ['to catch sight of something', 'At the edge of the pond, we could *espy* a shy heron.'],
+  estranged: [
+    'no longer friendly or close',
+    'The *estranged* cousins finally talked after ten quiet years.',
+  ],
+  farcical: [
+    'so silly that it is almost a joke',
+    'The *farcical* race ended with both runners tripping over a goat.',
+  ],
+  figurative: [
+    'using words in a creative, not exact, way',
+    'Saying my heart is a drum is a *figurative* way to describe fear.',
+  ],
+  flux: [
+    'a state of constant change',
+    'Our plans were in *flux* because the weather kept shifting.',
+  ],
+  fruition: [
+    'the point when a plan comes true',
+    'After years of work, her dream of a garden came to *fruition*.',
+  ],
+  incognito: [
+    'hiding who you are with a disguise',
+    'The famous singer walked *incognito* in a hat and big glasses.',
+  ],
+  incumbent: [
+    'resting on someone as a duty',
+    'It is *incumbent* on every driver to stop at a red light.',
+  ],
+  invulnerable: [
+    'impossible to harm or damage',
+    'The knight felt *invulnerable* inside his thick, shiny armor.',
+  ],
+  irrevocable: [
+    'not able to be undone or changed',
+    'Once the letter is mailed, the choice becomes *irrevocable*.',
+  ],
+  officiate: [
+    'to be in charge of a game or event',
+    'Our coach will *officiate* the final match of the season.',
+  ],
+  ordain: [
+    'to order by law or authority',
+    'The old law did *ordain* that every shop close on Sunday.',
+  ],
+  orchestrate: [
+    'to plan and direct many parts of something',
+    'Dad helped *orchestrate* the surprise party with six friends.',
+  ],
+  pestilence: [
+    'a deadly disease that spreads quickly',
+    'Old tales speak of a *pestilence* that emptied whole villages.',
+  ],
+  propound: [
+    'to put forward an idea for others to think about',
+    'The scientist will *propound* a new theory at the meeting.',
+  ],
+  quash: ['to put a stop to something firmly', 'The judge chose to *quash* the unfair ruling.'],
+  resonant: [
+    'deep, full and echoing',
+    'The bell gave a *resonant* tone that carried over the hills.',
+  ],
+  sate: ['to fill up completely', 'A huge bowl of soup will *sate* even the hungriest hiker.'],
+  servitude: [
+    'a state of being forced to work for others',
+    'The tale tells of a boy who escaped years of *servitude*.',
+  ],
+  sycophantic: [
+    'too eager to please someone important',
+    'His *sycophantic* praise of the coach made the team roll their eyes.',
+  ],
+  synopsis: [
+    'a short summary of a story or article',
+    'Read the *synopsis* on the back to learn what the book is about.',
+  ],
+  unflinching: [
+    'not showing fear or doubt',
+    'She gave an *unflinching* stare while the thunder rolled overhead.',
+  ],
+  contingency: [
+    'a future event that might happen but is not certain',
+    'We packed extra food as a *contingency* against delays.',
+  ],
+  ascendant: ['rising in power or influence', 'The *ascendant* team won its fifth game in a row.'],
+  abrade: [
+    'to wear away by rubbing',
+    'Sand and wind will *abrade* the paint from a fence over time.',
+  ],
+  acme: [
+    'the highest point of something',
+    'The pianist reached the *acme* of her skill at age thirty.',
+  ],
+  adjudicate: [
+    'to act as judge and settle a matter',
+    'A neutral teacher will *adjudicate* the debate between the teams.',
+  ],
+  adjunct: [
+    'something added to a main thing, but not essential',
+    'The new gym is an *adjunct* to the school library.',
+  ],
+  agog: [
+    'very excited and eager to know more',
+    'The class was *agog* when the visitor opened the mystery box.',
+  ],
+  allusion: [
+    'a short mention of something without naming it',
+    'His joke was an *allusion* to a story we all read last year.',
+  ],
+  aperture: [
+    'a small opening, often to let light in',
+    'Light poured through a narrow *aperture* in the barn wall.',
+  ],
+  asinine: [
+    'very silly and showing poor sense',
+    'It was *asinine* to leave the cake out where the dog could reach it.',
+  ],
+  bailiwick: [
+    'the area of work that a person knows best',
+    "Fixing bikes is Tom's *bailiwick*, so ask him about the chain.",
+  ],
+  beget: [
+    'to cause something to come into being',
+    'Kindness tends to *beget* more kindness in a school.',
+  ],
+  bifurcate: ['to divide into two parts', 'The river will *bifurcate* just past the old mill.'],
+  blithely: [
+    'in a happy and carefree way',
+    'He *blithely* skipped through the puddles without a thought.',
+  ],
+  bode: [
+    'to be a sign of what will come',
+    'Dark clouds *bode* a storm over the lake this afternoon.',
+  ],
+  bonhomie: [
+    'a cheerful and friendly manner',
+    'The cook greeted every guest with warm *bonhomie*.',
+  ],
+  cerulean: [
+    'a deep, bright blue like a clear sky',
+    'The *cerulean* sea sparkled under the noon sun.',
+  ],
+  ambulatory: ['able to walk around', 'The *ambulatory* patient strolled the hallway after lunch.'],
+  circumnavigate: [
+    'to travel all the way around something',
+    'The crew plans to *circumnavigate* the island in two days.',
+  ],
+  clarion: [
+    'loud, clear and stirring',
+    'The coach gave a *clarion* call, and the team ran onto the field.',
+  ],
+  cloy: [
+    'to make someone tired of too much sweetness',
+    'Too much frosting will *cloy* even the biggest cake lover.',
+  ],
+  cognate: [
+    'having the same origin or root',
+    'Night and nacht are *cognate* words from two languages.',
+  ],
+  compatriot: [
+    'a person from your own country',
+    'At the games, she cheered for every *compatriot* on the field.',
+  ],
+  conversant: [
+    'well informed about a subject',
+    'Ruth is *conversant* with every planet and moon in the sky.',
+  ],
+  countermand: [
+    'to cancel an order that was already given',
+    'The captain had to *countermand* his first order when the wind changed.',
+  ],
+  deterrent: [
+    'something that discourages an action',
+    'A tall fence is a good *deterrent* for wandering goats.',
+  ],
+  dictum: [
+    'a short, firm statement of a rule',
+    'Her coach had one *dictum*, which was to practice before play.',
+  ],
+  digression: [
+    'a step away from the main subject',
+    "The teacher's *digression* about birds made the lesson run long.",
+  ],
+  diminution: [
+    'a lessening in size or amount',
+    "We noticed a *diminution* in the river's flow after the dry spell.",
+  ],
+  doldrums: [
+    'a time of low spirits or no activity',
+    'The team fell into the *doldrums* after losing three games.',
+  ],
+  drivel: [
+    'silly talk that means nothing',
+    'Nobody could follow the *drivel* he spouted after the long ride.',
+  ],
+  evocative: [
+    'bringing strong memories or feelings to mind',
+    'The smell of pine was *evocative* of every camping trip.',
+  ],
+  exponent: [
+    'a person who speaks up for an idea',
+    'She is a strong *exponent* of planting trees in the park.',
+  ],
+  fissure: [
+    'a long, narrow crack in something',
+    'A *fissure* opened in the dry mud after the heat wave.',
+  ],
+  forebear: [
+    'a person from whom you are descended',
+    'Her *forebear* sailed across the sea in a tiny wooden boat.',
+  ],
+  formative: [
+    'having a big effect on how someone grows',
+    'Those *formative* years in the country taught him to love nature.',
+  ],
+  acquisitive: [
+    'eager to get and keep many things',
+    'The *acquisitive* collector bought every stamp in the shop.',
+  ],
+  hobnob: [
+    'to spend time with important people',
+    'At the fair, the mayor likes to *hobnob* with all the farmers.',
+  ],
+  implication: [
+    'something that is suggested without being said',
+    'The *implication* of his smile was that he had won.',
+  ],
+  inception: [
+    'the very start of something',
+    'Since its *inception*, the club has helped many kids learn chess.',
+  ],
+  indignity: [
+    "an act that hurts a person's pride",
+    'It was an *indignity* to be left out of the team photo.',
+  ],
+  insinuation: [
+    'a sly hint that something bad is true',
+    'I did not like his *insinuation* that I took the cookie.',
+  ],
+  instigator: ['a person who starts trouble', 'The *instigator* of the prank was never found out.'],
+  intersperse: [
+    'to place here and there among other things',
+    'She chose to *intersperse* red tulips among the white ones.',
+  ],
+  lackey: [
+    'a person who serves another in a servile way',
+    "The duke's *lackey* ran to carry every parcel.",
+  ],
+  leviathan: [
+    'something that is huge and strong',
+    'A *leviathan* of a ship loomed over the little dock.',
+  ],
+  levitate: [
+    'to rise and float in the air',
+    'The magician made the scarf *levitate* above the stage.',
+  ],
+  macabre: [
+    'strange and spooky in a gloomy way',
+    'The old house had a *macabre* look, with bare, twisting trees.',
+  ],
+  mediator: [
+    'a person who helps two sides settle an argument',
+    'A kind *mediator* helped the two clubs share the field.',
+  ],
+  meld: ['to blend into a single whole', 'Cooks *meld* herbs and spices to build a rich flavor.'],
+  microcosm: [
+    'a small thing that shows a larger whole',
+    'The school is a *microcosm* of the whole town.',
+  ],
+  nether: ['located beneath or below', 'Bats nest in the *nether* parts of the dark cave.'],
+  oratory: [
+    'the art of giving fine speeches',
+    'Her *oratory* held the whole room still for an hour.',
+  ],
+  overwrought: [
+    'too nervous and upset',
+    'The *overwrought* actor forgot every line on opening night.',
+  ],
+  palpitate: ['to beat fast and hard', 'My heart began to *palpitate* when the lights went out.'],
+  cynicism: [
+    'a belief that people act only for selfish reasons',
+    'His *cynicism* made him doubt every kind offer.',
+  ],
+  parlance: [
+    'a way of speaking used by a certain group',
+    'In sailing *parlance*, a rope is called a line.',
+  ],
+  pastoral: [
+    'about quiet country life',
+    'The painting showed a *pastoral* scene of sheep and green hills.',
+  ],
+  perimeter: [
+    'the outer edge of an area',
+    'We walked the *perimeter* of the field before the game.',
+  ],
+  persona: [
+    'the character a person shows to others',
+    'On stage, the singer takes on a bold, silly *persona*.',
+  ],
+  populace: [
+    'all the people who live in a place',
+    'The whole *populace* turned out to watch the parade.',
+  ],
+  presumption: [
+    'something taken as true without proof',
+    'It was a safe *presumption* that the bus would be late.',
+  ],
+  protocol: [
+    'the set of rules for how to act in a setting',
+    'The *protocol* for the visit says to bow at the door.',
+  ],
+  prototype: [
+    'the first model of a new invention',
+    'The engineer tested a *prototype* of the little robot.',
+  ],
+  purview: [
+    'the limit of what someone is in charge of',
+    "Picking the menu is within the cook's *purview*.",
+  ],
+  recourse: [
+    'a choice you turn to for help',
+    'With the door locked, our only *recourse* was to call the janitor.',
+  ],
+  remedial: [
+    'meant to fix a problem or help someone catch up',
+    'Sam took a *remedial* class to improve his reading.',
+  ],
+  rumination: [
+    'deep thought about something',
+    'After long *rumination*, Eli chose to join the choir.',
+  ],
+  rupture: ['a sudden break or tear', 'A *rupture* in the water pipe flooded the basement.'],
+  secede: ['to formally pull out of a group', 'The small town voted to *secede* from the county.'],
+  soliloquy: [
+    'a speech where a character thinks aloud alone',
+    'The actor spoke a long *soliloquy* alone on the dim stage.',
+  ],
+  spectral: [
+    'like a ghost, pale and strange',
+    'A *spectral* mist floated over the quiet pond at dawn.',
+  ],
+  stagnate: ['to stop growing or moving', 'Water will *stagnate* if it has nowhere to flow.'],
+  subjugation: [
+    'the act of bringing a people under control',
+    'The story tells of the *subjugation* of a small kingdom.',
+  ],
+  subsidize: [
+    'to help pay for something with money',
+    'The town will *subsidize* bus rides for students this year.',
+  ],
+  summation: [
+    'a short wrap-up of the main points',
+    "The lawyer's *summation* took only five minutes.",
+  ],
+  timbre: ['the special quality of a sound or voice', 'The cello has a deep, warm *timbre*.'],
+  transcribe: [
+    'to write down in full what was said or played',
+    'A helper will *transcribe* the interview from the tape.',
+  ],
+  traverse: ['to travel across an area', 'The hikers will *traverse* the ridge before noon.'],
+  vacillation: [
+    'a back-and-forth change of mind',
+    'After much *vacillation*, he picked the blue jacket.',
+  ],
+  vernal: [
+    'of or like the season of spring',
+    'The *vernal* breeze carried the scent of fresh grass.',
+  ],
+  vulpine: ['like a fox, sly and clever', "The thief's *vulpine* grin made the guard suspicious."],
+  destitution: [
+    'the state of having no money or belongings',
+    'The flood left many families in *destitution*.',
+  ],
+  acerbity: [
+    'a sharp, bitter quality in speech or taste',
+    "The critic's *acerbity* made the young author wince.",
+  ],
+  aficionado: [
+    'a person who loves and knows a lot about something',
+    'Every train *aficionado* in town came to see the old engine.',
+  ],
+  ambit: [
+    'the range or limits of something',
+    "Fixing the roof falls outside the *ambit* of the club's work.",
+  ],
+  ancillary: [
+    'giving help to something more important',
+    'The nurse did *ancillary* jobs like filing and fetching blankets.',
+  ],
+  arrant: [
+    'complete, in a bad way',
+    'Wearing mismatched boots to the dance was *arrant* nonsense.',
+  ],
+  artless: [
+    'simple and honest, with no tricks',
+    'The child gave an *artless* smile and told the plain truth.',
+  ],
+  baneful: ['causing harm or ruin', 'The *baneful* weeds choked every bean plant in the garden.'],
+  debilitating: ['making a person very weak', 'A *debilitating* fever kept her in bed for a week.'],
+  bruit: [
+    'to spread a story far and wide',
+    'People began to *bruit* the news of the festival all over town.',
+  ],
+  burgeoning: [
+    'growing and increasing fast',
+    'The *burgeoning* town added a new school every two years.',
+  ],
+  cavalcade: [
+    'a long, showy line of riders or vehicles',
+    'A *cavalcade* of horses and wagons rolled through the square.',
+  ],
+  ceremonious: [
+    'full of formal manners and rituals',
+    'The mayor gave a *ceremonious* bow before cutting the ribbon.',
+  ],
+  chromatic: ['having to do with color', 'The painter loved the *chromatic* glow of the sunset.'],
+  conscript: [
+    'to order someone to serve',
+    'The village will *conscript* every strong helper for the harvest.',
+  ],
+  curator: [
+    "a person who takes care of a museum's collection",
+    'The *curator* hung each painting with great care.',
+  ],
+  declivity: [
+    'a downward slope of land',
+    'The sled raced down the long *declivity* behind the barn.',
+  ],
+  denude: [
+    'to strip a thing of its covering',
+    'A hard frost can *denude* the trees of every leaf.',
+  ],
+  dilate: [
+    'to become wider or larger',
+    'Your pupils *dilate* in a dark room to let in more light.',
+  ],
+  evanescence: [
+    'the quality of quickly fading away',
+    'We admired the *evanescence* of morning mist over the lake.',
+  ],
+  expatriate: [
+    'a person who lives outside their home country',
+    'The *expatriate* missed her home village but loved her new city.',
+  ],
+  glutinous: [
+    'thick and sticky like glue',
+    'The *glutinous* rice clung to the spoon in a thick lump.',
+  ],
+  defamation: [
+    "false words that harm someone's good name",
+    'The baker sued over the *defamation* printed in the paper.',
+  ],
+  impalpable: [
+    'too faint or fine to be touched or grasped',
+    'An *impalpable* mist hung over the field at dawn.',
+  ],
+  impetuosity: [
+    'a tendency to act quickly without thinking',
+    'His *impetuosity* made him jump in before checking the water.',
+  ],
+  inglorious: [
+    'bringing shame, not honor',
+    "The team's *inglorious* loss ended with a long, quiet bus ride.",
+  ],
+  interstice: [
+    'a small gap between things',
+    'Tiny ferns grew in each *interstice* of the stone wall.',
+  ],
+  leaven: [
+    'to lighten or brighten with a touch of something',
+    'A joke can *leaven* a long, serious meeting.',
+  ],
+  odoriferous: [
+    'giving off a strong smell',
+    'The *odoriferous* cheese filled the kitchen with its sharp scent.',
+  ],
+  oxymoron: [
+    'a phrase made of two words that seem to oppose each other',
+    'Jumbo shrimp is a funny *oxymoron* about size.',
+  ],
+  connote: [
+    'to suggest a meaning beyond the plain one',
+    'The word home can *connote* warmth and safety.',
+  ],
+  futility: [
+    'the state of being useless or without result',
+    'She saw the *futility* of pushing the stuck car alone.',
+  ],
+  precis: [
+    'a short summary of a longer text',
+    'Write a one-page *precis* of the chapter for class.',
+  ],
+  presentiment: [
+    'a strong feeling that something will happen',
+    'A *presentiment* of rain made her pack an umbrella.',
+  ],
+  priggish: [
+    'too proper and quick to judge others',
+    'His *priggish* frown showed he disliked our silly game.',
+  ],
+  putrescent: [
+    'rotting and giving off a bad smell',
+    'The *putrescent* fruit left in the sun attracted flies.',
+  ],
+  stasis: [
+    'a state in which nothing changes',
+    'The town seemed in *stasis*, with no new shops for years.',
+  ],
+  susurrus: ['a soft whispering sound', 'A *susurrus* of leaves came from the quiet forest.'],
+  trammel: [
+    'to hold back or limit freedom',
+    'Do not let fear *trammel* your hopes for the new year.',
+  ],
+  ululate: [
+    'to cry out in a long, high wail',
+    'The wolves began to *ululate* under the full moon.',
+  ],
+  umbrageous: ['giving lots of shade', 'We picnicked under an *umbrageous* maple at the park.'],
+  unguent: [
+    'a soft, smooth cream for the skin',
+    'The nurse spread a cool *unguent* on the sore spot.',
+  ],
+  urbanity: [
+    'smooth, polite and cultured manners',
+    "The host's *urbanity* put every nervous guest at ease.",
+  ],
+  yammer: ['to talk loudly and on and on', 'The parrots *yammer* from sunrise until dusk.'],
+  amenity: [
+    'something that makes a place nice to be in',
+    "The campground's best *amenity* was a hot shower.",
+  ],
+  apace: ['at a fast speed', 'Work on the new bridge is going *apace*.'],
+  auspices: [
+    'the support or guidance of a group',
+    'The fair is held under the *auspices* of the town library.',
+  ],
+  alluvial: [
+    'made of soil left behind by a river',
+    'The river left rich *alluvial* soil across the farmland.',
+  ],
+  compeer: [
+    'a person of the same rank as you',
+    'She chatted with her *compeer* from the next classroom.',
+  ],
+  concatenate: [
+    'to join things in a chain',
+    'The program will *concatenate* the two lists into one.',
+  ],
+  conjoin: ['to join together', 'The two streams *conjoin* below the old mill.'],
+  crabbed: ['grumpy and hard to please', 'The *crabbed* clerk scowled at every customer.'],
+  donnish: [
+    'like a scholar, serious about books',
+    'His *donnish* talk of old maps bored the picnic crowd.',
+  ],
+  fulgent: ['shining brightly', 'The *fulgent* moon lit the whole snowy field.'],
+  harrow: ['to cause deep worry or pain', 'The long wait for news began to *harrow* the family.'],
+  anarchic: [
+    'without any rules or order',
+    'The *anarchic* playground had no rules and no referee.',
+  ],
+  illimitable: ['without any limit', 'The *illimitable* sea stretched past the horizon.'],
+  supernal: ['of heaven or the sky above', 'The choir sang with *supernal* beauty.'],
+  aspersions: [
+    'unfair remarks that harm a good name',
+    "He cast *aspersions* on the cook's honest work.",
+  ],
+  attenuated: ['made thin or weak', 'The *attenuated* beam of light barely lit the hall.'],
+  elocution: [
+    'the skill of speaking clearly and well',
+    'The teacher praised her clear *elocution* in the play.',
+  ],
+  hinterland: [
+    'the land far from towns or the coast',
+    'Farmers from the *hinterland* brought corn to the market.',
+  ],
+  incantation: [
+    'words said as a magic spell',
+    'The wizard in the tale spoke an *incantation* over the pot.',
+  ],
+  inflection: [
+    'a change in the pitch of the voice',
+    'Her voice rose with a clear *inflection* at the end of the question.',
+  ],
+  insignia: [
+    'a badge that shows rank or membership',
+    'Each scout wore an *insignia* on the sleeve.',
+  ],
+  largess: [
+    'generous gifts of money or help',
+    'The town thanked the baker for her *largess* at the fair.',
+  ],
+  monolith: ['a single huge block of stone', 'A lone *monolith* stood in the middle of the field.'],
+  patrimony: [
+    'wealth or traditions passed down from parents',
+    'The old farm was his *patrimony*, left by his grandfather.',
+  ],
+  perspicuity: [
+    'the quality of being clear and easy to follow',
+    'The *perspicuity* of her essay made it easy to read.',
+  ],
+  retrospect: ['a look back at past events', 'In *retrospect*, we should have packed more snacks.'],
+  rostrum: [
+    'a raised stage for a speaker',
+    'The principal stepped up to the *rostrum* and tapped the mic.',
+  ],
 };
