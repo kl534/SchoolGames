@@ -1,7 +1,10 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { moveEvents } from '../src/games/cat-dash/moves';
 import { OBSTACLE_IDS } from '../src/games/cat-dash/places';
 import {
+  CAT_CLIPS,
   catCallCurves,
   HISS_SECONDS,
   hissSamples,
@@ -33,6 +36,19 @@ describe('Cat Dash sounds', () => {
   it('has the four new cat sounds', () => {
     for (const name of ['meow', 'yowl', 'purr', 'hiss']) {
       expect(typeof (sfx as Record<string, unknown>)[name]).toBe('function');
+    }
+  });
+});
+
+describe('recorded cat sounds', () => {
+  it('has every clip in public/sfx/cat and lists it in SOURCES.md', () => {
+    const dir = resolve(import.meta.dirname, '../public/sfx/cat');
+    const sources = readFileSync(resolve(dir, 'SOURCES.md'), 'utf8');
+    for (const files of Object.values(CAT_CLIPS)) {
+      for (const file of files) {
+        expect(existsSync(resolve(dir, `${file}.mp3`)), file).toBe(true);
+        expect(sources).toContain(`${file}.mp3`);
+      }
     }
   });
 });

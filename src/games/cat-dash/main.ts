@@ -9,7 +9,7 @@ import {
   Vector3,
 } from 'three';
 import { pressAnswers } from '../../shared/answers';
-import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
+import { preloadCatSounds, sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
 import { createFactFeed, type FactFeed } from '../../shared/feed';
 import { createPointerInput } from '../../shared/input';
 import { hideFactMap, showFactMap } from '../../shared/maps';
@@ -1337,5 +1337,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
 const lerpNumber = (a: number, b: number, t: number) => a + (b - a) * t;
 
 const session = startGameSession(GAME_ID);
-if (session) run(session, devOptions());
-else location.replace(menuUrl());
+if (session) {
+  preloadCatSounds();
+  run(session, devOptions());
+} else location.replace(menuUrl());
