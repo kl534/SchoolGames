@@ -38,6 +38,10 @@ A side-view endless run: pick one of five cats, then run through places (house: 
 - `dev.ts`: dev query hooks (`parseDev`, `devOptions`)
 - `voice.ts`: every spoken line that is not a fact (`VOICE_LINES`)
 
+## Sounds
+
+- The meow (three kitten meows at random), yowl and hiss are real CC0 cat recordings in `public/sfx/cat/` (sources in its `SOURCES.md`), played by `sfx` in `src/shared/audio.ts` (`CAT_CLIPS`); `main.ts` preloads them with `preloadCatSounds()`. Until they load the synthesised ones play. The purr is still synthesised.
+
 ## Dev hooks
 
 - `?cat=<orange|black|tuxedo|calico|grey-tabby>`: skip the picker with that cat. `?lives=1|2|3`.

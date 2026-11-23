@@ -219,7 +219,7 @@ export function stopSpeaking(): void {
   synth()?.cancel();
 }
 
-// ---------- Sound effects (synthesised, no files) ----------
+// ---------- Sound effects (synthesised, apart from the recorded cat sounds) ----------
 
 let context: AudioContext | null = null;
 
@@ -683,6 +683,66 @@ function play(fn: (ctx: AudioContext, now: number) => void): void {
   fn(ctx, ctx.currentTime);
 }
 
+// ---------- Recorded sound effects ----------
+
+/**
+ * Real cat recordings in `public/sfx/cat/` (CC0, see its SOURCES.md), by sound. A sound plays
+ * one of its files at random; until they load (or if they can't) the synthesised one plays.
+ */
+export const CAT_CLIPS = {
+  meow: ['meow-1', 'meow-2', 'meow-3'],
+  yowl: ['yowl'],
+  hiss: ['hiss'],
+} as const;
+
+/** How loud the recordings play (they are loudness-normalised). */
+const RECORDED_VOLUME = 0.8;
+
+/** Each recording once it has loaded; null if it failed. */
+const recordings = new Map<string, AudioBuffer | null>();
+const recordingLoads = new Set<string>();
+
+function loadRecording(file: string, ctx: AudioContext): void {
+  if (recordingLoads.has(file)) return;
+  recordingLoads.add(file);
+  void fetch(`${import.meta.env.BASE_URL}sfx/cat/${file}.mp3`)
+    .then((response) => (response.ok ? response.arrayBuffer() : null))
+    .then((data) => (data ? ctx.decodeAudioData(data) : null))
+    .catch(() => null)
+    .then((buffer) => recordings.set(file, buffer));
+}
+
+/** Starts fetching the cat recordings so the first meow is a real one. */
+export function preloadCatSounds(): void {
+  const ctx = audioContext();
+  if (!ctx) return;
+  for (const files of Object.values(CAT_CLIPS)) for (const f of files) loadRecording(f, ctx);
+}
+
+/** The file each sound played last, so a meow doesn't repeat straight away. */
+const lastRecording = new Map<readonly string[], string>();
+
+/** Plays one of `files` at a slightly random speed, or `fallback` while none has loaded. */
+function playRecording(files: readonly string[], fallback: () => void): void {
+  if (muted) return;
+  const ctx = audioContext();
+  if (!ctx) return;
+  for (const f of files) loadRecording(f, ctx);
+  if (ctx.state !== 'running') return;
+  const ready = files.filter((f) => recordings.get(f));
+  if (ready.length === 0) return fallback();
+  const fresh = ready.length > 1 ? ready.filter((f) => f !== lastRecording.get(files)) : ready;
+  const file = fresh[Math.floor(Math.random() * fresh.length)];
+  lastRecording.set(files, file);
+  const source = ctx.createBufferSource();
+  source.buffer = recordings.get(file) ?? null;
+  source.playbackRate.value = 0.94 + Math.random() * 0.12;
+  const gain = ctx.createGain();
+  gain.gain.value = RECORDED_VOLUME;
+  source.connect(gain).connect(ctx.destination);
+  source.start();
+}
+
 /** The four low notes of the invaders' march (Hz). */
 const MARCH_NOTES = [98, 87, 78, 73];
 
@@ -957,14 +1017,14 @@ export const sfx = {
       tone(ctx, 'triangle', 1150, 800, t + 0.3, 0.11, 0.14);
       tone(ctx, 'triangle', 1150, 800, t + 0.42, 0.11, 0.14);
     }),
-  /** A cat's meow ("mi-a-ow", see `MEOW`), a little different in pitch and length each time. */
-  meow: () => play((ctx, t) => catVoice(ctx, t, varied(MEOW))),
-  /** A yowl: a long wavering cry (see `YOWL`), a little different each time. */
-  yowl: () => play((ctx, t) => catVoice(ctx, t, varied(YOWL))),
+  /** A kitten's meow: one of three real recordings (`CAT_CLIPS`), synthesised until they load. */
+  meow: () => playRecording(CAT_CLIPS.meow, () => play((ctx, t) => catVoice(ctx, t, varied(MEOW)))),
+  /** A yowl: a long real meow (`CAT_CLIPS`), synthesised (see `YOWL`) until it loads. */
+  yowl: () => playRecording(CAT_CLIPS.yowl, () => play((ctx, t) => catVoice(ctx, t, varied(YOWL)))),
   /** A purr: about 25 soft rattles a second, breathing out then in, 0.9 s (see `purrSamples`). */
   purr: () => play(playPurr),
-  /** An angry hiss: a sharp spit, then rough breathy noise that fades, 0.75 s (see `hissSamples`). */
-  hiss: () => play(playHiss),
+  /** An angry hiss: a real recording (`CAT_CLIPS`), synthesised (`hissSamples`) until it loads. */
+  hiss: () => playRecording(CAT_CLIPS.hiss, () => play(playHiss)),
   /** A school bell ringing for 1.6 s. */
   bell: () =>
     play((ctx, t) => {
