@@ -22,6 +22,7 @@ import { MEANINGS_GRADE_8 } from './meanings-grade-8';
 import { MEANINGS_GRADE_9 } from './meanings-grade-9';
 import { MEANINGS_GRADE_10 } from './meanings-grade-10';
 import { MEANINGS_GRADE_11 } from './meanings-grade-11';
+import { MEANINGS_GRADE_12 } from './meanings-grade-12';
 import type { PartOfSpeech, VocabRow, WordMeaning } from './types';
 
 export type { PartOfSpeech, VocabRow, WordMeaning } from './types';
@@ -50,7 +51,7 @@ export const VOCAB_GRADES: VocabGrade[] = [
   { id: '9', title: 'Grade 9', rows: GRADE_9, meanings: MEANINGS_GRADE_9 },
   { id: '10', title: 'Grade 10', rows: GRADE_10, meanings: MEANINGS_GRADE_10 },
   { id: '11', title: 'Grade 11', rows: GRADE_11, meanings: MEANINGS_GRADE_11 },
-  { id: '12', title: 'Grade 12', rows: GRADE_12 },
+  { id: '12', title: 'Grade 12', rows: GRADE_12, meanings: MEANINGS_GRADE_12 },
   { id: 'college', title: 'College', rows: GRADE_COLLEGE },
 ];
 export const SETS_PER_GRADE = 6;
