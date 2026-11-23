@@ -29,6 +29,7 @@ import {
   ENTRY_SPEED,
   VISIT_LENGTH,
   approach,
+  fishPoints,
   fishTrailLength,
   leapLift,
   LEAP_REACH,
@@ -184,6 +185,7 @@ describe('approach and sprint', () => {
     for (let r = 0; r < 1; r += 0.05) seen.add(fishTrailLength(r));
     expect([...seen].sort()).toEqual([...FISH_TRAIL]);
     expect(fishTrailLength(0.999)).toBe(5);
+    expect([1, 2, 3, 4, 5].map(fishPoints)).toEqual([25, 50, 75, 100, 125]);
   });
 });
 
