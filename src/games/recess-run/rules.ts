@@ -78,6 +78,38 @@ export function easeSpeed(speed: number, target: number, dt: number): number {
 /** Words a minute shown for a rate in keys a second. */
 export const wpmOf = (rate: number): number => Math.round(rate * 12);
 
+// ---------- The words a minute on the HUD ----------
+
+/** The HUD's words a minute count the right keys of the last this many seconds. */
+export const WPM_WINDOW = 10;
+/** Until this many seconds have passed since the first right key, it is counted over this span. */
+export const WPM_MIN_SPAN = 3;
+/** Seconds the shown number takes to close most of the gap to the sustained one. */
+export const WPM_EASE_SECONDS = 0.6;
+
+/**
+ * Sustained words a minute: the right keys typed in the last `WPM_WINDOW` s (of `rightTimes`, race
+ * seconds) over that span, or over the time since the first right key `firstAt` while that is
+ * shorter (never under `WPM_MIN_SPAN`). Pauses and face-plants count as time, so it falls when
+ * the player stops. 0 before the first right key.
+ */
+export function sustainedWpm(
+  rightTimes: readonly number[],
+  firstAt: number | null,
+  now: number,
+): number {
+  if (firstAt === null) return 0;
+  const from = now - WPM_WINDOW;
+  const keys = rightTimes.filter((at) => at > from && at <= now).length;
+  const span = Math.max(WPM_MIN_SPAN, Math.min(WPM_WINDOW, now - firstAt));
+  return wpm(keys, span);
+}
+
+/** One step of easing the shown words a minute towards the sustained one. */
+export function easeWpm(shown: number, target: number, dt: number): number {
+  return shown + (target - shown) * Math.min(1, dt / WPM_EASE_SECONDS);
+}
+
 // ---------- Mistakes ----------
 
 export type Stride =

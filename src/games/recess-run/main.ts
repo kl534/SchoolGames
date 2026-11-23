@@ -82,7 +82,9 @@ import {
   stepStride,
   strideSpeedFactor,
   targetSpeed,
-  wpmOf,
+  easeWpm,
+  sustainedWpm,
+  WPM_WINDOW,
   type BlockResult,
   type RunnerMark,
   type Stride,
@@ -235,6 +237,11 @@ function run(session: TypingSession): void {
   // The player's typing.
   let rate = 0;
   let lastRight = 0;
+  /** Race seconds of the right keys of the last `WPM_WINDOW` s, and of the heat's first right key. */
+  let rightTimes: number[] = [];
+  let firstRightAt: number | null = null;
+  /** The words a minute on the HUD, eased towards the sustained one. */
+  let shownWpm = 0;
   let stride: Stride = { kind: 'run' };
   let missesInRow = 0;
   let blockOn = false;
@@ -506,6 +513,9 @@ function run(session: TypingSession): void {
     const gap = t - lastRight;
     rate = nextRate(rate, gap);
     lastRight = t;
+    firstRightAt ??= t;
+    rightTimes.push(t);
+    while (rightTimes.length > 0 && rightTimes[0] <= t - WPM_WINDOW) rightTimes.shift();
     missesInRow = 0;
     score += keyPoints(playLevel);
     hud.setScore(score, session.highScore(), multiplier(playLevel));
@@ -662,6 +672,9 @@ function run(session: TypingSession): void {
     t = 0;
     rate = dev?.wpm ? dev.wpm / 12 : 0;
     lastRight = 0;
+    rightTimes = [];
+    firstRightAt = null;
+    shownWpm = dev?.wpm ?? 0;
     stride = dev?.faceplant
       ? { kind: 'down', t: 0.9 }
       : dev?.stumble
@@ -985,8 +998,12 @@ function run(session: TypingSession): void {
 
     // The HUD.
     if (phase === 'racing') {
-      const live = liveRate(rate, t - lastRight);
-      hud.setSpeed(wpmOf(live), (live * 12) / heatWpm(heat));
+      // The sustained speed, not the key-to-key rate the runner uses, so the number holds steady.
+      // `?wpm=` shows its number until the first right key.
+      const sustained =
+        firstRightAt === null && dev?.wpm ? dev.wpm : sustainedWpm(rightTimes, firstRightAt, t);
+      shownWpm = easeWpm(shownWpm, sustained, delta);
+      hud.setSpeed(Math.round(shownWpm), shownWpm / heatWpm(heat));
       hud.setPlace(ordinal(placeOf(playerMark(), marks())));
     }
     if (phase === 'marks' || phase === 'racing' || phase === 'finished' || phase === 'out') {
