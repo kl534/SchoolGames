@@ -179,10 +179,10 @@ describe('approach and sprint', () => {
 describe('places', () => {
   it('has unique ids, three obstacles each and every obstacle in exactly one place', () => {
     expect(new Set(PLACE_IDS).size).toBe(PLACES.length);
-    expect(PLACES).toHaveLength(18);
+    expect(PLACES).toHaveLength(20);
     const all = PLACES.flatMap((p) => [...p.obstacles]);
-    expect(all).toHaveLength(54);
-    expect(new Set(all).size).toBe(54);
+    expect(all).toHaveLength(60);
+    expect(new Set(all).size).toBe(60);
     expect([...OBSTACLE_IDS].sort()).toEqual([...all].sort());
     for (const p of PLACES) {
       expect(p.obstacles).toHaveLength(3);
@@ -191,19 +191,27 @@ describe('places', () => {
     }
   });
 
-  it('has four places in each group, plus the farm (town) and the jungle (adventure)', () => {
-    const counts = { house: 4, town: 5, busy: 4, adventure: 5 };
+  it('has house 4, town 5, busy 5 and adventure 6 places', () => {
+    const counts = { house: 4, town: 5, busy: 5, adventure: 6 };
     for (const group of ['house', 'town', 'busy', 'adventure'] as const) {
       expect(PLACES.filter((p) => p.group === group)).toHaveLength(counts[group]);
     }
-    for (const id of ['farm', 'jungle']) {
+    for (const id of ['farm', 'jungle', 'pirate-ship']) {
       expect(PLACES.find((p) => p.id === id)?.look.indoor).toBe(false);
     }
     const indoor = PLACES.filter((p) => p.look.indoor).map((p) => p.id);
-    for (const id of ['grocery', 'library', 'fish-market', 'space-station']) {
+    for (const id of ['grocery', 'library', 'fish-market', 'space-station', 'toy-store']) {
       expect(indoor).toContain(id);
     }
-    for (const id of ['construction', 'beach', 'snowy-forest', 'desert', 'farm', 'jungle']) {
+    for (const id of [
+      'construction',
+      'beach',
+      'snowy-forest',
+      'desert',
+      'farm',
+      'jungle',
+      'pirate-ship',
+    ]) {
       expect(indoor).not.toContain(id);
     }
     expect(PLACES.find((p) => p.id === 'space-station')?.look.floorPattern).toBe('metal');
@@ -222,6 +230,16 @@ describe('places', () => {
       desert: 'The desert!',
       'space-station': 'The space station!',
     });
+  });
+
+  it('speaks the exact lines of the toy store and the pirate ship', () => {
+    const lines = Object.fromEntries(PLACES.map((p) => [p.id, p.speech]));
+    expect(lines).toMatchObject({
+      'toy-store': 'The toy store!',
+      'pirate-ship': 'The pirate ship!',
+    });
+    expect(PLACES.find((p) => p.id === 'toy-store')?.group).toBe('busy');
+    expect(PLACES.find((p) => p.id === 'pirate-ship')?.group).toBe('adventure');
   });
 
   it('speaks every place name', () => {
@@ -258,6 +276,16 @@ describe('cats', () => {
 });
 
 describe('parseDev', () => {
+  it('reads the toy store and the pirate ship', () => {
+    expect(parseDev('?place=pirate-ship').place).toBe('pirate-ship');
+    expect(parseDev('?places=toy-store,pirate-ship').places).toEqual(['toy-store', 'pirate-ship']);
+    expect(parseDev('?lab=ball-pit:fail:1').lab).toEqual({
+      obstacle: 'ball-pit',
+      outcome: 'fail',
+      variant: 1,
+    });
+  });
+
   it('reads the hooks', () => {
     const d = parseDev(
       '?cat=calico&lives=2&place=kitchen&places=bedroom,kitchen,x&obstacle=yarn&lab=couch:fail:1&at=1.5&door=bathroom',

@@ -49,7 +49,9 @@ export type Hat =
   | 'sheet'
   | 'box'
   | 'bucket'
-  | 'seaweed';
+  | 'seaweed'
+  | 'block'
+  | 'crown';
 
 export interface CatFrame {
   /** Obstacle-local position of the cat's base (where its feet are when it stands). */

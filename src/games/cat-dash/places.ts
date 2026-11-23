@@ -19,7 +19,9 @@ export type PlaceId =
   | 'desert'
   | 'space-station'
   | 'farm'
-  | 'jungle';
+  | 'jungle'
+  | 'toy-store'
+  | 'pirate-ship';
 export type ObstacleId =
   | 'couch'
   | 'bookshelf'
@@ -74,7 +76,13 @@ export type ObstacleId =
   | 'chickens'
   | 'vine'
   | 'stones'
-  | 'mud';
+  | 'mud'
+  | 'toy-train'
+  | 'blocks'
+  | 'ball-pit'
+  | 'cannon'
+  | 'rigging'
+  | 'chest';
 
 export type FloorPattern =
   'planks' | 'tiles' | 'carpet' | 'grass' | 'pavement' | 'roof' | 'sand' | 'snow' | 'metal';
@@ -101,7 +109,10 @@ export interface Place {
   look: PlaceLook;
 }
 
-/** All 18 places: four groups of four, then the farm (town) and the jungle (adventure). */
+/**
+ * All 20 places: four groups of four, then the farm (town), the jungle (adventure), the toy store
+ * (busy) and the pirate ship (adventure).
+ */
 export const PLACES: readonly Place[] = [
   {
     id: 'living-room',
@@ -389,6 +400,38 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'grass',
       sky: [0x5fb89a, 0xcdeec0],
       light: 0xf4ffd8,
+    },
+  },
+  {
+    id: 'toy-store',
+    group: 'busy',
+    name: 'The Toy Store',
+    speech: 'The toy store!',
+    obstacles: ['toy-train', 'blocks', 'ball-pit'],
+    look: {
+      indoor: true,
+      wall: 0xffd6e8,
+      trim: 0x5aa9f0,
+      floor: 0xf2c94c,
+      floorPattern: 'tiles',
+      sky: [0xbfe6ff, 0xffffff],
+      light: 0xfff4e0,
+    },
+  },
+  {
+    id: 'pirate-ship',
+    group: 'adventure',
+    name: 'The Pirate Ship',
+    speech: 'The pirate ship!',
+    obstacles: ['cannon', 'rigging', 'chest'],
+    look: {
+      indoor: false,
+      wall: 0x2f7fb8,
+      trim: 0x7a4a26,
+      floor: 0x9a6a3c,
+      floorPattern: 'planks',
+      sky: [0x5fb2ee, 0xdff2ff],
+      light: 0xfff3d6,
     },
   },
 ];

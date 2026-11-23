@@ -10,6 +10,7 @@ import { TOWN_MOVES } from './moves/town';
 import { BUSY_MOVES } from './moves/busy';
 import { ADVENTURE_MOVES } from './moves/adventure';
 import { EXTRA_MOVES } from './moves/extra';
+import { TOYS_PIRATES_MOVES } from './moves/toys-pirates';
 import {
   EASE,
   arc,
@@ -35,6 +36,7 @@ const ALL: Record<ObstacleId, ObstacleMoves> = {
   ...BUSY_MOVES,
   ...ADVENTURE_MOVES,
   ...EXTRA_MOVES,
+  ...TOYS_PIRATES_MOVES,
 };
 
 export const MOVE_SPECS: Record<ObstacleId, MoveSpec> = Object.fromEntries(
