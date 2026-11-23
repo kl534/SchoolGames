@@ -538,7 +538,7 @@ export function createCat(initial: CatLook): Cat {
 
   // A letter block and a gold crown.
   const blockMat = kit.lit(0xff7a3d, 0.6);
-  kit.box(0.34, 0.34, 0.34, blockMat, hats.block, 0, 0.1, 0);
+  kit.box(0.5, 0.5, 0.5, blockMat, hats.block, 0, 0.2, 0);
   const letter = kit.paint(64, 64, (g) => {
     g.fillStyle = '#ffe9a8';
     g.fillRect(0, 0, 64, 64);
@@ -551,12 +551,12 @@ export function createCat(initial: CatLook): Cat {
   const letterFace = letter ? new MeshBasicMaterial({ map: letter }) : kit.lit(0xffe9a8, 0.6);
   if (letter) kit.materials.push(letterFace);
   for (const [x, z, ry] of [
-    [0, 0.172, 0],
-    [0, -0.172, Math.PI],
-    [0.172, 0, Math.PI / 2],
-    [-0.172, 0, -Math.PI / 2],
+    [0, 0.253, 0],
+    [0, -0.253, Math.PI],
+    [0.253, 0, Math.PI / 2],
+    [-0.253, 0, -Math.PI / 2],
   ] as const) {
-    kit.mesh(new PlaneGeometry(0.28, 0.28), letterFace, hats.block, x, 0.1, z).rotation.y = ry;
+    kit.mesh(new PlaneGeometry(0.42, 0.42), letterFace, hats.block, x, 0.2, z).rotation.y = ry;
   }
   const gold = kit.lit(0xf2c230, 0.35);
   kit.mesh(new CylinderGeometry(0.19, 0.17, 0.12, 16, 1, true), gold, hats.crown, 0, 0.06, 0);
