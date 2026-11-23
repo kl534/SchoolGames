@@ -377,7 +377,8 @@ export function migrateSocialStudiesOrder(progress: PlayerProgress): boolean {
 export const VOCAB_LAYOUTS: readonly (readonly number[])[] = [
   [6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6], // v1: 300 words a grade
   [8, 8, 10, 6, 6, 6, 6, 6, 6, 6, 6, 6], // v2: M1, Grades 2–4
-  // M2 appends [8, 8, 10, 10, 10, 10, 6, 6, 6, 6, 6, 6], M3 [8, 8, 10, 10, 10, 10, 10, 10, 10, 6, 6, 6],
+  [8, 8, 10, 10, 10, 10, 6, 6, 6, 6, 6, 6], // v3: M2, Grades 5–7
+  // M3 appends [8, 8, 10, 10, 10, 10, 10, 10, 10, 6, 6, 6],
   // M4 [8, 8, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10].
 ];
 export const VOCAB_LEVELS_VERSION = VOCAB_LAYOUTS.length;
