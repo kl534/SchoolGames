@@ -56,7 +56,7 @@ import {
   FIRST_PLACE,
   FISH_ARC,
   FISH_GAP,
-  FISH_POINTS,
+  fishPoints,
   FISH_Y,
   GREAT_RUNNING_SPEECH,
   LIVES,
@@ -240,6 +240,8 @@ function run(session: GameSession, dev: DevOptions | null): void {
   /** The miss has been shown: the game waits for the tap on the green answer. */
   let revealed = false;
   let trailDue = false;
+  /** Fish caught from the current trail; each one is worth more than the last. */
+  let trailCaught = 0;
 
   // The cat.
   let catX = 0;
@@ -960,6 +962,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
   const rightNow = () => chosen >= 0 && options[chosen] === fact?.answer && !timedOut;
   const spawnTrail = () => {
     const count = fishTrailLength(Math.random());
+    trailCaught = 0;
     const x0 = camX + fit.viewW * 0.5 + 1.5;
     // Keep clear of the obstacle once it is out there.
     if (obstaclePlaced && x0 + count * FISH_GAP > originX - 6) return;
@@ -990,8 +993,8 @@ function run(session: GameSession, dev: DevOptions | null): void {
     for (const f of fish) {
       if (!f.visible) continue;
       if (phase === 'sprint' && grabbing && f.userData.grab !== true) {
-        // Caught by the leap: the cat is up there when it passes the fish.
-        if (Math.abs(f.position.x - catX) < 0.5 && frame.y >= f.position.y - CAT_CHEST - 0.7) {
+        // Caught by the leap, however fast the sprint: any fish the cat reaches or has passed.
+        if (f.position.x <= catX + 0.5) {
           f.userData.grab = true;
           f.position.x = catX;
           f.position.y = frame.y + CAT_CHEST;
@@ -1007,11 +1010,12 @@ function run(session: GameSession, dev: DevOptions | null): void {
         f.rotation.z = 0;
         if (Math.hypot(dx, dy) < 0.6) {
           f.visible = false;
-          score += FISH_POINTS;
+          const worth = fishPoints(++trailCaught);
+          score += worth;
           setScoreHud(true);
           effects.sparkle(f.position.x, f.position.y);
           sfx.purr();
-          hud.pop(`+${FISH_POINTS}`, toScreen(f.position.x, f.position.y + 0.8), 'good');
+          hud.pop(`+${worth}`, toScreen(f.position.x, f.position.y + 0.8), 'good');
         }
         continue;
       }

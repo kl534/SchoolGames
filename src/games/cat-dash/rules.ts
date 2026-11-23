@@ -20,6 +20,8 @@ export const STREAK_X2 = 5;
 export const STREAK_X3 = 10;
 /** Fish treats: points each, how many in a trail, the gap between them and their height. */
 export const FISH_POINTS = 25;
+/** The nth fish (1 is the first) caught from one trail is worth n times FISH_POINTS. */
+export const fishPoints = (nth: number): number => FISH_POINTS * Math.max(1, Math.floor(nth));
 export const FISH_TRAIL = [3, 4, 5] as const;
 export const FISH_GAP = 1.6;
 export const FISH_Y = 2.0;
