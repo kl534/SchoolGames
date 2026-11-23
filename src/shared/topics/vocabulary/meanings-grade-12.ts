@@ -441,8 +441,8 @@ export const MEANINGS_GRADE_12: Readonly<Record<string, WordMeaning>> = {
   ],
   seraphic: ['sweet and peaceful like an angel', 'The baby had a *seraphic* smile as she slept.'],
   shibboleth: [
-    'an old saying that marks one group',
-    'The old *shibboleth* helped members know who was in the club.',
+    'a word or custom that shows who is in a group',
+    'The secret *shibboleth* of our club is a special handshake.',
   ],
   simper: ['to smile in a silly, fake way', 'He would *simper* and bat his eyes to get a cookie.'],
   skittish: ['jumpy and easily scared', 'The *skittish* horse jumped at every little noise.'],
@@ -466,8 +466,8 @@ export const MEANINGS_GRADE_12: Readonly<Record<string, WordMeaning>> = {
     'The coach used a smart *stratagem* to score in the last minute.',
   ],
   stricture: [
-    'a hard comment of blame or a limit',
-    'The teacher spoke a *stricture* about writing on the desks.',
+    'a strong comment that finds fault',
+    "The critic's *stricture* said the play was dull and far too long.",
   ],
   stupor: [
     'a dull, sleepy state of mind',

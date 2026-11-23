@@ -778,7 +778,7 @@ export const MEANINGS_GRADE_11: Readonly<Record<string, WordMeaning>> = {
   ],
   solipsism: [
     'the idea that only your own mind is real',
-    'His *solipsism* made him think only he was real.',
+    "Tim's *solipsism* made him doubt that anyone else could think or feel.",
   ],
   sophistry: ['clever but false arguing', 'Her *sophistry* sounded smart but was full of holes.'],
   splenetic: ['cranky and easily angered', 'The *splenetic* old man shouted at the crows.'],

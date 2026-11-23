@@ -545,7 +545,7 @@ export const MEANINGS_GRADE_COLLEGE: Readonly<Record<string, WordMeaning>> = {
   reticence: ['a habit of not speaking much', 'Her *reticence* made her slow to join the talk.'],
   ribaldry: [
     'rude and silly joking',
-    'The teacher stopped the *ribaldry* and the silly, rude jokes.',
+    'The class giggled at the *ribaldry* until the teacher asked for quiet.',
   ],
   rococo: ['fancy and full of curls', 'The *rococo* clock was covered in gold swirls.'],
   roseate: ['pink and rosy', 'The *roseate* clouds glowed at sunrise.'],
@@ -622,7 +622,10 @@ export const MEANINGS_GRADE_COLLEGE: Readonly<Record<string, WordMeaning>> = {
   venality: ['a willingness to be bought', "The town was upset by the mayor's *venality*."],
   verisimilitude: ['the look of being true', 'The movie had *verisimilitude* and seemed so real.'],
   vexatious: ['causing worry or irritation', 'The *vexatious* buzzing of the fly bothered us all.'],
-  virago: ['a loud and bossy woman', 'The *virago* shouted orders to the whole crew.'],
+  virago: [
+    'a loud person with a fierce temper',
+    'In the play, the *virago* stomped on stage and scolded the storm.',
+  ],
   virtuosity: ['great skill in an art', 'The pianist played with *virtuosity*.'],
   vituperative: [
     'full of harsh and angry words',
