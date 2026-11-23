@@ -23,9 +23,9 @@ const HETERONYMS = new Set(
 );
 /** Rows each grade has. Grow a grade by appending rows in fifties and raising its number here. */
 const WORDS: Record<string, number> = {
-  '2': 300,
-  '3': 300,
-  '4': 300,
+  '2': 400,
+  '3': 400,
+  '4': 500,
   '5': 300,
   '6': 300,
   '7': 300,
