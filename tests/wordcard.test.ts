@@ -8,7 +8,7 @@ import { antonymFact, synonymFact, VOCAB_GRADES } from '../src/shared/topics/voc
 afterEach(() => document.body.replaceChildren());
 
 const row = VOCAB_GRADES[0].rows.find((r) => r[0] === 'happy')!;
-const meaning = VOCAB_GRADES[0].meanings!.happy;
+const meaning = VOCAB_GRADES[0].meanings.happy;
 const syn = synonymFact(row, meaning);
 const ant = antonymFact(row, meaning)!;
 

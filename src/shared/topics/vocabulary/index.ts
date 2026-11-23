@@ -20,6 +20,10 @@ import { MEANINGS_GRADE_6 } from './meanings-grade-6';
 import { MEANINGS_GRADE_7 } from './meanings-grade-7';
 import { MEANINGS_GRADE_8 } from './meanings-grade-8';
 import { MEANINGS_GRADE_9 } from './meanings-grade-9';
+import { MEANINGS_GRADE_10 } from './meanings-grade-10';
+import { MEANINGS_GRADE_11 } from './meanings-grade-11';
+import { MEANINGS_GRADE_12 } from './meanings-grade-12';
+import { MEANINGS_GRADE_COLLEGE } from './meanings-grade-college';
 import type { PartOfSpeech, VocabRow, WordMeaning } from './types';
 
 export type { PartOfSpeech, VocabRow, WordMeaning } from './types';
@@ -32,8 +36,8 @@ export interface VocabGrade {
   /** 'Grade 2' … 'Grade 12', 'College'. */
   title: string;
   rows: readonly VocabRow[];
-  /** Definitions and example sentences by head word (grades without them show no word card). */
-  meanings?: Readonly<Record<string, WordMeaning>>;
+  /** Definitions and example sentences by head word (every grade has them). */
+  meanings: Readonly<Record<string, WordMeaning>>;
 }
 
 /** Easiest first. Later milestones append grades here; never reorder (levels follow this order). */
@@ -46,10 +50,10 @@ export const VOCAB_GRADES: VocabGrade[] = [
   { id: '7', title: 'Grade 7', rows: GRADE_7, meanings: MEANINGS_GRADE_7 },
   { id: '8', title: 'Grade 8', rows: GRADE_8, meanings: MEANINGS_GRADE_8 },
   { id: '9', title: 'Grade 9', rows: GRADE_9, meanings: MEANINGS_GRADE_9 },
-  { id: '10', title: 'Grade 10', rows: GRADE_10 },
-  { id: '11', title: 'Grade 11', rows: GRADE_11 },
-  { id: '12', title: 'Grade 12', rows: GRADE_12 },
-  { id: 'college', title: 'College', rows: GRADE_COLLEGE },
+  { id: '10', title: 'Grade 10', rows: GRADE_10, meanings: MEANINGS_GRADE_10 },
+  { id: '11', title: 'Grade 11', rows: GRADE_11, meanings: MEANINGS_GRADE_11 },
+  { id: '12', title: 'Grade 12', rows: GRADE_12, meanings: MEANINGS_GRADE_12 },
+  { id: 'college', title: 'College', rows: GRADE_COLLEGE, meanings: MEANINGS_GRADE_COLLEGE },
 ];
 export const SETS_PER_GRADE = 6;
 export const WORDS_PER_SET = 50;
@@ -270,7 +274,7 @@ export function synonymTopic(grade: VocabGrade): Topic {
     title: `${grade.title} synonyms`,
     subject: 'Synonyms',
     description: 'Pick the word that means the same.',
-    facts: grade.rows.map((row) => synonymFact(row, grade.meanings?.[row[0]])),
+    facts: grade.rows.map((row) => synonymFact(row, grade.meanings[row[0]])),
     distractors: vocabDistractors,
   };
 }
@@ -281,7 +285,7 @@ export function antonymTopic(grade: VocabGrade): Topic {
     title: `${grade.title} antonyms`,
     subject: 'Antonyms',
     description: 'Pick the word that means the opposite.',
-    facts: grade.rows.flatMap((row) => antonymFact(row, grade.meanings?.[row[0]]) ?? []),
+    facts: grade.rows.flatMap((row) => antonymFact(row, grade.meanings[row[0]]) ?? []),
     distractors: vocabDistractors,
   };
 }

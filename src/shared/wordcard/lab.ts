@@ -17,7 +17,7 @@ function factOf(word: string, which: string, gradeId?: string): Fact | undefined
     if (gradeId && grade.id !== gradeId) continue;
     const row = grade.rows.find((r) => r[0] === word);
     if (!row) continue;
-    const meaning = grade.meanings?.[word];
+    const meaning = grade.meanings[word];
     return which === 'antonym' ? antonymFact(row, meaning) : synonymFact(row, meaning);
   }
   return undefined;
