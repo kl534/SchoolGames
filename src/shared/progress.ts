@@ -47,6 +47,8 @@ export interface PlayerProgress {
   pathLevelsOpen?: Record<string, number>;
   /** Which `SOCIAL_STUDIES_LEVELS` order `pathLevelsOpen['social-studies']` counts in; see `migrateSocialStudiesOrder`. */
   socialLevelsVersion?: number;
+  /** Which `VOCAB_LAYOUTS` layout `pathLevelsOpen.vocabulary` counts in; see `migrateVocabularySets`. Missing means 1. */
+  vocabLevelsVersion?: number;
   /** 2 once `migrateLearnNoWait` has run. */
   learnVersion?: number;
   /** The home tab last used: a path id. */
@@ -367,6 +369,64 @@ export function migrateSocialStudiesOrder(progress: PlayerProgress): boolean {
   return changed;
 }
 
+/**
+ * Sets per vocabulary grade (VOCAB_GRADES order) in each layout `vocabLevelsVersion` counts in;
+ * version v is VOCAB_LAYOUTS[v - 1]. Append a layout whenever a grade gains sets; never edit one.
+ * The levels test checks the last against VOCAB_GRADES.
+ */
+export const VOCAB_LAYOUTS: readonly (readonly number[])[] = [
+  [6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6], // v1: 300 words a grade
+  [8, 8, 10, 6, 6, 6, 6, 6, 6, 6, 6, 6], // v2: M1, Grades 2–4
+  // M2 appends [8, 8, 10, 10, 10, 10, 6, 6, 6, 6, 6, 6], M3 [8, 8, 10, 10, 10, 10, 10, 10, 10, 6, 6, 6],
+  // M4 [8, 8, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10].
+];
+export const VOCAB_LEVELS_VERSION = VOCAB_LAYOUTS.length;
+
+const sumOf = (sets: readonly number[], count: number): number =>
+  sets.slice(0, count).reduce((a, b) => a + b, 0);
+
+/**
+ * Where open count `open` (1-based, in layout `from`) belongs in layout `to`: the same grade and
+ * set, but never past the first new set of an earlier grade that gained sets.
+ */
+export function moveVocabOpen(
+  open: number,
+  from: readonly number[],
+  to: readonly number[],
+): number {
+  const total = sumOf(from, from.length);
+  const o = Math.min(Math.max(1, Math.floor(open)), total);
+  let g = 0;
+  while (o > sumOf(from, g + 1)) g++;
+  const s = o - sumOf(from, g) - 1;
+  const spot = sumOf(to, g) + s + 1;
+  for (let h = 0; h < g; h++) {
+    if (to[h] > from[h]) return Math.min(spot, sumOf(to, h) + from[h] + 1);
+  }
+  return spot;
+}
+
+/** Moves `pathLevelsOpen.vocabulary` to the current layout and stamps `vocabLevelsVersion`. Returns true when it changed the count; running it again changes nothing. */
+export function migrateVocabularySets(progress: PlayerProgress): boolean {
+  const from = progress.vocabLevelsVersion ?? 1;
+  if (from > VOCAB_LEVELS_VERSION) return false;
+  let changed = false;
+  const old = progress.pathLevelsOpen?.vocabulary;
+  if (from < VOCAB_LEVELS_VERSION && progress.pathLevelsOpen && typeof old === 'number') {
+    const now = moveVocabOpen(
+      old,
+      VOCAB_LAYOUTS[from - 1],
+      VOCAB_LAYOUTS[VOCAB_LAYOUTS.length - 1],
+    );
+    if (now !== old) {
+      progress.pathLevelsOpen.vocabulary = now;
+      changed = true;
+    }
+  }
+  progress.vocabLevelsVersion = VOCAB_LEVELS_VERSION;
+  return changed;
+}
+
 /** The learning rules `learnVersion` counts in. Version 2 dropped the wait and added reviews. */
 export const LEARN_VERSION = 2;
 
@@ -445,6 +505,10 @@ export function normalizeProgress(data: Partial<PlayerProgress>): PlayerProgress
     progress.socialLevelsVersion = data.socialLevelsVersion;
   }
   migrateSocialStudiesOrder(progress);
+  if (typeof data.vocabLevelsVersion === 'number') {
+    progress.vocabLevelsVersion = data.vocabLevelsVersion;
+  }
+  migrateVocabularySets(progress);
   migrateLearnNoWait(progress);
   return progress;
 }

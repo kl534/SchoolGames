@@ -1,4 +1,4 @@
-import { createProgressStore, type ProgressStore } from '../progress';
+import { createProgressStore, normalizeProgress, type ProgressStore } from '../progress';
 import { deviceStore, type KeyValueStore } from '../storage';
 import { ApiError, createSyncApi, type SyncApi } from './api';
 import {
@@ -135,7 +135,7 @@ async function runSync(r: Resolved): Promise<boolean> {
   for (const [id, remote] of Object.entries(response.progress)) {
     if (!local().some((l) => l.id === id)) continue;
     const mine = r.progress.load(id);
-    const merged = mergeProgress(mine, remote);
+    const merged = mergeProgress(mine, normalizeProgress(remote));
     if (canonical(merged) !== canonical(mine)) {
       r.progress.saveSynced(id, merged);
       changed = true;

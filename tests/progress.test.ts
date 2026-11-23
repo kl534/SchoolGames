@@ -24,10 +24,15 @@ import {
   migrateAboveTenTables,
   migrateMissingNumberLevels,
   migrateRenamedGames,
+  normalizeProgress,
   OLD_LEVEL_SPOTS,
   recordAnswer,
   SOCIAL_LEVELS_VERSION,
   migrateSocialStudiesOrder,
+  migrateVocabularySets,
+  moveVocabOpen,
+  VOCAB_LAYOUTS,
+  VOCAB_LEVELS_VERSION,
   recordBest,
   recordLadder,
   recordHighScore,
@@ -35,7 +40,15 @@ import {
   type FactStat,
   type PlayerProgress,
 } from '../src/shared/progress';
-import { LEVELS, levelPassed, levelsOpen, topicOfFact, type LevelFact } from '../src/shared/levels';
+import {
+  LEVELS,
+  levelPassed,
+  levelsOpen,
+  topicOfFact,
+  VOCABULARY_PATH,
+  type LevelFact,
+} from '../src/shared/levels';
+import { VOCABULARY_LEVELS } from '../src/shared/levels-vocabulary';
 import { memoryStore } from '../src/shared/storage';
 
 describe('recordAnswer', () => {
@@ -286,6 +299,7 @@ describe('createProgressStore', () => {
       ...emptyProgress(),
       levelsVersion: LEVELS_VERSION,
       socialLevelsVersion: SOCIAL_LEVELS_VERSION,
+      vocabLevelsVersion: VOCAB_LEVELS_VERSION,
       learnVersion: LEARN_VERSION,
     };
     recordAnswer(progress, 't', 'f', true);
@@ -299,6 +313,7 @@ describe('createProgressStore', () => {
       ...emptyProgress(),
       levelsVersion: LEVELS_VERSION,
       socialLevelsVersion: SOCIAL_LEVELS_VERSION,
+      vocabLevelsVersion: VOCAB_LEVELS_VERSION,
       learnVersion: LEARN_VERSION,
     });
   });
@@ -354,6 +369,7 @@ describe('createProgressStore', () => {
       JSON.stringify({
         pathLevelsOpen: { 'social-studies': 3 },
         socialLevelsVersion: SOCIAL_LEVELS_VERSION,
+        vocabLevelsVersion: VOCAB_LEVELS_VERSION,
         learnVersion: LEARN_VERSION,
         homePath: 'social-studies',
       }),
@@ -393,6 +409,7 @@ describe('createProgressStore', () => {
       ...emptyProgress(),
       levelsVersion: LEVELS_VERSION,
       socialLevelsVersion: SOCIAL_LEVELS_VERSION,
+      vocabLevelsVersion: VOCAB_LEVELS_VERSION,
       learnVersion: LEARN_VERSION,
     });
   });
@@ -687,6 +704,123 @@ describe('migrateSocialStudiesOrder', () => {
     const p = at(8);
     expect(migrateSocialStudiesOrder(p)).toBe(true);
     expect(migrateSocialStudiesOrder(p)).toBe(false);
+  });
+});
+
+describe('moveVocabOpen', () => {
+  const [v1, v2] = VOCAB_LAYOUTS;
+  const sum = (a: readonly number[]) => a.reduce((x, y) => x + y, 0);
+
+  it('moves a player past a grown grade back to its first new set (v1 to v2)', () => {
+    for (const [open, now] of [
+      [1, 1],
+      [6, 6],
+      [7, 7],
+      [18, 7],
+      [72, 7],
+    ]) {
+      expect(moveVocabOpen(open, v1, v2), `open ${open}`).toBe(now);
+    }
+  });
+
+  it('keeps the same grade and set when no earlier grade grew (v2 to v3)', () => {
+    const v3 = [8, 8, 10, 10, 10, 10, 6, 6, 6, 6, 6, 6];
+    expect(moveVocabOpen(9, v2, v3)).toBe(9);
+    expect(moveVocabOpen(27, v2, v3)).toBe(27);
+    expect(moveVocabOpen(40, v2, v3)).toBe(8 + 8 + 10 + 6 + 1);
+  });
+
+  it('clamps an open count outside the layout', () => {
+    expect(moveVocabOpen(0, v1, v2)).toBe(1);
+    expect(moveVocabOpen(500, v1, v2)).toBe(7);
+  });
+
+  it('stays in range, never moves forward and never goes down as open grows, in every pair', () => {
+    for (let a = 0; a < VOCAB_LAYOUTS.length; a++) {
+      for (let b = a + 1; b < VOCAB_LAYOUTS.length; b++) {
+        const from = VOCAB_LAYOUTS[a];
+        const to = VOCAB_LAYOUTS[b];
+        let last = 0;
+        for (let open = 1; open <= sum(from); open++) {
+          const now = moveVocabOpen(open, from, to);
+          expect(now).toBeGreaterThanOrEqual(1);
+          expect(now).toBeLessThanOrEqual(sum(to));
+          expect(now).toBeGreaterThanOrEqual(last);
+          last = now;
+          // Same grade and set, in the new layout, is the furthest it may go.
+          let g = 0;
+          while (open > sum(from.slice(0, g + 1))) g++;
+          const spot = sum(to.slice(0, g)) + (open - sum(from.slice(0, g)));
+          expect(now).toBeLessThanOrEqual(spot);
+        }
+      }
+    }
+  });
+});
+
+describe('migrateVocabularySets', () => {
+  const at = (open?: number, version?: number): PlayerProgress => ({
+    ...emptyProgress(),
+    pathLevelsOpen: open === undefined ? undefined : { vocabulary: open },
+    vocabLevelsVersion: version,
+  });
+
+  it('moves an unversioned save back and stamps the version', () => {
+    const p = at(18);
+    expect(migrateVocabularySets(p)).toBe(true);
+    expect(p.pathLevelsOpen?.vocabulary).toBe(7);
+    expect(p.vocabLevelsVersion).toBe(VOCAB_LEVELS_VERSION);
+    expect(migrateVocabularySets(p)).toBe(false);
+    expect(p.pathLevelsOpen?.vocabulary).toBe(7);
+  });
+
+  it('only stamps a save without a vocabulary count', () => {
+    const p = at(undefined);
+    expect(migrateVocabularySets(p)).toBe(false);
+    expect(p.vocabLevelsVersion).toBe(VOCAB_LEVELS_VERSION);
+    expect(p.pathLevelsOpen).toBeUndefined();
+    const q = { ...emptyProgress(), pathLevelsOpen: { 'social-studies': 4 } };
+    migrateVocabularySets(q);
+    expect(q.pathLevelsOpen).toEqual({ 'social-studies': 4 });
+  });
+
+  it('leaves a newer version alone', () => {
+    const p = at(18, VOCAB_LEVELS_VERSION + 1);
+    expect(migrateVocabularySets(p)).toBe(false);
+    expect(p.pathLevelsOpen?.vocabulary).toBe(18);
+    expect(p.vocabLevelsVersion).toBe(VOCAB_LEVELS_VERSION + 1);
+  });
+
+  it('round-trips the version through normalizeProgress and migrates on load', () => {
+    const kept = normalizeProgress({ vocabLevelsVersion: VOCAB_LEVELS_VERSION });
+    expect(kept.vocabLevelsVersion).toBe(VOCAB_LEVELS_VERSION);
+    const old = normalizeProgress({ facts: {}, best: {}, pathLevelsOpen: { vocabulary: 18 } });
+    expect(old.pathLevelsOpen?.vocabulary).toBe(7);
+    expect(old.vocabLevelsVersion).toBe(VOCAB_LEVELS_VERSION);
+  });
+
+  it('re-earns the new sets, then jumps past the old ones the player had passed', () => {
+    const p = at(18);
+    // Passed every old set of Grades 2 and 3 (the first six sets of each).
+    const grade = (g: number, sets: number[]) =>
+      VOCABULARY_LEVELS.filter((l) => l.title.startsWith(`Grade ${g} · Set `)).filter((_, i) =>
+        sets.includes(i),
+      );
+    const pass = (levels: typeof VOCABULARY_LEVELS) => {
+      for (const level of levels) {
+        for (const { topic, fact } of level.facts) {
+          p.facts[topic.id] ??= {};
+          p.facts[topic.id][fact.id] = { correct: 1, wrong: 0, streak: 1, lastSeen: 1 };
+        }
+      }
+    };
+    pass(grade(2, [0, 1, 2, 3, 4, 5]));
+    pass(grade(3, [0, 1, 2, 3, 4, 5]));
+    migrateVocabularySets(p);
+    expect(levelsOpen(p, VOCABULARY_PATH)).toBe(7);
+    pass(grade(2, [6, 7]));
+    const next = levelsOpen(p, VOCABULARY_PATH);
+    expect(VOCABULARY_LEVELS[next - 1].title).toBe('Grade 3 · Set 7');
   });
 });
 

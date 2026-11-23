@@ -4,11 +4,12 @@ import {
   createProgressStore,
   recordAnswer,
   recordBest,
+  VOCAB_LEVELS_VERSION,
   type PlayerProgress,
 } from '../src/shared/progress';
 import { memoryStore } from '../src/shared/storage';
 import { ApiError, createSyncApi } from '../src/shared/sync/api';
-import { getAccount, getCursor, getNotice } from '../src/shared/sync/account';
+import { getAccount, getCursor, getNotice, setAccount } from '../src/shared/sync/account';
 import {
   SYNC_DEBOUNCE_MS,
   pushDirty,
@@ -342,5 +343,29 @@ describe('sync engine with two devices', () => {
     expect(got.ladders).toEqual({ t: { g: 3 } });
     expect(got.homePath).toBe('social-studies');
     expect(got.pathLevelsOpen).toEqual({ 'social-studies': 4 });
+  });
+
+  it('keeps a migrated vocabulary count when the cloud still has an old one', async () => {
+    const store = memoryStore();
+    const progress = createProgressStore(store);
+    const ana = progress.addPlayer('Ana', AVATARS[0]);
+    const mine = progress.load(ana.id);
+    mine.pathLevelsOpen = { vocabulary: 7 };
+    mine.vocabLevelsVersion = VOCAB_LEVELS_VERSION;
+    progress.save(ana.id, mine);
+    setAccount({ email: EMAIL, token: 't' }, store);
+    // An old save from the cloud: Grade 4 · Set 6, counted in the first layout, with no version.
+    const remote = { facts: {}, best: {}, highScores: {}, pathLevelsOpen: { vocabulary: 18 } };
+    const api = createSyncApi('https://sync.test', async () =>
+      Response.json({
+        cursor: 5,
+        players: [{ id: ana.id, name: 'Ana', avatar: AVATARS[0] }],
+        progress: { [ana.id]: remote },
+      }),
+    );
+    await syncNow({ store, progress, api });
+    const got = progress.load(ana.id);
+    expect(got.pathLevelsOpen?.vocabulary).toBe(7);
+    expect(got.vocabLevelsVersion).toBe(VOCAB_LEVELS_VERSION);
   });
 });

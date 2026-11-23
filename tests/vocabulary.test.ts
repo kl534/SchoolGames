@@ -9,6 +9,7 @@ import {
   isFormOf,
   SYNONYM_TOPICS,
   synonymFact,
+  setsOf,
   VOCAB_GRADES,
   VOCABULARY_TOPICS,
   type VocabRow,
@@ -20,6 +21,44 @@ const HETERONYMS = new Set(
   permit subject conduct contract desert refuse reject separate moderate estimate perfect upset use
   excuse house number does dove bow row bass sow`.split(/\s+/),
 );
+/** Rows each grade has. Grow a grade by appending rows in fifties and raising its number here. */
+const WORDS: Record<string, number> = {
+  '2': 400,
+  '3': 400,
+  '4': 500,
+  '5': 300,
+  '6': 300,
+  '7': 300,
+  '8': 300,
+  '9': 300,
+  '10': 300,
+  '11': 300,
+  '12': 300,
+  college: 300,
+};
+/** FNV-1a, to pin the first 300 head words of each grade as they were on main. */
+const fnv1a = (text: string): string => {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, '0');
+};
+const OLD_HEAD_HASHES: Record<string, string> = {
+  '2': '09b5477e',
+  '3': 'a40ee917',
+  '4': '74c9a633',
+  '5': '1d71b204',
+  '6': '7766350c',
+  '7': 'e57cc567',
+  '8': '03081b85',
+  '9': '3202f21f',
+  '10': 'e28d058b',
+  '11': 'b5d6ac8d',
+  '12': 'fa86d22f',
+  college: 'f1ae55a7',
+};
 const rowOf = (word: string): VocabRow => {
   for (const g of VOCAB_GRADES) {
     const row = g.rows.find((r) => r[0] === word);
@@ -31,9 +70,18 @@ const rowOf = (word: string): VocabRow => {
 describe('vocabulary data', () => {
   for (const grade of VOCAB_GRADES) {
     describe(grade.title, () => {
-      it('has 300 rows, at least 150 with antonyms', () => {
-        expect(grade.rows).toHaveLength(300);
-        expect(grade.rows.filter((r) => r[3].length > 0).length).toBeGreaterThanOrEqual(150);
+      it('has the right number of rows, in whole sets, at least half with antonyms', () => {
+        expect(grade.rows).toHaveLength(WORDS[grade.id]);
+        expect(grade.rows.length % 50).toBe(0);
+        const withAntonyms = (rows: readonly VocabRow[]) =>
+          rows.filter((r) => r[3].length > 0).length;
+        expect(withAntonyms(grade.rows)).toBeGreaterThanOrEqual(grade.rows.length / 2);
+        const added = grade.rows.slice(300);
+        expect(withAntonyms(added)).toBeGreaterThanOrEqual(added.length / 2);
+      });
+      it('still starts with the same 300 head words as before it grew', () => {
+        const heads = grade.rows.slice(0, 300).map((r) => r[0]);
+        expect(fnv1a(heads.join(','))).toBe(OLD_HEAD_HASHES[grade.id]);
       });
       it('has well-formed rows', () => {
         for (const [word, pos, syns, ants] of grade.rows) {
@@ -54,6 +102,11 @@ describe('vocabulary data', () => {
       });
     });
   }
+
+  it('counts the sets of a grade', () => {
+    expect(setsOf(VOCAB_GRADES[0])).toBe(WORDS['2'] / 50);
+    expect(setsOf(VOCAB_GRADES[2])).toBe(WORDS['4'] / 50);
+  });
 
   it('has unique head words across all grades', () => {
     const heads = VOCAB_GRADES.flatMap((g) => g.rows.map((r) => r[0]));
@@ -156,7 +209,7 @@ describe('vocabulary topics', () => {
 
   it('holds the right facts and validates', () => {
     VOCAB_GRADES.forEach((grade, g) => {
-      expect(SYNONYM_TOPICS[g].facts).toHaveLength(300);
+      expect(SYNONYM_TOPICS[g].facts).toHaveLength(grade.rows.length);
       expect(ANTONYM_TOPICS[g].facts).toHaveLength(grade.rows.filter((r) => r[3].length).length);
     });
     for (const topic of VOCABULARY_TOPICS) {

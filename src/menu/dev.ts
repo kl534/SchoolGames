@@ -5,6 +5,7 @@ import { TYPING_LEVEL_ID, type TypingProgress, emptyTyping } from '../shared/typ
 import {
   LEVELS_VERSION,
   SOCIAL_LEVELS_VERSION,
+  VOCAB_LEVELS_VERSION,
   SOLID_REVIEWS,
   emptyProgress,
   type FactStat,
@@ -61,6 +62,7 @@ export function demoStepsProgress(now: number): PlayerProgress {
   // Current version numbers, so the load does not move the saved level to a new spot.
   progress.levelsVersion = LEVELS_VERSION;
   progress.socialLevelsVersion = SOCIAL_LEVELS_VERSION;
+  progress.vocabLevelsVersion = VOCAB_LEVELS_VERSION;
   progress.levelsOpen = 3;
   const seen = new Set<unknown>();
   let i = 0;

@@ -35,12 +35,14 @@ import {
   recordAnswer,
   type FactStat,
   type PlayerProgress,
+  VOCAB_LAYOUTS,
 } from '../src/shared/progress';
 import { SOCIAL_STUDIES_LEVELS } from '../src/shared/levels-social';
 import { VOCABULARY_LEVELS } from '../src/shared/levels-vocabulary';
 import {
   ANTONYM_TOPICS,
   antonymFact,
+  setsOf,
   SYNONYM_TOPICS,
   synonymFact,
   VOCAB_GRADES,
@@ -903,23 +905,37 @@ describe('Vocabulary path', () => {
   const path = VOCABULARY_PATH;
   const level1 = VOCABULARY_LEVELS[0].facts;
 
-  it('has 72 levels, six sets for each of Grades 2 to 12 and College', () => {
-    expect(VOCABULARY_LEVELS).toHaveLength(72);
+  it('has 80 levels: eight sets for Grades 2 and 3, ten for Grade 4, six for the rest', () => {
+    expect(VOCABULARY_LEVELS).toHaveLength(80);
     expect(VOCABULARY_LEVELS.map((l) => l.title)).toEqual(
-      ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', 'college'].flatMap((g) =>
-        [1, 2, 3, 4, 5, 6].map((s) => `${g === 'college' ? 'College' : `Grade ${g}`} · Set ${s}`),
+      VOCAB_GRADES.flatMap((grade) =>
+        Array.from({ length: setsOf(grade) }, (_, s) => `${grade.title} · Set ${s + 1}`),
       ),
     );
+    expect(VOCABULARY_LEVELS.slice(0, 9).map((l) => l.title)).toEqual([
+      ...[1, 2, 3, 4, 5, 6, 7, 8].map((s) => `Grade 2 · Set ${s}`),
+      'Grade 3 · Set 1',
+    ]);
   });
 
   it('ends with College set 6 and has the College topics', () => {
-    expect(VOCABULARY_LEVELS[71].title).toBe('College · Set 6');
+    expect(VOCABULARY_LEVELS[79].title).toBe('College · Set 6');
     expect(getTopic('antonyms-college')).toBeDefined();
   });
 
+  it('keeps VOCAB_LAYOUTS in step with the grades', () => {
+    expect(VOCAB_LAYOUTS.at(-1)).toEqual(VOCAB_GRADES.map(setsOf));
+    VOCAB_LAYOUTS.forEach((layout, v) => {
+      expect(layout).toHaveLength(12);
+      if (v > 0)
+        layout.forEach((n, g) => expect(n).toBeGreaterThanOrEqual(VOCAB_LAYOUTS[v - 1][g]));
+    });
+  });
+
   it("holds each set's 50 words as the topics' own facts, synonym then antonym", () => {
+    let at = 0;
     VOCAB_GRADES.forEach((grade, g) => {
-      for (let k = 0; k < 6; k++) {
+      for (let k = 0; k < setsOf(grade); k++) {
         const expected: unknown[] = [];
         for (const row of grade.rows.slice(50 * k, 50 * k + 50)) {
           const syn = SYNONYM_TOPICS[g].facts.find((f) => f.id === synonymFact(row).id);
@@ -927,7 +943,7 @@ describe('Vocabulary path', () => {
           const ant = antonymFact(row);
           if (ant) expected.push(ANTONYM_TOPICS[g].facts.find((f) => f.id === ant.id));
         }
-        const facts = VOCABULARY_LEVELS[g * 6 + k].facts;
+        const facts = VOCABULARY_LEVELS[at++].facts;
         expect(facts.length).toBe(expected.length);
         facts.forEach((lf, i) => expect(lf.fact).toBe(expected[i]));
       }
@@ -950,7 +966,7 @@ describe('Vocabulary path', () => {
   });
 
   it('labels a level', () => {
-    expect(levelLabel(1, path)).toBe('Level 1 of 72: Grade 2 · Set 1');
+    expect(levelLabel(1, path)).toBe('Level 1 of 80: Grade 2 · Set 1');
   });
 
   const topicIdOf = (fact: { id: string }) =>
