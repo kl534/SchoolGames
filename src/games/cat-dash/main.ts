@@ -1214,7 +1214,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
       if (l.item !== prop || phase === 'move') continue;
     }
     retireFar();
-    world.update(camX);
+    world.update(camX, fit);
     effects.update(delta);
     cat.update(delta, elapsed);
 
