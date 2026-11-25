@@ -8,9 +8,11 @@
  *   except the comic word. `&at=<seconds>` freezes it there (prop and effects included).
  * - `?door=<PlaceId>&at=<0..2.4>` the doorway into that place frozen at that time (0 door in view,
  *   1.2 iris closed, 1.55 open again with the new place, 2.4 banner).
+ * - `?quality=high|medium|low` fixes the quality tier (no saved tier, no automatic step down).
  */
 import { CAT_IDS, type CatId } from './looks';
 import { OBSTACLE_IDS, PLACE_IDS, type ObstacleId, type PlaceId } from './places';
+import { isQuality, type Quality } from './quality';
 import { LIVES, type Outcome, type Variant } from './rules';
 
 export interface LabMove {
@@ -28,6 +30,7 @@ export interface DevOptions {
   lab: LabMove | null;
   door: PlaceId | null;
   at: number | null;
+  quality: Quality | null;
 }
 
 const isPlace = (name: string): name is PlaceId => (PLACE_IDS as readonly string[]).includes(name);
@@ -43,6 +46,7 @@ export function parseDev(search: string): DevOptions {
   const place = q.get('place') ?? '';
   const obstacle = q.get('obstacle') ?? '';
   const door = q.get('door') ?? '';
+  const quality = q.get('quality');
   let lab: LabMove | null = null;
   const [id, outcome, variant] = (q.get('lab') ?? '').split(':');
   if (
@@ -65,6 +69,7 @@ export function parseDev(search: string): DevOptions {
     lab,
     door: isPlace(door) ? door : null,
     at: Number.isFinite(at) ? at : null,
+    quality: isQuality(quality) ? quality : null,
   };
 }
 

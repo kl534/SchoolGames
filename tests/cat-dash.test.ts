@@ -414,6 +414,7 @@ describe('parseDev', () => {
       lab: null,
       door: null,
       at: null,
+      quality: null,
     });
     expect(parseDev('').lab).toBeNull();
     expect(parseDev('?lab=couch:clear').lab).toBeNull();
