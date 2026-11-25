@@ -58,7 +58,7 @@ export const GRADE_2: VocabRow[] = [
   ['give', 'verb', ['hand', 'offer', 'donate'], ['take', 'keep']],
   ['find', 'verb', ['discover', 'spot', 'locate', 'uncover'], ['lose']],
   ['friend', 'noun', ['pal', 'buddy', 'mate', 'chum'], ['enemy', 'foe']],
-  ['near', 'adj', ['nearby', 'handy'], ['far', 'distant']],
+  ['near', 'adj', ['close by', 'handy'], ['far', 'distant']],
   ['nice', 'adj', ['pleasant', 'lovely', 'kind', 'friendly'], ['mean', 'nasty', 'unkind']],
   ['stop', 'verb', ['halt', 'quit', 'cease', 'end'], ['go', 'start', 'begin']],
   ['full', 'adj', ['filled', 'stuffed', 'packed'], ['empty']],
