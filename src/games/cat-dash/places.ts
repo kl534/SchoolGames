@@ -91,6 +91,25 @@ export type ObstacleId =
 export type FloorPattern =
   'planks' | 'tiles' | 'carpet' | 'grass' | 'pavement' | 'roof' | 'sand' | 'snow' | 'metal';
 
+export type WallPattern = 'stripes' | 'dots' | 'tiles' | 'panels' | 'wainscot';
+export type BackdropKind =
+  | 'hills'
+  | 'treeline'
+  | 'skyline'
+  | 'cranes'
+  | 'sea'
+  | 'island'
+  | 'mountains'
+  | 'pines'
+  | 'mesas'
+  | 'dunes'
+  | 'canopy';
+/** One silhouette strip painted behind an outdoor place. */
+export interface Backdrop {
+  kind: BackdropKind;
+  color: number;
+}
+
 /** The colours of a place (hex numbers). */
 export interface PlaceLook {
   indoor: boolean;
@@ -100,6 +119,10 @@ export interface PlaceLook {
   floorPattern: FloorPattern;
   sky: [top: number, bottom: number];
   light: number;
+  /** What the indoor wall is painted with. */
+  wallPattern?: WallPattern;
+  /** The two silhouette strips behind an outdoor place (far, then near). */
+  backdrop?: readonly [far: Backdrop, near: Backdrop];
 }
 
 export interface Place {
@@ -147,6 +170,7 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'planks',
       sky: [0xffe9c2, 0xfff5e0],
       light: 0xfff1d6,
+      wallPattern: 'wainscot',
     },
   },
   {
@@ -163,6 +187,7 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'tiles',
       sky: [0xd8f3ef, 0xf1fffc],
       light: 0xf4fbff,
+      wallPattern: 'tiles',
     },
   },
   {
@@ -179,6 +204,7 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'tiles',
       sky: [0xcfe6fb, 0xeef7ff],
       light: 0xf0f6ff,
+      wallPattern: 'tiles',
     },
   },
   {
@@ -195,6 +221,7 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'carpet',
       sky: [0xd9ccf7, 0xf1eaff],
       light: 0xffeedd,
+      wallPattern: 'dots',
     },
   },
   {
@@ -211,6 +238,10 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'grass',
       sky: [0x6ec6ff, 0xdff3ff],
       light: 0xfff6e0,
+      backdrop: [
+        { kind: 'hills', color: 0x8fc48a },
+        { kind: 'treeline', color: 0x5f9e5a },
+      ],
     },
   },
   {
@@ -227,6 +258,10 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'grass',
       sky: [0x7fd0ff, 0xe8f7ff],
       light: 0xfffbe8,
+      backdrop: [
+        { kind: 'hills', color: 0x8fc48a },
+        { kind: 'treeline', color: 0x5f9e5a },
+      ],
     },
   },
   {
@@ -243,6 +278,10 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'pavement',
       sky: [0x9cd3ff, 0xeaf5ff],
       light: 0xfff4e0,
+      backdrop: [
+        { kind: 'skyline', color: 0x9fb3c8 },
+        { kind: 'skyline', color: 0x7d8fa6 },
+      ],
     },
   },
   {
@@ -259,6 +298,10 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'roof',
       sky: [0x3a4a8a, 0xf6a46f],
       light: 0xffd2a8,
+      backdrop: [
+        { kind: 'skyline', color: 0x6a5a8a },
+        { kind: 'skyline', color: 0x4a3f66 },
+      ],
     },
   },
   {
@@ -275,6 +318,7 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'tiles',
       sky: [0xfff0c8, 0xfffaf0],
       light: 0xfffbe8,
+      wallPattern: 'panels',
     },
   },
   {
@@ -291,6 +335,7 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'carpet',
       sky: [0xe8c79a, 0xf7e8cf],
       light: 0xffe2b0,
+      wallPattern: 'wainscot',
     },
   },
   {
@@ -307,6 +352,7 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'tiles',
       sky: [0xcfe9f0, 0xeef9fc],
       light: 0xeaf6ff,
+      wallPattern: 'tiles',
     },
   },
   {
@@ -323,6 +369,10 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'pavement',
       sky: [0x7fcfff, 0xe8f6ff],
       light: 0xfff4d8,
+      backdrop: [
+        { kind: 'skyline', color: 0xa8b4c0 },
+        { kind: 'cranes', color: 0x7f8a96 },
+      ],
     },
   },
   {
@@ -339,6 +389,10 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'sand',
       sky: [0x5ec8ff, 0xd8f4ff],
       light: 0xfffbe0,
+      backdrop: [
+        { kind: 'sea', color: 0x7cc4e8 },
+        { kind: 'island', color: 0x6fae6a },
+      ],
     },
   },
   {
@@ -355,6 +409,10 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'snow',
       sky: [0xaed4ee, 0xf2f8ff],
       light: 0xeef4ff,
+      backdrop: [
+        { kind: 'mountains', color: 0xc8d8ea },
+        { kind: 'pines', color: 0x7f9fb8 },
+      ],
     },
   },
   {
@@ -371,6 +429,10 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'sand',
       sky: [0x7ac8f5, 0xfbe3b0],
       light: 0xffe6b8,
+      backdrop: [
+        { kind: 'mesas', color: 0xe0b088 },
+        { kind: 'dunes', color: 0xd9a66b },
+      ],
     },
   },
   {
@@ -387,6 +449,7 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'metal',
       sky: [0x151a33, 0x2a3358],
       light: 0xcfe0ff,
+      wallPattern: 'panels',
     },
   },
   {
@@ -403,6 +466,10 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'grass',
       sky: [0x74c0f2, 0xe2f5ff],
       light: 0xfff5d8,
+      backdrop: [
+        { kind: 'hills', color: 0x8fc48a },
+        { kind: 'treeline', color: 0x5f9e5a },
+      ],
     },
   },
   {
@@ -419,6 +486,10 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'grass',
       sky: [0x5fb89a, 0xcdeec0],
       light: 0xf4ffd8,
+      backdrop: [
+        { kind: 'hills', color: 0x4f8f5a },
+        { kind: 'canopy', color: 0x2f6b3a },
+      ],
     },
   },
   {
@@ -435,6 +506,7 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'tiles',
       sky: [0xbfe6ff, 0xffffff],
       light: 0xfff4e0,
+      wallPattern: 'stripes',
     },
   },
   {
@@ -451,6 +523,10 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'planks',
       sky: [0x5fb2ee, 0xdff2ff],
       light: 0xfff3d6,
+      backdrop: [
+        { kind: 'sea', color: 0x7cc4e8 },
+        { kind: 'island', color: 0x6fae6a },
+      ],
     },
   },
   {
@@ -468,6 +544,10 @@ export const PLACES: readonly Place[] = [
       floorPattern: 'grass',
       sky: [0x6cbcf0, 0xe4f6ff],
       light: 0xfff6dc,
+      backdrop: [
+        { kind: 'hills', color: 0x8fc48a },
+        { kind: 'treeline', color: 0x5f9e5a },
+      ],
     },
   },
 ];
