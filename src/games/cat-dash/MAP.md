@@ -41,10 +41,11 @@ A side-view endless run: pick one of ten cats, then run through places (house: l
 - `props/toys-pirates-scenery.ts`: the decor of the toy store (indoors, shelves of toys) and the pirate ship (outdoors: sea, island, rail, mast) (`TOYS_PIRATES_SCENERY`)
 - `props/zoo.ts`: the 3 zoo obstacles as meshes (a trunk that curls and sprays, a neck that bends, three waddling penguins on flat ice)
 - `props/zoo-scenery.ts`: the decor of the zoo (outdoors: sandy path, enclosure fences with picture signs, trees, balloon cart, pond) (`ZOO_SCENERY`)
-- `props/pool.ts`: one built prop per obstacle, pruned when a place is left (`createPropPool`, `PROP_BUILDERS`)
+- `props/pool.ts`: one built prop per obstacle, each with its ink outline, pruned when a place is left (`createPropPool`, `setOutlines`, `PROP_BUILDERS`)
 - `world.ts`: the current place: one long textured wall and floor (`buildGround`) with baked AO bands and a lip, the decor tiles (`buildScenery`) with front-edge dressing, two parallax backdrop strips outdoors, the far layer and the blob shadow (`createWorld`)
 - `door.ts`: the doorways between places: house `door`, town `gate`, busy `shop-doors`, adventure `portal` and the zoo's own `zoo-arch` (`createDoorway(kind, next)`, `DOOR_ICONS`; `doorOf(place)` in `places.ts` picks the kind)
-- `effects.ts`: dust, splash, stars, poof, bubbles, feathers, sparkle, confetti as one pooled `Points` (`createEffects`)
+- `fish.ts`: the fish treats: lathe body, fins, eyes, ink outline, bob and spin (`createFishSet`, `fishBob`, `fishSpin`)
+- `effects.ts`: dust, splash, stars, poof, bubbles, feathers, sparkle, confetti as one pooled `Points` of soft puffs, glowing stars and rounded squares (`createEffects`, `fadeAlpha`)
 - `hud.ts`: question panel, place strip, lives, banner, comic words, bonk flash and iris wipe (`createHud`)
 - `picker.ts`: the cat picker overlay (`showCatPicker`)
 - `dev.ts`: dev query hooks (`parseDev`, `devOptions`)
@@ -73,6 +74,8 @@ A side-view endless run: pick one of ten cats, then run through places (house: l
 ## Tests
 
 - `tests/cat-dash.test.ts`
+- `tests/cat-dash-graphics.test.ts` (quality, light, outlines, places, textures)
+- `tests/cat-dash-props.test.ts` (prop outlines and smooth shapes, fish, particle fade)
 - `tests/cat-dash-moves.test.ts` (all 252 moves sampled every 1/60 s)
 - `tests/cat-dash-sounds.test.ts` (every `sfx:` event names a sound in `src/shared/audio.ts`)
 - `tests/tap-to-continue.test.ts` (tap-to-continue flow in `main.ts`)
