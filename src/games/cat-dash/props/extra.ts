@@ -13,8 +13,8 @@ import { beam, cyl, hash, makeProp as prop, sphere } from './parts';
 
 function hay(): Prop {
   return prop((kit, root) => {
-    const straw = kit.lit(0xe8c34a, 0.95);
-    const band = kit.lit(0x8a5a2a, 0.9);
+    const straw = kit.fabric(0xe8c34a);
+    const band = kit.fabric(0x8a5a2a);
     const bale = (parent: Group, x: number, y: number, w: number, h: number) => {
       kit.box(w, h, 1.2, straw, parent, x, y + h / 2, -0.3);
       for (const s of [-0.3, 0.3])
@@ -48,9 +48,9 @@ function hay(): Prop {
 
 function scarecrow(): Prop {
   return prop((kit, root) => {
-    const wood = kit.lit(0x7a5230, 0.9);
-    const shirt = kit.lit(0xc0392b, 0.8);
-    const straw = kit.lit(0xe8c34a, 0.95);
+    const wood = kit.wood(0x7a5230);
+    const shirt = kit.fabric(0xc0392b);
+    const straw = kit.fabric(0xe8c34a);
     cyl(kit, 0.1, 0.1, 3.4, wood, root, 6, 1.7, -0.9);
     const arms = new Group();
     arms.position.set(6, 2.4, -0.7);
@@ -65,8 +65,8 @@ function scarecrow(): Prop {
       }
     }
     sphere(kit, 0.42, kit.lit(0xf2dcb0, 0.8), root, 6, 3.25, -0.7);
-    kit.mesh(new CylinderGeometry(0.75, 0.75, 0.06, 16), wood, root, 6, 3.55, -0.7);
-    kit.mesh(new CylinderGeometry(0.4, 0.5, 0.55, 16), kit.lit(0x5a3a1a, 0.9), root, 6, 3.85, -0.7);
+    kit.mesh(new CylinderGeometry(0.75, 0.75, 0.06, 24), wood, root, 6, 3.55, -0.7);
+    kit.mesh(new CylinderGeometry(0.4, 0.5, 0.55, 24), kit.lit(0x5a3a1a, 0.9), root, 6, 3.85, -0.7);
     for (const s of [-1, 1]) sphere(kit, 0.06, kit.lit(0x222222), root, 6 + s * 0.15, 3.3, -0.3);
     return (outcome, variant, t) => {
       const drop = armDrop(outcome, variant, t);
@@ -95,7 +95,7 @@ function chickens(): Prop {
         0,
       ).rotation.z = -Math.PI / 2;
       kit.box(0.12, 0.14, 0.04, kit.lit(0xd8302a, 0.7), hen, 0.55, 1.32, 0);
-      kit.mesh(new SphereGeometry(0.28, 10, 8), white, hen, -0.55, 0.85, 0).scale.set(0.5, 1, 0.7);
+      kit.mesh(new SphereGeometry(0.28, 28, 20), white, hen, -0.55, 0.85, 0).scale.set(0.5, 1, 0.7);
       for (const s of [-0.15, 0.15])
         cyl(kit, 0.03, 0.03, 0.2, kit.lit(0xf2a22e, 0.6), hen, s, 0.1, 0);
       sphere(kit, 0.04, kit.lit(0x111111), hen, 0.72, 1.12, 0.2);
@@ -120,16 +120,16 @@ function vine(): Prop {
   return prop((kit, root) => {
     // A dark pit under the vine (flat on the floor).
     kit.mesh(new CylinderGeometry(2.0, 2.0, 0.04, 24), kit.lit(0x1b1208, 0.95), root, 6.4, 0.02, 0);
-    const branch = kit.lit(0x6a4a2a, 0.9);
+    const branch = kit.wood(0x6a4a2a);
     kit.box(4.2, 0.35, 0.5, branch, root, VINE.x, VINE.top + 0.1, -1.0);
-    const leaf = kit.lit(0x2f9a4a, 0.8);
+    const leaf = kit.foliage(0x2f9a4a);
     for (let i = 0; i < 6; i++) {
       sphere(kit, 0.4, leaf, root, VINE.x - 1.8 + i * 0.72, VINE.top + 0.35, -1.0).scale.y = 0.6;
     }
     const swing = new Group();
     swing.position.set(VINE.x, VINE.top, -0.5);
     root.add(swing);
-    const rope = kit.lit(0x4a8a2a, 0.85);
+    const rope = kit.foliage(0x4a8a2a);
     const segs = 6;
     for (let i = 0; i < segs; i++) {
       cyl(
@@ -161,7 +161,7 @@ function stones(): Prop {
     const foam = kit.basic(0xe8f8ff, 0.8);
     const ripples = [4.4, 6.2, 8.2].map((x) => {
       const r = kit.mesh(
-        new CylinderGeometry(0.75, 0.75, 0.02, 16),
+        new CylinderGeometry(0.75, 0.75, 0.02, 24),
         foam,
         root,
         x + 0.1,
@@ -171,9 +171,9 @@ function stones(): Prop {
       r.scale.set(1, 1, 0.5);
       return r;
     });
-    const rock = kit.lit(0x8a8a90, 0.95);
+    const rock = kit.stone(0x8a8a90);
     [4.6, 6.4, 8.2].forEach((x, i) => {
-      kit.mesh(new CylinderGeometry(0.55, 0.65, 0.3, 10), rock, root, x, 0.15, 0);
+      kit.mesh(new CylinderGeometry(0.55, 0.65, 0.3, 24), rock, root, x, 0.15, 0);
       sphere(kit, 0.12, kit.lit(0x4a8a3a, 0.9), root, x - 0.2, 0.3, 0.2).scale.y = 0.4;
       void i;
     });
@@ -199,7 +199,7 @@ function mud(): Prop {
     });
     // A little palm leaf and a rock at the edge.
     kit
-      .mesh(new SphereGeometry(0.45, 10, 8), kit.lit(0x8a8a90, 0.95), root, 3.8, 0.2, -0.4)
+      .mesh(new SphereGeometry(0.45, 28, 20), kit.lit(0x8a8a90, 0.95), root, 3.8, 0.2, -0.4)
       .scale.set(1.3, 0.7, 1);
     beam(kit, kit.lit(0x2f9a4a, 0.8), root, [8.6, 0], [8.9, 0.8], 0.08, -0.3);
     return (outcome, _variant, t) => {

@@ -40,7 +40,7 @@ function prop(setup: (kit: Kit, root: Group) => Pose): Prop {
 }
 
 const sphere = (kit: Kit, r: number, mat: Material, parent: Group, x = 0, y = 0, z = 0) =>
-  kit.mesh(new SphereGeometry(r, 16, 12), mat, parent, x, y, z);
+  kit.mesh(new SphereGeometry(r, 28, 20), mat, parent, x, y, z);
 const cyl = (
   kit: Kit,
   rt: number,
@@ -51,7 +51,7 @@ const cyl = (
   x = 0,
   y = 0,
   z = 0,
-) => kit.mesh(new CylinderGeometry(rt, rb, h, 16), mat, parent, x, y, z);
+) => kit.mesh(new CylinderGeometry(rt, rb, h, 24), mat, parent, x, y, z);
 
 /** 0 to 1 and back: a dip of width `w` centred on each time in `times`. */
 const dip = (t: number, times: readonly number[], w = 0.14) =>
@@ -70,8 +70,8 @@ const DARK_WOOD = 0x6b4526;
 
 function couch(): Prop {
   return prop((kit, root) => {
-    const red = kit.lit(0xb5483a, 0.8);
-    const darkRed = kit.lit(0x8e3328, 0.8);
+    const red = kit.fabric(0xb5483a);
+    const darkRed = kit.fabric(0x8e3328);
     kit.box(4.4, 0.55, 1.2, darkRed, root, 6, 0.275, 0);
     const cushionA = new Group();
     cushionA.position.set(4.9, 0.55, 0);
@@ -109,8 +109,8 @@ function couch(): Prop {
 
 function bookshelf(): Prop {
   return prop((kit, root) => {
-    const wood = kit.lit(WOOD, 0.8);
-    const dark = kit.lit(DARK_WOOD, 0.9);
+    const wood = kit.wood(WOOD);
+    const dark = kit.wood(DARK_WOOD);
     // Everything hangs on `shelf`, which pivots about its bottom right corner when it tips.
     const shelf = new Group();
     shelf.position.set(SHELF_TIP.pivotX, 0, 0);
@@ -171,7 +171,7 @@ function basket(): Prop {
   return prop((kit, root) => {
     const body = new Group();
     root.add(body);
-    const white = kit.lit(0xf4f1e8, 0.7);
+    const white = kit.fabric(0xf4f1e8);
     const wall = kit.mesh(
       new CylinderGeometry(1.0, 0.85, 1.3, 20, 1, true),
       white,
@@ -216,12 +216,12 @@ function basket(): Prop {
 
 function counter(): Prop {
   return prop((kit, root) => {
-    const cabinet = kit.lit(0xd9b98a, 0.8);
-    const top = kit.lit(0x6f7d86, 0.4);
+    const cabinet = kit.wood(0xd9b98a);
+    const top = kit.stone(0x6f7d86);
     kit.box(5.2, 1.5, 1.3, cabinet, root, 6, 0.75, -0.1);
     kit.box(5.4, 0.12, 1.4, top, root, 6, 1.54, -0.1);
     for (const x of [4.5, 6, 7.5]) {
-      kit.box(1.2, 1.1, 0.04, kit.lit(0xc4a270, 0.8), root, x, 0.8, 0.57);
+      kit.box(1.2, 1.1, 0.04, kit.wood(0xc4a270), root, x, 0.8, 0.57);
       sphere(kit, 0.06, kit.lit(0x444444), root, x + 0.4, 0.8, 0.62);
     }
     // The stool.
@@ -278,9 +278,9 @@ function mop(): Prop {
     const pivot = new Group();
     pivot.position.set(MOP.x, MOP.y, 0);
     root.add(pivot);
-    cyl(kit, 0.06, 0.06, 2.9, kit.lit(0xc9a15a, 0.6), pivot, 0, -1.45, 0);
+    cyl(kit, 0.06, 0.06, 2.9, kit.wood(0xc9a15a), pivot, 0, -1.45, 0);
     kit.box(1.5, 0.28, 0.5, kit.lit(0x8f8f98, 0.7), pivot, 0, -2.95, 0);
-    const mat = kit.lit(0xe8e4d6, 0.95);
+    const mat = kit.fabric(0xe8e4d6);
     for (let i = 0; i < 9; i++) {
       kit.box(0.14, 0.5, 0.45, mat, pivot, -0.65 + i * 0.163, -3.28, 0);
     }
@@ -304,8 +304,8 @@ function mop(): Prop {
 
 function sink(): Prop {
   return prop((kit, root) => {
-    const cab = kit.lit(0xe6dfcf, 0.8);
-    const top = kit.lit(0x6f7d86, 0.4);
+    const cab = kit.wood(0xe6dfcf);
+    const top = kit.stone(0x6f7d86);
     for (const [x, w] of [
       [3.4, 2.0],
       [8.4, 2.0],
@@ -343,7 +343,7 @@ function sink(): Prop {
       bubbles.push(m);
     }
     // The tap: a riser at the back of the right counter, a neck over the basin, a nozzle.
-    const metal = kit.lit(0xcfd6dc, 0.25);
+    const metal = kit.metal(0xcfd6dc);
     cyl(kit, 0.12, 0.12, 1.3, metal, root, 7.6, 1.65, -0.4);
     const neck = cyl(kit, 0.1, 0.1, 2.4, metal, root, 6.4, 2.3, -0.4);
     neck.rotation.z = Math.PI / 2;
@@ -397,7 +397,7 @@ function bathtub(): Prop {
     sphere(kit, 0.28, yellow, duck, 0, 0.1, 0).scale.set(1.2, 0.9, 1);
     sphere(kit, 0.17, yellow, duck, 0.25, 0.4, 0);
     kit.mesh(
-      new CylinderGeometry(0.05, 0.08, 0.16, 8),
+      new CylinderGeometry(0.05, 0.08, 0.16, 24),
       kit.lit(0xff9f1c),
       duck,
       0.45,
@@ -475,14 +475,14 @@ function paperRoll(): Prop {
 
 function towel(): Prop {
   return prop((kit, root) => {
-    const metal = kit.lit(0xcfd6dc, 0.25);
+    const metal = kit.metal(0xcfd6dc);
     const rail = cyl(kit, 0.07, 0.07, 5.2, metal, root, 6, TOWEL.y + 0.05, -0.3);
     rail.rotation.z = Math.PI / 2;
     for (const x of [3.5, 8.5]) kit.box(0.2, 0.25, 0.6, metal, root, x, TOWEL.y + 0.05, -0.4);
     const pivot = new Group();
     pivot.position.set(TOWEL.x, TOWEL.y + 0.05, -0.2);
     root.add(pivot);
-    const teal = kit.lit(0x3fb8af, 0.95);
+    const teal = kit.fabric(0x3fb8af);
     kit.box(0.95, TOWEL.len, 0.1, teal, pivot, 0, -TOWEL.len / 2, 0);
     kit.box(0.95, 0.12, 0.12, kit.lit(0xffffff, 0.9), pivot, 0, -TOWEL.len + 0.35, 0.01);
     const puddle = cyl(kit, 2.1, 2.1, 0.02, kit.glass(0x6bb8ff, 0.55), root, 6, 0.015, 0.2);
@@ -506,7 +506,7 @@ function towel(): Prop {
 
 function bed(): Prop {
   return prop((kit, root) => {
-    const wood = kit.lit(0x8a5a33, 0.8);
+    const wood = kit.wood(0x8a5a33);
     kit.box(0.3, 1.6, 1.5, wood, root, 3.15, 0.8, 0);
     kit.box(0.4, 2.2, 1.5, wood, root, 8.8, 1.1, 0);
     for (const x of [3.5, 8.4])
@@ -515,15 +515,15 @@ function bed(): Prop {
     const mattress = new Group();
     mattress.position.set(0, 0.9, 0);
     root.add(mattress);
-    kit.box(5.3, 0.3, 1.4, kit.lit(0x7fb4e8, 0.9), mattress, 5.95, 0.15, 0);
-    kit.box(3.0, 0.08, 1.46, kit.lit(0xe8737b, 0.9), mattress, 4.9, 0.3, 0);
+    kit.box(5.3, 0.3, 1.4, kit.fabric(0x7fb4e8), mattress, 5.95, 0.15, 0);
+    kit.box(3.0, 0.08, 1.46, kit.fabric(0xe8737b), mattress, 4.9, 0.3, 0);
     const pillows: Mesh[] = [];
     for (const x of [7.45, 8.25]) {
-      const p = sphere(kit, 0.5, kit.lit(0xffffff, 0.95), root, x, 1.2, 0);
+      const p = sphere(kit, 0.5, kit.fabric(0xffffff), root, x, 1.2, 0);
       p.scale.set(1.0, 0.32, 1.2);
       pillows.push(p);
     }
-    const bunnyMat = kit.lit(0xb8b3ad, 1);
+    const bunnyMat = kit.fabric(0xb8b3ad);
     const bunnies = [4.8, 5.7, 6.6, 7.4].map((x, i) => ({
       mesh: sphere(kit, 0.2, bunnyMat, root, x, 0.2, 0.1 * (i % 2)),
       x,
@@ -559,7 +559,7 @@ function bed(): Prop {
 
 function closet(): Prop {
   return prop((kit, root) => {
-    const wood = kit.lit(0xa27853, 0.8);
+    const wood = kit.wood(0xa27853);
     const dark = kit.lit(0x3b2b3f, 1);
     const X0 = 4.2;
     kit.box(0.16, 3.6, 1.4, wood, root, X0 + 0.08, 1.8, 0);
@@ -572,7 +572,7 @@ function closet(): Prop {
     // Clothes on the rail; in fail 1 they drop to the floor.
     const colors = [0xe0504a, 0x4d8fe0, 0xf2c14a, 0x6bbf7a, 0xb58ad6];
     const clothes = colors.map((c, i) => {
-      const m = kit.box(0.5, 1.1, 0.12, kit.lit(c, 0.9), root, X0 + 0.7 + i * 0.5, 2.4, -0.4);
+      const m = kit.box(0.5, 1.1, 0.12, kit.fabric(c), root, X0 + 0.7 + i * 0.5, 2.4, -0.4);
       return { m, x: m.position.x, delay: 0.85 + i * 0.06 };
     });
     const doorHinge = new Group();
@@ -580,8 +580,8 @@ function closet(): Prop {
     root.add(doorHinge);
     const leaf = new Group();
     doorHinge.add(leaf);
-    kit.box(3.4, 3.4, 0.1, kit.lit(0x8f6240, 0.8), leaf, 1.7, 1.8, 0);
-    kit.box(2.9, 2.9, 0.04, kit.lit(0x9c6b4a, 0.8), leaf, 1.7, 1.8, 0.06);
+    kit.box(3.4, 3.4, 0.1, kit.wood(0x8f6240), leaf, 1.7, 1.8, 0);
+    kit.box(2.9, 2.9, 0.04, kit.wood(0x9c6b4a), leaf, 1.7, 1.8, 0.06);
     sphere(kit, 0.1, kit.lit(0xf2c14a, 0.3), leaf, 3.0, 1.7, 0.12);
     return (outcome, variant, t) => {
       leaf.rotation.y = -(outcome === null
@@ -612,8 +612,8 @@ function yarn(): Prop {
   return prop((kit, root) => {
     const ball = new Group();
     root.add(ball);
-    const pink = kit.lit(0xe85d9b, 0.9);
-    const dark = kit.lit(0xb83a78, 0.9);
+    const pink = kit.fabric(0xe85d9b);
+    const dark = kit.fabric(0xb83a78);
     sphere(kit, 0.9, pink, ball);
     for (let i = 0; i < 6; i++) {
       const ring = kit.mesh(new TorusGeometry(0.9, 0.035, 6, 32), dark, ball);
