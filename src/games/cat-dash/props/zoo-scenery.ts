@@ -17,8 +17,8 @@ const hash = (n: number) => {
 
 /** A round tree: a trunk and a few leafy balls. */
 function tree(kit: Kit, tile: Group, x: number, z: number, h: number, colour = 0x3e9a4a) {
-  kit.mesh(new CylinderGeometry(0.22, 0.32, h, 8), kit.lit(0x7a5230, 0.9), tile, x, h / 2, z);
-  const leaf = kit.lit(colour, 0.85);
+  kit.mesh(new CylinderGeometry(0.22, 0.32, h, 8), kit.wood(0x7a5230), tile, x, h / 2, z);
+  const leaf = kit.foliage(colour);
   kit.mesh(new SphereGeometry(1.5, 12, 10), leaf, tile, x, h + 0.5, z);
   kit.mesh(new SphereGeometry(1.1, 12, 10), leaf, tile, x - 0.9, h, z + 0.2);
   kit.mesh(new SphereGeometry(1.1, 12, 10), leaf, tile, x + 0.9, h - 0.1, z - 0.1);
@@ -33,9 +33,9 @@ function signPost(
   face: number,
   ears: 'round' | 'long',
 ) {
-  const wood = kit.lit(0x7a5230, 0.9);
+  const wood = kit.wood(0x7a5230);
   kit.mesh(new CylinderGeometry(0.07, 0.07, 2.4, 8), wood, tile, x, 1.2, z);
-  kit.box(1.2, 1.0, 0.1, kit.lit(0xfaf4e6, 0.7), tile, x, 2.5, z + 0.05);
+  kit.box(1.2, 1.0, 0.1, kit.wood(0xfaf4e6), tile, x, 2.5, z + 0.05);
   const skin = kit.lit(face, 0.7);
   kit.mesh(new SphereGeometry(0.34, 12, 10), skin, tile, x, 2.45, z + 0.14);
   for (const s of [-1, 1]) {
@@ -61,7 +61,7 @@ function balloonCart(kit: Kit, tile: Group, x: number, z: number) {
   for (const dx of [-0.8, 0.8]) {
     kit.mesh(
       new CylinderGeometry(0.3, 0.3, 0.12, 12),
-      kit.lit(0x33363c, 0.5),
+      kit.metal(0x33363c),
       tile,
       x + dx,
       0.3,
@@ -73,7 +73,7 @@ function balloonCart(kit: Kit, tile: Group, x: number, z: number) {
       0.4,
       0.1,
       1.3,
-      kit.lit(i % 2 ? 0xffffff : 0xe0504a, 0.7),
+      kit.fabric(i % 2 ? 0xffffff : 0xe0504a),
       tile,
       x - 0.8 + i * 0.32,
       2.5,
@@ -94,7 +94,7 @@ function balloonCart(kit: Kit, tile: Group, x: number, z: number) {
 
 const zoo: Decor = (kit, tile) => {
   // Rolling hills far away, and a sandy path along the back.
-  const hill = kit.lit(0x86d06a, 0.95);
+  const hill = kit.foliage(0x86d06a);
   for (const [x, r] of [
     [3, 4.2],
     [11, 3.4],
@@ -107,7 +107,7 @@ const zoo: Decor = (kit, tile) => {
   }
   kit.box(24, 0.03, 1.6, kit.lit(0xecdca8, 0.95), tile, 12, 0.015, -2.1);
   // Low wooden enclosure fences with picture signs.
-  const wood = kit.lit(0xc99a5e, 0.85);
+  const wood = kit.wood(0xc99a5e);
   for (let i = 0; i < 25; i++) kit.box(0.16, 1.1, 0.16, wood, tile, i, 0.55, -3.2);
   kit.box(24, 0.12, 0.1, wood, tile, 12, 0.95, -3.2);
   kit.box(24, 0.12, 0.1, wood, tile, 12, 0.55, -3.2);
@@ -126,7 +126,7 @@ const zoo: Decor = (kit, tile) => {
   // The far enclosure: a pond with rocks.
   const water = kit.lit(0x4fb0e0, 0.25);
   kit.mesh(new CylinderGeometry(2.2, 2.2, 0.04, 24), water, tile, 13.4, 0.03, -4.8).scale.z = 0.5;
-  const rock = kit.lit(0x8a8a90, 0.95);
+  const rock = kit.stone(0x8a8a90);
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * Math.PI * 2;
     kit
