@@ -2,6 +2,7 @@
  * One built prop per obstacle of the current place and the next; a place's props are disposed
  * when it is left.
  */
+import { MeshBasicMaterial, type Mesh } from 'three';
 import type { ObstacleId } from '../places';
 import type { Prop } from '../kit';
 import { HOUSE_PROPS } from './house';
@@ -29,6 +30,18 @@ export interface PropPool {
   dispose(): void;
 }
 
+/** Props cast and receive real shadows (not glass, glow or other see-through bits). */
+function castAndReceive(prop: Prop): void {
+  prop.object.traverse((o) => {
+    const mesh = o as Mesh;
+    if (!mesh.isMesh) return;
+    const m = mesh.material as { transparent?: boolean };
+    const solid = !m.transparent && !(mesh.material instanceof MeshBasicMaterial);
+    mesh.castShadow = solid;
+    mesh.receiveShadow = true;
+  });
+}
+
 export function createPropPool(): PropPool {
   const built = new Map<ObstacleId, Prop>();
   return {
@@ -36,6 +49,7 @@ export function createPropPool(): PropPool {
       let prop = built.get(id);
       if (!prop) {
         prop = PROP_BUILDERS[id]();
+        castAndReceive(prop);
         built.set(id, prop);
       }
       return prop;

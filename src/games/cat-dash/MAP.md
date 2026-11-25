@@ -19,7 +19,12 @@ A side-view endless run: pick one of ten cats, then run through places (house: l
 - `moves/toys-pirates.ts`: the 6 toy store (`toy-train`, `blocks`, `ball-pit`) and pirate ship (`cannon`, `rigging`, `chest`) obstacles' moves and shared motions (`trainX`, `towerTopple`, `ballBounce`, `cannonRecoil`, `sailFlap`, `ropeSwing`, `lidAngle`, `coinSpray`, ...)
 - `moves/zoo.ts`: the 3 zoo obstacles' (`elephant`, `giraffe`, `penguins`) 12 moves and shared motions (`trunkCurl`, `trunkJoints`, `earFlap`, `neckBend`, `neckJoints`, `giraffeHead`, `headTop`, `tongueOut`, `penguinPose`)
 - `kit.ts`: prop-building helpers that remember what to dispose (`Kit`, `Prop`)
-- `cat.ts`: the cat rig and its poses, faces, coats and hats (`createCat`)
+- `cat.ts`: the cat rig and its poses, faces, coats and hats (`createCat`), with its ink outline (`cat.outline`)
+- `cat-materials.ts`: the fur material with a rim of light (`furMaterial`)
+- `quality.ts`: pure quality tiers (`high`, `medium`, `low`), the starting tier (`initialQuality`) and the governor that steps down when fps is under 45 (`createGovernor`)
+- `lighting.ts`: pure light and haze of each place (`lightFor`)
+- `render.ts`: tone mapping, environment sheen, key light with its cast shadow, fill light, haze and pixel ratio (`createLook`)
+- `outline.ts`: inverted-hull ink outlines (`addOutline`, `setOutlineView`)
 - `props/house.ts`: the 12 house obstacles as meshes posed by `update(outcome, variant, t)`
 - `props/house-scenery.ts`: the decor of the four house places (`HOUSE_SCENERY`, `WALL_Z`)
 - `props/town.ts`: the 12 town obstacles as meshes
@@ -54,6 +59,7 @@ A side-view endless run: pick one of ten cats, then run through places (house: l
 - `?place=<id>`: start in that place (`living-room`, `kitchen`, `bathroom`, `bedroom`, `backyard`, `park`, `street`, `rooftops`, `farm`, `grocery`, `library`, `fish-market`, `construction`, `beach`, `snowy-forest`, `desert`, `space-station`, `jungle`, `toy-store`, `pirate-ship`, `zoo`). `?places=a,b`: the places come in this order, then repeat. `?obstacle=<id>`: every obstacle is that one (its place is used).
 - `?lab=<obstacle>:<clear|fail>:<0|1>`: move lab, loops one move with the HUD hidden. `&at=<seconds>` freezes it there (prop and effects included).
 - `?door=<place>&at=<0..2.4>`: the doorway into that place frozen at that time (0 door in view, 1.2 iris closed, 1.55 open again, 2.4 banner).
+- `?quality=high|medium|low`: fixes the quality tier (no saved tier, no automatic step down). The tier is otherwise saved per device under `cd-quality`.
 - Example: `npm run shots -- "cat-dash?lab=couch:clear:0&at=0.9" "cat-dash?door=kitchen&at=1.2"`
 
 ## Where changes go

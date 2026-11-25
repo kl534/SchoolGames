@@ -1,16 +1,14 @@
 /**
  * The place the cat is in: a wall or sky, a floor in the place's pattern, decor, one far layer
- * that slides at 0.4 times the speed, the lights and the blob shadow. All procedural.
+ * that slides at 0.4 times the speed and the blob shadow under the cat (the lights are `render.ts`). All procedural.
  */
 import {
-  AmbientLight,
   CanvasTexture,
   Color,
-  DirectionalLight,
   Group,
-  HemisphereLight,
   Mesh,
   MeshBasicMaterial,
+  PlaneGeometry,
   SphereGeometry,
   SRGBColorSpace,
   type Scene,
@@ -42,6 +40,13 @@ export interface World {
   update(camX: number): void;
   /** The blob shadow under the cat. */
   setShadow(x: number, visible: boolean, scale: number): void;
+  /** How dark the blob shadow is (darker when there is no real shadow). */
+  setBlobOpacity(opacity: number): void;
+  /**
+   * Scenery shadows: everything receives them; decor also casts them when `decor` is true. Kept
+   * for the places that are built later.
+   */
+  setShadows(decor: boolean): void;
   dispose(): void;
 }
 
@@ -60,6 +65,21 @@ function gradient(top: number, bottom: number): CanvasTexture | null {
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
   return texture;
+}
+
+/** A radial fade from dark to clear: the blob shadow (null where there is no canvas). */
+function blobTexture(): CanvasTexture | null {
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 128;
+  const g = canvas.getContext('2d');
+  if (!g) return null;
+  const fill = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  fill.addColorStop(0, 'rgba(0,0,0,0.55)');
+  fill.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = fill;
+  g.fillRect(0, 0, 128, 128);
+  return new CanvasTexture(canvas);
 }
 
 /** Builds one tile of a place's scenery (24 units wide, x from 0 to 24). */
@@ -220,6 +240,8 @@ export function buildScenery(place: Place, kit: Kit): Group {
     EXTRA_SCENERY[place.id as keyof typeof EXTRA_SCENERY] ??
     TOYS_PIRATES_SCENERY[place.id as keyof typeof TOYS_PIRATES_SCENERY] ??
     ZOO_SCENERY[place.id as keyof typeof ZOO_SCENERY];
+  // The wall, floor and their decals come first and only receive shadows; the decor after them.
+  tile.userData.surfaceCount = tile.children.length;
   decor?.(kit, tile, look);
   return tile;
 }
@@ -227,29 +249,42 @@ export function buildScenery(place: Place, kit: Kit): Group {
 export function createWorld(scene: Scene): World {
   const root = new Group();
   scene.add(root);
-  const lights = new Group();
-  const hemi = new HemisphereLight(0xffffff, 0x998877, 1.5);
-  const ambient = new AmbientLight(0xffffff, 0.5);
-  const sun = new DirectionalLight(0xffffff, 1.8);
-  sun.position.set(-8, 18, 14);
-  lights.add(hemi, ambient, sun);
-  scene.add(lights);
-
   let kit: Kit | null = null;
   let tiles: Group[] = [];
   let far: Group | null = null;
   let background: Texture | null = null;
 
-  const shadowGeometry = new SphereGeometry(1, 16, 8);
+  let decorShadows = true;
+  const applyShadows = () => {
+    for (const tile of tiles) {
+      const surface = (tile.userData.surfaceCount as number | undefined) ?? 0;
+      tile.children.forEach((child, i) => {
+        child.traverse((o) => {
+          const mesh = o as Mesh;
+          if (!mesh.isMesh) return;
+          mesh.receiveShadow = true;
+          const m = mesh.material as { transparent?: boolean };
+          const solid = !m.transparent && !(mesh.material instanceof MeshBasicMaterial);
+          mesh.castShadow = decorShadows && i >= surface && solid;
+        });
+      });
+    }
+  };
+
+  // The blob shadow: a soft dark oval on the floor under the cat.
+  const shadowGeometry = new PlaneGeometry(2, 1);
+  shadowGeometry.rotateX(-Math.PI / 2);
+  const shadowTexture = blobTexture();
   const shadowMaterial = new MeshBasicMaterial({
-    color: 0x000000,
+    color: shadowTexture ? 0xffffff : 0x000000,
+    map: shadowTexture,
     transparent: true,
-    opacity: 0.28,
+    opacity: 0.22,
     depthWrite: false,
   });
   const shadow = new Mesh(shadowGeometry, shadowMaterial);
-  shadow.scale.set(0.9, 0.02, 0.45);
-  shadow.position.z = 0.1;
+  shadow.scale.set(0.9, 1, 0.9);
+  shadow.position.set(0, 0.012, 0.1);
   shadow.visible = false;
   scene.add(shadow);
 
@@ -272,13 +307,12 @@ export function createWorld(scene: Scene): World {
       const look = place.look;
       background = gradient(look.sky[0], look.sky[1]);
       scene.background = background ?? new Color(look.sky[1]);
-      hemi.color.setHex(look.light);
-      sun.color.setHex(look.light);
       tiles = Array.from({ length: TILES }, () => {
         const tile = buildScenery(place, next);
         root.add(tile);
         return tile;
       });
+      applyShadows();
       // The far layer: pendant lights indoors; a sun and clouds (or a dusk sky) outdoors.
       far = new Group();
       if (!look.indoor) {
@@ -311,14 +345,21 @@ export function createWorld(scene: Scene): World {
     setShadow(x, visible, scale) {
       shadow.visible = visible;
       shadow.position.x = x;
-      shadow.scale.set(0.9 * scale, 0.02, 0.45 * scale);
+      shadow.scale.set(0.9 * scale, 1, 0.9 * scale);
+    },
+    setBlobOpacity(opacity) {
+      shadowMaterial.opacity = opacity;
+    },
+    setShadows(decor) {
+      decorShadows = decor;
+      applyShadows();
     },
     dispose() {
       clear();
       root.removeFromParent();
-      lights.removeFromParent();
       shadow.removeFromParent();
       shadowGeometry.dispose();
+      shadowTexture?.dispose();
       shadowMaterial.dispose();
     },
   };
