@@ -18,7 +18,8 @@ A side-view endless run: pick one of ten cats, then run through places (house: l
 - `moves/extra.ts`: the 6 farm (`hay`, `scarecrow`, `chickens`) and jungle (`vine`, `stones`, `mud`) obstacles' moves and shared motions (`vineSwing`, `hayTip`, `armDrop`, `henScatter`)
 - `moves/toys-pirates.ts`: the 6 toy store (`toy-train`, `blocks`, `ball-pit`) and pirate ship (`cannon`, `rigging`, `chest`) obstacles' moves and shared motions (`trainX`, `towerTopple`, `ballBounce`, `cannonRecoil`, `sailFlap`, `ropeSwing`, `lidAngle`, `coinSpray`, ...)
 - `moves/zoo.ts`: the 3 zoo obstacles' (`elephant`, `giraffe`, `penguins`) 12 moves and shared motions (`trunkCurl`, `trunkJoints`, `earFlap`, `neckBend`, `neckJoints`, `giraffeHead`, `headTop`, `tongueOut`, `penguinPose`)
-- `kit.ts`: prop-building helpers that remember what to dispose (`Kit`, `Prop`)
+- `kit.ts`: prop-building helpers that remember what to dispose (`Kit`, `Prop`): bevelled boxes (`Kit.box`, plain under `BEVEL_MIN`) and the painted materials `wood`, `fabric`, `foliage`, `metal`, `stone`
+- `textures.ts`: the canvas painters for material grain, floors, walls, backdrops and fades (`paintGrain`, `paintFloor`, `paintWall`, `paintBackdrop`, `paintFade`); all tile seamlessly and need no three.js
 - `cat.ts`: the cat rig and its poses, faces, coats and hats (`createCat`), with its ink outline (`cat.outline`)
 - `cat-materials.ts`: the fur material with a rim of light (`furMaterial`)
 - `quality.ts`: pure quality tiers (`high`, `medium`, `low`), the starting tier (`initialQuality`) and the governor that steps down when fps is under 45 (`createGovernor`)
@@ -41,7 +42,7 @@ A side-view endless run: pick one of ten cats, then run through places (house: l
 - `props/zoo.ts`: the 3 zoo obstacles as meshes (a trunk that curls and sprays, a neck that bends, three waddling penguins on flat ice)
 - `props/zoo-scenery.ts`: the decor of the zoo (outdoors: sandy path, enclosure fences with picture signs, trees, balloon cart, pond) (`ZOO_SCENERY`)
 - `props/pool.ts`: one built prop per obstacle, pruned when a place is left (`createPropPool`, `PROP_BUILDERS`)
-- `world.ts`: wall, floor pattern, lights, far layer and blob shadow of the current place (`createWorld`, `buildScenery`)
+- `world.ts`: the current place: one long textured wall and floor (`buildGround`) with baked AO bands and a lip, the decor tiles (`buildScenery`) with front-edge dressing, two parallax backdrop strips outdoors, the far layer and the blob shadow (`createWorld`)
 - `door.ts`: the doorways between places: house `door`, town `gate`, busy `shop-doors`, adventure `portal` and the zoo's own `zoo-arch` (`createDoorway(kind, next)`, `DOOR_ICONS`; `doorOf(place)` in `places.ts` picks the kind)
 - `effects.ts`: dust, splash, stars, poof, bubbles, feathers, sparkle, confetti as one pooled `Points` (`createEffects`)
 - `hud.ts`: question panel, place strip, lives, banner, comic words, bonk flash and iris wipe (`createHud`)
@@ -65,7 +66,7 @@ A side-view endless run: pick one of ten cats, then run through places (house: l
 ## Where changes go
 
 - A new obstacle: its id in `places.ts`, its moves in `moves/<group>.ts` (`HOUSE_MOVES`, `TOWN_MOVES`, `BUSY_MOVES`, `ADVENTURE_MOVES`, `EXTRA_MOVES`, `TOYS_PIRATES_MOVES`, `ZOO_MOVES`), its builder in `props/<group>.ts` and `props/pool.ts`.
-- A new place: a `Place` in `places.ts`, decor in `props/<group>-scenery.ts` (floor patterns are drawn in `world.ts`), its speech line (then `npm run voice`).
+- A new place: a `Place` in `places.ts` (with `wallPattern` indoors, `backdrop` outdoors), decor in `props/<group>-scenery.ts` (floor and wall patterns are painted in `textures.ts`), its speech line (then `npm run voice`).
 - Scoring, lives, order or approach timing: `rules.ts`. A new cat: `looks.ts` (and `cat.ts` for new parts).
 - A new state that is hard to reach: extend `parseDev` in `dev.ts` and its test.
 

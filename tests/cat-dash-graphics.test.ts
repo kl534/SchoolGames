@@ -10,7 +10,22 @@ import {
 import { parseDev } from '../src/games/cat-dash/dev';
 import { lightFor } from '../src/games/cat-dash/lighting';
 import { addOutline } from '../src/games/cat-dash/outline';
-import { PLACES } from '../src/games/cat-dash/places';
+import {
+  PLACES,
+  type BackdropKind,
+  type FloorPattern,
+  type WallPattern,
+} from '../src/games/cat-dash/places';
+import { BEVEL_MIN, Kit } from '../src/games/cat-dash/kit';
+import {
+  paintBackdrop,
+  paintFade,
+  paintFloor,
+  paintGrain,
+  paintWall,
+  type GrainKind,
+} from '../src/games/cat-dash/textures';
+import { buildGround, buildScenery } from '../src/games/cat-dash/world';
 import {
   MIN_FPS,
   SAMPLE_FRAMES,
@@ -185,5 +200,120 @@ describe('addOutline', () => {
     outline.dispose();
     expect(hulls()).toBe(0);
     expect(sphere.children).toHaveLength(0);
+  });
+});
+
+describe('places and backdrops', () => {
+  const indoor = PLACES.filter((p) => p.look.indoor);
+  const outdoor = PLACES.filter((p) => !p.look.indoor);
+
+  it('gives every indoor place a wall pattern and every outdoor place two backdrop strips', () => {
+    expect(indoor.length).toBeGreaterThan(0);
+    for (const p of indoor) expect(p.look.wallPattern, p.id).toBeTruthy();
+    for (const p of outdoor) {
+      expect(p.look.backdrop, p.id).toHaveLength(2);
+      const [far, near] = p.look.backdrop!;
+      expect(far.color).not.toBe(near.color);
+    }
+  });
+
+  it('builds every place without a canvas and frees all it made', () => {
+    for (const p of PLACES) {
+      const kit = new Kit();
+      const ground = buildGround(p, kit);
+      const tile = buildScenery(p, kit);
+      expect(ground.children.length, p.id).toBeGreaterThan(3);
+      expect(tile.children.length, p.id).toBeGreaterThan(0);
+      expect(new Set(kit.geometries).size).toBe(kit.geometries.length);
+      kit.dispose();
+    }
+  });
+});
+
+describe('Kit.box', () => {
+  const parent = new Group();
+  it('keeps thin boxes crisp and rounds thick ones', () => {
+    const kit = new Kit();
+    const m = kit.lit(0xffffff);
+    expect(kit.box(2, 0.05, 1, m, parent).geometry.type).toBe('BoxGeometry');
+    expect(kit.box(2, BEVEL_MIN - 0.01, 1, m, parent).geometry.type).toBe('BoxGeometry');
+    expect(kit.box(2, BEVEL_MIN, 1, m, parent).geometry.type).toBe('RoundedBoxGeometry');
+    expect(kit.box(1, 1, 1, m, parent).geometry.type).toBe('RoundedBoxGeometry');
+  });
+
+  it('shares the geometry of equal sizes and frees it once', () => {
+    const kit = new Kit();
+    const m = kit.lit(0xffffff);
+    const a = kit.box(1, 2, 3, m, parent);
+    const b = kit.box(1, 2, 3, m, parent);
+    const c = kit.box(1, 2, 4, m, parent);
+    expect(a.geometry).toBe(b.geometry);
+    expect(a.geometry).not.toBe(c.geometry);
+    expect(kit.geometries).toHaveLength(2);
+  });
+
+  it('caches a material per kind and colour', () => {
+    const kit = new Kit();
+    expect(kit.wood(0xaa5500)).toBe(kit.wood(0xaa5500));
+    expect(kit.wood(0xaa5500)).not.toBe(kit.wood(0x55aa00));
+    expect(kit.wood(0xaa5500)).not.toBe(kit.stone(0xaa5500));
+    expect(kit.metal(0x888888).metalness).toBeGreaterThan(0.5);
+  });
+});
+
+describe('texture painters', () => {
+  /** A drawing context that accepts any call, so a painter's own logic still runs. */
+  const stub = () => {
+    const gradient = { addColorStop: () => undefined };
+    const target: Record<string, unknown> = {};
+    return new Proxy(target, {
+      get: (t, key: string) =>
+        key in t ? t[key] : key.startsWith('create') ? () => gradient : () => undefined,
+      set: (t, key: string, value) => {
+        t[key] = value;
+        return true;
+      },
+    }) as unknown as CanvasRenderingContext2D;
+  };
+
+  it('paints every pattern, grain and backdrop', () => {
+    const grains: GrainKind[] = ['wood', 'fabric', 'foliage', 'metal', 'stone'];
+    const floors: FloorPattern[] = [
+      'tiles',
+      'planks',
+      'carpet',
+      'grass',
+      'pavement',
+      'roof',
+      'sand',
+      'snow',
+      'metal',
+    ];
+    const walls: WallPattern[] = ['stripes', 'dots', 'tiles', 'panels', 'wainscot'];
+    const kinds: BackdropKind[] = [
+      'hills',
+      'treeline',
+      'skyline',
+      'cranes',
+      'sea',
+      'island',
+      'mountains',
+      'pines',
+      'mesas',
+      'dunes',
+      'canopy',
+    ];
+    for (const k of grains) expect(() => paintGrain(stub(), k)).not.toThrow();
+    for (const k of floors) expect(() => paintFloor(stub(), k)).not.toThrow();
+    for (const k of walls) expect(() => paintWall(stub(), k)).not.toThrow();
+    for (const k of kinds) expect(() => paintBackdrop(stub(), k, 0x88aa66)).not.toThrow();
+    expect(() => paintFade(stub(), 64, true)).not.toThrow();
+  });
+
+  it('is asked for every floor pattern, wall pattern and backdrop kind the places name', () => {
+    expect(new Set(PLACES.map((p) => p.look.floorPattern)).size).toBe(9);
+    expect(new Set(PLACES.map((p) => p.look.wallPattern).filter(Boolean)).size).toBe(5);
+    const kinds = new Set(PLACES.flatMap((p) => (p.look.backdrop ?? []).map((b) => b.kind)));
+    expect(kinds.size).toBe(11);
   });
 });
