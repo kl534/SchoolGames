@@ -298,14 +298,14 @@ function buildDressing(look: PlaceLook, kit: Kit, tile: Group, seed: number) {
       if (r < 0.6) {
         for (let b = -1; b <= 1; b++) {
           const blade = kit.mesh(
-            new ConeGeometry(0.04, 0.3, 5),
+            new ConeGeometry(0.03, 0.22, 5),
             blades,
             tile,
             x + b * 0.05,
             0.15,
             z + dz,
           );
-          blade.rotation.z = -b * 0.35;
+          blade.rotation.z = -b * 0.5;
         }
       } else {
         kit.mesh(new CylinderGeometry(0.012, 0.012, 0.24, 5), blades, tile, x, 0.12, z + dz);
