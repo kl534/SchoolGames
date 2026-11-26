@@ -18,6 +18,8 @@
  * - `?place=1` holds the higher "place" camera view (as if a finger were down on the picture).
  * - `?intro=1` keeps the hole intro (the flyover) even with `hole`, `lie` or `strokes`.
  * - `?introAt=<0..1>` freezes the hole flyover at that progress (and keeps the intro).
+ * - `?gfx=low|medium|high` forces the picture quality tier (and stops it adapting or being saved).
+ *   Headless browsers run on a software renderer, so every shot passes it.
  * - `?shadows=off` turns the real shadow map off and brings back the round blobs under the people.
  * - `?holes=ok` plays every hole instantly, so the results can be seen at once.
  * - `?swing=<seconds>` freezes the golfer that many seconds into the swing for the club in play
@@ -43,6 +45,7 @@ import {
 } from './shot';
 import { centreX, HOLES, surfaceAt, type Hole } from './course';
 import { startHole, type HoleState } from './rules';
+import type { Gfx } from './quality';
 
 const params = () => new URLSearchParams(location.search);
 
@@ -247,4 +250,11 @@ export function devIntroAt(): number | null {
 /** False when the real shadow map is switched off. */
 export function devShadows(): boolean {
   return !(import.meta.env.DEV && params().get('shadows') === 'off');
+}
+
+/** The picture quality tier forced by the address, or null to pick one for the device. */
+export function devGfx(): Gfx | null {
+  if (!import.meta.env.DEV) return null;
+  const gfx = params().get('gfx');
+  return gfx === 'low' || gfx === 'medium' || gfx === 'high' ? gfx : null;
 }

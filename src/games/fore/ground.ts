@@ -4,16 +4,28 @@
  */
 import {
   BufferGeometry,
+  Color,
   DataTexture,
   Float32BufferAttribute,
   LinearFilter,
   LinearMipmapLinearFilter,
+  MeshStandardMaterial,
   RGBAFormat,
   RepeatWrapping,
   SRGBColorSpace,
+  Vector2,
+  Vector3,
+  Vector4,
+  type Material,
+  type Object3D,
+  type WebGLProgramParametersWithUniforms,
 } from 'three';
+import type { CSM } from 'three/addons/csm/CSM.js';
 import { seededRandom } from '../../shared/random';
+import { NO_ASSETS, type ForeAssets } from './assets';
 import { centreX, type Ellipse, type Hole } from './course';
+import { GFX_SETTINGS, type GfxSettings } from './quality';
+import { moundY } from './terrain';
 
 const SIZE = 256;
 
@@ -160,10 +172,10 @@ function faceUp(g: BufferGeometry): BufferGeometry {
 
 /**
  * The fairway as a ribbon along the bent centre line from `latA` to `latB` yards off it, a sample
- * every 5 yd. u is the lateral yards over 12 (so the stripe texture tiles every 12 yd), v the
- * distance down the hole over 8.
+ * every 5 yd. u is the lateral yards over `tileU` and v the distance down the hole over `tileV`
+ * (12 and 8 for the old stripe texture).
  */
-export function ribbon(h: Hole, latA: number, latB: number): BufferGeometry {
+export function ribbon(h: Hole, latA: number, latB: number, tileU = 12, tileV = 8): BufferGeometry {
   const zs: number[] = [];
   for (let z = 0; z < h.length; z += 5) zs.push(z);
   zs.push(h.length);
@@ -173,7 +185,7 @@ export function ribbon(h: Hole, latA: number, latB: number): BufferGeometry {
   zs.forEach((z, i) => {
     const c = centreX(h, z);
     positions.push(c + latA, 0, z, c + latB, 0, z);
-    uvs.push((latA + 18) / 12, z / 8, (latB + 18) / 12, z / 8);
+    uvs.push((latA + 18) / tileU, z / tileV, (latB + 18) / tileU, z / tileV);
     if (i > 0) {
       const a = (i - 1) * 2;
       index.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
@@ -243,4 +255,372 @@ export function strip(points: { x: number; z: number }[], width: number): Buffer
   g.setAttribute('position', new Float32BufferAttribute(positions, 3));
   g.setIndex(index);
   return faceUp(g);
+}
+
+// ---------- Looks, lit materials and turf ----------
+
+/** Everything a hole needs to dress itself for this device. */
+export interface Look {
+  settings: GfxSettings;
+  /** What loaded; `NO_ASSETS` falls back to the plain procedural look. */
+  assets: ForeAssets;
+  /** The cascaded shadow map, on the high tier. */
+  csm: CSM | null;
+  /** Unit vector from the scene towards the sun. */
+  sun: Vector3;
+  /** Whether shadows are cast and received (any tier but low, and not `?shadows=off`). */
+  shadows: boolean;
+}
+
+/** The look of a Node run with no assets and no shadows (tests, and the low tier's fallback). */
+export const FALLBACK_LOOK: Look = {
+  settings: GFX_SETTINGS.low,
+  assets: NO_ASSETS,
+  csm: null,
+  sun: new Vector3(-0.45, 0.62, -0.64).normalize(),
+  shadows: false,
+};
+
+const isLit = (m: Material) =>
+  (m as { isMeshStandardMaterial?: boolean }).isMeshStandardMaterial ||
+  (m as { isMeshLambertMaterial?: boolean }).isMeshLambertMaterial ||
+  (m as { isMeshPhongMaterial?: boolean }).isMeshPhongMaterial;
+
+/**
+ * Makes `m` take the cascaded shadow map's light. CSM replaces `onBeforeCompile`, so a hook the
+ * material already had runs after it. Materials the CSM already knows are left alone.
+ */
+export function litMaterial<T extends Material>(csm: CSM | null, m: T): T {
+  if (!csm || csm.shaders.has(m) || !isLit(m)) return m;
+  const own = m.onBeforeCompile;
+  csm.setupMaterial(m);
+  m.needsUpdate = true;
+  const hook = m.onBeforeCompile;
+  m.onBeforeCompile = (shader, renderer) => {
+    hook.call(m, shader, renderer);
+    own.call(m, shader, renderer);
+  };
+  return m;
+}
+
+/** Runs `litMaterial` over every material under `root`. */
+export function litTree(csm: CSM | null, root: Object3D): void {
+  if (!csm) return;
+  root.traverse((o) => {
+    const material = (o as { material?: Material | Material[] }).material;
+    if (!material) return;
+    (Array.isArray(material) ? material : [material]).forEach((m) => litMaterial(csm, m));
+  });
+}
+
+/** Forgets a material the CSM was given (call before disposing it). */
+export function unlitMaterial(csm: CSM | null, m: Material): void {
+  csm?.shaders.delete(m);
+}
+
+export type TurfKind = 'rough' | 'fairway' | 'fringe' | 'green' | 'tee';
+
+interface TurfSpec {
+  colour: number;
+  roughness: number;
+  normal: number;
+  /** One tile of the grass picture, yards. */
+  tile: number;
+}
+const TURF: Record<TurfKind, TurfSpec> = {
+  rough: { colour: 0x5d7f3c, roughness: 0.95, normal: 1.0, tile: 3 },
+  fairway: { colour: 0x86b153, roughness: 0.85, normal: 0.6, tile: 2.5 },
+  fringe: { colour: 0x7aa84c, roughness: 0.85, normal: 0.5, tile: 2.5 },
+  green: { colour: 0x76b04a, roughness: 0.7, normal: 0.3, tile: 1.2 },
+  tee: { colour: 0x80ad50, roughness: 0.85, normal: 0.5, tile: 2.5 },
+};
+const KIND_INDEX: Record<TurfKind, number> = { rough: 0, fairway: 1, fringe: 2, green: 3, tee: 4 };
+/** The grass picture is evened to 0.92 of white, so the turf is brightened back. */
+const TURF_GAIN = 1.2;
+
+/** Yards one tile of this turf covers (what UVs should be scaled to): the plain look uses 8. */
+export function turfTile(look: Look, kind: TurfKind): number {
+  return look.assets.grass ? TURF[kind].tile : 8;
+}
+
+const TURF_VERTEX = `
+varying vec3 vTurfW;
+`;
+const TURF_FRAGMENT = `
+varying vec3 vTurfW;
+float tHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float tNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(tHash(i), tHash(i + vec2(1.0, 0.0)), f.x),
+             mix(tHash(i + vec2(0.0, 1.0)), tHash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+float tPar(float v) { return mod(floor(v), 2.0); }
+float turfShade() {
+  vec2 w = vTurfW.xz;
+  float macro = (tNoise(w / 35.0) - 0.5) * 0.6 + (tNoise(w / 9.0) - 0.5) * 0.4;
+  float k = 1.0 + 0.18 * macro;
+  #if TURF_KIND == 1
+    k *= mix(1.08, 0.9, tPar(w.y / 6.0));
+  #elif TURF_KIND == 3
+    float a = tPar((w.x + w.y) * 0.70711 / 3.0);
+    float b = tPar((w.x - w.y) * 0.70711 / 3.0);
+    k *= mix(0.94, 1.05, (a + b) * 0.5);
+  #elif TURF_KIND == 4
+    k *= mix(1.06, 0.94, tPar(w.y / 2.0));
+  #endif
+  return k * ${TURF_GAIN.toFixed(2)};
+}
+`;
+
+/** How far past a hazard's edge the flat layers (and the rough) are cut away. */
+export const CUT_OUT = { sand: 0.6, water: 1.4 } as const;
+
+/** The ellipses a hole's flat layers must leave open: its bunkers and ponds, a little larger. */
+export function hazardCuts(h: Hole): Ellipse[] {
+  return h.hazards.map((hz) => inflated(hz.at, CUT_OUT[hz.kind]));
+}
+
+/**
+ * Makes `material` leave the given ellipses open (a bunker or pond sunk below the layer shows
+ * through). The hook runs after any hook the material already has.
+ */
+export function cutOut<T extends Material>(material: T, cuts: readonly Ellipse[]): T {
+  if (cuts.length === 0) return material;
+  const own = material.onBeforeCompile;
+  const list = cuts.map((c) => new Vector4(c.x, c.z, c.rx, c.rz));
+  const key = material.customProgramCacheKey.bind(material);
+  material.customProgramCacheKey = () => `${key()}-cut${list.length}`;
+  material.onBeforeCompile = (shader, renderer) => {
+    own.call(material, shader, renderer);
+    shader.uniforms.uCuts = { value: list };
+    shader.vertexShader = shader.vertexShader
+      .replace('void main() {', 'varying vec3 vCutW;\nvoid main() {')
+      .replace(
+        '#include <project_vertex>',
+        '#include <project_vertex>\n  vCutW = (modelMatrix * vec4(transformed, 1.0)).xyz;',
+      );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      'void main() {',
+      `varying vec3 vCutW;\nuniform vec4 uCuts[${list.length}];\nvoid main() {\n  for (int i = 0; i < ${list.length}; i++) {\n    vec2 d = (vCutW.xz - uCuts[i].xy) / uCuts[i].zw;\n    if (dot(d, d) < 1.0) discard;\n  }`,
+    );
+  };
+  return material;
+}
+
+/**
+ * The grass for one part of the course: the photo's colour, normal and roughness maps tinted to
+ * the kind's colour, with macro noise from world position (so tiling never shows) and the mown
+ * stripes. Without the picture it is the old noise texture with the same colours. `cuts` are
+ * left open (a layer over a bunker or pond).
+ */
+export function turfMaterial(
+  look: Look,
+  kind: TurfKind,
+  cuts: readonly Ellipse[] = [],
+): MeshStandardMaterial {
+  const spec = TURF[kind];
+  const grass = look.assets.grass;
+  const plain = groundTextures();
+  const material = new MeshStandardMaterial({
+    color: new Color(grass || kind !== 'fairway' ? spec.colour : 0xffffff),
+    roughness: spec.roughness,
+    map: grass
+      ? grass.color
+      : kind === 'fairway'
+        ? plain.fairway
+        : kind === 'green'
+          ? plain.green
+          : plain.grass,
+    normalMap: grass ? grass.normal : null,
+    roughnessMap: grass ? grass.rough : null,
+    metalness: 0,
+  });
+  material.normalScale = new Vector2(spec.normal, spec.normal);
+  material.customProgramCacheKey = () => `turf-${kind}-${grass ? 'photo' : 'plain'}`;
+  if (grass) {
+    material.defines = { TURF_KIND: KIND_INDEX[kind] };
+    material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
+      shader.vertexShader = shader.vertexShader
+        .replace('void main() {', `${TURF_VERTEX}void main() {`)
+        .replace(
+          '#include <project_vertex>',
+          '#include <project_vertex>\n  vTurfW = (modelMatrix * vec4(transformed, 1.0)).xyz;',
+        );
+      shader.fragmentShader = shader.fragmentShader
+        .replace('void main() {', `${TURF_FRAGMENT}void main() {`)
+        .replace(
+          '#include <map_fragment>',
+          '#include <map_fragment>\n  diffuseColor.rgb *= turfShade();',
+        );
+    };
+  }
+  return cutOut(material, cuts);
+}
+
+/** The sand: the photo's maps tinted `0xe3d2a6`, or the old grain texture. */
+export function sandMaterial(look: Look): MeshStandardMaterial {
+  const sand = look.assets.sand;
+  return new MeshStandardMaterial({
+    color: 0xe3d2a6,
+    roughness: 0.9,
+    map: sand ? sand.color : groundTextures().sand,
+    normalMap: sand?.normal ?? null,
+    roughnessMap: sand?.rough ?? null,
+    metalness: 0,
+  });
+}
+
+/** Yards one tile of the sand covers. */
+export const SAND_TILE = 2;
+
+// ---------- Rough, dishes and banks ----------
+
+const inflated = (e: Ellipse, by: number): Ellipse => ({ ...e, rx: e.rx + by, rz: e.rz + by });
+
+/**
+ * The rough: one grid under everything out to the foot of the hills, 4 yd cells within 130 yd of
+ * the line and 12 yd beyond, heights from the mounds, smooth normals, UV in tiles of `tile` yards.
+ * The grid is cut away where a bunker or pond goes (vertices snap to the cut's edge, whole
+ * triangles inside drop out), so the dish and the bank can sit below grade.
+ */
+export function roughGeometry(h: Hole, tile: number): BufferGeometry {
+  const axis = (from: number, to: number, nearFrom: number, nearTo: number) => {
+    const out: number[] = [];
+    for (let v = from; v < nearFrom; v += 12) out.push(v);
+    for (let v = nearFrom; v < nearTo; v += 4) out.push(v);
+    for (let v = nearTo; v < to; v += 12) out.push(v);
+    out.push(to);
+    return out;
+  };
+  const xs = axis(-500, 500, -148, 148);
+  const zs = axis(-300, h.length + 500, -130, h.length + 130);
+  const cuts = h.hazards.map((hz) => inflated(hz.at, CUT_OUT[hz.kind]));
+  const nx = xs.length;
+  const positions = new Float32Array(nx * zs.length * 3);
+  const normals = new Float32Array(nx * zs.length * 3);
+  const uvs = new Float32Array(nx * zs.length * 2);
+  const inside = new Uint8Array(nx * zs.length);
+  const EPS = 0.5;
+  zs.forEach((z, j) => {
+    xs.forEach((x, i) => {
+      const k = j * nx + i;
+      let px = x;
+      let pz = z;
+      let py = moundY(h, x, z);
+      for (const c of cuts) {
+        const q = Math.hypot((px - c.x) / c.rx, (pz - c.z) / c.rz);
+        if (q < 1) {
+          inside[k] = 1;
+          px = c.x + (px - c.x) / Math.max(q, 1e-6);
+          pz = c.z + (pz - c.z) / Math.max(q, 1e-6);
+          py = 0;
+          break;
+        }
+      }
+      positions.set([px, py, pz], k * 3);
+      uvs.set([px / tile, pz / tile], k * 2);
+      const dx = moundY(h, x + EPS, z) - moundY(h, x - EPS, z);
+      const dz = moundY(h, x, z + EPS) - moundY(h, x, z - EPS);
+      const n = new Vector3(-dx / (2 * EPS), 1, -dz / (2 * EPS)).normalize();
+      normals.set([n.x, n.y, n.z], k * 3);
+    });
+  });
+  const index: number[] = [];
+  for (let j = 0; j < zs.length - 1; j++) {
+    for (let i = 0; i < nx - 1; i++) {
+      const a = j * nx + i;
+      const b = a + 1;
+      const c = a + nx;
+      const d = c + 1;
+      // Counter-clockwise seen from above (+y).
+      if (!(inside[a] && inside[c] && inside[b])) index.push(a, c, b);
+      if (!(inside[b] && inside[c] && inside[d])) index.push(b, c, d);
+    }
+  }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  g.setAttribute('normal', new Float32BufferAttribute(normals, 3));
+  g.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
+  g.setIndex(index);
+  return g;
+}
+
+/**
+ * A ring around an ellipse made of a profile: each `[offset, y]` is a loop `offset` yards outside
+ * its edge (negative is inside) at height `y`. UVs are world position over `tile`; normals smooth.
+ */
+export function profileRing(
+  e: Ellipse,
+  profile: readonly (readonly [number, number])[],
+  tile: number,
+  segments = 48,
+): BufferGeometry {
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const index: number[] = [];
+  for (let i = 0; i <= segments; i++) {
+    const a = (i / segments) * Math.PI * 2;
+    const c = Math.cos(a);
+    const s = Math.sin(a);
+    for (const [offset, y] of profile) {
+      const x = e.x + (e.rx + offset) * c;
+      const z = e.z + (e.rz + offset) * s;
+      positions.push(x, y, z);
+      uvs.push(x / tile, z / tile);
+    }
+  }
+  const m = profile.length;
+  for (let i = 0; i < segments; i++) {
+    for (let k = 0; k < m - 1; k++) {
+      const a = i * m + k;
+      const b = a + m;
+      // Counter-clockwise from above: round the ellipse first, then outwards.
+      index.push(a, b, a + 1, b, b + 1, a + 1);
+    }
+  }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  g.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
+  g.setIndex(index);
+  g.computeVertexNormals();
+  return g;
+}
+
+/** A bowl: a polar grid from the middle to the edge of the ellipse, heights from `height(x, z)`. */
+export function dish(
+  e: Ellipse,
+  height: (x: number, z: number) => number,
+  tile: number,
+  around = 32,
+  rings = 16,
+): BufferGeometry {
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const index: number[] = [];
+  for (let r = 0; r <= rings; r++) {
+    const s = r / rings;
+    for (let i = 0; i <= around; i++) {
+      const a = (i / around) * Math.PI * 2;
+      const x = e.x + e.rx * s * Math.cos(a);
+      const z = e.z + e.rz * s * Math.sin(a);
+      positions.push(x, height(x, z), z);
+      uvs.push(x / tile, z / tile);
+    }
+  }
+  const w = around + 1;
+  for (let r = 0; r < rings; r++) {
+    for (let i = 0; i < around; i++) {
+      const a = r * w + i;
+      const b = a + w;
+      index.push(a, a + 1, b, b, a + 1, b + 1);
+    }
+  }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  g.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
+  g.setIndex(index);
+  g.computeVertexNormals();
+  return g;
 }

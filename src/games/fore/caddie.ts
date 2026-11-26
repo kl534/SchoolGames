@@ -16,7 +16,11 @@ export interface Caddie {
    * Stands 2 yd behind the golfer's back (away from the ball line) and 0.5 yd further along the
    * line, facing the same way as the golfer, who is side-on to a shot along `dir`.
    */
-  stand(golfer: { x: number; z: number }, dir: number): void;
+  stand(
+    golfer: { x: number; z: number },
+    dir: number,
+    ground?: (x: number, z: number) => number,
+  ): void;
 }
 
 /** A standing figure with the golf bag at his feet, who cheers or groans after a shot. */
@@ -105,15 +109,13 @@ export function createCaddie(): Caddie {
         }
       });
     },
-    stand(golfer, dir) {
+    stand(golfer, dir, ground = () => 0) {
       // The golfer faces (-cos dir, sin dir); his back is the other way.
       const back = { x: Math.cos(dir), z: -Math.sin(dir) };
       const along = { x: Math.sin(dir), z: Math.cos(dir) };
-      root.position.set(
-        golfer.x + back.x * 2 + along.x * 0.5,
-        0,
-        golfer.z + back.z * 2 + along.z * 0.5,
-      );
+      const x = golfer.x + back.x * 2 + along.x * 0.5;
+      const z = golfer.z + back.z * 2 + along.z * 0.5;
+      root.position.set(x, ground(x, z), z);
       root.rotation.y = dir - Math.PI / 2;
     },
   };

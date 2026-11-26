@@ -10,12 +10,13 @@ import {
   IcosahedronGeometry,
   InstancedMesh,
   MeshBasicMaterial,
-  MeshLambertMaterial,
+  MeshStandardMaterial,
   Object3D,
   type Material,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { seededRandom } from '../../shared/random';
+import { FALLBACK_LOOK, type Look } from './ground';
 import type { Species } from './scenery';
 
 /** The parts of one tree kind: a trunk and a crown, each one merged, vertex-coloured geometry. */
@@ -213,15 +214,22 @@ const hash01 = (x: number, z: number) => {
 
 /**
  * Draws the trees as instances, one trunk mesh and one crown mesh per species, plus one mesh of
- * blob shadows. A crown's colour varies by +-8% per tree.
+ * blob shadows (only where the tier has no shadow map). A crown's colour varies by +-8% per tree.
  */
-export function buildTreeLayer(list: readonly TreePlacement[]): TreeLayer {
+export function buildTreeLayer(
+  list: readonly TreePlacement[],
+  look: Look = FALLBACK_LOOK,
+): TreeLayer {
   const object = new Group();
   const geometries: BufferGeometry[] = [];
   const materials: Material[] = [];
   const dummy = new Object3D();
-  const trunkMaterial = new MeshLambertMaterial({ vertexColors: true });
-  const crownMaterial = new MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  const trunkMaterial = new MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
+  const crownMaterial = new MeshStandardMaterial({
+    vertexColors: true,
+    flatShading: true,
+    roughness: 0.9,
+  });
   materials.push(trunkMaterial, crownMaterial);
 
   for (const species of Object.keys(PARTS) as Species[]) {
@@ -245,12 +253,13 @@ export function buildTreeLayer(list: readonly TreePlacement[]): TreeLayer {
     });
     for (const m of [trunk, crown]) {
       m.frustumCulled = false;
+      m.castShadow = m.receiveShadow = look.shadows;
       object.add(m);
     }
   }
 
   // Blob shadows: the sun is high in the north-east, so they lean towards -x and +z.
-  const blobs = list.filter((t) => t.blob !== false && !t.y);
+  const blobs = look.shadows ? [] : list.filter((t) => t.blob !== false);
   if (blobs.length > 0) {
     const geometry = new CircleGeometry(1, 14).rotateX(-Math.PI / 2);
     const material = new MeshBasicMaterial({
@@ -266,7 +275,7 @@ export function buildTreeLayer(list: readonly TreePlacement[]): TreeLayer {
     materials.push(material);
     const mesh = new InstancedMesh(geometry, material, blobs.length);
     blobs.forEach((t, i) => {
-      dummy.position.set(t.x - t.height * 0.2, 0.05, t.z + t.height * 0.17);
+      dummy.position.set(t.x - t.height * 0.2, (t.y ?? 0) + 0.05, t.z + t.height * 0.17);
       dummy.rotation.set(0, 0, 0);
       dummy.scale.set(t.r * 1.15, 1, t.r * 1.0);
       dummy.updateMatrix();

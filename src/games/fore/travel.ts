@@ -54,9 +54,27 @@ export type Spot = { x: number; y: number; z: number };
  * The travel of a struck shot: the flight to where it touches down (`result.land`), then a run in a
  * straight line to the rest point with hops that get lower and an even slowdown. A holed ball runs
  * to the pin, a splash runs to the splash point, a ball that hit a tree stops where it hit. A putt
- * just rolls, slowing evenly, to where it stops.
+ * just rolls, slowing evenly, to where it stops. `ground` is the ground's height under a point;
+ * it is added to the ball's height (a ball in a bunker rests below grade).
  */
-export function createTravel(plan: Plan, outcome: Outcome, result: Result, pin: XZ): Travel {
+export function createTravel(
+  plan: Plan,
+  outcome: Outcome,
+  result: Result,
+  pin: XZ,
+  ground: (x: number, z: number) => number = () => 0,
+): Travel {
+  const travel = flatTravel(plan, outcome, result, pin);
+  return {
+    ...travel,
+    at(t) {
+      const p = travel.at(t);
+      return { ...p, y: p.y + ground(p.x, p.z) };
+    },
+  };
+}
+
+function flatTravel(plan: Plan, outcome: Outcome, result: Result, pin: XZ): Travel {
   const { from } = plan;
   const { land } = outcome;
   const end = result.kind === 'holed' ? pin : result.kind === 'water' ? result.splash : result.at;

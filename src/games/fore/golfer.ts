@@ -50,7 +50,13 @@ export interface Golfer {
    * left, his feet line `reach` for the club from the ball. `dir` is the shot direction (radians
    * from +z towards +x).
    */
-  stand(ball: { x: number; z: number }, dir: number, clubId: string): void;
+  /** `ground` is the ground's height under a point: his feet stand on it (a bunker is below grade). */
+  stand(
+    ball: { x: number; z: number },
+    dir: number,
+    clubId: string,
+    ground?: (x: number, z: number) => number,
+  ): void;
   dispose(): void;
 }
 
@@ -735,12 +741,14 @@ export function createGolfer(): Golfer {
         model.group.quaternion.copy(qHoldClub);
       }
     },
-    stand(ball, dir, id) {
+    stand(ball, dir, id, ground = () => 0) {
       const reach = reachFor(id);
       // His chest faces along (-cos dir, sin dir): the ball line is in front of him, the target on his left.
       const forward = { x: -Math.cos(dir), z: Math.sin(dir) };
       root.rotation.y = dir - Math.PI / 2;
-      root.position.set(ball.x - forward.x * reach, 0, ball.z - forward.z * reach);
+      const x = ball.x - forward.x * reach;
+      const z = ball.z - forward.z * reach;
+      root.position.set(x, ground(x, z), z);
     },
     dispose() {
       model.dispose();

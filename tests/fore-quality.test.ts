@@ -6,6 +6,7 @@ import {
   horizonRow,
   pickGfx,
   SLOW_FRAME_MS,
+  sunSetup,
   type DeviceInfo,
 } from '../src/games/fore/quality';
 
@@ -100,5 +101,36 @@ describe('reading the sky picture', () => {
     expect(r).toBeCloseTo(0.3, 5);
     expect(g).toBeCloseTo(0.4, 5);
     expect(b).toBeCloseTo(0.6, 5);
+  });
+});
+
+describe('sunSetup', () => {
+  it('puts the sun behind the tee, to the left on screen, at the picture elevation', () => {
+    const { dir } = sunSetup({ phi: 1.2, elevation: 0.8 });
+    expect(dir[0]).toBeGreaterThan(0);
+    expect(dir[1]).toBeCloseTo(Math.sin(0.8), 6);
+    expect(dir[2]).toBeLessThan(0);
+    expect(Math.hypot(...dir)).toBeCloseTo(1, 6);
+  });
+
+  it('turns the picture so its own sun lands on that direction', () => {
+    const sun = { phi: -2.3, elevation: 0.7 };
+    const { dir, yaw } = sunSetup(sun);
+    // The lookup turns the world direction by yaw about y, and must land on the picture's sun.
+    const c = Math.cos(yaw);
+    const s = Math.sin(yaw);
+    const looked = [dir[0] * c + dir[2] * s, dir[1], -dir[0] * s + dir[2] * c];
+    const picture = [
+      Math.cos(sun.elevation) * Math.cos(sun.phi),
+      Math.sin(sun.elevation),
+      Math.cos(sun.elevation) * Math.sin(sun.phi),
+    ];
+    looked.forEach((v, i) => expect(v).toBeCloseTo(picture[i], 6));
+  });
+
+  it('has a plain sun and no turn without a picture', () => {
+    const { dir, yaw } = sunSetup(null);
+    expect(yaw).toBe(0);
+    expect(dir[1]).toBeGreaterThan(0.5);
   });
 });

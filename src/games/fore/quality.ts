@@ -179,3 +179,33 @@ export function horizonRow(
   }
   return [r / width, g / width, b / width];
 }
+
+/**
+ * Where the sun shines from, as a bearing from +z towards +x: behind the tee and to the left of the
+ * line on screen (x is to the left when looking down the hole). The doc's 215 is the same bearing
+ * measured the other way round (from +z towards -x).
+ */
+export const SUN_AZIMUTH = (145 * Math.PI) / 180;
+/** The sun's elevation when there is no picture to read it from. */
+export const FALLBACK_ELEVATION = (48 * Math.PI) / 180;
+
+/**
+ * The sun the scene is lit from: `dir` is the unit vector towards it, and `yaw` the turn about the
+ * y axis (the same one for the environment and the dome, whose lookups turn by it) that puts the
+ * picture's own sun there. `sun` is `brightestDirection`'s reading; null means no picture.
+ */
+export function sunSetup(sun: { phi: number; elevation: number } | null): {
+  dir: [number, number, number];
+  yaw: number;
+} {
+  const elevation = sun?.elevation ?? FALLBACK_ELEVATION;
+  const flat = Math.cos(elevation);
+  const dir: [number, number, number] = [
+    Math.sin(SUN_AZIMUTH) * flat,
+    Math.sin(elevation),
+    Math.cos(SUN_AZIMUTH) * flat,
+  ];
+  // The picture's sun has bearing (from +z towards +x) of pi/2 - phi.
+  const yaw = sun ? Math.PI / 2 - sun.phi - SUN_AZIMUTH : 0;
+  return { dir, yaw };
+}
