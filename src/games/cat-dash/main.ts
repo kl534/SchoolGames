@@ -152,17 +152,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
   let catId: CatId = dev?.cat ?? savedCat(getSetting(CAT_SETTING(playerId)));
 
   // ---------- Scene ----------
-  const ctx = createScene(container, { fov: FOV, near: 5, far: 400 });
-  const { scene, camera } = ctx;
-  const world = createWorld(scene);
-  const effects = createEffects();
-  scene.add(effects.object);
-  const props = createPropPool();
-  const cat: Cat = createCat(CAT_LOOKS[catId]);
-  scene.add(cat.object);
-
   // Quality tier: the saved one or one from the device's hints; it steps down when frames are slow.
-  const look = createLook(ctx, world);
   const readSavedQuality = () => {
     try {
       return localStorage.getItem(QUALITY_KEY);
@@ -178,6 +168,21 @@ function run(session: GameSession, dev: DevOptions | null): void {
       cores: hints.hardwareConcurrency,
       memoryGb: hints.deviceMemory,
     });
+  const ctx = createScene(container, {
+    fov: FOV,
+    near: 5,
+    far: 400,
+    antialias: QUALITY_SETTINGS[quality].antialias,
+  });
+  const { scene, camera } = ctx;
+  const world = createWorld(scene);
+  const effects = createEffects();
+  scene.add(effects.object);
+  const props = createPropPool();
+  const cat: Cat = createCat(CAT_LOOKS[catId]);
+  scene.add(cat.object);
+  const look = createLook(ctx, world);
+
   const fishSet = createFishSet(QUALITY_SETTINGS[quality].outlines);
   const applyQuality = (q: Quality) => {
     quality = q;

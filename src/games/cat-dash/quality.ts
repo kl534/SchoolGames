@@ -1,15 +1,18 @@
 /**
  * Quality tiers: how much the renderer does. A device starts on the tier its hints suggest (or the
- * one it saved) and the governor steps it down, never up, when the frame rate stays low.
+ * one it saved) and the governor steps it down, never up, when the frame rate stays low. The last
+ * tier keeps everything `low` draws but renders fewer pixels, for the slowest Chromebooks.
  */
 import { MAX_DELTA } from '../../shared/scene';
 
-export type Quality = 'high' | 'medium' | 'low';
-export const QUALITIES: readonly Quality[] = ['high', 'medium', 'low'];
+export type Quality = 'high' | 'medium' | 'low' | 'lowest';
+export const QUALITIES: readonly Quality[] = ['high', 'medium', 'low', 'lowest'];
 
 export interface QualitySettings {
-  /** Cap on devicePixelRatio. */
+  /** Cap on devicePixelRatio (under 1 draws fewer pixels than the screen has and scales up). */
   maxPixelRatio: number;
+  /** Multisample antialiasing; it can only be chosen when the renderer is made (the start tier). */
+  antialias: boolean;
   /** 0 = no real shadows (the blob shadow only). */
   shadowMapSize: number;
   /** PCFSoftShadowMap, else PCFShadowMap. */
@@ -22,6 +25,7 @@ export interface QualitySettings {
 export const QUALITY_SETTINGS: Record<Quality, QualitySettings> = {
   high: {
     maxPixelRatio: 2,
+    antialias: true,
     shadowMapSize: 2048,
     softShadows: true,
     outlines: true,
@@ -29,6 +33,7 @@ export const QUALITY_SETTINGS: Record<Quality, QualitySettings> = {
   },
   medium: {
     maxPixelRatio: 1.5,
+    antialias: true,
     shadowMapSize: 1024,
     softShadows: false,
     outlines: true,
@@ -36,6 +41,15 @@ export const QUALITY_SETTINGS: Record<Quality, QualitySettings> = {
   },
   low: {
     maxPixelRatio: 1,
+    antialias: true,
+    shadowMapSize: 0,
+    softShadows: false,
+    outlines: false,
+    decorShadows: false,
+  },
+  lowest: {
+    maxPixelRatio: 0.75,
+    antialias: false,
     shadowMapSize: 0,
     softShadows: false,
     outlines: false,
@@ -54,7 +68,10 @@ export const QUALITY_KEY = 'cd-quality';
 export const isQuality = (value: string | null | undefined): value is Quality =>
   (QUALITIES as readonly (string | null | undefined)[]).includes(value);
 
-/** Starting tier from hints: a saved tier wins; else 'medium' for 4 cores or fewer or 3 GB or less. */
+/**
+ * Starting tier from hints: a saved tier wins; else 'medium' for 4 cores or fewer (a Celeron
+ * Chromebook) or 3 GB or less, else 'high'. The governor takes it lower only if frames are slow.
+ */
 export function initialQuality(hints: {
   saved: string | null;
   cores?: number;
@@ -80,8 +97,11 @@ export function createGovernor(start: Quality): Governor {
     get quality() {
       return quality;
     },
-    sample(delta) {
-      if (delta >= MAX_DELTA || !(delta > 0)) return null;
+    sample(raw) {
+      if (!(raw > 0)) return null;
+      // The loop clamps its steps to MAX_DELTA; a clamped frame still counts, as the slowest it
+      // can be, so a device under 10 fps steps down too. One hitch in the window barely moves it.
+      const delta = Math.min(raw, MAX_DELTA);
       if (settle < SETTLE_SECONDS) {
         settle += delta;
         return null;

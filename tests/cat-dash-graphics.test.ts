@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  Box3,
   BoxGeometry,
   Group,
+  type BufferGeometry,
+  type Object3D,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
@@ -16,7 +19,8 @@ import {
   type FloorPattern,
   type WallPattern,
 } from '../src/games/cat-dash/places';
-import { BEVEL_MIN, Kit } from '../src/games/cat-dash/kit';
+import { BEVEL_FINE, BEVEL_MIN, Kit } from '../src/games/cat-dash/kit';
+import { mergeStatic } from '../src/games/cat-dash/merge';
 import {
   paintBackdrop,
   paintFade,
@@ -42,6 +46,7 @@ describe('initialQuality', () => {
     expect(initialQuality({ saved: 'high', cores: 2 })).toBe('high');
     expect(initialQuality({ saved: 'ultra', cores: 8, memoryGb: 8 })).toBe('high');
     expect(initialQuality({ saved: 'ultra', cores: 2 })).toBe('medium');
+    expect(initialQuality({ saved: 'lowest', cores: 8 })).toBe('lowest');
   });
   it('starts weak devices on medium and the rest on high', () => {
     expect(initialQuality({ saved: null, cores: 4 })).toBe('medium');
@@ -68,15 +73,17 @@ describe('quality governor', () => {
     expect(gov.quality).toBe('high');
   });
 
-  it('steps high to medium to low at 30 fps, then stays low', () => {
+  it('steps high to medium to low to lowest at 30 fps, then stays lowest', () => {
     const gov = createGovernor('high');
     const settleFrames = Math.ceil(SETTLE_SECONDS * 30) + 1;
     expect(feed(gov, 30, settleFrames + SAMPLE_FRAMES - 2)).toEqual([]);
     expect(feed(gov, 30, 5)).toEqual(['medium']);
     expect(feed(gov, 30, settleFrames + SAMPLE_FRAMES - 8)).toEqual([]);
     expect(feed(gov, 30, 8)).toEqual(['low']);
+    expect(feed(gov, 30, settleFrames + SAMPLE_FRAMES - 8)).toEqual([]);
+    expect(feed(gov, 30, 8)).toEqual(['lowest']);
     expect(feed(gov, 30, 3000)).toEqual([]);
-    expect(gov.quality).toBe('low');
+    expect(gov.quality).toBe('lowest');
   });
 
   it('counts nothing in the first two seconds', () => {
@@ -87,10 +94,15 @@ describe('quality governor', () => {
     expect(feed(gov, 12, SAMPLE_FRAMES - 2)).toEqual([]);
   });
 
-  it('ignores hitches of 0.1 s and more', () => {
+  it('shrugs off a lone hitch at 60 fps', () => {
     const gov = createGovernor('high');
-    expect(feed(gov, 5, 2000)).toEqual([]);
+    for (let i = 0; i < 6000; i++) expect(gov.sample(i % 200 === 199 ? 0.5 : 1 / 60)).toBeNull();
     expect(gov.quality).toBe('high');
+  });
+
+  it('steps down even under 10 fps, where every frame is clamped', () => {
+    const gov = createGovernor('medium');
+    expect(feed(gov, 5, 400)).toContain('low');
   });
 
   it('never steps up when the frame rate recovers', () => {
@@ -101,8 +113,8 @@ describe('quality governor', () => {
     expect(gov.quality).toBe('medium');
   });
 
-  it('on random traces never steps up and never steps more than twice', () => {
-    const order: Quality[] = ['high', 'medium', 'low'];
+  it('on random traces never steps up and never steps more than three times', () => {
+    const order: Quality[] = ['high', 'medium', 'low', 'lowest'];
     for (let run = 0; run < runs(300, 40); run++) {
       const gov = createGovernor('high');
       let seed = run * 7919 + 13;
@@ -123,7 +135,7 @@ describe('quality governor', () => {
           last = index;
         }
       }
-      expect(steps).toBeLessThanOrEqual(2);
+      expect(steps).toBeLessThanOrEqual(3);
     }
   });
 
@@ -245,6 +257,15 @@ describe('Kit.box', () => {
     expect(kit.box(1, 1, 1, m, parent).geometry.type).toBe('RoundedBoxGeometry');
   });
 
+  it('rounds small boxes with one segment and big ones with two', () => {
+    const kit = new Kit();
+    const m = kit.lit(0xffffff);
+    const tris = (g: BufferGeometry) => (g.index ? g.index.count : g.attributes.position.count) / 3;
+    const small = kit.box(1, BEVEL_FINE - 0.01, 1, m, parent).geometry;
+    const big = kit.box(1, BEVEL_FINE, 1, m, parent).geometry;
+    expect(tris(small)).toBeLessThan(tris(big) / 2);
+  });
+
   it('shares the geometry of equal sizes and frees it once', () => {
     const kit = new Kit();
     const m = kit.lit(0xffffff);
@@ -319,5 +340,72 @@ describe('texture painters', () => {
     expect(new Set(PLACES.map((p) => p.look.wallPattern).filter(Boolean)).size).toBe(5);
     const kinds = new Set(PLACES.flatMap((p) => (p.look.backdrop ?? []).map((b) => b.kind)));
     expect(kinds.size).toBe(11);
+  });
+});
+
+describe('mergeStatic', () => {
+  const count = (root: Object3D) => {
+    let meshes = 0;
+    let triangles = 0;
+    root.traverse((o) => {
+      const mesh = o as Mesh;
+      if (!mesh.isMesh) return;
+      meshes++;
+      const g = mesh.geometry;
+      triangles += (g.index ? g.index.count : g.attributes.position.count) / 3;
+    });
+    return { meshes, triangles };
+  };
+
+  it('keeps every triangle and the bounds of each place, in far fewer meshes', () => {
+    for (const place of PLACES) {
+      const kit = new Kit();
+      const tile = buildScenery(place, kit);
+      const before = count(tile);
+      const box = new Box3().setFromObject(tile, true);
+      const made = mergeStatic(tile);
+      const after = count(tile);
+      expect(after.triangles, place.id).toBe(before.triangles);
+      const merged = new Box3().setFromObject(tile, true);
+      expect(merged.min.distanceTo(box.min), place.id).toBeLessThan(1e-4);
+      expect(merged.max.distanceTo(box.max), place.id).toBeLessThan(1e-4);
+      expect(after.meshes, place.id).toBeLessThan(before.meshes);
+      made.forEach((g) => g.dispose());
+      kit.dispose();
+    }
+  });
+
+  it('bakes positions, rotations and scales, and leaves see-through and lone meshes alone', () => {
+    const root = new Group();
+    root.position.set(5, 0, 0);
+    const solid = new MeshStandardMaterial();
+    const glass = new MeshStandardMaterial({ transparent: true, opacity: 0.5 });
+    const lone = new MeshStandardMaterial();
+    const inner = new Group();
+    inner.position.set(0, 2, 0);
+    inner.rotation.z = Math.PI / 2;
+    root.add(inner);
+    const a = new Mesh(new BoxGeometry(1, 1, 1), solid);
+    a.position.set(1, 0, 0);
+    a.scale.set(2, 1, 1);
+    inner.add(a);
+    root.add(new Mesh(new SphereGeometry(0.5), solid));
+    root.add(new Mesh(new BoxGeometry(1, 1, 1), solid));
+    const see = new Mesh(new BoxGeometry(1, 1, 1), glass);
+    root.add(see);
+    root.add(new Mesh(new BoxGeometry(1, 1, 1), lone));
+    root.updateMatrixWorld(true);
+    const box = new Box3().setFromObject(a);
+    mergeStatic(root);
+    // The two boxes and the sphere share a material: one mesh (the sphere has the same attributes).
+    const meshes = root.children.filter((o) => (o as Mesh).isMesh) as Mesh[];
+    expect(meshes).toHaveLength(3);
+    expect(see.parent).toBe(root);
+    expect(meshes.filter((m) => m.material === solid)).toHaveLength(1);
+    expect(inner.parent).toBeNull();
+    // The rotated, scaled box landed where it was (in the root's own space).
+    root.updateMatrixWorld(true);
+    const all = new Box3().setFromObject(meshes.find((m) => m.material === solid)!);
+    expect(all.containsBox(box.expandByScalar(-1e-4))).toBe(true);
   });
 });

@@ -98,7 +98,7 @@ export function createLook(ctx: SceneContext, world: World): Look {
       if (s.shadowMapSize > 0) key.shadow.mapSize.set(s.shadowMapSize, s.shadowMapSize);
       key.shadow.map?.dispose();
       key.shadow.map = null;
-      world.setBlobOpacity(next === 'low' ? 0.45 : 0.22);
+      world.setBlobOpacity(s.shadowMapSize > 0 ? 0.22 : 0.45);
       refreshMaterials();
     },
     setPlace(place) {

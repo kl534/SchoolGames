@@ -16,7 +16,7 @@ import {
   TorusGeometry,
   type Material,
 } from 'three';
-import { Kit } from './kit';
+import { Kit, castShadows } from './kit';
 import { furMaterial, type FurMaterial } from './cat-materials';
 import { OUTLINE_CAT_PX, addOutline, type Outline } from './outline';
 import type { CatLook } from './looks';
@@ -766,14 +766,9 @@ export function createCat(initial: CatLook): Cat {
   spikes.visible = false;
   rig.add(spikes);
 
-  // Every solid mesh casts a shadow (the glass, blush and glow stay out of the shadow map).
-  object.traverse((o) => {
-    const mesh = o as Mesh;
-    if (!mesh.isMesh) return;
-    const m = mesh.material as Material;
-    mesh.castShadow = !m.transparent && !(m instanceof MeshBasicMaterial);
-    mesh.receiveShadow = false;
-  });
+  // Every solid mesh casts a shadow (the glass, blush and glow stay out of the shadow map, and so
+  // do specks like the eyes and nose).
+  castShadows(object);
   const outline = addOutline(object, OUTLINE_CAT_PX);
 
   // ----- State -----
