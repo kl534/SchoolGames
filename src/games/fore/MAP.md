@@ -47,7 +47,7 @@ Nine holes of real golf: each shot is one question. The player puts a ring where
 - `?cam=face|dtl|front`: camera 5 yd from the golfer at chest height: across the line at his front, behind the ball along the line, or from the target side.
 - `?introAt=<0..1>`: freeze the hole flyover at that progress (needs no `intro=1`).
 - `?shadows=off`: no real shadow map; the round blob shows under the golfer and caddie again.
-- `?gfx=low|medium|high`: force the picture quality tier (and stop it adapting or being saved). Headless browsers run on a software renderer that would pick `low`, so every `npm run shots` of Fore! passes it.
+- `?gfx=low|medium|high`: force the picture quality tier (and stop it adapting or being saved). Headless browsers run on a software renderer that would pick `low`, so every `npm run shots` of Fore! passes it (add `--serial` for `gfx=high`: four software-rendered high pages at once starve each other and the screenshots time out).
 - Example: `npm run shots -- "fore?hole=2&lie=sand" --start`
 
 ## Where changes go
