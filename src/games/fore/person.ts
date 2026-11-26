@@ -150,6 +150,12 @@ export function plantedBend(lift: number, heel: number): number {
   return (lo + hi) / 2;
 }
 
+export interface LegJoints {
+  hip: Group;
+  knee: Group;
+  ankle: Group;
+}
+
 export interface Person {
   /** At the feet; yaw this to face somewhere (0 faces +z). Scaled to the person's height. */
   root: Group;
@@ -169,6 +175,8 @@ export interface Person {
   /** Joints at the hands, for holding a ball. Left is +x. */
   handL: Group;
   handR: Group;
+  /** The leg joints (left is +x), for a model that follows the rig. */
+  legs: { L: LegJoints; R: LegJoints };
   materials: {
     shirt: MeshStandardMaterial;
     hat: MeshStandardMaterial;
@@ -437,6 +445,7 @@ export function createPerson(style: PersonStyle): Person {
     elbowR: armR.elbow,
     handL: armL.hand,
     handR: armR.hand,
+    legs: { L: legL, R: legR },
     materials: { shirt, hat, pants },
     apply,
     recolour(shirtColor, trimColor) {

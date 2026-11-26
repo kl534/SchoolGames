@@ -230,12 +230,12 @@ export function devPlace(): boolean {
   return import.meta.env.DEV && params().get('place') === '1';
 }
 
-export type DevCam = 'face' | 'dtl' | 'front';
+export type DevCam = 'face' | 'dtl' | 'front' | 'crowd';
 
 export function devCam(): DevCam | null {
   if (!import.meta.env.DEV) return null;
   const cam = params().get('cam');
-  return cam === 'face' || cam === 'dtl' || cam === 'front' ? cam : null;
+  return cam === 'face' || cam === 'dtl' || cam === 'front' || cam === 'crowd' ? cam : null;
 }
 
 /** Progress (0 to 1) to freeze the hole flyover at, or null. */
@@ -257,4 +257,9 @@ export function devGfx(): Gfx | null {
   if (!import.meta.env.DEV) return null;
   const gfx = params().get('gfx');
   return gfx === 'low' || gfx === 'medium' || gfx === 'high' ? gfx : null;
+}
+
+/** Whether the gallery claps for ever (to check the clapping pose). */
+export function devClap(): boolean {
+  return import.meta.env.DEV && params().get('clap') === '1';
 }

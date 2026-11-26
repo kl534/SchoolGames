@@ -37,6 +37,7 @@ import { HOLES, surfaceAt, type Hole } from './course';
 import {
   devBigMap,
   devCam,
+  devClap,
   devClubPlan,
   devGfx,
   devHoleState,
@@ -53,12 +54,13 @@ import {
   type DevCam,
 } from './dev';
 import { createCaddie } from './caddie';
+import { ROPE_R, shouldClap } from './gallery';
 import { createGolfer, type GolfMove } from './golfer';
 import { createGuide } from './guide';
 import { buildHole, CUP_AID_RANGE, SKY, type HoleScene } from './hole';
 import { createSky, type Sky } from './sky';
 import { disposeForeAssets, loadForeAssets, NO_ASSETS, type ForeAssets } from './assets';
-import { FALLBACK_LOOK, litTree, type Look } from './ground';
+import { FALLBACK_LOOK, litTree, useCascadedLightChunk, type Look } from './ground';
 import { createBlades } from './grass';
 import { createPost, type Post } from './post';
 import { adaptGfx, gfxSettings, pickGfx, sunSetup, type DeviceInfo, type Gfx } from './quality';
@@ -265,6 +267,8 @@ function run(session: GameSession): void {
       sun.shadow.normalBias = 0.02;
     }
   }
+  // One lights chunk on every tier, so medium and low colour like high (see the function).
+  const restoreLights = useCascadedLightChunk();
   let fill: HemisphereLight | null = null;
   let envTarget: WebGLRenderTarget | null = null;
   let sky: Sky | null = null;
@@ -380,6 +384,12 @@ function run(session: GameSession): void {
     sky = createSky(picture, yaw, scene.fog ? (scene.fog as Fog).color : undefined);
     scene.add(sky.object);
     look = makeLook();
+    // The realistic people take over from the rig, which keeps driving them (and falls back to
+    // being seen if the models did not load).
+    golfer.setModel(loaded.people, shadows);
+    caddie.setModel(loaded.people, shadows);
+    litTree(csm, golfer.root);
+    litTree(csm, caddie.root);
     assetsReady = true;
     bar?.remove();
     bar = null;
@@ -525,6 +535,23 @@ function run(session: GameSession): void {
     const line = { x: Math.sin(plan.dir), z: Math.cos(plan.dir) };
     const ballAt = hstate.at;
     const eye = (x: number, z: number): Vec => ({ x, y: 1.2, z });
+    const crowd = holeScene?.gallery;
+    if (cam === 'crowd' && crowd) {
+      // Inside the rope, facing the spectators from 9 yd.
+      const d = { x: Math.sin(crowd.centre), z: Math.cos(crowd.centre) };
+      const at = (r: number, y: number): Vec => ({
+        x: hole.pin.x + d.x * r,
+        y,
+        z: hole.pin.z + d.z * r,
+      });
+      return {
+        pos: at(ROPE_R - 9, 1.5),
+        look: at(ROPE_R + 3.5, 1.1),
+        fov: 45,
+        shift: centreShift(viewH, bands.aim),
+        shiftX: centreShiftX(viewW, bands.aim),
+      };
+    }
     const [pos, look]: [Vec, Vec] =
       cam === 'face'
         ? [eye(g.x + chest.x * 5, g.z + chest.z * 5), { x: g.x, y: 1, z: g.z }]
@@ -1017,6 +1044,8 @@ function run(session: GameSession): void {
     else if (holed || (result.kind === 'rest' && result.surface === 'green' && !isPutt(plan))) {
       setGolf('cheer');
     } else setGolf('follow');
+    // The gallery applauds a holed ball or one that stops beside the pin.
+    if (shouldClap(result, hole.pin)) holeScene?.gallery?.clap(gameTime);
     // The caddie reacts to the shot, or to the hole when this shot ends it.
     caddie.react(
       reactionFor(
@@ -1442,6 +1471,8 @@ function run(session: GameSession): void {
     else golfer.play(golfMove, gameTime - golfSince, delta);
     caddie.update(delta);
     holeScene?.update(gameTime);
+    if (devClap()) holeScene?.gallery?.clap(gameTime - 0.6);
+    holeScene?.gallery?.update(gameTime, camera.position);
     blades.update(gameTime);
     sky?.update(gameTime, camera.position, hole.length / 2);
     applyCamera();
@@ -1471,6 +1502,7 @@ function run(session: GameSession): void {
     window.removeEventListener('orientationchange', sizeRenderer);
     post?.dispose();
     csm?.remove();
+    restoreLights();
     csm?.dispose();
     envTarget?.dispose();
     fill?.dispose();
