@@ -200,7 +200,7 @@ function deviceInfo(renderer: WebGLRenderer): DeviceInfo {
 }
 
 /** AgX at 1.0 washes the grass out under this sun; a little lower keeps the greens. */
-const EXPOSURE = 0.75;
+const EXPOSURE = 0.65;
 /** The sun's intensity (the cascaded map's lights add up to the same). */
 const SUN_PLAIN = 3.2;
 
