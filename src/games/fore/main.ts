@@ -380,6 +380,12 @@ function run(session: GameSession): void {
     sky = createSky(picture, yaw, scene.fog ? (scene.fog as Fog).color : undefined);
     scene.add(sky.object);
     look = makeLook();
+    // The realistic people take over from the rig, which keeps driving them (and falls back to
+    // being seen if the models did not load).
+    golfer.setModel(loaded.people, shadows);
+    caddie.setModel(loaded.people, shadows);
+    litTree(csm, golfer.root);
+    litTree(csm, caddie.root);
     assetsReady = true;
     bar?.remove();
     bar = null;

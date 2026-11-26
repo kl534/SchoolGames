@@ -10,8 +10,11 @@ import {
   SRGBColorSpace,
   TextureLoader,
   type DataTexture,
+  type Mesh,
   type Texture,
 } from 'three';
+import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { brightestDirection, horizonRow } from './quality';
 
@@ -42,6 +45,15 @@ export interface TreeAssets {
   pine: Texture;
 }
 
+export interface PeopleAssets {
+  /** The Quaternius bodies (slimmed and dressed in code) and every hairstyle. */
+  golfer: GLTF;
+  caddie: GLTF;
+  hair: GLTF;
+  /** The cloth weave normal (linear, repeating). */
+  weave: Texture;
+}
+
 export interface ForeAssets {
   sky: SkyAssets | null;
   grass: TurfAssets | null;
@@ -49,6 +61,7 @@ export interface ForeAssets {
   /** Ripple normals for the water (linear, repeating). */
   water: Texture | null;
   trees: TreeAssets | null;
+  people: PeopleAssets | null;
 }
 
 /** The assets of a run with none (tests, or everything failed to load). */
@@ -58,6 +71,7 @@ export const NO_ASSETS: ForeAssets = {
   sand: null,
   water: null,
   trees: null,
+  people: null,
 };
 
 const base = () => `${import.meta.env.BASE_URL}fore/`;
@@ -79,7 +93,7 @@ export async function loadForeAssets(
 ): Promise<ForeAssets> {
   const failed: string[] = [];
   let done = 0;
-  const total = 12;
+  const total = 16;
   const tick = () => onProgress?.(Math.min(++done / total, 1));
   const textures = new TextureLoader();
   const tex = async (file: string, srgb: boolean) => {
@@ -98,7 +112,7 @@ export async function loadForeAssets(
     }
   };
 
-  const [sky, grass, sand, water, trees] = await Promise.all([
+  const [sky, grass, sand, water, trees, people] = await Promise.all([
     group('sky', async () => {
       const loader = new RGBELoader().setDataType(FloatType);
       const [hdr, dome] = await Promise.all([
@@ -141,12 +155,23 @@ export async function loadForeAssets(
       ]);
       return { barkColor, barkNormal, oak, pine };
     }),
+    group('people', async () => {
+      const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+      const model = (file: string) => loader.loadAsync(`${base()}people/${file}`).finally(tick);
+      const [golfer, caddie, hair, weave] = await Promise.all([
+        model('golfer.glb'),
+        model('caddie.glb'),
+        model('hair.glb'),
+        tex('people/fabric_normal.webp', false),
+      ]);
+      return { golfer, caddie, hair, weave };
+    }),
   ]);
   if (failed.length > 0) {
     console.warn(`Fore!: could not load ${failed.join(', ')}; using the plain look instead.`);
   }
   onProgress?.(1);
-  return { sky, grass, sand, water, trees };
+  return { sky, grass, sand, water, trees, people };
 }
 
 /** Frees every texture's GPU copy. */
@@ -166,4 +191,19 @@ export function disposeForeAssets(a: ForeAssets): void {
     a.trees?.pine,
   ];
   all.forEach((t) => t?.dispose());
+  if (a.people) {
+    a.people.weave.dispose();
+    for (const gltf of [a.people.golfer, a.people.caddie, a.people.hair]) {
+      gltf.scene.traverse((o) => {
+        const m = o as Mesh;
+        if (!m.isMesh) return;
+        m.geometry.dispose();
+        (Array.isArray(m.material) ? m.material : [m.material]).forEach((x) => {
+          for (const v of Object.values(x))
+            if ((v as Texture | null)?.isTexture) (v as Texture).dispose();
+          x.dispose();
+        });
+      });
+    }
+  }
 }

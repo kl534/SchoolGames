@@ -1,5 +1,7 @@
 import { CylinderGeometry, Group, Mesh, MeshStandardMaterial } from 'three';
+import type { PeopleAssets } from './assets';
 import { createAnimator, createPerson, type Person } from './person';
+import { CADDIE_OUTFIT, createSkinnedPerson, type Skinned } from './skin';
 import type { Reaction } from './rules';
 
 /** How long a cheer or a groan lasts before the caddie stands easy again, seconds. */
@@ -10,6 +12,8 @@ export interface Caddie {
   person: Person;
   /** Starts a reaction now; `idle` does nothing. It ends by itself after REACTION_SECONDS. */
   react(reaction: Reaction): void;
+  /** Puts the realistic model on the rig (null brings the rig back). */
+  setModel(people: PeopleAssets | null, shadows?: boolean): void;
   /** Poses the caddie; call every frame with the frame time. */
   update(delta: number): void;
   /**
@@ -61,6 +65,7 @@ export function createCaddie(): Caddie {
   bag.position.set(-0.45, 0, 0.05);
   root.add(bag);
 
+  let skinned: Skinned | null = null;
   let move: Reaction = 'idle';
   let since = 0;
   let now = 0;
@@ -108,6 +113,23 @@ export function createCaddie(): Caddie {
             break;
         }
       });
+      skinned?.update();
+    },
+    setModel(people, shadows = false) {
+      skinned?.dispose();
+      skinned = null;
+      if (!people) return;
+      skinned = createSkinnedPerson(people.caddie, person, {
+        outfit: CADDIE_OUTFIT,
+        accent: 'bib',
+        cap: 0x2f5a3a,
+        hair: { style: 'Hair_Buns', colour: 0x3a2616 },
+        hairSource: people.hair,
+        weave: people.weave,
+        height: 1.9,
+        face: true,
+      });
+      skinned.setShadows(shadows);
     },
     stand(golfer, dir, ground = () => 0) {
       // The golfer faces (-cos dir, sin dir); his back is the other way.
