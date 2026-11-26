@@ -53,8 +53,10 @@ export interface SkinOptions {
   accent: Accent;
   /** Cap colour; null for a bare head. */
   cap: number | null;
-  /** A hairstyle from `hair.glb` (a mesh name) and its colour. */
-  hair: { style: string; colour: number } | null;
+  /** Hairstyles from `hair.glb` (mesh names) and their colour (a beard goes with a haircut). */
+  hair: { style: string; colour: number }[];
+  /** A tint for the skin (white leaves the picture as it is). */
+  skin?: number;
   hairSource: ModelSource | null;
   weave: Texture | null;
   /** Standing height, yards, cap included. */
@@ -162,28 +164,34 @@ function setWorldQuat(bone: Bone, world: Quaternion): void {
   bone.updateWorldMatrix(false, false);
 }
 
-export function createSkinnedPerson(
+interface Body {
+  root: Group;
+  model: Object3D;
+  k: number;
+  bone(name: string): Bone;
+  bones: Map<string, Bone>;
+  owned: Material[];
+  geometries: BufferGeometry[];
+}
+
+/**
+ * Clones a prepared body under `parent` (scaled so it stands `options.height` yards tall inside a
+ * parent scaled by `parentScale`), dresses it and gives it hair and a cap.
+ */
+function dressBody(
   source: ModelSource,
-  person: Person,
   options: SkinOptions,
-): Skinned {
+  parent: Object3D,
+  parentScale: number,
+): Body {
   const template = prepare(source, options.accent);
-  // Hide the rig (its joints still pose and carry the club); the blob shadow stays.
-  const hidden: Object3D[] = [];
-  person.root.traverse((o) => {
-    const m = o as Mesh;
-    if (m.isMesh && m.name !== 'blob' && m.visible) {
-      m.visible = false;
-      hidden.push(m);
-    }
-  });
   const root = new Group();
   const model = cloneSkinned(template.scene);
   root.add(model);
-  person.root.add(root);
-  const k = options.height / template.standing / person.scale;
+  parent.add(root);
+  const k = options.height / template.standing / parentScale;
   root.scale.setScalar(k);
-  person.root.updateMatrixWorld(true);
+  parent.updateMatrixWorld(true);
 
   const { meshes, bones } = bonesOf(model);
   const bone = (name: string) => bones.get(name)!;
@@ -194,12 +202,11 @@ export function createSkinnedPerson(
     owned.push(m);
     return m;
   };
-  const cloth: MeshStandardMaterial[] = [];
   for (const mesh of meshes) {
     const material = mesh.material as MeshStandardMaterial;
     if (/Superhero/i.test(material.name)) {
       const m = own(clothMaterial(material, options.outfit, options.weave, CLOTH_PUSH / k));
-      cloth.push(m);
+      if (options.skin !== undefined) m.color.setHex(options.skin);
       mesh.material = m;
     } else if (!options.face) {
       mesh.visible = false;
@@ -211,15 +218,14 @@ export function createSkinnedPerson(
   // Hair and cap ride the head bone.
   const head = bone('Head');
   const geometries: BufferGeometry[] = [];
-  if (options.hair && options.hairSource) {
-    const hair = options.hairSource.scene.getObjectByName(options.hair.style) as Mesh | undefined;
-    if (hair) {
-      const material = own((hair.material as MeshStandardMaterial).clone());
-      material.color.setHex(options.hair.colour);
-      const piece = new Mesh(hair.geometry, material);
-      piece.frustumCulled = false;
-      head.add(piece);
-    }
+  for (const style of options.hair) {
+    const hair = options.hairSource?.scene.getObjectByName(style.style) as Mesh | undefined;
+    if (!hair) continue;
+    const material = own((hair.material as MeshStandardMaterial).clone());
+    material.color.setHex(style.colour);
+    const piece = new Mesh(hair.geometry, material);
+    piece.frustumCulled = false;
+    head.add(piece);
   }
   if (options.cap !== null) {
     const material = own(new MeshStandardMaterial({ color: options.cap, roughness: 0.7 }));
@@ -237,6 +243,29 @@ export function createSkinnedPerson(
     head.add(crown, peak);
     geometries.push(dome, peak.geometry);
   }
+  return { root, model, k, bone, bones, owned, geometries };
+}
+
+export function createSkinnedPerson(
+  source: ModelSource,
+  person: Person,
+  options: SkinOptions,
+): Skinned {
+  // Hide the rig (its joints still pose and carry the club); the blob shadow stays.
+  const hidden: Object3D[] = [];
+  person.root.traverse((o) => {
+    const m = o as Mesh;
+    if (m.isMesh && m.name !== 'blob' && m.visible) {
+      m.visible = false;
+      hidden.push(m);
+    }
+  });
+  const { root, model, bone, bones, owned, geometries } = dressBody(
+    source,
+    options,
+    person.root,
+    person.scale,
+  );
 
   // ----- Rest data -----
   model.updateMatrixWorld(true);
@@ -506,7 +535,6 @@ export function createSkinnedPerson(
             m4.makeBasis(handX, handY, handZ);
             gripQ.setFromRotationMatrix(m4);
             finalQuat = finalQ.copy(followQ).slerp(gripQ, Math.min(grip, 1));
-          } else {
           }
           handY.set(0, 1, 0).applyQuaternion(finalQuat);
         }
@@ -560,6 +588,83 @@ export function createSkinnedPerson(
       geometries.forEach((g) => g.dispose());
       root.removeFromParent();
       hidden.forEach((o) => (o.visible = true));
+    },
+  };
+}
+
+/** A spectator: a dressed body that stands with its arms down, sways and can clap. */
+export interface Spectator {
+  /** At the feet; turn it with `rotation.y` (0 faces +z). */
+  root: Group;
+  /** `clap` is how far into a clap it is (0 none, 1 full) and `since` seconds since it began. */
+  pose(t: number, clap: number, since: number): void;
+  dispose(): void;
+}
+
+export interface SpectatorOptions extends SkinOptions {
+  /** Where in its sway this one is (radians) and how fast (Hz, 0.2 to 0.4). */
+  phase: number;
+  rate: number;
+}
+
+const SWAY = (3 * Math.PI) / 180;
+const CLAP_SWING = (25 * Math.PI) / 180;
+const CLAP_HZ = 3;
+const AX = new Vector3(1, 0, 0);
+const AY = new Vector3(0, 1, 0);
+const AZ = new Vector3(0, 0, 1);
+
+export function createSpectator(source: ModelSource, options: SpectatorOptions): Spectator {
+  const holder = new Group();
+  const { root, model, bone, owned, geometries } = dressBody(source, options, holder, 1);
+  model.updateMatrixWorld(true);
+  const worldQ = (b: Object3D) => b.getWorldQuaternion(new Quaternion());
+  const spine = bone('spine_02');
+  const spineRest = spine.quaternion.clone();
+  const arms = (['l', 'r'] as const).map((s) => {
+    const upper = bone(`upperarm_${s}`);
+    const fore = bone(`lowerarm_${s}`);
+    return {
+      left: s === 'l',
+      upper,
+      fore,
+      upperQ: worldQ(upper),
+      foreQ: worldQ(fore),
+      parentQ: worldQ(upper.parent!),
+    };
+  });
+  const q1 = new Quaternion();
+  const q2 = new Quaternion();
+  const q3 = new Quaternion();
+  const pose = (t: number, clap: number, since: number) => {
+    spine.quaternion
+      .copy(spineRest)
+      .multiply(
+        q1.setFromAxisAngle(AZ, Math.sin(t * Math.PI * 2 * options.rate + options.phase) * SWAY),
+      );
+    for (const a of arms) {
+      const side = a.left ? -1 : 1;
+      // Arms hang (about 75 degrees down from the bind pose's T), the forearms a little forward;
+      // a clap lifts the elbows forward and the forearms up and together.
+      const down = q1.setFromAxisAngle(AZ, side * 1.3);
+      const lift = q2.setFromAxisAngle(AX, -0.7 * clap);
+      const upperWorld = new Quaternion().copy(lift).multiply(down).multiply(a.upperQ);
+      a.upper.quaternion.copy(q3.copy(a.parentQ).invert()).multiply(upperWorld);
+      const yaw = side * (0.5 * clap + clap * CLAP_SWING * Math.sin(since * Math.PI * 2 * CLAP_HZ));
+      const bend = q3.setFromAxisAngle(AX, -(0.35 + 1.0 * clap));
+      const turn = new Quaternion().setFromAxisAngle(AY, yaw);
+      const foreWorld = turn.multiply(bend).multiply(down).multiply(a.foreQ);
+      a.fore.quaternion.copy(upperWorld.invert()).multiply(foreWorld);
+    }
+  };
+  pose(0, 0, 0);
+  return {
+    root: holder,
+    pose,
+    dispose() {
+      owned.forEach((m) => m.dispose());
+      geometries.forEach((g) => g.dispose());
+      root.removeFromParent();
     },
   };
 }

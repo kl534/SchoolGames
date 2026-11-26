@@ -775,7 +775,7 @@ export function createGolfer(): Golfer {
         outfit: GOLFER_OUTFIT,
         accent: 'glove',
         cap: 0xf4f4f4,
-        hair: { style: 'Hair_SimpleParted', colour: 0x6b4a2c },
+        hair: [{ style: 'Hair_SimpleParted', colour: 0x6b4a2c }],
         hairSource: people.hair,
         weave: people.weave,
         height: 2,

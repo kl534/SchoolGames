@@ -10,6 +10,8 @@ export const REACTION_SECONDS = 1.3;
 export interface Caddie {
   root: Group;
   person: Person;
+  /** The realistic model, once `setModel` has put it on. */
+  readonly skin: Skinned | null;
   /** Starts a reaction now; `idle` does nothing. It ends by itself after REACTION_SECONDS. */
   react(reaction: Reaction): void;
   /** Puts the realistic model on the rig (null brings the rig back). */
@@ -74,6 +76,9 @@ export function createCaddie(): Caddie {
   return {
     root,
     person,
+    get skin() {
+      return skinned;
+    },
     react(reaction) {
       if (reaction === 'idle') return;
       move = reaction;
@@ -123,7 +128,7 @@ export function createCaddie(): Caddie {
         outfit: CADDIE_OUTFIT,
         accent: 'bib',
         cap: 0x2f5a3a,
-        hair: { style: 'Hair_Buns', colour: 0x3a2616 },
+        hair: [{ style: 'Hair_Buns', colour: 0x3a2616 }],
         hairSource: people.hair,
         weave: people.weave,
         height: 1.9,

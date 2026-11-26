@@ -136,7 +136,7 @@ export function clothMaterial(
         '#include <begin_vertex>',
         `#include <begin_vertex>
 	vRegion = aRegion;
-	float cloth = max( smoothstep( 0.35, 0.65, aRegion.x ), 2.5 * smoothstep( 0.35, 0.65, aRegion.y ) );
+	float cloth = max( smoothstep( 0.35, 0.65, aRegion.x ), 3.5 * smoothstep( 0.35, 0.65, aRegion.y ) );
 	transformed += normalize( objectNormal ) * uPush * cloth;`,
       );
     shader.fragmentShader = shader.fragmentShader

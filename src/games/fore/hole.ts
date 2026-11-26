@@ -51,6 +51,7 @@ import { cartPath, placeScenery, PATH_WIDTH } from './scenery';
 import { buildHills, HORIZON } from './sky';
 import { groundY, POND_DEPTH, SHORE } from './terrain';
 import { buildTufts } from './grass';
+import { buildGallery, type Gallery } from './gallery';
 import { buildProps } from './props';
 import { buildTreeLayer, type TreePlacement } from './trees';
 
@@ -73,6 +74,8 @@ const MARKERS: readonly [number, number][] = [
 
 export interface HoleScene {
   object: Group;
+  /** The crowd behind the green (high and medium tiers with the people loaded), else null. */
+  gallery: Gallery | null;
   /** Waves the flag, ripples the ponds and pulses the cup's flash ring; `t` in seconds. */
   update(t: number): void;
   /** Shows the flash ring around the cup (when the ball is on the green or the pin is near). */
@@ -594,10 +597,14 @@ export function buildHole(h: Hole, look: Look = FALLBACK_LOOK): HoleScene {
   flash.name = 'flash';
   flash.visible = false;
 
+  const gallery = buildGallery(h, scenery.groveSide, look);
+  if (gallery) object.add(gallery.object);
+
   litTree(look.csm, object);
 
   return {
     object,
+    gallery,
     update(t) {
       // The cloth swings about the pole.
       cloth.rotation.y = Math.sin(t * 3) * 0.3 + Math.sin(t * 7.3) * 0.08;
@@ -620,6 +627,7 @@ export function buildHole(h: Hole, look: Look = FALLBACK_LOOK): HoleScene {
       treeLayer.dispose();
       tufts.dispose();
       props.dispose();
+      gallery?.dispose();
       hills.dispose();
       geometries.forEach((g) => g.dispose());
       materials.forEach((m) => {
