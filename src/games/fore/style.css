@@ -129,12 +129,14 @@
   right: max(12px, env(safe-area-inset-right));
   z-index: 9;
   box-sizing: border-box;
-  width: 64px;
-  height: 112px;
+  width: 84px;
+  height: 150px;
   padding: 3px;
   border-radius: 10px;
   background: rgba(12, 28, 24, 0.7);
-  pointer-events: none;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: pointer;
 }
 
 .fg-map-svg {
@@ -162,7 +164,8 @@
   pointer-events: none;
 }
 
-.fg-row > * {
+.fg-row > *,
+.fg-dist > * {
   pointer-events: auto;
 }
 
@@ -193,6 +196,19 @@
   font-weight: 800;
   line-height: 1.2;
   white-space: nowrap;
+}
+
+.fg-dist {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 60px;
+}
+
+.fg-dist .fg-nudge {
+  width: 52px;
+  height: 52px;
 }
 
 .fg-lie[data-surface='Sand'] {
@@ -479,8 +495,8 @@
 /* ---------- Upright screens (aspect <= 6/5) ---------- */
 @media (max-aspect-ratio: 6/5) {
   .fg-map {
-    width: 64px;
-    height: 112px;
+    width: 84px;
+    height: 150px;
   }
 
   .fg-q {
@@ -524,8 +540,8 @@
   }
 
   .fg-map {
-    width: 80px;
-    height: 140px;
+    width: 110px;
+    height: 200px;
   }
 }
 
@@ -572,6 +588,10 @@
 
   .fg-chipcol {
     flex-direction: column-reverse;
+  }
+
+  .fg-dist {
+    order: -1;
   }
 
   .fg-chip {
@@ -652,8 +672,8 @@
   }
 
   .fg-map {
-    width: 48px;
-    height: 96px;
+    width: 72px;
+    height: 128px;
   }
 
   .fg-swing {
@@ -693,6 +713,15 @@
 
   .fg-banner-detail {
     font-size: 18px;
+  }
+}
+
+/* Short landscape screens have no room to stack the distance buttons. */
+@media (min-aspect-ratio: 6/5) and (max-height: 600px) {
+  .fg-dist {
+    flex-direction: row;
+    justify-content: flex-end;
+    width: auto;
   }
 }
 
@@ -743,8 +772,8 @@
   }
 
   .fg-map {
-    width: 80px;
-    height: 140px;
+    width: 110px;
+    height: 200px;
   }
 
   .fg-q {
@@ -754,6 +783,59 @@
   .fg-answers {
     width: min(34vw, 420px);
   }
+}
+
+/* ---------- The big map ---------- */
+.fg-bigmap {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  touch-action: none;
+}
+
+.fg-bigmap-panel {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 92%;
+  height: 78%;
+  padding: 10px;
+  border-radius: 20px;
+  background: rgba(12, 28, 24, 0.92);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  touch-action: none;
+}
+
+.fg-bigmap-svg {
+  display: block;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: crosshair;
+}
+
+.fg-bigmap-done {
+  flex: none;
+  align-self: center;
+  min-width: 160px;
+  height: 52px;
+  padding: 0 28px;
+  border: 3px solid #ffe9a8;
+  border-radius: 26px;
+  background: linear-gradient(#ffb02e, #ff8a00);
+  color: #fff;
+  font:
+    800 22px system-ui,
+    sans-serif;
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
 @media (prefers-reduced-motion: reduce) {

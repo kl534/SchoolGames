@@ -7,7 +7,7 @@ import { createGolfer, REACH } from '../src/games/fore/golfer';
 import { HOLES } from '../src/games/fore/course';
 import { CUP_VISUAL_R, buildHole } from '../src/games/fore/hole';
 import { neutralPose } from '../src/games/fore/person';
-import { CLUBS, CUP_R, holedOutcome } from '../src/games/fore/shot';
+import { CLUBS, CUP_R } from '../src/games/fore/shot';
 import {
   SWING_TIMING,
   swingFrame,
@@ -230,12 +230,10 @@ describe('smoothness and timing', () => {
     }
   });
 
-  it('picks the swing by club, and a holed shot flies to the pin', () => {
+  it('picks the swing by club', () => {
     expect(swingKind(club('putter'))).toBe('putt');
     expect(swingKind(club('sand', 30))).toBe('half');
     expect(swingKind(club('wedge', 95))).toBe('full');
     expect(swingKind(club('driver'))).toBe('full');
-    const o = { quality: 'wobbly' as const, end: { x: 1, z: 2 }, side: 1 as const };
-    expect(holedOutcome(o, { x: 5, z: 6 })).toEqual({ ...o, end: { x: 5, z: 6 } });
   });
 });

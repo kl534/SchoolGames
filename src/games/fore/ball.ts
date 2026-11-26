@@ -18,7 +18,7 @@ import {
   SphereGeometry,
   Vector3,
 } from 'three';
-import { DUFF_FRACTION, isPutt, pathAt, type Lie, type Outcome, type Plan } from './shot';
+import { isPutt, pathAt, type Lie, type Outcome, type Plan } from './shot';
 
 /** The ball is true size (1.68 in across); a ring and a halo help the eye find it. */
 export const BALL_R = 0.047;
@@ -306,10 +306,9 @@ export function createBall(): Ball {
 
 /** How long the ball is in the air (or rolling) for a struck shot, seconds. */
 export function flightSeconds(plan: Plan, outcome: Outcome): number {
-  const d = Math.hypot(outcome.end.x - plan.from.x, outcome.end.z - plan.from.z);
+  const d = Math.hypot(outcome.land.x - plan.from.x, outcome.land.z - plan.from.z);
   if (isPutt(plan)) return Math.max(d / PUTT_SPEED, 0.4);
-  const carry = outcome.quality === 'duff' ? DUFF_FRACTION * plan.carry : plan.carry;
-  return 0.9 + carry / 120;
+  return 0.9 + plan.carry / 120;
 }
 
 /**

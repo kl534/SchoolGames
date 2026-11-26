@@ -84,7 +84,15 @@ export function roundOutcome(total: number, rel: number): string {
 // ---------- Spoken lines ----------
 
 export type CallKind =
-  'fairway' | 'rough' | 'sand' | 'green' | 'water' | 'holed' | 'puttGood' | 'puttMiss' | 'duff';
+  | 'fairway'
+  | 'rough'
+  | 'sand'
+  | 'green'
+  | 'water'
+  | 'holed'
+  | 'puttGood'
+  | 'puttMiss'
+  | 'offTarget';
 
 const SHOT_CALLS: Record<CallKind, string> = {
   fairway: 'Fairway!',
@@ -95,7 +103,7 @@ const SHOT_CALLS: Record<CallKind, string> = {
   holed: 'In the hole!',
   puttGood: 'Nice putt.',
   puttMiss: 'Missed it.',
-  duff: 'Duffed it.',
+  offTarget: 'Off target.',
 };
 
 export const shotCall = (kind: CallKind): string => SHOT_CALLS[kind];
@@ -103,9 +111,11 @@ export const shotCall = (kind: CallKind): string => SHOT_CALLS[kind];
 /** Which call a finished shot gets. */
 export function callKindFor(result: Result, quality: Quality, putt: boolean): CallKind {
   if (result.kind === 'holed') return 'holed';
-  if (quality === 'duff') return putt ? 'puttMiss' : 'duff';
-  if (putt) return 'puttGood';
+  if (putt) return quality === 'miss' ? 'puttMiss' : 'puttGood';
   if (result.kind === 'water') return 'water';
+  if (quality === 'miss' && (result.surface === 'fairway' || result.surface === 'green')) {
+    return 'offTarget';
+  }
   return result.surface === 'tree' ? 'rough' : result.surface;
 }
 
@@ -129,7 +139,7 @@ export type Reaction = 'idle' | 'cheer' | 'groan';
 
 /**
  * What the caddie does after a shot. `name` is the `nameFor` of the hole when this shot ended it
- * (else null). A hole in the water or a duff groans; holing out, a birdie or better, or a full
+ * (else null). A shot in the water or a miss groans; holing out, a birdie or better, or a full
  * shot onto the green cheers; a bogey or worse groans; anything else is nothing special.
  */
 export function reactionFor(
@@ -137,7 +147,7 @@ export function reactionFor(
   name: string | null,
   how: { quality?: Quality; putt?: boolean } = {},
 ): Reaction {
-  if (result.kind === 'water' || how.quality === 'duff') return 'groan';
+  if (result.kind === 'water' || how.quality === 'miss') return 'groan';
   if (name) {
     if (name === 'Par') return result.kind === 'holed' ? 'cheer' : 'idle';
     const bad = ['Bogey', 'Double bogey', 'Triple bogey', 'Pick up'];

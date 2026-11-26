@@ -4,12 +4,18 @@
  * - `?hole=N` starts at hole N (1 to 9), with the card filled in as if the earlier holes were par.
  * - `?lie=green|sand|rough|tee|water` starts that hole with the ball in that lie near the pin
  *   (12 yd on the green, 20 yd otherwise). `sand` uses the hole's first bunker when it has one;
- *   `water` stands where a club's carry reaches the first pond, ring aimed at it (the ring turns red).
- * - `?lie=tree` (on a hole with trees) starts on the fairway with the ring aimed so a perfect shot
+ *   `water` stands 100 yd short of the first pond with the ring on its centre (the ring turns red).
+ * - `?lie=tree` (on a hole with trees) starts on the fairway with the ring placed so a perfect shot
  *   flies low through the first tree it can (the ball drops in the rough there).
+ * - `?target=<yd>,<deg>` puts the first shot's ring that far out and that many degrees from the
+ *   line to the pin (+ is right on screen); it is clamped to the limits.
  * - `?strokes=N` presets the strokes already taken on the hole (to check the cap).
- * - `?side=-1|1|0` forces the wobble and duff side (0 or absent is random).
- * - `?quality=perfect|wobbly|duff` forces the next shot's quality, whatever the answer.
+ * - `?scatter=<deg>` is the direction a miss or a slow right answer lands off the ring (0 straight
+ *   on, 90 to the right on screen); absent is random.
+ * - `?quality=perfect|close|miss` forces the next shot's quality, whatever the answer (`close` is
+ *   a right answer at 60 % of the clock).
+ * - `?bigmap=1` opens the big map once the aim view is up.
+ * - `?place=1` holds the higher "place" camera view (as if a finger were down on the picture).
  * - `?intro=1` keeps the hole intro (the flyover) even with `hole`, `lie` or `strokes`.
  * - `?introAt=<0..1>` freezes the hole flyover at that progress (and keeps the intro).
  * - `?shadows=off` turns the real shadow map off and brings back the round blobs under the people.
@@ -23,7 +29,18 @@
  *   across the line looking at his front, `dtl` 5 yd behind the ball looking along the line,
  *   `front` from the target side looking back at him.
  */
-import { AIM_MAX, CLUBS, planShot, treeHit, type Lie, type Plan, type Quality } from './shot';
+import {
+  clampTarget,
+  CLUBS,
+  planShot,
+  reachFor,
+  ringRadius,
+  treeHit,
+  type Lie,
+  type Plan,
+  type Quality,
+  type XZ,
+} from './shot';
 import { centreX, HOLES, surfaceAt, type Hole } from './course';
 import { startHole, type HoleState } from './rules';
 
@@ -43,17 +60,25 @@ export function devStart(): DevStart {
   return { hole, scores: HOLES.slice(0, hole).map((h) => h.par) };
 }
 
-/** A start and an aim from which a perfect shot hits a tree: the farthest-back such start. */
-function treeShot(h: Hole): { at: { x: number; z: number }; lie: Lie; aim: number } | null {
+const RAD = Math.PI / 180;
+
+/** A start and a ring spot from which a perfect shot hits a tree: the farthest-back such start. */
+function treeShot(h: Hole): { at: XZ; lie: Lie; want: XZ } | null {
   const tree = h.trees[0];
   if (!tree) return null;
   for (let z = Math.max(tree.z - 120, 0); z < tree.z; z += 5) {
     const at = { x: centreX(h, z), z };
     const lie: Lie = z > 0 ? 'fairway' : 'tee';
-    for (let a = -AIM_MAX; a <= AIM_MAX; a += 0.5) {
-      const plan = planShot(h, at, lie, a);
-      const outcome = { quality: 'perfect' as const, end: plan.landing, side: 1 as const };
-      if (treeHit(h, plan, outcome)) return { at, lie, aim: a };
+    const base = Math.atan2(h.pin.x - at.x, h.pin.z - at.z);
+    for (let dist = 60; dist <= reachFor(lie); dist += 10) {
+      for (let a = -35; a <= 35; a += 0.5) {
+        const want = {
+          x: at.x + dist * Math.sin(base - a * RAD),
+          z: at.z + dist * Math.cos(base - a * RAD),
+        };
+        const plan = planShot(h, at, lie, want);
+        if (treeHit(h, plan, { quality: 'perfect', land: plan.landing })) return { at, lie, want };
+      }
     }
   }
   return null;
@@ -92,23 +117,12 @@ export function devHoleState(h: Hole): HoleState {
       state.lie = 'rough';
       break;
     case 'water': {
-      // Stand where the club's carry lands on the first pond, on the centre line.
+      // Stand 100 yd short of the first pond, on the centre line.
       const pond = h.hazards.find((hz) => hz.kind === 'water');
       if (pond) {
-        let bestD = Infinity;
-        for (let z = Math.max(pond.at.z - 250, 0); z <= pond.at.z - 40; z += 5) {
-          const at = { x: centreX(h, z), z };
-          const from: Lie = z > 0 ? surfaceAt(h, at.x, at.z) : 'tee';
-          for (let a = -AIM_MAX; a <= AIM_MAX; a += 1) {
-            const p = planShot(h, at, from, a);
-            const d = Math.hypot(p.landing.x - pond.at.x, p.landing.z - pond.at.z);
-            if (d < bestD) {
-              bestD = d;
-              state.at = at;
-              state.lie = from;
-            }
-          }
-        }
+        const z = Math.max(pond.at.z - 100, 0);
+        state.at = { x: centreX(h, z), z };
+        state.lie = z > 0 ? surfaceAt(h, state.at.x, state.at.z) : 'tee';
       }
       break;
     }
@@ -118,38 +132,46 @@ export function devHoleState(h: Hole): HoleState {
   return state;
 }
 
-/** The aim a dev address wants (ring on the first pond for `lie=water`), or null for the pin. */
-export function devAim(h: Hole, state: HoleState): number | null {
-  if (import.meta.env.DEV && params().get('lie') === 'tree') return treeShot(h)?.aim ?? null;
-  if (!import.meta.env.DEV || params().get('lie') !== 'water') return null;
-  const pond = h.hazards.find((hz) => hz.kind === 'water');
-  if (!pond) return null;
-  let best = 0;
-  let bestD = Infinity;
-  const lie: Lie = state.lie;
-  for (let a = -AIM_MAX; a <= AIM_MAX; a += 0.5) {
-    const p = planShot(h, state.at, lie, a);
-    const d = Math.hypot(p.landing.x - pond.at.x, p.landing.z - pond.at.z);
-    if (d < bestD) {
-      bestD = d;
-      best = a;
+/**
+ * The ring spot a dev address wants for the first shot, or null for the smart suggestion:
+ * `?target=<yd>,<deg>`, the first pond's centre for `lie=water`, a low flight through a tree for
+ * `lie=tree`.
+ */
+export function devTarget(h: Hole, state: HoleState): XZ | null {
+  if (!import.meta.env.DEV) return null;
+  const q = params();
+  const raw = q.get('target');
+  if (raw) {
+    const [yd, deg] = raw.split(',').map(Number);
+    if (Number.isFinite(yd)) {
+      const base = Math.atan2(h.pin.x - state.at.x, h.pin.z - state.at.z);
+      // Screen-right is -x, so a positive angle turns towards -x.
+      const dir = base - (Number.isFinite(deg) ? deg : 0) * RAD;
+      const want = { x: state.at.x + yd * Math.sin(dir), z: state.at.z + yd * Math.cos(dir) };
+      return clampTarget(h, state.at, state.lie, want);
     }
   }
-  return best;
+  const lie = q.get('lie');
+  if (lie === 'tree') return treeShot(h)?.want ?? null;
+  if (lie !== 'water') return null;
+  const pond = h.hazards.find((hz) => hz.kind === 'water');
+  return pond ? clampTarget(h, state.at, state.lie, { x: pond.at.x, z: pond.at.z }) : null;
 }
 
-/** The wobble and duff side the address forces, or 0 for a random one. */
-export function devSide(): -1 | 0 | 1 {
-  if (!import.meta.env.DEV) return 0;
-  const side = params().get('side');
-  return side === '1' ? 1 : side === '-1' ? -1 : 0;
+/** The direction (radians; 0 straight on, pi/2 right on screen) a miss lands in, or null for random. */
+export function devScatter(): number | null {
+  if (!import.meta.env.DEV) return null;
+  const raw = params().get('scatter');
+  if (raw === null || raw === '') return null;
+  const deg = Number(raw);
+  return Number.isFinite(deg) ? deg * RAD : null;
 }
 
 /** The quality every shot gets, if the address forces one. */
 export function devQuality(): Quality | null {
   if (!import.meta.env.DEV) return null;
   const quality = params().get('quality');
-  return quality === 'perfect' || quality === 'wobbly' || quality === 'duff' ? quality : null;
+  return quality === 'perfect' || quality === 'close' || quality === 'miss' ? quality : null;
 }
 
 /** A dev address that picks a hole, lie or strokes goes straight to the aim, with no intro. */
@@ -191,7 +213,18 @@ export function devClubPlan(plan: Plan, lie: Lie): Plan {
       x: plan.from.x + yards * Math.sin(plan.dir),
       z: plan.from.z + yards * Math.cos(plan.dir),
     },
+    ringR: ringRadius(yards, club.id === 'putter'),
   };
+}
+
+/** Whether to open the big map once the aim view is up. */
+export function devBigMap(): boolean {
+  return import.meta.env.DEV && params().get('bigmap') === '1';
+}
+
+/** Whether to hold the higher "place" camera view. */
+export function devPlace(): boolean {
+  return import.meta.env.DEV && params().get('place') === '1';
 }
 
 export type DevCam = 'face' | 'dtl' | 'front';
