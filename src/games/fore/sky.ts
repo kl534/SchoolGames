@@ -1,4 +1,4 @@
-/** The sky dome, drifting clouds, birds, and the hills behind each hole. */
+/** The sky dome (the photo sky), birds, and the hills behind each hole. */
 import {
   BackSide,
   BufferGeometry,
@@ -6,109 +6,104 @@ import {
   DoubleSide,
   Float32BufferAttribute,
   Group,
-  InstancedMesh,
   Mesh,
   MeshBasicMaterial,
-  MeshLambertMaterial,
-  Object3D,
   PlaneGeometry,
+  ShaderMaterial,
   SphereGeometry,
   type Material,
 } from 'three';
 import { seededRandom } from '../../shared/random';
+import type { SkyAssets } from './assets';
 import type { Hole } from './course';
+import { FALLBACK_LOOK, scaleUV, turfMaterial, type Look } from './ground';
 import { buildTreeLayer, type TreePlacement } from './trees';
 
 export const HORIZON = 0xcfe9ff;
 const ZENITH = 0x3f95e8;
 const DOME_R = 600;
-const CLUSTERS = 10;
-const CLOUD_SPEED = 0.8;
-const CLOUD_RANGE = 400;
 const BIRDS = 4;
 
 export interface Sky {
   object: Group;
-  /** `t` seconds of game time; clouds are placed around the middle of a hole `centreZ` down. */
+  /** `t` seconds of game time; the birds cross the sky around the middle of a hole `centreZ` down. */
   update(t: number, camera: { x: number; y: number; z: number }, centreZ: number): void;
   dispose(): void;
 }
 
-export function createSky(): Sky {
-  const object = new Group();
-  const rand = seededRandom(5);
-  const geometries: BufferGeometry[] = [];
-  const materials: Material[] = [];
-
-  // The dome: horizon colour at and below the horizon up to the zenith colour.
-  const dome = new SphereGeometry(DOME_R, 24, 14);
-  const pos = dome.getAttribute('position');
-  const horizon = new Color(HORIZON);
-  const zenith = new Color(ZENITH);
-  const mix = new Color();
-  const colours: number[] = [];
-  for (let i = 0; i < pos.count; i++) {
-    const k = Math.max(pos.getY(i) / DOME_R, 0) ** 0.6;
-    mix.copy(horizon).lerp(zenith, k);
-    colours.push(mix.r, mix.g, mix.b);
-  }
-  dome.setAttribute('color', new Float32BufferAttribute(colours, 3));
-  const domeMaterial = new MeshBasicMaterial({
-    vertexColors: true,
+/** The dome that shows the photo sky: each pixel looks up the picture along its own direction. */
+function photoDome(sky: SkyAssets, yaw: number, gain: number): ShaderMaterial {
+  return new ShaderMaterial({
+    uniforms: { map: { value: sky.dome }, yaw: { value: yaw }, gain: { value: gain } },
+    vertexShader: `
+      varying vec3 vDir;
+      void main() {
+        vDir = position;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: `
+      uniform sampler2D map;
+      uniform float yaw;
+      uniform float gain;
+      varying vec3 vDir;
+      void main() {
+        vec3 d = normalize(vDir);
+        float c = cos(yaw);
+        float s = sin(yaw);
+        vec3 r = vec3(d.x * c + d.z * s, d.y, -d.x * s + d.z * c);
+        vec2 uv = vec2(atan(r.z, r.x) * 0.15915494 + 0.5, asin(clamp(r.y, -1.0, 1.0)) * 0.31830989 + 0.5);
+        gl_FragColor = vec4(texture2D(map, uv).rgb * gain, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
     side: BackSide,
     fog: false,
     depthWrite: false,
     depthTest: false,
   });
+}
+
+/**
+ * The sky: the photo dome turned by `yaw` (the same turn as the scene's environment, so the sun in
+ * the picture is where the light comes from), or a plain gradient dome when the picture is missing.
+ */
+export function createSky(sky: SkyAssets | null = null, yaw = 0): Sky {
+  const object = new Group();
+  const rand = seededRandom(5);
+  const geometries: BufferGeometry[] = [];
+  const materials: Material[] = [];
+
+  const dome = new SphereGeometry(DOME_R, 48, 28);
+  let domeMaterial: Material;
+  if (sky) {
+    domeMaterial = photoDome(sky, yaw, 1);
+  } else {
+    // Horizon colour at and below the horizon up to the zenith colour.
+    const pos = dome.getAttribute('position');
+    const horizon = new Color(HORIZON);
+    const zenith = new Color(ZENITH);
+    const mix = new Color();
+    const colours: number[] = [];
+    for (let i = 0; i < pos.count; i++) {
+      const k = Math.max(pos.getY(i) / DOME_R, 0) ** 0.6;
+      mix.copy(horizon).lerp(zenith, k);
+      colours.push(mix.r, mix.g, mix.b);
+    }
+    dome.setAttribute('color', new Float32BufferAttribute(colours, 3));
+    domeMaterial = new MeshBasicMaterial({
+      vertexColors: true,
+      side: BackSide,
+      fog: false,
+      depthWrite: false,
+      depthTest: false,
+    });
+  }
   const domeMesh = new Mesh(dome, domeMaterial);
   domeMesh.renderOrder = -10;
   domeMesh.frustumCulled = false;
   object.add(domeMesh);
   geometries.push(dome);
   materials.push(domeMaterial);
-
-  // Clouds: clusters of flattened white spheres, drifting along +x and wrapping.
-  interface Puff {
-    cluster: number;
-    dx: number;
-    dy: number;
-    dz: number;
-    sx: number;
-    sy: number;
-    sz: number;
-  }
-  const clusters = Array.from({ length: CLUSTERS }, () => ({
-    x: (rand() * 2 - 1) * CLOUD_RANGE,
-    y: 120 + rand() * 60,
-    z: (rand() * 2 - 1) * CLOUD_RANGE,
-  }));
-  const puffs: Puff[] = [];
-  clusters.forEach((_, cluster) => {
-    const n = 4 + Math.floor(rand() * 3);
-    for (let i = 0; i < n; i++) {
-      puffs.push({
-        cluster,
-        dx: (rand() * 2 - 1) * 14,
-        dy: (rand() * 2 - 1) * 2,
-        dz: (rand() * 2 - 1) * 8,
-        sx: 8 + rand() * 6,
-        sy: 3 + rand() * 2,
-        sz: 6 + rand() * 3,
-      });
-    }
-  });
-  const cloudGeometry = new SphereGeometry(1, 8, 6);
-  const cloudMaterial = new MeshBasicMaterial({
-    color: 0xffffff,
-    transparent: true,
-    opacity: 0.92,
-    depthWrite: false,
-  });
-  const clouds = new InstancedMesh(cloudGeometry, cloudMaterial, puffs.length);
-  clouds.frustumCulled = false;
-  object.add(clouds);
-  geometries.push(cloudGeometry);
-  materials.push(cloudMaterial);
 
   // Birds: a V of two thin triangles that flaps, crossing the sky every 25 to 40 seconds.
   const wing = new BufferGeometry();
@@ -140,22 +135,11 @@ export function createSky(): Sky {
     };
   });
 
-  const dummy = new Object3D();
   return {
     object,
     update(t, camera, centreZ) {
       object.position.set(0, 0, 0);
       domeMesh.position.set(camera.x, camera.y, camera.z);
-      puffs.forEach((p, i) => {
-        const c = clusters[p.cluster];
-        const span = CLOUD_RANGE * 2;
-        const x = ((((c.x + CLOUD_RANGE + t * CLOUD_SPEED) % span) + span) % span) - CLOUD_RANGE;
-        dummy.position.set(x + p.dx, c.y + p.dy, centreZ + c.z + p.dz);
-        dummy.scale.set(p.sx, p.sy, p.sz);
-        dummy.updateMatrix();
-        clouds.setMatrixAt(i, dummy.matrix);
-      });
-      clouds.instanceMatrix.needsUpdate = true;
       for (const b of birds) {
         const u = (t + b.offset) % b.period;
         const flight = 18;
@@ -169,7 +153,6 @@ export function createSky(): Sky {
       }
     },
     dispose() {
-      clouds.dispose();
       geometries.forEach((g) => g.dispose());
       materials.forEach((m) => m.dispose());
       object.removeFromParent();
@@ -212,7 +195,7 @@ export interface Hills {
 }
 
 /** Three low-poly ridges 250 to 420 yd away: both sides and beyond the green, with pines on top. */
-export function buildHills(h: Hole): Hills {
+export function buildHills(h: Hole, look: Look = FALLBACK_LOOK): Hills {
   const object = new Group();
   const rand = seededRandom(Math.round(h.length * 17 + h.bend * 311 + 7));
   const mid = h.length / 2 + 100;
@@ -246,7 +229,10 @@ export function buildHills(h: Hole): Hills {
     },
   ];
   const geometries: BufferGeometry[] = [];
-  const material = new MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  // The turf's maps, tinted by the vertex colours (green near, hazy blue-grey far).
+  const material = turfMaterial(look, 'rough');
+  material.color.set(0xffffff);
+  material.vertexColors = true;
   const pines: TreePlacement[] = [];
   for (const r of ridges) {
     const g = new PlaneGeometry(r.len, r.depth, 24, 6);
@@ -265,11 +251,15 @@ export function buildHills(h: Hole): Hills {
       pos.setZ(i, y);
     }
     g.setAttribute('color', new Float32BufferAttribute(colours, 3));
+    scaleUV(g, r.len / 20, r.depth / 20);
+    g.computeVertexNormals();
     g.rotateX(-Math.PI / 2);
     if (r.alongZ) g.rotateY(Math.PI / 2);
     g.translate(r.x, 0, r.z);
     geometries.push(g);
-    object.add(new Mesh(g, material));
+    const ridge = new Mesh(g, material);
+    ridge.receiveShadow = look.shadows;
+    object.add(ridge);
     // Pines along the crest nearest the course.
     if (r.alongZ) {
       for (let along = 0.02; along < 0.98; along += 0.016) {
@@ -291,7 +281,7 @@ export function buildHills(h: Hole): Hills {
       }
     }
   }
-  const layer = buildTreeLayer(pines);
+  const layer = buildTreeLayer(pines, look);
   object.add(layer.object);
   return {
     object,

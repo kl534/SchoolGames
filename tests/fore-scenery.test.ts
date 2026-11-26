@@ -1,11 +1,21 @@
-import { InstancedMesh, Mesh, type BufferGeometry, type Object3D } from 'three';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { InstancedMesh, Matrix4, Mesh, Vector3, type BufferGeometry, type Object3D } from 'three';
 import { describe, expect, it } from 'vitest';
 import { centreX, GREEN_R, HOLES, inEllipse, type Hole } from '../src/games/fore/course';
-import { groundTextures } from '../src/games/fore/ground';
+import { FALLBACK_LOOK, groundTextures, type Look } from '../src/games/fore/ground';
+import { GFX_SETTINGS, type Gfx } from '../src/games/fore/quality';
+import { groundY } from '../src/games/fore/terrain';
 import { buildHole } from '../src/games/fore/hole';
 import { placeScenery, LINE_CLEAR, LOW_MIN_OFF } from '../src/games/fore/scenery';
 import { finishShot, planShot, resolveShot, TREE_HEIGHT } from '../src/games/fore/shot';
 import { treeBounds, treeScale } from '../src/games/fore/trees';
+
+const look = (gfx: Gfx): Look => ({
+  ...FALLBACK_LOOK,
+  settings: GFX_SETTINGS[gfx],
+  shadows: gfx !== 'low',
+});
 
 const off = (h: Hole, p: { x: number; z: number }) => Math.abs(p.x - centreX(h, p.z));
 
@@ -133,17 +143,92 @@ describe('hole build', () => {
     }
   });
 
-  it('disposes everything it built, textures included', () => {
-    const textures = Object.values(groundTextures());
-    for (const h of HOLES) {
-      let disposed = 0;
-      textures.forEach((t) => t.addEventListener('dispose', () => disposed++));
-      const hole = buildHole(h);
-      expect(hole.object.children.length).toBeGreaterThan(0);
-      hole.dispose();
-      expect(hole.object.children.length).toBe(0);
-      expect(hole.object.parent).toBeNull();
-      expect(disposed).toBeGreaterThanOrEqual(textures.length);
+  it('keeps each tier inside its draw budget (high 220 meshes, low 120)', () => {
+    const budget: Record<Gfx, number> = { low: 120, medium: 220, high: 220 };
+    for (const gfx of ['low', 'medium', 'high'] as const) {
+      for (const h of HOLES) {
+        const hole = buildHole(h, look(gfx));
+        const { meshes, triangles } = stats(hole.object);
+        expect(meshes, `${gfx} hole ${HOLES.indexOf(h) + 1}`).toBeLessThanOrEqual(budget[gfx]);
+        expect(triangles).toBeLessThan(400_000);
+        hole.dispose();
+      }
     }
+  });
+
+  it('builds every hole on every tier with no pictures, and disposes everything', () => {
+    const textures = Object.values(groundTextures());
+    for (const gfx of ['low', 'medium', 'high'] as const) {
+      for (const h of HOLES) {
+        let disposed = 0;
+        textures.forEach((t) => t.addEventListener('dispose', () => disposed++));
+        const hole = buildHole(h, look(gfx));
+        expect(hole.object.children.length).toBeGreaterThan(0);
+        hole.dispose();
+        expect(hole.object.children.length).toBe(0);
+        expect(hole.object.parent).toBeNull();
+        expect(disposed).toBeGreaterThanOrEqual(textures.length);
+      }
+    }
+  });
+
+  it('stands every tree, bush, rock and flower on the ground height', () => {
+    const m = new Matrix4();
+    const at = new Vector3();
+    for (const h of HOLES) {
+      const hole = buildHole(h, look('high'));
+      // Every instance's base (x, y, z), by instance mesh.
+      const bases: Vector3[] = [];
+      hole.object.traverse((o) => {
+        const im = o as InstancedMesh;
+        if (!im.isInstancedMesh) return;
+        for (let i = 0; i < im.count; i++) {
+          im.getMatrixAt(i, m);
+          bases.push(at.setFromMatrixPosition(m).clone());
+        }
+      });
+      const near = (x: number, z: number) =>
+        bases.filter((b) => Math.hypot(b.x - x, b.z - z) < 1e-3);
+      const scenery = placeScenery(h);
+      for (const t of [...h.trees, ...scenery.trees]) {
+        const found = near(t.x, t.z);
+        expect(found.length, `tree at ${t.x}, ${t.z}`).toBeGreaterThan(0);
+        // The trunk and the crown share one base; the blob shadow sits just above it.
+        expect(found.some((b) => Math.abs(b.y - groundY(h, t.x, t.z)) < 1e-6)).toBe(true);
+      }
+      for (const b of scenery.bushes) {
+        expect(
+          near(b.x, b.z).some((p) => Math.abs(p.y - groundY(h, b.x, b.z) - b.r * 0.4) < 1e-6),
+        ).toBe(true);
+      }
+      for (const r of scenery.rocks) {
+        expect(
+          near(r.x, r.z).some((p) => Math.abs(p.y - groundY(h, r.x, r.z) - r.r * 0.25) < 1e-6),
+        ).toBe(true);
+      }
+      hole.dispose();
+    }
+  });
+});
+
+describe('public/fore assets', () => {
+  const dir = join(__dirname, '..', 'public', 'fore');
+  const files = (d: string): string[] =>
+    readdirSync(d).flatMap((f) => {
+      const p = join(d, f);
+      return statSync(p).isDirectory() ? files(p) : [p];
+    });
+
+  it('lists every file in CREDITS.md and stays under 15 MB', () => {
+    const credits = readFileSync(join(dir, 'CREDITS.md'), 'utf8');
+    const all = files(dir);
+    let total = 0;
+    for (const f of all) {
+      const rel = f.slice(dir.length + 1).replaceAll('\\', '/');
+      expect(credits, rel).toContain(`\`${rel}\``);
+      total += statSync(f).size;
+    }
+    expect(all.length).toBeGreaterThan(5);
+    expect(total).toBeLessThanOrEqual(15 * 1024 * 1024);
   });
 });

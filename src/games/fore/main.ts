@@ -1,17 +1,21 @@
 import './style.css';
 import {
-  ACESFilmicToneMapping,
+  AgXToneMapping,
   Color,
   DirectionalLight,
   Fog,
   HemisphereLight,
   MathUtils,
-  PCFShadowMap,
+  PCFSoftShadowMap,
+  PMREMGenerator,
   Raycaster,
   Vector2,
   Vector3,
   type Object3D,
+  type WebGLRenderer,
+  type WebGLRenderTarget,
 } from 'three';
+import { CSM } from 'three/addons/csm/CSM.js';
 import { pressAnswers } from '../../shared/answers';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
 import { createFactFeed, type FactFeed } from '../../shared/feed';
@@ -19,6 +23,7 @@ import { createPointerInput, onPress } from '../../shared/input';
 import { showPreview } from '../../shared/preview';
 import { showResults } from '../../shared/results';
 import { starsFor } from '../../shared/round';
+import { createProgressBar, type ProgressBar } from '../../shared/assets';
 import { createScene } from '../../shared/scene';
 import { startGameSession, type GameSession } from '../../shared/session';
 import { createTapFlow } from '../../shared/tapflow';
@@ -33,6 +38,7 @@ import {
   devBigMap,
   devCam,
   devClubPlan,
+  devGfx,
   devHoleState,
   devHolesOk,
   devIntroAt,
@@ -50,7 +56,12 @@ import { createCaddie } from './caddie';
 import { createGolfer, type GolfMove } from './golfer';
 import { createGuide } from './guide';
 import { buildHole, CUP_AID_RANGE, SKY, type HoleScene } from './hole';
-import { createSky } from './sky';
+import { createSky, type Sky } from './sky';
+import { disposeForeAssets, loadForeAssets, NO_ASSETS, type ForeAssets } from './assets';
+import { FALLBACK_LOOK, litTree, type Look } from './ground';
+import { createPost, type Post } from './post';
+import { adaptGfx, gfxSettings, pickGfx, sunSetup, type DeviceInfo, type Gfx } from './quality';
+import { groundY } from './terrain';
 import { createHud, SURFACE_NAMES, type Bands, type CardCell } from './hud';
 import {
   afterShot,
@@ -150,40 +161,128 @@ const lerpVec = (a: Vec, b: Vec, t: number): Vec => ({
 
 const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 
+/** localStorage key for the quality tier a slow device was stepped down to. */
+const GFX_KEY = 'fore.gfx';
+
+function readSavedGfx(): Gfx | null {
+  try {
+    const saved = localStorage.getItem(GFX_KEY);
+    return saved === 'low' || saved === 'medium' || saved === 'high' ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveGfx(gfx: Gfx): void {
+  try {
+    localStorage.setItem(GFX_KEY, gfx);
+  } catch {
+    // Private mode or blocked storage: the tier is just picked again next time.
+  }
+}
+
+/** What the picker needs to know about this device. */
+function deviceInfo(renderer: WebGLRenderer): DeviceInfo {
+  let gpu = '';
+  try {
+    const gl = renderer.getContext();
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    if (ext) gpu = String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) ?? '');
+  } catch {
+    gpu = '';
+  }
+  return {
+    gpu,
+    cores: navigator.hardwareConcurrency ?? 0,
+    minSide: Math.min(window.screen.width, window.screen.height),
+    mobile: /Android|iPhone|iPad|Mobile/.test(navigator.userAgent) || navigator.maxTouchPoints > 1,
+  };
+}
+
+/** AgX at 1.0 washes the grass out under this sun; a little lower keeps the greens. */
+const EXPOSURE = 0.65;
+/** The sun's intensity (the cascaded map's lights add up to the same). */
+const SUN_PLAIN = 3.2;
+
+/** Frames of the first aim that are timed to decide whether to step the quality down. */
+const SAMPLE_FRAMES = 120;
+
 function run(session: GameSession): void {
   const container = document.getElementById('game');
   if (!container) throw new Error('Missing #game container');
 
   // ---------- Scene ----------
   const ctx = createScene(container, { fov: 40, near: 0.5, far: 900 });
-  const { scene, camera } = ctx;
+  const { scene, camera, renderer } = ctx;
   scene.background = new Color(SKY);
-  scene.fog = new Fog(0xcfe9ff, 320, 820);
-  scene.add(new HemisphereLight(0xdff0ff, 0x5e8a46, 1.6));
-  const sun = new DirectionalLight(0xfff0d0, 2.4);
-  scene.add(sun, sun.target);
-  const sky = createSky();
-  scene.add(sky.object);
-  ctx.renderer.toneMapping = ACESFilmicToneMapping;
-  ctx.renderer.toneMappingExposure = 0.9;
-  // One shadow map for the people and the flag; its box (14 x 14 yd) follows the golfer.
-  const shadows = devShadows();
-  if (shadows) {
-    ctx.renderer.shadowMap.enabled = true;
-    ctx.renderer.shadowMap.type = PCFShadowMap;
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
-    const box = sun.shadow.camera;
-    box.left = box.bottom = -7;
-    box.right = box.top = 7;
-    box.near = 1;
-    box.far = 160;
-    sun.shadow.bias = -0.0005;
-    sun.shadow.normalBias = 0.03;
+  scene.fog = new Fog(SKY, 260, 1500);
+  renderer.toneMapping = AgXToneMapping;
+  renderer.toneMappingExposure = EXPOSURE;
+
+  // Quality: the dev address, else the tier saved after a slow run, else a guess from the device.
+  const forcedGfx = devGfx();
+  let gfx: Gfx = forcedGfx ?? readSavedGfx() ?? pickGfx(deviceInfo(renderer));
+  let settings = gfxSettings(gfx);
+  // The shadow map is fixed for the page (a step down changes the rest at the next hole).
+  const pageSettings = settings;
+  const shadows = devShadows() && settings.shadows !== 'none';
+  renderer.shadowMap.enabled = shadows;
+  renderer.shadowMap.type = PCFSoftShadowMap;
+
+  // Light: the sun (its direction is fixed once the sky picture is read) and, on the high tier,
+  // its cascaded shadow map. Without the picture a faint hemisphere light fills the shade.
+  const sunDir = new Vector3(...sunSetup(null).dir);
+  const sun = new DirectionalLight(0xfff1dc, SUN_PLAIN);
+  const single = shadows && pageSettings.shadows === 'single';
+  let csm: CSM | null = null;
+  if (shadows && pageSettings.shadows === 'cascaded') {
+    csm = new CSM({
+      camera,
+      parent: scene,
+      cascades: pageSettings.cascades,
+      maxFar: pageSettings.shadowFar,
+      shadowMapSize: pageSettings.shadowSize,
+      shadowBias: -0.0003,
+      lightDirection: sunDir.clone().negate(),
+      lightIntensity: 3.2,
+    });
+    csm.lights.forEach((l) => {
+      l.color.set(0xfff1dc);
+      l.shadow.normalBias = 0.02;
+    });
+  } else {
+    scene.add(sun, sun.target);
+    if (single) {
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(pageSettings.shadowSize, pageSettings.shadowSize);
+      const box = sun.shadow.camera;
+      box.left = box.bottom = -30;
+      box.right = box.top = 30;
+      box.near = 1;
+      box.far = 220;
+      sun.shadow.bias = -0.0003;
+      sun.shadow.normalBias = 0.02;
+    }
   }
-  const ball = createBall();
+  let fill: HemisphereLight | null = null;
+  let envTarget: WebGLRenderTarget | null = null;
+  let sky: Sky | null = null;
+  let assets: ForeAssets = NO_ASSETS;
+  /** What a hole is built with: the tier, the pictures, the shadow map. */
+  const makeLook = (): Look => ({
+    settings,
+    assets,
+    csm,
+    sun: sunDir,
+    shadows,
+  });
+  let look: Look = FALLBACK_LOOK;
+
+  // The aids and the tracer are brighter when a tone-mapping post pass follows.
+  const glow = settings.post ? 1.5 : 1;
+  const ball = createBall(glow);
   scene.add(ball.object);
-  const guide = createGuide();
+  const guide = createGuide(glow);
   scene.add(guide.object);
   const golfer = createGolfer();
   scene.add(golfer.root);
@@ -196,6 +295,94 @@ function run(session: GameSession): void {
       else if ((o as { isMesh?: boolean }).isMesh) o.castShadow = shadows;
     });
   }
+  litTree(csm, scene);
+
+  // The effects chain (medium and high): the pass settings follow the tier, so a step down
+  // rebuilds it at once.
+  let post: Post | null = null;
+  let frameDelta = 0.016;
+  const sizeRenderer = () => {
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, settings.pixelRatio));
+    const buffer = renderer.getDrawingBufferSize(new Vector2());
+    ball.setResolution(buffer.x, buffer.y);
+    post?.setSize(w, h);
+  };
+  const buildPost = () => {
+    post?.dispose();
+    post = null;
+    ctx.setRender(null);
+    sizeRenderer();
+    if (!settings.post) return;
+    post = createPost(
+      renderer,
+      scene,
+      camera,
+      settings,
+      Math.max(container.clientWidth, 1),
+      Math.max(container.clientHeight, 1),
+    );
+    ctx.setRender(() => post?.render(frameDelta));
+  };
+  buildPost();
+  // After the shared scene's own resize, so this tier's pixel ratio wins.
+  const resizeWatcher = new ResizeObserver(sizeRenderer);
+  resizeWatcher.observe(container);
+  window.addEventListener('orientationchange', sizeRenderer);
+
+  // Everything the loaded pictures change: the sky and what it lights, the fog, the look.
+  let assetsReady = false;
+  let bar: ProgressBar | null = null;
+  let afterAssets: (() => void) | null = null;
+  const applyAssets = (loaded: ForeAssets) => {
+    assets = loaded;
+    const picture = loaded.sky;
+    const { dir, yaw } = sunSetup(picture?.sun ?? null);
+    sunDir.set(...dir);
+    csm?.lightDirection.copy(sunDir).negate();
+    if (picture) {
+      const pmrem = new PMREMGenerator(renderer);
+      envTarget = pmrem.fromEquirectangular(picture.hdr);
+      pmrem.dispose();
+      scene.environment = envTarget.texture;
+      scene.environmentIntensity = 1;
+      scene.environmentRotation.set(0, yaw, 0);
+      const [r, g, b] = picture.horizon;
+      scene.fog = new Fog(
+        new Color().setRGB(Math.min(r, 1), Math.min(g, 1), Math.min(b, 1)),
+        260,
+        1500,
+      );
+      scene.background = scene.fog.color;
+    } else {
+      fill = new HemisphereLight(0xdff0ff, 0x5e8a46, 0.4);
+      scene.add(fill);
+    }
+    sky = createSky(picture, yaw);
+    scene.add(sky.object);
+    look = makeLook();
+    assetsReady = true;
+    bar?.remove();
+    bar = null;
+    afterAssets?.();
+    afterAssets = null;
+  };
+  // Start loading now, while the preview is read; Start waits for it (with a bar) if it must.
+  loadForeAssets(Math.min(8, renderer.capabilities.getMaxAnisotropy()), (f) => bar?.update(f))
+    .then(applyAssets)
+    .catch(() => applyAssets(NO_ASSETS));
+  const whenAssets = (go: () => void) => {
+    if (assetsReady) {
+      go();
+      return;
+    }
+    bar ??= createProgressBar(document.body);
+    afterAssets = go;
+  };
+  // Timing the first aim decides whether a slow device steps down a tier.
+  const samples: number[] = [];
+  let sampled = forcedGfx !== null;
   let holeScene: HoleScene | null = null;
 
   // ---------- HUD ----------
@@ -217,6 +404,16 @@ function run(session: GameSession): void {
   let bestAtStart = session.highScore();
   let holeIndex = 0;
   let hole: Hole = HOLES[0];
+  /** The ground's height under a point of this hole (below grade in a bunker). */
+  const ground = (x: number, z: number) => groundY(hole, x, z);
+  /** Puts the ball at rest (or in flight) at `p`, whose y is its height above the flat ground. */
+  const putBall = (
+    p: { x: number; y: number; z: number },
+    lie?: Parameters<typeof ball.place>[1],
+  ) => {
+    const g = ground(p.x, p.z);
+    ball.place({ x: p.x, y: p.y + g, z: p.z }, lie, g);
+  };
   let hstate: HoleState = startHole(hole);
   let scores: number[] = [];
   /** Where the player wants the ring (the plan clamps it to the limits). */
@@ -442,10 +639,8 @@ function run(session: GameSession): void {
 
   const placeGolfer = () => {
     golfer.setClub(plan.club);
-    golfer.stand(hstate.at, plan.dir, plan.club.id);
-    sun.target.position.copy(golfer.root.position);
-    sun.position.set(golfer.root.position.x + 36, 72, golfer.root.position.z - 30);
-    caddie.stand(golfer.root.position, plan.dir);
+    golfer.stand(hstate.at, plan.dir, plan.club.id, ground);
+    caddie.stand(golfer.root.position, plan.dir, ground);
     // The flash ring around the cup shows on the green and when the pin is near.
     const toPin = Math.hypot(hole.pin.x - hstate.at.x, hole.pin.z - hstate.at.z);
     holeScene?.setCupAid(hstate.lie === 'green' || toPin <= CUP_AID_RANGE);
@@ -458,7 +653,7 @@ function run(session: GameSession): void {
     const over = surfaceAt(hole, plan.landing.x, plan.landing.z);
     restNow = predictRest(hole, plan);
     const treeStop = restNow.kind === 'rest' && restNow.tree !== undefined;
-    guide.update(plan, over, restNow, treeStop);
+    guide.update(plan, over, restNow, treeStop, ground);
     const putt = isPutt(plan);
     const toPin = Math.hypot(hole.pin.x - hstate.at.x, hole.pin.z - hstate.at.z);
     hud.renderChips(
@@ -501,7 +696,7 @@ function run(session: GameSession): void {
     holeIndex = index;
     hole = HOLES[index];
     holeScene?.dispose();
-    holeScene = buildHole(hole);
+    holeScene = buildHole(hole, look);
     scene.add(holeScene.object);
     const first = devPending;
     hstate = first ? devHoleState(hole) : startHole(hole);
@@ -522,7 +717,7 @@ function run(session: GameSession): void {
     placeGolfer();
     ball.setVisible(true);
     ball.splash(null);
-    ball.place({ x: hstate.at.x, y: BALL_R, z: hstate.at.z }, hstate.lie);
+    putBall({ x: hstate.at.x, y: BALL_R, z: hstate.at.z }, hstate.lie);
     hud.renderMap(hole, hstate.at, null);
     renderCard();
     setGolf('address');
@@ -553,7 +748,7 @@ function run(session: GameSession): void {
     guide.setVisible(true);
     ball.setVisible(true);
     ball.splash(null);
-    ball.place({ x: hstate.at.x, y: BALL_R, z: hstate.at.z }, hstate.lie);
+    putBall({ x: hstate.at.x, y: BALL_R, z: hstate.at.z }, hstate.lie);
     ball.setAddress(true);
     refreshAim();
     renderCard();
@@ -681,7 +876,7 @@ function run(session: GameSession): void {
     } else {
       // Otherwise it touches down (inside the rough wall), hops and rolls to where it rests.
       flightOutcome = { ...outcome, land: result.land };
-      travel = createTravel(plan, flightOutcome, result, hole.pin);
+      travel = createTravel(plan, flightOutcome, result, hole.pin, ground);
       flightDur = travel.seconds;
     }
 
@@ -716,6 +911,7 @@ function run(session: GameSession): void {
     swingAt = gameTime;
     flightT = 0;
     ballPos = { x: plan.from.x, y: BALL_R, z: plan.from.z };
+    ball.clearTrail();
     ball.setAddress(false);
     setGolf('swing');
     goTo('follow', 0.6);
@@ -728,7 +924,12 @@ function run(session: GameSession): void {
       sfx.kick();
       // The club throws up grass or sand where it meets the ground (the putter just rolls it).
       if (!isPutt(plan)) {
-        ball.puff(hstate.lie === 'sand' ? 'sand' : 'grass', plan.from, gameTime, plan.dir);
+        ball.puff(
+          hstate.lie === 'sand' ? 'sand' : 'grass',
+          { ...plan.from, y: ground(plan.from.x, plan.from.z) },
+          gameTime,
+          plan.dir,
+        );
       }
       phase = 'flight';
       flightT = 0;
@@ -742,10 +943,13 @@ function run(session: GameSession): void {
     const u = flightT / flightDur;
     // A ball that hits a tree stops flying at that point of its path.
     const stop = result?.kind === 'rest' ? (result.tree ?? 1) : 1;
-    const p = travel ? travel.at(flightT) : flightPoint(plan, flightOutcome, Math.min(u, 1) * stop);
+    const flown = flightPoint(plan, flightOutcome, Math.min(u, 1) * stop);
+    const p = travel ? travel.at(flightT) : { ...flown, y: flown.y + ground(flown.x, flown.z) };
     ballPos = p;
-    ball.place(p, 'rough');
-    ball.trail(gameTime, p);
+    const g = ground(p.x, p.z);
+    ball.place(p, 'rough', g);
+    // Putts roll along the green: no tracer.
+    if (!isPutt(plan)) ball.trail(gameTime, p, g);
     if (u >= 1) land();
   };
 
@@ -754,19 +958,20 @@ function run(session: GameSession): void {
     if (phase !== 'flight' && phase !== 'swing') return;
     if (!outcome || !result) return;
     phase = 'landed';
+    ball.endTrail(gameTime);
     hstate = afterHole;
     // The golfer and the caddie walk up to the ball, so their reactions are in the landing view.
     placeGolfer();
     if (result.kind === 'holed') {
       // The ball drops into the cup (see the loop) and then goes.
-      ball.place({ x: hole.pin.x, y: BALL_R, z: hole.pin.z }, 'green');
+      putBall({ x: hole.pin.x, y: BALL_R, z: hole.pin.z }, 'green');
       holeDropAt = gameTime;
     } else if (result.kind === 'water') {
       ball.setVisible(false);
       splashAt = gameTime;
       ball.splash(result.splash, 0);
     } else {
-      ball.place({ x: result.at.x, y: BALL_R, z: result.at.z }, result.surface);
+      putBall({ x: result.at.x, y: BALL_R, z: result.at.z }, result.surface);
     }
     if (result.kind === 'water' || outcome.quality === 'miss') sfx.miss();
     else if (result.kind === 'holed') sfx.cheer();
@@ -988,7 +1193,7 @@ function run(session: GameSession): void {
     showPreview({
       topic: session.topic,
       facts: feed.peek(10),
-      onDone: () => startHoleAt(start.hole),
+      onDone: () => whenAssets(() => startHoleAt(start.hole)),
     });
   };
 
@@ -1152,6 +1357,40 @@ function run(session: GameSession): void {
   };
   window.addEventListener('keydown', onKey);
 
+  // ---------- Light, depth of field and quality, once a frame ----------
+  const chest = new Vector3();
+  const focus = new Vector3();
+  const followLight = () => {
+    // The light and its shadow box follow what the camera looks at.
+    focus.set(cur.look.x, 0, cur.look.z);
+    if (csm) {
+      csm.update();
+      csm.updateFrustums();
+    } else {
+      sun.position.copy(focus).addScaledVector(sunDir, 100);
+      sun.target.position.copy(focus);
+    }
+    // Depth of field only while the swing is watched up close (never while aiming).
+    const close = phase === 'swing' || devCam() !== null;
+    chest.set(golfer.root.position.x, golfer.root.position.y + 1.2, golfer.root.position.z);
+    post?.setDof(close, camera.position.distanceTo(chest));
+  };
+  /** Times the first 120 frames of the first aim; a slow median drops the tier one step. */
+  const watchFrames = (delta: number) => {
+    if (sampled || phase !== 'aim') return;
+    samples.push(delta * 1000);
+    if (samples.length < SAMPLE_FRAMES) return;
+    sampled = true;
+    const median = [...samples].sort((a, b) => a - b)[SAMPLE_FRAMES / 2];
+    const next = adaptGfx(median, gfx);
+    if (next === gfx) return;
+    gfx = next;
+    settings = gfxSettings(gfx);
+    saveGfx(gfx);
+    buildPost();
+    look = makeLook();
+  };
+
   // ---------- Loop ----------
   ctx.onUpdate((delta) => {
     layout();
@@ -1184,8 +1423,11 @@ function run(session: GameSession): void {
     else golfer.play(golfMove, gameTime - golfSince, delta);
     caddie.update(delta);
     holeScene?.update(gameTime);
-    sky.update(gameTime, camera.position, hole.length / 2);
+    sky?.update(gameTime, camera.position, hole.length / 2);
     applyCamera();
+    frameDelta = delta;
+    followLight();
+    watchFrames(delta);
   });
 
   layout(true);
@@ -1203,7 +1445,15 @@ function run(session: GameSession): void {
     mute.dispose();
     hud.dispose();
     holeScene?.dispose();
-    sky.dispose();
+    sky?.dispose();
+    resizeWatcher.disconnect();
+    window.removeEventListener('orientationchange', sizeRenderer);
+    post?.dispose();
+    csm?.remove();
+    csm?.dispose();
+    envTarget?.dispose();
+    fill?.dispose();
+    disposeForeAssets(assets);
     ctx.dispose();
   });
 }
