@@ -3,6 +3,7 @@ import { onPress } from '../../shared/input';
 import { centreX, FAIRWAY_HALF, GREEN_R, surfaceAt, type Hole, type Surface } from './course';
 import { isPutt, reachFor, TURN_MAX, type Lie, type Plan, type Result, type XZ } from './shot';
 import { ringColour } from './guide';
+import { toParLabel, toParTone } from './rules';
 import type { PlayBand } from './views';
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -80,7 +81,8 @@ export interface Hud {
   /** ▲ and ▼: the ring farther and shorter. */
   farther: HTMLButtonElement;
   shorter: HTMLButtonElement;
-  renderCard(cells: readonly CardCell[]): void;
+  /** `toPar`: strokes against par over the holes finished (the Total cell). */
+  renderCard(cells: readonly CardCell[], toPar: number): void;
   /** The big scorecard in the middle of the screen, for the end of the round. */
   setCardBig(big: boolean, total?: string): void;
   showCard(visible: boolean): void;
@@ -174,6 +176,10 @@ export function createHud(): Hud {
     const score = el('div', 'fg-s', cell);
     return { cell, par, score };
   });
+  const totalCell = el('div', 'fg-f fg-tot', card);
+  el('div', 'fg-fn', totalCell).innerHTML =
+    '<span class="fg-tot-long">Total</span><span class="fg-tot-short">Tot</span>';
+  const totalScore = el('div', 'fg-s', totalCell);
   const total = el('div', 'fg-total', card);
 
   // ---------- The hole map ----------
@@ -524,7 +530,7 @@ export function createHud(): Hud {
     farther,
     shorter,
 
-    renderCard(next) {
+    renderCard(next, toPar) {
       next.forEach((c, i) => {
         const f = cells[i];
         f.par.textContent = `Par ${c.par}`;
@@ -532,7 +538,11 @@ export function createHud(): Hud {
         f.cell.classList.toggle('cur', c.current);
       });
       const played = next.filter((c) => c.strokes !== null && !c.current).length;
-      card.setAttribute('aria-label', `Scorecard, ${played} holes played`);
+      totalScore.textContent = toParLabel(toPar);
+      totalScore.dataset.tone = toParTone(toPar);
+      const standing =
+        toPar === 0 ? 'level par' : `${Math.abs(toPar)} ${toPar < 0 ? 'under' : 'over'} par`;
+      card.setAttribute('aria-label', `Scorecard, ${played} holes played, ${standing}`);
       place();
     },
     setCardBig(big, text = '') {
