@@ -4,7 +4,7 @@
  * Gameplay trees (`Hole.trees`) are not here; `hole.ts` draws those from `Hole.trees`.
  */
 import { seededRandom, type Random } from '../../shared/random';
-import { centreX, GREEN_R, inEllipse, type Hole } from './course';
+import { centreX, GREEN_R, HOLES, inEllipse, type Hole } from './course';
 
 export type Species = 'pine' | 'oak' | 'birch';
 
@@ -51,6 +51,24 @@ const LOW_MAX_OFF = 58;
 export const PATH_OFF = 26;
 export const PATH_WIDTH = 1.4;
 export const MAX_TREES = 250;
+/** Nothing grows or lies within this many yards of a clubhouse's centre. */
+export const CLUBHOUSE_CLEAR = 30;
+
+/** Where a hole's clubhouse stands (`yaw` turns its porch to face +x at 0), or null. */
+export interface ClubhouseSite {
+  x: number;
+  z: number;
+  yaw: number;
+}
+
+/** Holes 1 and 9 have one: beside the first tee, and behind the ninth green. */
+export function clubhouseSite(h: Hole): ClubhouseSite | null {
+  const i = HOLES.indexOf(h);
+  if (i === 0) return { x: -85, z: -25, yaw: 0 };
+  if (i === HOLES.length - 1) return { x: 0, z: h.length + 90, yaw: Math.PI / 2 };
+  return null;
+}
+
 const FLOWER_COLOURS = [0xffd84a, 0xffffff, 0xff8fb0];
 
 const range = (rand: Random, a: number, b: number) => a + (b - a) * rand();
@@ -195,5 +213,15 @@ export function placeScenery(h: Hole): Scenery {
     }
   }
 
-  return { trees, bushes, rocks, flowers, groveSide };
+  const house = clubhouseSite(h);
+  if (!house) return { trees, bushes, rocks, flowers, groveSide };
+  const free = (p: { x: number; z: number }) =>
+    Math.hypot(p.x - house.x, p.z - house.z) >= CLUBHOUSE_CLEAR;
+  return {
+    trees: trees.filter(free),
+    bushes: bushes.filter(free),
+    rocks: rocks.filter(free),
+    flowers: flowers.filter(free),
+    groveSide,
+  };
 }

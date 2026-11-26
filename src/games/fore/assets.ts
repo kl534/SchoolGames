@@ -33,16 +33,32 @@ export interface TurfAssets {
   rough: Texture | null;
 }
 
+export interface TreeAssets {
+  /** Bark for trunks, branches and the tee furniture's wood. */
+  barkColor: Texture;
+  barkNormal: Texture;
+  /** Four tiles each of leaf clusters (oak, birch) and needle branches (pine), with alpha. */
+  oak: Texture;
+  pine: Texture;
+}
+
 export interface ForeAssets {
   sky: SkyAssets | null;
   grass: TurfAssets | null;
   sand: TurfAssets | null;
   /** Ripple normals for the water (linear, repeating). */
   water: Texture | null;
+  trees: TreeAssets | null;
 }
 
 /** The assets of a run with none (tests, or everything failed to load). */
-export const NO_ASSETS: ForeAssets = { sky: null, grass: null, sand: null, water: null };
+export const NO_ASSETS: ForeAssets = {
+  sky: null,
+  grass: null,
+  sand: null,
+  water: null,
+  trees: null,
+};
 
 const base = () => `${import.meta.env.BASE_URL}fore/`;
 
@@ -63,7 +79,7 @@ export async function loadForeAssets(
 ): Promise<ForeAssets> {
   const failed: string[] = [];
   let done = 0;
-  const total = 8;
+  const total = 12;
   const tick = () => onProgress?.(Math.min(++done / total, 1));
   const textures = new TextureLoader();
   const tex = async (file: string, srgb: boolean) => {
@@ -82,7 +98,7 @@ export async function loadForeAssets(
     }
   };
 
-  const [sky, grass, sand, water] = await Promise.all([
+  const [sky, grass, sand, water, trees] = await Promise.all([
     group('sky', async () => {
       const loader = new RGBELoader().setDataType(FloatType);
       const [hdr, dome] = await Promise.all([
@@ -116,12 +132,21 @@ export async function loadForeAssets(
       rough: await tex('turf/sand_rough.webp', false),
     })),
     group('water', () => tex('turf/waternormals.jpg', false)),
+    group('trees', async () => {
+      const [barkColor, barkNormal, oak, pine] = await Promise.all([
+        tex('trees/bark_color.webp', true),
+        tex('trees/bark_normal.webp', false),
+        tex('trees/leaves_oak.webp', true),
+        tex('trees/leaves_pine.webp', true),
+      ]);
+      return { barkColor, barkNormal, oak, pine };
+    }),
   ]);
   if (failed.length > 0) {
     console.warn(`Fore!: could not load ${failed.join(', ')}; using the plain look instead.`);
   }
   onProgress?.(1);
-  return { sky, grass, sand, water };
+  return { sky, grass, sand, water, trees };
 }
 
 /** Frees every texture's GPU copy. */
@@ -135,6 +160,10 @@ export function disposeForeAssets(a: ForeAssets): void {
     a.sand?.normal,
     a.sand?.rough,
     a.water,
+    a.trees?.barkColor,
+    a.trees?.barkNormal,
+    a.trees?.oak,
+    a.trees?.pine,
   ];
   all.forEach((t) => t?.dispose());
 }
