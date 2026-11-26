@@ -917,19 +917,39 @@ describe('the big map', () => {
     const p = bigMapWorld(false, span, box, left + 60 * scale, 0);
     expect(p.x).toBeCloseTo(0, 6);
     expect(p.z).toBeCloseTo(330, 6);
+    // The right edge is -x, as screen-right is in the 3D view.
     const q = bigMapWorld(false, span, box, left + 120 * scale, 250 * scale);
-    expect(q.x).toBeCloseTo(60, 6);
+    expect(q.x).toBeCloseTo(-60, 6);
     expect(q.z).toBeCloseTo(80, 6);
-    // Rotated: the hole runs left to right, tee on the left.
+    // Rotated: the hole runs left to right, tee on the left; the bottom edge is -x.
     const wide = { w: 600, h: 300 };
     const s = Math.min(600 / 250, 300 / 120);
     const top = (300 - 120 * s) / 2;
     const a = bigMapWorld(true, span, wide, 0, top);
     expect(a.z).toBeCloseTo(80, 6);
-    expect(a.x).toBeCloseTo(-60, 6);
+    expect(a.x).toBeCloseTo(60, 6);
     const b = bigMapWorld(true, span, wide, 250 * s, top + 120 * s);
     expect(b.z).toBeCloseTo(330, 6);
-    expect(b.x).toBeCloseTo(60, 6);
+    expect(b.x).toBeCloseTo(-60, 6);
+  });
+
+  it('a point right of centre is world -x, and world to map to world is the identity', () => {
+    expect(cornerMapWorld(HOLES[0], { w: 84, h: 150 }, 63, 75).x).toBeLessThan(0);
+    const scale = Math.min(300 / 120, 600 / 250);
+    const left = (300 - 120 * scale) / 2;
+    expect(bigMapWorld(false, span, box, left + 90 * scale, 100).x).toBeLessThan(0);
+    // world -> map (the drawing's matrices) -> world
+    const world = { x: -22, z: 150 };
+    const px = (60 - world.x) * scale + left;
+    const py = (span.z1 - world.z) * scale;
+    const back = bigMapWorld(false, span, box, px, py);
+    expect(back.x).toBeCloseTo(world.x, 6);
+    expect(back.z).toBeCloseTo(world.z, 6);
+    const cx = ((60 - world.x) / 120) * 84;
+    const cy = (1 - world.z / HOLES[0].length) * 150;
+    const c = cornerMapWorld(HOLES[0], { w: 84, h: 150 }, cx, cy);
+    expect(c.x).toBeCloseTo(world.x, 6);
+    expect(c.z).toBeCloseTo(world.z, 6);
   });
 
   it('shows 20 yd behind the ball to 280 yd ahead, or 30 yd past the pin', () => {

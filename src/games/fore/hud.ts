@@ -120,7 +120,7 @@ export function bigMapSpan(hole: Hole, ballZ: number): { z0: number; z1: number 
 
 /** The matrix that draws world (x, z) on the big map: up the page, or (landscape) left to right. */
 function bigMapMatrix(landscape: boolean, z0: number, z1: number): string {
-  return landscape ? `matrix(0 1 1 0 ${-z0} ${MAP_HALF})` : `matrix(1 0 0 -1 ${MAP_HALF} ${z1})`;
+  return landscape ? `matrix(0 -1 1 0 ${-z0} ${MAP_HALF})` : `matrix(-1 0 0 -1 ${MAP_HALF} ${z1})`;
 }
 
 /**
@@ -139,7 +139,7 @@ export function bigMapWorld(
   const scale = Math.min(box.w / vw, box.h / vh);
   const ux = (px - (box.w - vw * scale) / 2) / scale;
   const uy = (py - (box.h - vh * scale) / 2) / scale;
-  return landscape ? { x: uy - MAP_HALF, z: ux + span.z0 } : { x: ux - MAP_HALF, z: span.z1 - uy };
+  return landscape ? { x: MAP_HALF - uy, z: ux + span.z0 } : { x: MAP_HALF - ux, z: span.z1 - uy };
 }
 
 /** The corner map's world spot for a point (px, py) of its picture. */
@@ -150,7 +150,7 @@ export function cornerMapWorld(
   py: number,
 ): XZ {
   return {
-    x: -MAP_HALF + (px / Math.max(box.w, 1)) * 2 * MAP_HALF,
+    x: MAP_HALF - (px / Math.max(box.w, 1)) * 2 * MAP_HALF,
     z: hole.length * (1 - py / Math.max(box.h, 1)),
   };
 }
@@ -217,8 +217,8 @@ export function createHud(): Hud {
     mapHole = h;
     mapSvg.replaceChildren();
     mapSvg.setAttribute('viewBox', `${-MAP_HALF} 0 ${MAP_HALF * 2} ${h.length}`);
-    // Up the page is down the hole: flip z.
-    const g = svg('g', { transform: `translate(0 ${h.length}) scale(1 -1)` }, mapSvg);
+    // Up the page is down the hole (flip z); screen-right is -x, as in the 3D view (flip x).
+    const g = svg('g', { transform: `translate(0 ${h.length}) scale(-1 -1)` }, mapSvg);
     mapLayer = g;
     drawGround(g, h, -MAP_HALF, MAP_HALF, 0, h.length);
     aimLine = svg(
