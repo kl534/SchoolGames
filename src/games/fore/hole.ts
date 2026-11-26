@@ -356,10 +356,26 @@ export function buildHole(h: Hole, look: Look = FALLBACK_LOOK): HoleScene {
   const scenery = placeScenery(h);
   const runs = cartPath(h, scenery.groveSide);
   if (runs.length > 0) {
-    const path = own(
-      new Mesh(mergeGeometries(runs.map((run) => strip(run, PATH_WIDTH))), paint(0xc4c2ba, 0.8)),
-      true,
+    // Grey concrete: the sand's grain, faint, gives it a surface.
+    const pathGeometry = mergeGeometries(runs.map((run) => strip(run, PATH_WIDTH)));
+    const at = pathGeometry.getAttribute('position');
+    const uv = new Float32Array(at.count * 2);
+    for (let i = 0; i < at.count; i++) {
+      uv[i * 2] = at.getX(i) / SAND_TILE;
+      uv[i * 2 + 1] = at.getZ(i) / SAND_TILE;
+    }
+    pathGeometry.setAttribute('uv', new Float32BufferAttribute(uv, 2));
+    const concrete = lift(
+      new MeshStandardMaterial({
+        color: 0xa19d94,
+        roughness: 0.9,
+        metalness: 0,
+        normalMap: look.assets.sand?.normal ?? null,
+      }),
+      0.8,
     );
+    concrete.normalScale.set(0.3, 0.3);
+    const path = own(new Mesh(pathGeometry, concrete), true);
     path.position.y = 0.03;
   }
 
