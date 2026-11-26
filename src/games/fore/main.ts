@@ -1,6 +1,6 @@
 import './style.css';
 import {
-  AgXToneMapping,
+  NeutralToneMapping,
   Color,
   DirectionalLight,
   Fog,
@@ -199,8 +199,8 @@ function deviceInfo(renderer: WebGLRenderer): DeviceInfo {
   };
 }
 
-/** AgX at 1.0 washes the grass out under this sun; a little lower keeps the greens. */
-const EXPOSURE = 0.65;
+/** Neutral tone mapping keeps the greens (AgX turned every lawn grey); a little under 1 keeps the sunlit grass from clipping. */
+const EXPOSURE = 0.75;
 /** The sun's intensity (the cascaded map's lights add up to the same). */
 const SUN_PLAIN = 3.2;
 
@@ -216,7 +216,7 @@ function run(session: GameSession): void {
   const { scene, camera, renderer } = ctx;
   scene.background = new Color(SKY);
   scene.fog = new Fog(SKY, 260, 1500);
-  renderer.toneMapping = AgXToneMapping;
+  renderer.toneMapping = NeutralToneMapping;
   renderer.toneMappingExposure = EXPOSURE;
 
   // Quality: the dev address, else the tier saved after a slow run, else a guess from the device.
