@@ -59,6 +59,7 @@ import { buildHole, CUP_AID_RANGE, SKY, type HoleScene } from './hole';
 import { createSky, type Sky } from './sky';
 import { disposeForeAssets, loadForeAssets, NO_ASSETS, type ForeAssets } from './assets';
 import { FALLBACK_LOOK, litTree, type Look } from './ground';
+import { createBlades } from './grass';
 import { createPost, type Post } from './post';
 import { adaptGfx, gfxSettings, pickGfx, sunSetup, type DeviceInfo, type Gfx } from './quality';
 import { groundY } from './terrain';
@@ -284,6 +285,18 @@ function run(session: GameSession): void {
   scene.add(ball.object);
   const guide = createGuide(glow);
   scene.add(guide.object);
+  // Close grass blades round the ball, regrown for each shot.
+  const blades = createBlades(settings.blades);
+  scene.add(blades.object);
+  let bladeKey = '';
+  const growBlades = () => {
+    const key = `${holeIndex}:${hstate.at.x.toFixed(2)},${hstate.at.z.toFixed(2)}`;
+    if (key === bladeKey) return;
+    bladeKey = key;
+    const seed =
+      holeIndex * 7919 + Math.round(hstate.at.x * 100) * 31 + Math.round(hstate.at.z * 100);
+    blades.rebuild(hole, hstate.at, seed);
+  };
   const golfer = createGolfer();
   scene.add(golfer.root);
   const caddie = createCaddie();
@@ -638,6 +651,7 @@ function run(session: GameSession): void {
     devClubPlan(planShot(hole, hstate.at, hstate.lie, ringWant), hstate.lie);
 
   const placeGolfer = () => {
+    growBlades();
     golfer.setClub(plan.club);
     golfer.stand(hstate.at, plan.dir, plan.club.id, ground);
     caddie.stand(golfer.root.position, plan.dir, ground);
@@ -1423,6 +1437,7 @@ function run(session: GameSession): void {
     else golfer.play(golfMove, gameTime - golfSince, delta);
     caddie.update(delta);
     holeScene?.update(gameTime);
+    blades.update(gameTime);
     sky?.update(gameTime, camera.position, hole.length / 2);
     applyCamera();
     frameDelta = delta;
@@ -1445,6 +1460,7 @@ function run(session: GameSession): void {
     mute.dispose();
     hud.dispose();
     holeScene?.dispose();
+    blades.dispose();
     sky?.dispose();
     resizeWatcher.disconnect();
     window.removeEventListener('orientationchange', sizeRenderer);

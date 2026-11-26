@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import sharp from 'sharp';
+import sharp, { type OverlayOptions } from 'sharp';
 
 const OUT = resolve(dirname(fileURLToPath(import.meta.url)), '../../public/fore');
 const work = mkdtempSync(join(tmpdir(), 'fore-assets-'));
@@ -136,7 +136,7 @@ async function flatAtlas(
   fill: { r: number; g: number; b: number },
 ): Promise<Buffer> {
   const half = size / 2;
-  const all: sharp.OverlayOptions[] = [];
+  const all: OverlayOptions[] = [];
   tiles.forEach((pieces, t) => {
     const ox = (t % 2) * half;
     const oy = Math.floor(t / 2) * half;
