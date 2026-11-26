@@ -62,7 +62,7 @@ const webp = (input: Buffer, size: number, quality: number, grey = false) => {
 async function evened(input: Buffer, mean: number): Promise<Buffer> {
   const { channels } = await sharp(input).stats();
   const k = channels.slice(0, 3).map((c) => mean / c.mean);
-  return sharp(input).removeAlpha().linear(k, [0, 0, 0]).toBuffer();
+  return sharp(input).removeAlpha().linear(k, [0, 0, 0]).png().toBuffer();
 }
 
 async function ambientCg(id: string, res: string) {
