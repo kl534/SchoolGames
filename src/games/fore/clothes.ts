@@ -25,6 +25,8 @@ export interface Outfit {
   accent: number;
   /** Whether the accent is worn at all (spectators wear neither). */
   accentOn: boolean;
+  /** The accent is a loose bib (pushed out and smoothed), not a glove. */
+  bib?: boolean;
 }
 
 /** How far cloth stands off the skin, yards. */
@@ -115,6 +117,7 @@ export function clothMaterial(
     uWeave: { value: weave },
     uWeaveOn: { value: weave ? 1 : 0 },
     uPush: { value: push },
+    uBib: { value: outfit.bib ? 1 : 0 },
   };
   m.userData.cloth = uniforms;
   const patched = ShaderChunk.normal_fragment_maps.replace(
@@ -130,14 +133,26 @@ export function clothMaterial(
     shader.vertexShader = shader.vertexShader
       .replace(
         'void main() {',
-        'attribute vec4 aRegion;\nvarying vec4 vRegion;\nuniform float uPush;\nvoid main() {',
+        'attribute vec4 aRegion;\nvarying vec4 vRegion;\nuniform float uPush;\nuniform float uBib;\nvoid main() {',
+      )
+      .replace(
+        '#include <beginnormal_vertex>',
+        `#include <beginnormal_vertex>
+	float bibW = smoothstep( 0.35, 0.65, aRegion.w ) * uBib;
+	vec3 origNormal = objectNormal;
+	vec3 flatN = normalize( vec3( objectNormal.x * 0.35, objectNormal.y * 0.2, objectNormal.z >= 0.0 ? 1.0 : -1.0 ) );
+	objectNormal = normalize( mix( objectNormal, flatN, 0.9 * bibW ) );`,
       )
       .replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
 	vRegion = aRegion;
 	float cloth = max( smoothstep( 0.35, 0.65, aRegion.x ), 3.5 * smoothstep( 0.35, 0.65, aRegion.y ) );
-	transformed += normalize( objectNormal ) * uPush * cloth;`,
+	vec3 nrm = normalize( origNormal );
+	transformed += normalize( mix( nrm, flatN, bibW ) ) * uPush * max( cloth, bibW * 5.0 );
+	// Hang it like a tabard: the bust is smoothed towards a plane in front, and one behind.
+	float plane = nrm.z >= 0.0 ? 0.1 : -0.08;
+	transformed.z = mix( transformed.z, plane, 0.85 * bibW );`,
       );
     shader.fragmentShader = shader.fragmentShader
       .replace(

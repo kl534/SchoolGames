@@ -46,6 +46,7 @@ export const CADDIE_OUTFIT: Outfit = {
   shoes: 0x4a3f33,
   accent: 0xf4f4f4,
   accentOn: true,
+  bib: true,
 };
 
 export interface SkinOptions {
@@ -218,6 +219,7 @@ function dressBody(
   // Hair and cap ride the head bone.
   const head = bone('Head');
   const geometries: BufferGeometry[] = [];
+  const hairPieces: Mesh[] = [];
   for (const style of options.hair) {
     const hair = options.hairSource?.scene.getObjectByName(style.style) as Mesh | undefined;
     if (!hair) continue;
@@ -226,20 +228,29 @@ function dressBody(
     const piece = new Mesh(hair.geometry, material);
     piece.frustumCulled = false;
     head.add(piece);
+    hairPieces.push(piece);
   }
   if (options.cap !== null) {
     const material = own(new MeshStandardMaterial({ color: options.cap, roughness: 0.7 }));
-    // An ellipsoid over the skull (the head is about 0.17 wide, 0.19 deep and 0.23 tall).
-    const dome = new SphereGeometry(1, 24, 12, 0, Math.PI * 2, 0, 1.38);
+    // A snug crown over the skull (about the head's size plus a centimetre, above the ears and
+    // brows) and a 7 cm brim tipped down, dark underneath. The hair is tucked inside.
+    const dome = new SphereGeometry(1, 24, 12, 0, Math.PI * 2, 0, 1.39);
     const crown = new Mesh(dome, material);
-    crown.scale.set(0.118, 0.172, 0.134);
-    crown.position.set(0, 0.104, -0.01);
-    const peak = new Mesh(
-      new CylinderGeometry(0.105, 0.105, 0.006, 16, 1, false, 0, Math.PI),
+    crown.scale.set(0.098, 0.148, 0.11);
+    crown.position.set(0, 0.1, -0.003);
+    const under = own(new MeshStandardMaterial({ color: 0x2a2a2e, roughness: 0.8 }));
+    const peak = new Mesh(new CylinderGeometry(0.075, 0.075, 0.004, 16, 1, false, 0, Math.PI), [
       material,
-    );
-    peak.position.set(0, 0.136, 0.095);
-    peak.rotation.set(0.1, -Math.PI / 2, 0);
+      material,
+      under,
+    ]);
+    peak.position.set(0, 0.123, 0.088);
+    peak.rotation.set(0.25, -Math.PI / 2, 0);
+    peak.scale.set(1, 1, 1.3);
+    for (const piece of hairPieces) {
+      piece.scale.setScalar(0.82);
+      piece.position.y = 0.018;
+    }
     head.add(crown, peak);
     geometries.push(dome, peak.geometry);
   }
