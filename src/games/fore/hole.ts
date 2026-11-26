@@ -17,6 +17,7 @@ import {
   PlaneGeometry,
   RingGeometry,
   SphereGeometry,
+  Float32BufferAttribute,
   Vector2,
   type Material,
   type WebGLProgramParametersWithUniforms,
@@ -49,6 +50,8 @@ import {
 import { cartPath, placeScenery, PATH_WIDTH } from './scenery';
 import { buildHills, HORIZON } from './sky';
 import { groundY, POND_DEPTH, SHORE } from './terrain';
+import { buildTufts } from './grass';
+import { buildProps } from './props';
 import { buildTreeLayer, type TreePlacement } from './trees';
 
 /** The horizon colour: the fog, the background and the bottom of the sky dome. */
@@ -186,6 +189,28 @@ function pondWater(
     },
     materials: [material],
   };
+}
+
+/** A rock: an icosahedron (detail 2) with its points pushed in and out by seeded wobble. */
+function rockGeometry(): BufferGeometry {
+  const g = new IcosahedronGeometry(1, 2);
+  const pos = g.getAttribute('position');
+  const out: number[] = [];
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    // Depends on the direction only, so the points shared by faces move together.
+    const k =
+      1 +
+      0.16 * Math.sin(3.1 * x + 1.7 * y + 0.4) +
+      0.11 * Math.sin(5.3 * y - 2.1 * z + 1.3) +
+      0.07 * Math.sin(7.7 * z + 2.3 * x - 0.8);
+    out.push(x * k, y * k, z * k);
+  }
+  g.setAttribute('position', new Float32BufferAttribute(out, 3));
+  g.computeVertexNormals();
+  return g;
 }
 
 /**
@@ -338,16 +363,24 @@ export function buildHole(h: Hole, look: Look = FALLBACK_LOOK): HoleScene {
     path.position.y = 0.03;
   }
 
-  // The tee: a mown rectangle, two tee blocks, a yardage plaque, a ball washer and a bench.
+  // The tee: a mown rectangle, two tee blocks, a ball washer and a bench (the yardage sign is a prop).
   const teeTile = turfTile(look, 'tee');
   const tee = own(
     flat(scaleUV(new PlaneGeometry(8, 10), 8 / teeTile, 10 / teeTile), turf('tee', 2), 0.08),
     true,
   );
   tee.position.set(0, 0.08, 0);
-  const block = ownMaterial(new MeshStandardMaterial({ color: 0x9a9a9a, roughness: 0.8 }));
-  const wood = ownMaterial(new MeshStandardMaterial({ color: 0x6b4a2b, roughness: 0.9 }));
-  const white = ownMaterial(new MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.7 }));
+  const block = ownMaterial(new MeshStandardMaterial({ color: 0x9a9a9a, roughness: 0.6 }));
+  const bark = look.assets.trees;
+  const wood = ownMaterial(
+    new MeshStandardMaterial({
+      color: bark ? 0xffffff : 0x6b4a2b,
+      map: bark?.barkColor ?? null,
+      normalMap: bark?.barkNormal ?? null,
+      roughness: 0.6,
+    }),
+  );
+  const white = ownMaterial(new MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.6 }));
   const green2 = ownMaterial(new MeshStandardMaterial({ color: 0x2f5f3a, roughness: 0.6 }));
   const prop = (g: BufferGeometry, m: Material, x: number, y: number, z: number, yaw = 0) => {
     geometries.push(g);
@@ -358,8 +391,6 @@ export function buildHole(h: Hole, look: Look = FALLBACK_LOOK): HoleScene {
     object.add(mesh);
   };
   for (const side of [-1, 1]) prop(new SphereGeometry(0.2, 10, 8), block, side * 3.4, 0.25, 0.4);
-  prop(new CylinderGeometry(0.05, 0.05, 1.1, 6), wood, 5.8, 0.63, 3, -0.3);
-  prop(new BoxGeometry(0.8, 0.45, 0.05), white, 5.8, 1.1, 3, -0.3);
   prop(new CylinderGeometry(0.13, 0.15, 1, 8), green2, -5.5, 0.58, 2.4);
   prop(new BoxGeometry(0.34, 0.12, 0.34), white, -5.5, 1.14, 2.4);
   prop(new BoxGeometry(1.6, 0.08, 0.5), wood, -6.6, 0.5, -2.4, 0.3);
@@ -382,7 +413,7 @@ export function buildHole(h: Hole, look: Look = FALLBACK_LOOK): HoleScene {
     if (z < 30) continue;
     const c = centreX(h, z);
     const stripe = own(
-      flat(new PlaneGeometry(FAIRWAY_HALF * 2, 0.7), cutOut(paint(color, 2.5, 0.8), cuts), 0.07),
+      flat(new PlaneGeometry(FAIRWAY_HALF * 2, 0.7), cutOut(paint(color, 2.5, 0.6), cuts), 0.07),
       true,
     );
     stripe.position.set(c, 0.07, z);
@@ -390,7 +421,7 @@ export function buildHole(h: Hole, look: Look = FALLBACK_LOOK): HoleScene {
       const post = own(
         new Mesh(
           new CylinderGeometry(0.2, 0.2, 1.6, 8),
-          new MeshStandardMaterial({ color, roughness: 0.7 }),
+          new MeshStandardMaterial({ color, roughness: 0.6 }),
         ),
       );
       post.castShadow = shadows;
@@ -401,6 +432,9 @@ export function buildHole(h: Hole, look: Look = FALLBACK_LOOK): HoleScene {
   // Trees: the gameplay trees (oak and pine in turn, exactly as tall as the flight check says),
   // then the scenery trees (a share of them on the lower tiers). Bushes, rocks and flowers are
   // instanced too. Everything stands on the ground's height.
+  // Park trees spread wider than the old cartoon crowns: a full, rounded oak.
+  const fuller = (t: { species: 'pine' | 'oak' | 'birch'; r: number }) =>
+    t.r * (t.species === 'oak' ? 1.3 : t.species === 'birch' ? 1.2 : 1.1);
   const share = look.settings.sceneryShare;
   const keep = (i: number) => (i * 0.6180339887) % 1 < share;
   const placements: TreePlacement[] = h.trees.map((tr, i) => ({
@@ -413,40 +447,45 @@ export function buildHole(h: Hole, look: Look = FALLBACK_LOOK): HoleScene {
     yaw: rand() * Math.PI * 2,
   }));
   scenery.trees.forEach((t, i) => {
-    if (keep(i)) placements.push({ ...t, y: groundY(h, t.x, t.z) });
+    if (keep(i)) placements.push({ ...t, r: fuller(t), y: groundY(h, t.x, t.z) });
   });
+  // The woods line: far trees with a third of the cards.
+  scenery.woods.forEach((t, i) => {
+    if (keep(i)) {
+      placements.push({ ...t, r: fuller(t), y: groundY(h, t.x, t.z), share: 0.33, blob: false });
+    }
+  });
+  // Bushes are leaf cards like the trees' crowns, standing right on the ground.
+  scenery.bushes
+    .filter((_, i) => keep(i))
+    .forEach((b, i) => {
+      placements.push({
+        x: b.x,
+        y: groundY(h, b.x, b.z),
+        z: b.z,
+        species: 'bush',
+        r: b.r,
+        height: b.r * 1.9,
+        yaw: i,
+        blob: false,
+      });
+    });
   const treeLayer = buildTreeLayer(placements, look);
   object.add(treeLayer.object);
 
   const tint = new Color();
-  const bushList = scenery.bushes.filter((_, i) => keep(i));
-  if (bushList.length > 0) {
-    const bushes = own(
-      new InstancedMesh(
-        new IcosahedronGeometry(1, 1),
-        new MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.95 }),
-        bushList.length,
-      ),
-    );
-    bushes.castShadow = shadows;
-    bushList.forEach((b, i) => {
-      dummy.position.set(b.x, groundY(h, b.x, b.z) + b.r * 0.4, b.z);
-      dummy.rotation.set(0, i, 0);
-      dummy.scale.set(b.r, b.r * 0.75, b.r);
-      dummy.updateMatrix();
-      bushes.setMatrixAt(i, dummy.matrix);
-      bushes.setColorAt(
-        i,
-        tint.setHex(0x3a7f3a).offsetHSL(0, 0, (((i * 37) % 17) / 17) * 0.1 - 0.05),
-      );
-    });
-    bushes.frustumCulled = false;
-  }
   if (scenery.rocks.length > 0) {
+    const sand = look.assets.sand;
     const rocks = own(
       new InstancedMesh(
-        new IcosahedronGeometry(1, 0),
-        new MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.9 }),
+        rockGeometry(),
+        new MeshStandardMaterial({
+          color: 0x8b8680,
+          map: sand?.color ?? null,
+          normalMap: sand?.normal ?? null,
+          roughness: 0.9,
+          metalness: 0,
+        }),
         scenery.rocks.length,
       ),
     );
@@ -457,19 +496,22 @@ export function buildHole(h: Hole, look: Look = FALLBACK_LOOK): HoleScene {
       dummy.scale.set(r.r, r.r * 0.6, r.r * 0.85);
       dummy.updateMatrix();
       rocks.setMatrixAt(i, dummy.matrix);
-      rocks.setColorAt(i, tint.setHex(0x8d8c86).offsetHSL(0, 0, (((i * 5) % 7) / 7) * 0.12 - 0.06));
+      const k = 0.88 + (((i * 5) % 7) / 7) * 0.24;
+      rocks.setColorAt(i, tint.setRGB(k, k, k));
     });
     rocks.frustumCulled = false;
   }
-  if (scenery.flowers.length > 0) {
+  // Flowers: small, and half as many as there were.
+  const flowerList = scenery.flowers.filter((_, i) => i % 2 === 0);
+  if (flowerList.length > 0) {
     const flowers = own(
       new InstancedMesh(
-        new PlaneGeometry(0.34, 0.34).rotateX(-Math.PI / 2),
+        new PlaneGeometry(0.2, 0.2).rotateX(-Math.PI / 2),
         new MeshStandardMaterial({ color: 0xffffff, side: DoubleSide, roughness: 0.8 }),
-        scenery.flowers.length,
+        flowerList.length,
       ),
     );
-    scenery.flowers.forEach((f, i) => {
+    flowerList.forEach((f, i) => {
       dummy.position.set(f.x, groundY(h, f.x, f.z) + 0.13, f.z);
       dummy.rotation.set(0, i * 2.4, 0);
       dummy.scale.setScalar(1);
@@ -479,6 +521,15 @@ export function buildHole(h: Hole, look: Look = FALLBACK_LOOK): HoleScene {
     });
     flowers.frustumCulled = false;
   }
+
+  // Tufts of tall grass in the far rough, and the built things (clubhouse, sign, sprinklers).
+  const tufts = buildTufts(h, look.settings.tufts);
+  if (tufts.mesh) {
+    tufts.mesh.receiveShadow = shadows;
+    object.add(tufts.mesh);
+  }
+  const props = buildProps(h, look);
+  object.add(props.object);
 
   const hills = buildHills(h, look);
   object.add(hills.object);
@@ -509,6 +560,10 @@ export function buildHole(h: Hole, look: Look = FALLBACK_LOOK): HoleScene {
   const rim = own(flat(new RingGeometry(0.07, 0.09, 24), paint(0xffffff, 5.5), 0.145));
   rim.position.set(pin.x, 0.145, pin.z);
   rim.name = 'rim';
+  // The white cup liner, just inside the cup's edge.
+  const liner = own(flat(new RingGeometry(0.044, 0.056, 24), paint(0xffffff, 5.2), 0.147));
+  liner.position.set(pin.x, 0.147, pin.z);
+  liner.name = 'liner';
   const flashMaterial = new MeshBasicMaterial({
     color: 0xffffff,
     transparent: true,
@@ -539,12 +594,16 @@ export function buildHole(h: Hole, look: Look = FALLBACK_LOOK): HoleScene {
         r.material.opacity = 0.4 * (1 - p);
       }
       waters.forEach((w) => w.update(t));
+      treeLayer.update(t);
+      tufts.update(t);
     },
     setCupAid(on) {
       flash.visible = on;
     },
     dispose() {
       treeLayer.dispose();
+      tufts.dispose();
+      props.dispose();
       hills.dispose();
       geometries.forEach((g) => g.dispose());
       materials.forEach((m) => {

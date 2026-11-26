@@ -4,7 +4,7 @@
  * Gameplay trees (`Hole.trees`) are not here; `hole.ts` draws those from `Hole.trees`.
  */
 import { seededRandom, type Random } from '../../shared/random';
-import { centreX, GREEN_R, inEllipse, type Hole } from './course';
+import { centreX, GREEN_R, HOLES, inEllipse, type Hole } from './course';
 
 export type Species = 'pine' | 'oak' | 'birch';
 
@@ -34,6 +34,8 @@ export interface Flower {
 }
 export interface Scenery {
   trees: SceneryTree[];
+  /** The woods line: a dense band of far trees 100 to 170 yd off the line and behind the green. */
+  woods: SceneryTree[];
   bushes: Bush[];
   rocks: Rock[];
   flowers: Flower[];
@@ -51,6 +53,27 @@ const LOW_MAX_OFF = 58;
 export const PATH_OFF = 26;
 export const PATH_WIDTH = 1.4;
 export const MAX_TREES = 250;
+/** The woods line stands this far off the centre line, yards. */
+export const WOODS_FROM = 100;
+export const WOODS_TO = 170;
+/** Nothing grows or lies within this many yards of a clubhouse's centre. */
+export const CLUBHOUSE_CLEAR = 30;
+
+/** Where a hole's clubhouse stands (`yaw` turns its porch to face +x at 0), or null. */
+export interface ClubhouseSite {
+  x: number;
+  z: number;
+  yaw: number;
+}
+
+/** Holes 1 and 9 have one: beside the first tee, and behind the ninth green. */
+export function clubhouseSite(h: Hole): ClubhouseSite | null {
+  const i = HOLES.indexOf(h);
+  if (i === 0) return { x: -85, z: -25, yaw: 0 };
+  if (i === HOLES.length - 1) return { x: 0, z: h.length + 90, yaw: Math.PI / 2 };
+  return null;
+}
+
 const FLOWER_COLOURS = [0xffd84a, 0xffffff, 0xff8fb0];
 
 const range = (rand: Random, a: number, b: number) => a + (b - a) * rand();
@@ -77,7 +100,7 @@ export function sceneryTrees(rand: Random, h: Hole, groveSide: -1 | 1): SceneryT
     for (let z = range(rand, 120, 200) - 40; z < h.length + 60; z += range(rand, 120, 200)) {
       clearings.push([z, z + range(rand, 25, 45)]);
     }
-    for (let row = 0; row < 3; row++) {
+    for (let row = 0; row < 2; row++) {
       const base = 64 + row * 24;
       let z = -40 + rand() * 4;
       while (z < h.length + 60) {
@@ -88,7 +111,7 @@ export function sceneryTrees(rand: Random, h: Hole, groveSide: -1 | 1): SceneryT
         }
         const off = Math.min(base + range(rand, -2, 8), 128);
         add(centreX(h, z) + side * off, z);
-        z += range(rand, 6, 11);
+        z += range(rand, 9, 15);
       }
     }
   }
@@ -103,6 +126,44 @@ export function sceneryTrees(rand: Random, h: Hole, groveSide: -1 | 1): SceneryT
   if (trees.length <= MAX_TREES) return trees;
   const keep = (MAX_TREES - 10) / trees.length;
   return trees.filter(() => rand() < keep).slice(0, MAX_TREES);
+}
+
+/**
+ * The woods line: two staggered rows of trees 7 to 10 yd apart along both sides, 100 to 170 yd off
+ * the line, and two more rows beyond the green. Its own seed, so it leaves the other placements be.
+ */
+export function sceneryWoods(h: Hole): SceneryTree[] {
+  const rand = seededRandom(Math.round(h.length * 53 + h.bend * 211 + 99));
+  const woods: SceneryTree[] = [];
+  const add = (x: number, z: number) => {
+    const u = rand();
+    const scale = range(rand, 0.9, 1.2);
+    woods.push({
+      x,
+      z,
+      species: u < 0.4 ? 'pine' : u < 0.85 ? 'oak' : 'birch',
+      scale,
+      yaw: rand() * Math.PI * 2,
+      height: range(rand, 11, 14.5) * scale,
+      r: range(rand, 3.8, 5) * scale,
+    });
+  };
+  for (const side of [-1, 1]) {
+    for (let row = 0; row < 2; row++) {
+      const base = WOODS_FROM + row * 30 + range(rand, 0, 12);
+      for (let z = -40 + row * 4; z < h.length + 60; z += range(rand, 7, 10)) {
+        const off = Math.min(base + range(rand, -6, 10), WOODS_TO);
+        add(centreX(h, z) + side * off, z);
+      }
+    }
+  }
+  for (let row = 0; row < 2; row++) {
+    const base = h.length + WOODS_FROM + row * 30;
+    for (let x = -WOODS_TO; x <= WOODS_TO; x += range(rand, 7, 10)) {
+      add(x, base + range(rand, -6, 10));
+    }
+  }
+  return woods;
 }
 
 /** The path's centre points in runs, with the runs broken where it would cross a hazard or tree. */
@@ -130,6 +191,7 @@ export function placeScenery(h: Hole): Scenery {
   const rand = seededRandom(Math.round(h.length * 31 + h.bend * 977 + 12345));
   const groveSide: -1 | 1 = rand() < 0.5 ? -1 : 1;
   const trees = sceneryTrees(rand, h, groveSide);
+  const woods = sceneryWoods(h);
 
   const onPath = (x: number, z: number) =>
     z >= -3 &&
@@ -195,5 +257,16 @@ export function placeScenery(h: Hole): Scenery {
     }
   }
 
-  return { trees, bushes, rocks, flowers, groveSide };
+  const house = clubhouseSite(h);
+  if (!house) return { trees, woods, bushes, rocks, flowers, groveSide };
+  const free = (p: { x: number; z: number }) =>
+    Math.hypot(p.x - house.x, p.z - house.z) >= CLUBHOUSE_CLEAR;
+  return {
+    trees: trees.filter(free),
+    woods: woods.filter(free),
+    bushes: bushes.filter(free),
+    rocks: rocks.filter(free),
+    flowers: flowers.filter(free),
+    groveSide,
+  };
 }

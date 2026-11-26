@@ -187,9 +187,10 @@ async function main(): Promise<number> {
     const outDir = resolve(root, options.out);
     await mkdir(outDir, { recursive: true });
     for (const target of options.targets) {
-      const shots = await Promise.all(
-        options.sizes.map((size) => shoot(browser!, origin!, target, size, options, script)),
-      );
+      const one = (size: Size) => shoot(browser!, origin!, target, size, options, script);
+      const shots: Shot[] = [];
+      if (options.serial) for (const size of options.sizes) shots.push(await one(size));
+      else shots.push(...(await Promise.all(options.sizes.map(one))));
       const file = resolve(outDir, `${options.name ?? slug(target)}.jpg`);
       await writeFile(file, await composeSheet(browser, shots));
       const errorCount = shots.reduce((n, s) => n + s.errors.length, 0);

@@ -7,7 +7,15 @@ import { FALLBACK_LOOK, groundTextures, type Look } from '../src/games/fore/grou
 import { GFX_SETTINGS, type Gfx } from '../src/games/fore/quality';
 import { groundY } from '../src/games/fore/terrain';
 import { buildHole } from '../src/games/fore/hole';
-import { placeScenery, LINE_CLEAR, LOW_MIN_OFF } from '../src/games/fore/scenery';
+import {
+  clubhouseSite,
+  CLUBHOUSE_CLEAR,
+  placeScenery,
+  LINE_CLEAR,
+  LOW_MIN_OFF,
+  WOODS_FROM,
+  WOODS_TO,
+} from '../src/games/fore/scenery';
 import { finishShot, planShot, resolveShot, TREE_HEIGHT } from '../src/games/fore/shot';
 import { treeBounds, treeScale } from '../src/games/fore/trees';
 
@@ -60,6 +68,36 @@ describe('scenery placement', () => {
   it('is the same every time for a hole, and differs between holes', () => {
     for (const h of HOLES) expect(placeScenery(h)).toEqual(placeScenery(h));
     expect(placeScenery(HOLES[0]).trees).not.toEqual(placeScenery(HOLES[1]).trees);
+  });
+});
+
+describe('woods line', () => {
+  it('stands 100 to 170 yd off the line or behind the green, 7 to 10 yd apart, on every hole', () => {
+    for (const h of HOLES) {
+      const woods = placeScenery(h).woods;
+      expect(woods.length).toBeGreaterThan(100);
+      for (const t of woods) {
+        const beyond = t.z >= h.length + 90;
+        expect(beyond || off(h, t) >= WOODS_FROM - 8).toBe(true);
+        expect(beyond || off(h, t) <= WOODS_TO).toBe(true);
+      }
+    }
+  });
+});
+
+describe('clubhouse clearance', () => {
+  it('drops every tree, bush, rock and flower within 30 yd of a clubhouse', () => {
+    for (const h of HOLES) {
+      const house = clubhouseSite(h);
+      if (!house) continue;
+      const s = placeScenery(h);
+      for (const p of [...s.trees, ...s.woods, ...s.bushes, ...s.rocks, ...s.flowers]) {
+        expect(Math.hypot(p.x - house.x, p.z - house.z)).toBeGreaterThanOrEqual(CLUBHOUSE_CLEAR);
+      }
+    }
+    expect(clubhouseSite(HOLES[0])).toMatchObject({ x: -85, z: -25 });
+    expect(clubhouseSite(HOLES[8])).toMatchObject({ x: 0, z: HOLES[8].length + 90 });
+    expect(HOLES.filter((h) => clubhouseSite(h)).length).toBe(2);
   });
 });
 
@@ -145,12 +183,16 @@ describe('hole build', () => {
 
   it('keeps each tier inside its draw budget (high 220 meshes, low 120)', () => {
     const budget: Record<Gfx, number> = { low: 120, medium: 220, high: 220 };
+    // Leaf cards and bark are many small triangles; each tier gets a share.
+    const triangleBudget: Record<Gfx, number> = { low: 250_000, medium: 450_000, high: 650_000 };
     for (const gfx of ['low', 'medium', 'high'] as const) {
       for (const h of HOLES) {
         const hole = buildHole(h, look(gfx));
         const { meshes, triangles } = stats(hole.object);
         expect(meshes, `${gfx} hole ${HOLES.indexOf(h) + 1}`).toBeLessThanOrEqual(budget[gfx]);
-        expect(triangles).toBeLessThan(400_000);
+        expect(triangles, `${gfx} hole ${HOLES.indexOf(h) + 1} triangles`).toBeLessThan(
+          triangleBudget[gfx],
+        );
         hole.dispose();
       }
     }
@@ -197,17 +239,32 @@ describe('hole build', () => {
         expect(found.some((b) => Math.abs(b.y - groundY(h, t.x, t.z)) < 1e-6)).toBe(true);
       }
       for (const b of scenery.bushes) {
-        expect(
-          near(b.x, b.z).some((p) => Math.abs(p.y - groundY(h, b.x, b.z) - b.r * 0.4) < 1e-6),
-        ).toBe(true);
+        expect(near(b.x, b.z).some((p) => Math.abs(p.y - groundY(h, b.x, b.z)) < 1e-6)).toBe(true);
       }
       for (const r of scenery.rocks) {
         expect(
           near(r.x, r.z).some((p) => Math.abs(p.y - groundY(h, r.x, r.z) - r.r * 0.25) < 1e-6),
         ).toBe(true);
       }
+      const house = clubhouseSite(h);
+      if (house) {
+        const built = hole.object.getObjectByName('clubhouse');
+        expect(built, `clubhouse on hole ${HOLES.indexOf(h) + 1}`).toBeDefined();
+        expect(built!.position.y).toBeCloseTo(groundY(h, house.x, house.z), 6);
+      }
       hole.dispose();
     }
+  });
+
+  it('puts a clubhouse and two carts on holes 1 and 9 only, and a sign on every tee', () => {
+    HOLES.forEach((h, i) => {
+      const hole = buildHole(h, look('medium'));
+      const house = hole.object.getObjectByName('clubhouse');
+      expect(Boolean(house), `hole ${i + 1}`).toBe(i === 0 || i === 8);
+      if (house) expect(house.getObjectByName('carts')).toBeDefined();
+      expect(hole.object.getObjectByName('sign')).toBeDefined();
+      hole.dispose();
+    });
   });
 });
 

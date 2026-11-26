@@ -9,15 +9,18 @@ Nine holes of real golf: each shot is one question. The player puts a ring where
 - `shot.ts`: clubs by landing distance, the limits on the ring (`reachFor`, `clubFor`, `clampTarget`, `ringRadius`), the planned shot, how it was struck (`resolveShot`: right lands inside the ring, wrong 15 to 30 % off), the roll and where the ball ends (`rollFrom`, `finishShot`, `predictRest`, `treeHit`, `pathAt`), the smart starting spot (`suggestTarget`) and `Plan`, `Outcome`, `Result`
 - `rules.ts`: pure golf scoring, the stored score and the announcer's lines (`afterShot`, `holeScore`, `holeOver`, `nameFor`, `storedFor`, `shotCall`, `holeCall`, `holeIntro`, `allCallLines`, `reactionFor`)
 - `voice.ts`: every spoken line that is not a fact (`VOICE_LINES`)
-- `hole.ts`: one hole as lit (standard material) meshes for a given `Look`: rolling rough with mounds, mown fairway, crosshatched green with fringe and apron, sunken bunkers with a grass lip, ponds with a mud bank and reflecting water, reeds and ripples, cart path, tee with furniture, 150 and 100 yd markers, trees, bushes, rocks, flowers, hills, true-size cup with its flash ring, and flag; every base stands on `groundY` (`buildHole`, `CUP_VISUAL_R`, `SKY`)
-- `scenery.ts`: pure, seeded placement of the scenery trees, bushes, rocks and flowers and of the cart path for a hole (`placeScenery`, `cartPath`, `LINE_CLEAR`); gameplay trees stay in `course.ts`
-- `trees.ts`: pine, oak and birch geometry (merged, vertex coloured) drawn as instances; they cast and receive real shadows on the tiers that have them, blob decals on low (`buildTreeLayer`, `treeBounds`, `treeScale`)
+- `hole.ts`: one hole as lit (standard material) meshes for a given `Look`: rolling rough with mounds, mown fairway, crosshatched green with fringe and apron, sunken bunkers with a grass lip, ponds with a mud bank and reflecting water, reeds and ripples, cart path, tee with furniture, 150 and 100 yd markers, trees and bushes (leaf cards), rocks (noisy icosahedra with the sand maps), half as many small flowers, tufts, props, hills, true-size cup with its white liner and flash ring, and flag; every base stands on `groundY` (`buildHole`, `CUP_VISUAL_R`, `SKY`)
+- `scenery.ts`: pure, seeded placement of the scenery trees, bushes, rocks and flowers and of the cart path for a hole, the woods line (`sceneryWoods`: two staggered rows 100 to 170 yd off the line and behind the green, drawn with a third of the cards) and where the clubhouses stand and the 30 yd they keep clear (`placeScenery`, `cartPath`, `LINE_CLEAR`, `clubhouseSite`, `CLUBHOUSE_CLEAR`); gameplay trees stay in `course.ts`
+- `trees-grow.ts`: pure, seeded tree shapes: trunk and branch segments plus leaf cards for oak, birch and pine (three variants each, the card count a parameter), and the bush (the oak crown at a quarter size) (`growTree`, `growBush`, `TREE_BOUNDS`, `BUSH_BOUNDS`, `cardAxes`)
+- `trees.ts`: turns the shapes into bark geometry (tapered 7-sided cylinders, bark picture) and leaf-card geometry (soft crown-outward normals, leaf picture with alpha, a sway in the vertex shader), one instanced mesh per species, variant and part, plus the bushes; they cast and receive real shadows on the tiers that have them, blob decals on low; a plain blob texture stands in for a leaf picture that did not load (`buildTreeLayer`, `barkGeometry`, `leafGeometry`, `treeBounds`, `treeScale`)
+- `grass.ts`: the close blades round the ball (bent triangles on the rough within 22 yd, regrown each shot), the tufts of tall fescue in the far rough, their pure placements and the shared sway shader hook (`bladeSpots`, `tuftSpots`, `createBlades`, `buildTufts`, `swayMaterial`)
+- `props.ts`: the clubhouse and two carts on holes 1 and 9, the yardage sign on every tee (canvas picture) and the sprinkler heads (`buildProps`)
 - `ground.ts`: the `Look` a hole is dressed with (tier settings, loaded pictures, shadow map, sun), the lit-material helpers for the cascaded shadow map (`litMaterial`, `litTree`), the photo turf and sand materials with world-space macro noise and mown stripes (`turfMaterial`, `sandMaterial`, `cutOut`), the rough grid with hazard cut-outs, dish and bank geometry (`roughGeometry`, `dish`, `profileRing`) and the old procedural `DataTexture`s that stand in when a picture is missing (`groundTextures`, `ribbon`, `ellipseRing`, `strip`)
 - `quality.ts`: pure: the three picture tiers and their settings (`GFX_SETTINGS`), the device rules that pick one and step it down (`pickGfx`, `adaptGfx`), and the readings of the sky picture (`brightestDirection`, `horizonRow`, `sunSetup`)
 - `terrain.ts`: pure: the visual ground height, flat in play, mounds in the rough, dished bunkers and sunk ponds (`groundY`, `moundY`, `FLAT_HALF`, `RISE_TO`, `MOUND_MAX`, `BUNKER_DEPTH`, `POND_DEPTH`)
-- `assets.ts`: loads the HDR sky, the dome picture, the grass, sand and water pictures from `public/fore/`; any that fails is null and its user falls back to the procedural look (`loadForeAssets`, `NO_ASSETS`)
+- `assets.ts`: loads the HDR sky, the dome picture, the grass, sand, water, bark and leaf pictures from `public/fore/`; any that fails is null and its user falls back to the procedural look (`loadForeAssets`, `NO_ASSETS`)
 - `post.ts`: the effects chain for medium and high: multisampled half-float target, ambient occlusion (high), bloom, depth of field (high, eased in only while wanted) and the tone-map output (`createPost`)
-- `sky.ts`: the photo sky dome (turned to match the environment's sun) or a plain gradient, the birds, and the three hills behind each hole (`createSky`, `buildHills`)
+- `sky.ts`: the photo sky dome (turned to match the environment's sun; the picture only says where the clouds are, the sky itself is a graded clear blue) or a plain gradient, the birds, and the three hills behind each hole (`createSky`, `buildHills`)
 - `swing.ts`: pure swing numbers: the kind of swing for a club, its timing and the body and arm angles over time (`swingKind`, `timingFor`, `SWING_TIMING`, `swingFrame`)
 - `golfer.ts`: the right-handed golfer: stands side-on to the ball, holds the club in both hands (arm solver), swings per `swing.ts`, cheers and groans (`createGolfer`, `createClub`, `REACH`)
 - `caddie.ts`: the caddie with the bag, who idles, cheers or groans for 1.3 s (`createCaddie`, `REACTION_SECONDS`)
@@ -47,7 +50,7 @@ Nine holes of real golf: each shot is one question. The player puts a ring where
 - `?cam=face|dtl|front`: camera 5 yd from the golfer at chest height: across the line at his front, behind the ball along the line, or from the target side.
 - `?introAt=<0..1>`: freeze the hole flyover at that progress (needs no `intro=1`).
 - `?shadows=off`: no real shadow map; the round blob shows under the golfer and caddie again.
-- `?gfx=low|medium|high`: force the picture quality tier (and stop it adapting or being saved). Headless browsers run on a software renderer that would pick `low`, so every `npm run shots` of Fore! passes it.
+- `?gfx=low|medium|high`: force the picture quality tier (and stop it adapting or being saved). Headless browsers run on a software renderer that would pick `low`, so every `npm run shots` of Fore! passes it (add `--serial` for `gfx=high`: four software-rendered high pages at once starve each other and the screenshots time out).
 - Example: `npm run shots -- "fore?hole=2&lie=sand" --start`
 
 ## Where changes go
@@ -55,7 +58,7 @@ Nine holes of real golf: each shot is one question. The player puts a ring where
 - Hole layouts, hazards or par: `course.ts` (the voice intro lines follow; run `npm run voice`).
 - Clubs, reach, ring size, how a slow or wrong answer misses, the roll, the starting suggestion: `shot.ts` (`DEAD_CENTRE_SHARE`, `MISS_MIN`, `MISS_MAX`, `ROLL_SHARE`, `SURFACE_ROLL`, `ringRadius`).
 - Scoring, names and announcer calls: `rules.ts`, and add the lines to `allCallLines` so `voice.ts` stays complete.
-- Trees, ground colours, hills or sky: `trees.ts`, `ground.ts`, `hole.ts`, `sky.ts`; where scenery stands: `scenery.ts` (keep trees 62 yd off the line). Anything with a height stands on `groundY` (`terrain.ts`); the play area (62 yd off the line) must stay exactly flat.
+- Trees, ground colours, hills or sky: `trees-grow.ts` (shapes), `trees.ts`, `grass.ts`, `props.ts`, `ground.ts`, `hole.ts`, `sky.ts`; where scenery stands: `scenery.ts` (keep trees 62 yd off the line). Anything with a height stands on `groundY` (`terrain.ts`); the play area (62 yd off the line) must stay exactly flat.
 - What a tier draws (shadows, post passes, water, counts): `GFX_SETTINGS` in `quality.ts`. The pictures under `public/fore/` come from `npm run fore-assets` (`scripts/fore-assets/main.ts`) and are all listed in `public/fore/CREDITS.md` (the test checks that and the 15 MB budget).
 - A new camera shot or screen fit: `views.ts`; HUD layout is in `hud.ts` and `style.css`.
 - A new state that is hard to reach: add a query hook in `dev.ts`.
@@ -64,6 +67,7 @@ Nine holes of real golf: each shot is one question. The player puts a ring where
 
 - `tests/fore.test.ts`
 - `tests/fore-scenery.test.ts`: scenery placement rules, gameplay trees unchanged, draw budget per tier, dispose, bases on `groundY`, the `public/fore` asset list and size
+- `tests/fore-trees.test.ts`: `growTree` (deterministic, exact card count, inside the bounds), bark and leaf geometry, the tree layer, blade and tuft placement
 - `tests/fore-quality.test.ts`: tier rules and settings, the sky readings and the sun's direction
 - `tests/fore-terrain.test.ts`: `groundY` is flat in play, dished in hazards, continuous and deterministic
 - `tests/fore-swing.test.ts`: handedness, sizes, the grip, address, impact, top and finish of the swing

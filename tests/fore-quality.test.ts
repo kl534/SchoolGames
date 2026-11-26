@@ -64,7 +64,7 @@ describe('tier settings', () => {
     expect([medium.shadowSize, high.shadowSize]).toEqual([2048, 2048]);
     expect([medium.shadowFar, high.shadowFar, high.cascades]).toEqual([60, 320, 3]);
     expect([low.water, medium.water, high.water]).toEqual(['env', 'env', 'mirror']);
-    expect([low.treeLeafCards, medium.treeLeafCards, high.treeLeafCards]).toEqual([140, 260, 420]);
+    expect([low.treeLeafCards, medium.treeLeafCards, high.treeLeafCards]).toEqual([180, 340, 520]);
     expect([low.sceneryShare, medium.sceneryShare, high.sceneryShare]).toEqual([0.5, 0.8, 1]);
     expect([low.blades, medium.blades, high.blades]).toEqual([0, 15000, 40000]);
     expect([low.tufts, medium.tufts, high.tufts]).toEqual([600, 1500, 3000]);

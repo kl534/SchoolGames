@@ -9,6 +9,7 @@ import {
   Float32BufferAttribute,
   LinearFilter,
   LinearMipmapLinearFilter,
+  MeshPhysicalMaterial,
   MeshStandardMaterial,
   RGBAFormat,
   RepeatWrapping,
@@ -328,15 +329,15 @@ interface TurfSpec {
   tile: number;
 }
 const TURF: Record<TurfKind, TurfSpec> = {
-  rough: { colour: 0x5d7f3c, roughness: 0.95, normal: 1.0, tile: 3 },
-  fairway: { colour: 0x86b153, roughness: 0.85, normal: 0.6, tile: 2.5 },
-  fringe: { colour: 0x7aa84c, roughness: 0.85, normal: 0.5, tile: 2.5 },
-  green: { colour: 0x76b04a, roughness: 0.7, normal: 0.3, tile: 1.2 },
-  tee: { colour: 0x80ad50, roughness: 0.85, normal: 0.5, tile: 2.5 },
+  rough: { colour: 0x506e41, roughness: 1, normal: 1.6, tile: 4 },
+  fairway: { colour: 0x648c4c, roughness: 0.85, normal: 0.6, tile: 2.5 },
+  fringe: { colour: 0x628c4a, roughness: 0.85, normal: 0.5, tile: 2.5 },
+  green: { colour: 0x71a259, roughness: 0.7, normal: 0.3, tile: 1.2 },
+  tee: { colour: 0x628a4a, roughness: 0.85, normal: 0.5, tile: 2.5 },
 };
 const KIND_INDEX: Record<TurfKind, number> = { rough: 0, fairway: 1, fringe: 2, green: 3, tee: 4 };
 /** The grass picture is evened to 0.92 of white, so the turf is brightened back. */
-const TURF_GAIN = 1.2;
+const TURF_GAIN = 1.0;
 
 /** Yards one tile of this turf covers (what UVs should be scaled to): the plain look uses 8. */
 export function turfTile(look: Look, kind: TurfKind): number {
@@ -357,18 +358,25 @@ float tNoise(vec2 p) {
              mix(tHash(i + vec2(0.0, 1.0)), tHash(i + vec2(1.0, 1.0)), f.x), f.y);
 }
 float tPar(float v) { return mod(floor(v), 2.0); }
+// A mown band: 1 inside, 0 outside, with a soft 1.5 yd blend at each edge.
+float tBand(float x, float width) {
+  float u = mod(x, 2.0 * width);
+  return smoothstep(0.0, 1.5, u) - smoothstep(width, width + 1.5, u);
+}
 float turfShade() {
   vec2 w = vTurfW.xz;
-  float macro = (tNoise(w / 35.0) - 0.5) * 0.6 + (tNoise(w / 9.0) - 0.5) * 0.4;
-  float k = 1.0 + 0.18 * macro;
+  float macro = (tNoise(w / MACRO_A) - 0.5) * 0.6 + (tNoise(w / MACRO_B) - 0.5) * 0.4;
+  float k = 1.0 + TURF_MACRO * macro;
+  // The stripes read from a distance and fade out close to the camera.
+  float far = smoothstep(10.0, 50.0, length(vTurfW - cameraPosition));
   #if TURF_KIND == 1
-    k *= mix(1.08, 0.9, tPar(w.y / 6.0));
+    k *= 1.0 + 0.05 * far * (tBand(w.y, 6.0) * 2.0 - 1.0);
   #elif TURF_KIND == 3
-    float a = tPar((w.x + w.y) * 0.70711 / 3.0);
-    float b = tPar((w.x - w.y) * 0.70711 / 3.0);
-    k *= mix(0.94, 1.05, (a + b) * 0.5);
+    float a = tBand((w.x + w.y) * 0.70711, 3.0);
+    float b = tBand((w.x - w.y) * 0.70711, 3.0);
+    k *= 1.0 + 0.05 * far * (a + b - 1.0);
   #elif TURF_KIND == 4
-    k *= mix(1.06, 0.94, tPar(w.y / 2.0));
+    k *= 1.0 + 0.05 * far * (tBand(w.y, 2.0) * 2.0 - 1.0);
   #endif
   return k * ${TURF_GAIN.toFixed(2)};
 }
@@ -423,7 +431,9 @@ export function turfMaterial(
   const spec = TURF[kind];
   const grass = look.assets.grass;
   const plain = groundTextures();
-  const material = new MeshStandardMaterial({
+  // Physical, only for the specular knob: at a grazing angle a lawn must not turn into a mirror.
+  const material = new MeshPhysicalMaterial({
+    specularIntensity: 0.25,
     color: new Color(grass || kind !== 'fairway' ? spec.colour : 0xffffff),
     roughness: spec.roughness,
     map: grass
@@ -440,7 +450,14 @@ export function turfMaterial(
   material.normalScale = new Vector2(spec.normal, spec.normal);
   material.customProgramCacheKey = () => `turf-${kind}-${grass ? 'photo' : 'plain'}`;
   if (grass) {
-    material.defines = { TURF_KIND: KIND_INDEX[kind] };
+    // The rough varies more (+-12% in patches 20 to 40 yd), the mown turf less.
+    const rough = kind === 'rough';
+    material.defines = {
+      TURF_KIND: KIND_INDEX[kind],
+      TURF_MACRO: rough ? '0.32' : '0.12',
+      MACRO_A: rough ? '34.0' : '35.0',
+      MACRO_B: rough ? '21.0' : '9.0',
+    };
     material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
       shader.vertexShader = shader.vertexShader
         .replace('void main() {', `${TURF_VERTEX}void main() {`)

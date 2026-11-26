@@ -13,3 +13,7 @@ Every file under `public/fore/` is listed here. Rebuild them with `npm run fore-
 | `turf/sand_normal.webp`  | https://polyhaven.com/a/coast_sand_01                                                     | CC0 1.0        |
 | `turf/sand_rough.webp`   | https://polyhaven.com/a/coast_sand_01                                                     | CC0 1.0        |
 | `turf/waternormals.jpg`  | https://raw.githubusercontent.com/mrdoob/three.js/r186/examples/textures/waternormals.jpg | MIT (three.js) |
+| `trees/bark_color.webp`  | https://polyhaven.com/a/bark_brown_02                                                     | CC0 1.0        |
+| `trees/bark_normal.webp` | https://polyhaven.com/a/bark_brown_02                                                     | CC0 1.0        |
+| `trees/leaves_oak.webp`  | https://ambientcg.com/a/LeafSet024 (leaves clustered into four tiles)                     | CC0 1.0        |
+| `trees/leaves_pine.webp` | https://ambientcg.com/a/LeafSet019 (needle branches laid into four tiles)                 | CC0 1.0        |

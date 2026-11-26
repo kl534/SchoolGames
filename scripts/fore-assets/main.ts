@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import sharp from 'sharp';
+import sharp, { type OverlayOptions } from 'sharp';
 
 const OUT = resolve(dirname(fileURLToPath(import.meta.url)), '../../public/fore');
 const work = mkdtempSync(join(tmpdir(), 'fore-assets-'));
@@ -73,6 +73,208 @@ async function ambientCg(id: string, res: string) {
   return (name: string) => readFileSync(join(dir, 'files', `${id}_${res}-JPG_${name}.jpg`));
 }
 
+// ---------- Tree pictures ----------
+
+/** The alpha bounding box of an RGBA picture: [left, top, width, height]. */
+async function alphaBox(rgba: Buffer): Promise<[number, number, number, number]> {
+  const { data, info } = await sharp(rgba)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  let x0 = info.width;
+  let y0 = info.height;
+  let x1 = 0;
+  let y1 = 0;
+  for (let y = 0; y < info.height; y++) {
+    for (let x = 0; x < info.width; x++) {
+      if (data[(y * info.width + x) * 4 + 3] > 40) {
+        x0 = Math.min(x0, x);
+        x1 = Math.max(x1, x);
+        y0 = Math.min(y0, y);
+        y1 = Math.max(y1, y);
+      }
+    }
+  }
+  return [x0, y0, x1 - x0 + 1, y1 - y0 + 1];
+}
+
+/** Joins a raw 3-channel colour and a 1-channel alpha into one raw 4-channel buffer. */
+function interleave(rgb: Buffer, alpha: Buffer): Buffer {
+  const out = Buffer.alloc(alpha.length * 4);
+  for (let i = 0; i < alpha.length; i++) {
+    out[i * 4] = rgb[i * 3];
+    out[i * 4 + 1] = rgb[i * 3 + 1];
+    out[i * 4 + 2] = rgb[i * 3 + 2];
+    out[i * 4 + 3] = alpha[i];
+  }
+  return out;
+}
+
+/** A colour picture and its opacity picture as one RGBA png buffer. */
+async function withOpacity(color: Buffer, opacity: Buffer): Promise<Buffer> {
+  const rgb = await sharp(color).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const alpha = await sharp(opacity).greyscale().raw().toBuffer();
+  const { width, height } = rgb.info;
+  return sharp(interleave(rgb.data, alpha), { raw: { width, height, channels: 4 } })
+    .png()
+    .toBuffer();
+}
+
+interface Piece {
+  image: Buffer;
+  left: number;
+  top: number;
+}
+
+/**
+ * Lays pieces on a transparent square and returns an RGBA webp whose colour under the clear parts
+ * is the leaf green (so mip-mapped edges never go dark or white).
+ */
+async function flatAtlas(
+  size: number,
+  tiles: Piece[][],
+  fill: { r: number; g: number; b: number },
+): Promise<Buffer> {
+  const half = size / 2;
+  const all: OverlayOptions[] = [];
+  tiles.forEach((pieces, t) => {
+    const ox = (t % 2) * half;
+    const oy = Math.floor(t / 2) * half;
+    for (const p of pieces) all.push({ input: p.image, left: ox + p.left, top: oy + p.top });
+  });
+  const blank = { create: { width: size, height: size, channels: 4 as const } };
+  const rgba = await sharp({
+    create: { ...blank.create, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+  })
+    .composite(all)
+    .raw()
+    .toBuffer();
+  const alpha = Buffer.alloc(size * size);
+  for (let i = 0; i < alpha.length; i++) alpha[i] = rgba[i * 4 + 3];
+  const colour = await sharp({
+    create: { width: size, height: size, channels: 3, background: fill },
+  })
+    .composite(all)
+    .removeAlpha()
+    .raw()
+    .toBuffer();
+  return sharp(interleave(colour, alpha), { raw: { width: size, height: size, channels: 4 } })
+    .webp({ quality: 78, alphaQuality: 90 })
+    .toBuffer();
+}
+
+/** Four 512 px tiles of leaf clusters cut from the nine leaves of LeafSet024. */
+async function leafAtlas(rgba: Buffer, seed: number): Promise<Buffer> {
+  const rand = (() => {
+    let s = seed;
+    return () => (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296;
+  })();
+  const { width } = await sharp(rgba).metadata();
+  const cell = Math.floor(width! / 3);
+  const leaves: { image: Buffer; w: number; h: number }[] = [];
+  for (let i = 0; i < 9; i++) {
+    const crop = await sharp(rgba)
+      .extract({ left: (i % 3) * cell, top: Math.floor(i / 3) * cell, width: cell, height: cell })
+      .png()
+      .toBuffer();
+    const [l, t, w, h] = await alphaBox(crop);
+    const image = await sharp(crop)
+      .extract({ left: l, top: t, width: w, height: h })
+      .png()
+      .toBuffer();
+    leaves.push({ image, w, h });
+  }
+  const tiles: Piece[][] = [];
+  for (let t = 0; t < 4; t++) {
+    const pieces: Piece[] = [];
+    for (let k = 0; k < 30; k++) {
+      const leaf = leaves[Math.floor(rand() * leaves.length)];
+      const scale = 0.36 + rand() * 0.14;
+      const angle = rand() * 360;
+      const resized = await sharp(leaf.image)
+        .resize(Math.round(leaf.w * scale), Math.round(leaf.h * scale))
+        .rotate(angle, { background: { r: 0, g: 0, b: 0, alpha: 0 } })
+        .png()
+        .toBuffer();
+      const m = await sharp(resized).metadata();
+      const a = rand() * Math.PI * 2;
+      const d = Math.sqrt(rand()) * 165;
+      pieces.push({
+        image: resized,
+        left: Math.round(256 + Math.cos(a) * d - m.width! / 2),
+        top: Math.round(256 + Math.sin(a) * d - m.height! / 2),
+      });
+    }
+    tiles.push(pieces);
+  }
+  return flatAtlas(1024, tiles, { r: 70, g: 105, b: 45 });
+}
+
+/** Four tiles of needle branches cut from the three branches of LeafSet019. */
+async function needleAtlas(rgba: Buffer): Promise<Buffer> {
+  const { width, height } = await sharp(rgba).metadata();
+  const [l, t, w, h] = await alphaBox(rgba);
+  void width;
+  void height;
+  // The three branches are stacked: split the opaque region into rows by the clear gaps.
+  const { data, info } = await sharp(rgba)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const rowOpaque = (y: number) => {
+    for (let x = 0; x < info.width; x++) if (data[(y * info.width + x) * 4 + 3] > 40) return true;
+    return false;
+  };
+  const bands: [number, number][] = [];
+  let start = -1;
+  for (let y = t; y <= t + h; y++) {
+    const on = y < t + h && rowOpaque(y);
+    if (on && start < 0) start = y;
+    if (!on && start >= 0) {
+      if (y - start > 20) bands.push([start, y - start]);
+      start = -1;
+    }
+  }
+  void l;
+  void w;
+  const branches: { image: Buffer; w: number; h: number }[] = [];
+  for (const [y, bh] of bands) {
+    const strip = await sharp(rgba)
+      .extract({ left: 0, top: y, width: info.width, height: bh })
+      .png()
+      .toBuffer();
+    const [bl, bt, bw, bhh] = await alphaBox(strip);
+    const image = await sharp(strip)
+      .extract({ left: bl, top: bt, width: bw, height: bhh })
+      .png()
+      .toBuffer();
+    branches.push({ image, w: bw, h: bhh });
+  }
+  const tiles: Piece[][] = [];
+  for (let k = 0; k < 4; k++) {
+    const a = branches[k % branches.length];
+    const b = branches[(k + 1) % branches.length];
+    const place = async (br: typeof a, width: number, angle: number, cx: number, cy: number) => {
+      const scaled = await sharp(br.image)
+        .resize(width, Math.round((br.h / br.w) * width))
+        .rotate(angle, { background: { r: 0, g: 0, b: 0, alpha: 0 } })
+        .png()
+        .toBuffer();
+      const m = await sharp(scaled).metadata();
+      return {
+        image: scaled,
+        left: Math.round(cx - m.width! / 2),
+        top: Math.round(cy - m.height! / 2),
+      };
+    };
+    tiles.push([
+      await place(a, 480, k % 2 === 0 ? -12 : 10, 256, 190),
+      await place(b, 440, k % 2 === 0 ? 14 : -9, 256, 330),
+    ]);
+  }
+  return flatAtlas(1024, tiles, { r: 40, g: 78, b: 45 });
+}
+
 async function main() {
   const cc0 = 'CC0 1.0';
 
@@ -120,6 +322,35 @@ async function main() {
   const waterUrl =
     'https://raw.githubusercontent.com/mrdoob/three.js/r186/examples/textures/waternormals.jpg';
   save('turf/waternormals.jpg', await download(waterUrl), waterUrl, 'MIT (three.js)');
+
+  // Trees: bark for trunks (and the wood of the tee furniture) and the two leaf atlases.
+  const bark =
+    await polyhaven<Record<string, Record<string, Record<string, PolyFile>>>>('bark_brown_02');
+  const barkUrl = 'https://polyhaven.com/a/bark_brown_02';
+  const barkPart = async (key: string) => download(bark[key]['1k'].jpg.url);
+  save('trees/bark_color.webp', await webp(await barkPart('Diffuse'), 1024, 78), barkUrl, cc0);
+  save('trees/bark_normal.webp', await webp(await barkPart('nor_gl'), 1024, 80), barkUrl, cc0);
+  const oakLeaves = await ambientCg('LeafSet024', '1K');
+  save(
+    'trees/leaves_oak.webp',
+    await leafAtlas(await withOpacity(oakLeaves('Color'), oakLeaves('Opacity')), 24),
+    'https://ambientcg.com/a/LeafSet024 (leaves clustered into four tiles)',
+    cc0,
+  );
+  const pineLeaves = await ambientCg('LeafSet019', '1K');
+  save(
+    'trees/leaves_pine.webp',
+    await needleAtlas(
+      await withOpacity(
+        await sharp(pineLeaves('Color'))
+          .modulate({ brightness: 1.15, saturation: 1.1, hue: -10 })
+          .toBuffer(),
+        pineLeaves('Opacity'),
+      ),
+    ),
+    'https://ambientcg.com/a/LeafSet019 (needle branches laid into four tiles)',
+    cc0,
+  );
 
   const rows = credits.map((c) => `| \`${c.file}\` | ${c.source} | ${c.licence} |`);
   const text = [

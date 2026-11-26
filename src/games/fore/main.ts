@@ -1,6 +1,6 @@
 import './style.css';
 import {
-  AgXToneMapping,
+  NeutralToneMapping,
   Color,
   DirectionalLight,
   Fog,
@@ -59,6 +59,7 @@ import { buildHole, CUP_AID_RANGE, SKY, type HoleScene } from './hole';
 import { createSky, type Sky } from './sky';
 import { disposeForeAssets, loadForeAssets, NO_ASSETS, type ForeAssets } from './assets';
 import { FALLBACK_LOOK, litTree, type Look } from './ground';
+import { createBlades } from './grass';
 import { createPost, type Post } from './post';
 import { adaptGfx, gfxSettings, pickGfx, sunSetup, type DeviceInfo, type Gfx } from './quality';
 import { groundY } from './terrain';
@@ -199,8 +200,8 @@ function deviceInfo(renderer: WebGLRenderer): DeviceInfo {
   };
 }
 
-/** AgX at 1.0 washes the grass out under this sun; a little lower keeps the greens. */
-const EXPOSURE = 0.65;
+/** Neutral tone mapping keeps the greens (AgX turned every lawn grey); a little under 1 keeps the sunlit grass from clipping. */
+const EXPOSURE = 0.75;
 /** The sun's intensity (the cascaded map's lights add up to the same). */
 const SUN_PLAIN = 3.2;
 
@@ -216,7 +217,7 @@ function run(session: GameSession): void {
   const { scene, camera, renderer } = ctx;
   scene.background = new Color(SKY);
   scene.fog = new Fog(SKY, 260, 1500);
-  renderer.toneMapping = AgXToneMapping;
+  renderer.toneMapping = NeutralToneMapping;
   renderer.toneMappingExposure = EXPOSURE;
 
   // Quality: the dev address, else the tier saved after a slow run, else a guess from the device.
@@ -284,6 +285,18 @@ function run(session: GameSession): void {
   scene.add(ball.object);
   const guide = createGuide(glow);
   scene.add(guide.object);
+  // Close grass blades round the ball, regrown for each shot.
+  const blades = createBlades(settings.blades);
+  scene.add(blades.object);
+  let bladeKey = '';
+  const growBlades = () => {
+    const key = `${holeIndex}:${hstate.at.x.toFixed(2)},${hstate.at.z.toFixed(2)}`;
+    if (key === bladeKey) return;
+    bladeKey = key;
+    const seed =
+      holeIndex * 7919 + Math.round(hstate.at.x * 100) * 31 + Math.round(hstate.at.z * 100);
+    blades.rebuild(hole, hstate.at, seed);
+  };
   const golfer = createGolfer();
   scene.add(golfer.root);
   const caddie = createCaddie();
@@ -349,8 +362,13 @@ function run(session: GameSession): void {
       scene.environmentIntensity = 1;
       scene.environmentRotation.set(0, yaw, 0);
       const [r, g, b] = picture.horizon;
+      // A bright haze: the exposure takes a quarter off, so the colour is lifted to match.
       scene.fog = new Fog(
-        new Color().setRGB(Math.min(r, 1), Math.min(g, 1), Math.min(b, 1)),
+        new Color().setRGB(
+          Math.min(r / EXPOSURE, 1),
+          Math.min(g / EXPOSURE, 1),
+          Math.min(b / EXPOSURE, 1),
+        ),
         260,
         1500,
       );
@@ -359,7 +377,7 @@ function run(session: GameSession): void {
       fill = new HemisphereLight(0xdff0ff, 0x5e8a46, 0.4);
       scene.add(fill);
     }
-    sky = createSky(picture, yaw);
+    sky = createSky(picture, yaw, scene.fog ? (scene.fog as Fog).color : undefined);
     scene.add(sky.object);
     look = makeLook();
     assetsReady = true;
@@ -638,6 +656,7 @@ function run(session: GameSession): void {
     devClubPlan(planShot(hole, hstate.at, hstate.lie, ringWant), hstate.lie);
 
   const placeGolfer = () => {
+    growBlades();
     golfer.setClub(plan.club);
     golfer.stand(hstate.at, plan.dir, plan.club.id, ground);
     caddie.stand(golfer.root.position, plan.dir, ground);
@@ -1423,6 +1442,7 @@ function run(session: GameSession): void {
     else golfer.play(golfMove, gameTime - golfSince, delta);
     caddie.update(delta);
     holeScene?.update(gameTime);
+    blades.update(gameTime);
     sky?.update(gameTime, camera.position, hole.length / 2);
     applyCamera();
     frameDelta = delta;
@@ -1445,6 +1465,7 @@ function run(session: GameSession): void {
     mute.dispose();
     hud.dispose();
     holeScene?.dispose();
+    blades.dispose();
     sky?.dispose();
     resizeWatcher.disconnect();
     window.removeEventListener('orientationchange', sizeRenderer);
