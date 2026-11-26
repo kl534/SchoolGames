@@ -183,7 +183,10 @@ describe('addOutline', () => {
     );
     const whisker = new Mesh(new BoxGeometry(0.4, 0.008, 0.4), solid);
     const glow = new Mesh(new SphereGeometry(0.5, 12, 8), new MeshBasicMaterial());
-    group.add(sphere, glass, whisker, glow);
+    // An eye part marked `noOutline` draws its own rim.
+    const eye = new Mesh(new SphereGeometry(0.5, 12, 8), solid);
+    eye.userData.noOutline = true;
+    group.add(sphere, glass, whisker, glow, eye);
     const outline = addOutline(group, 2.5);
     const hulls = () => {
       let n = 0;
@@ -194,6 +197,7 @@ describe('addOutline', () => {
     };
     expect(hulls()).toBe(1);
     expect(sphere.children).toHaveLength(1);
+    expect(eye.children).toHaveLength(0);
     expect(sphere.children[0].castShadow).toBe(false);
     outline.setVisible(false);
     expect(sphere.children[0].visible).toBe(false);
