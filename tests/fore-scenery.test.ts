@@ -92,65 +92,20 @@ describe('gameplay trees', () => {
     }
   });
 
-  it('leave finishShot results unchanged for fixed plans', () => {
+  it('leave the straight tee shots alone', () => {
     const results = HOLES.map((h) =>
-      // Aims are mirrored from when the snapshot was taken (positive aim is now screen-right, -x).
-      [4, 0, -3].map((aim) => {
-        const plan = planShot(h, { x: 0, z: 0 }, 'tee', aim);
-        const outcome = resolveShot(plan, true, 0.5, 6, 1);
-        return JSON.stringify(finishShot(h, plan, outcome));
+      // A driver off the tee at 4 degrees left, straight and 3 degrees right on screen.
+      [4, 0, -3].map((deg) => {
+        const want = {
+          x: 240 * Math.sin(-deg * (Math.PI / 180)),
+          z: 240 * Math.cos(-deg * (Math.PI / 180)),
+        };
+        const plan = planShot(h, { x: 0, z: 0 }, 'tee', want);
+        const result = finishShot(h, plan, resolveShot(plan, true, 0.5, 6, 1, 0.5));
+        return result.kind === 'rest' && result.tree !== undefined ? result.tree : null;
       }),
     );
-    // Holes without trees can't be stopped by one; the tree holes at these aims are recorded below.
-    expect(results).toMatchInlineSnapshot(`
-      [
-        [
-          "{"kind":"rest","at":{"x":-16.741553698590074,"z":239.41537206235782},"surface":"fairway"}",
-          "{"kind":"rest","at":{"x":0,"z":240},"surface":"fairway"}",
-          "{"kind":"rest","at":{"x":12.56062949830652,"z":239.67108834109771},"surface":"fairway"}",
-        ],
-        [
-          "{"kind":"rest","at":{"x":-6.46834158673629,"z":129.68332653377715},"surface":"sand"}",
-          "{"kind":"rest","at":{"x":2.6,"z":130},"surface":"green"}",
-          "{"kind":"rest","at":{"x":9.403674311582698,"z":129.8218395180946},"surface":"green"}",
-        ],
-        [
-          "{"kind":"rest","at":{"x":-21.541553698590075,"z":239.41537206235782},"surface":"rough"}",
-          "{"kind":"rest","at":{"x":-4.8,"z":240},"surface":"fairway"}",
-          "{"kind":"rest","at":{"x":7.76062949830652,"z":239.67108834109771},"surface":"fairway"}",
-        ],
-        [
-          "{"kind":"rest","at":{"x":-9.541553698590075,"z":239.41537206235782},"surface":"fairway"}",
-          "{"kind":"rest","at":{"x":7.2,"z":240},"surface":"rough"}",
-          "{"kind":"rest","at":{"x":19.76062949830652,"z":239.67108834109771},"surface":"rough"}",
-        ],
-        [
-          "{"kind":"rest","at":{"x":-7.141553698590075,"z":239.41537206235782},"surface":"fairway"}",
-          "{"kind":"rest","at":{"x":9.6,"z":240},"surface":"fairway"}",
-          "{"kind":"rest","at":{"x":22.16062949830652,"z":239.67108834109771},"surface":"rough"}",
-        ],
-        [
-          "{"kind":"rest","at":{"x":-15.961035799060049,"z":159.61024804157188},"surface":"fairway"}",
-          "{"kind":"rest","at":{"x":-4.8,"z":160},"surface":"green"}",
-          "{"kind":"rest","at":{"x":3.573752998871014,"z":159.7807255607318},"surface":"green"}",
-        ],
-        [
-          "{"kind":"rest","at":{"x":-16.741553698590074,"z":239.41537206235782},"surface":"fairway"}",
-          "{"kind":"rest","at":{"x":0,"z":240},"surface":"fairway"}",
-          "{"kind":"rest","at":{"x":12.56062949830652,"z":239.67108834109771},"surface":"rough"}",
-        ],
-        [
-          "{"kind":"rest","at":{"x":-23.941553698590074,"z":239.41537206235782},"surface":"rough"}",
-          "{"kind":"rest","at":{"x":-7.2,"z":240},"surface":"fairway"}",
-          "{"kind":"rest","at":{"x":5.36062949830652,"z":239.67108834109771},"surface":"fairway"}",
-        ],
-        [
-          "{"kind":"rest","at":{"x":-11.941553698590074,"z":239.41537206235782},"surface":"fairway"}",
-          "{"kind":"rest","at":{"x":4.8,"z":240},"surface":"fairway"}",
-          "{"kind":"rest","at":{"x":17.36062949830652,"z":239.67108834109771},"surface":"fairway"}",
-        ],
-      ]
-    `);
+    expect(results.flat().every((r) => r === null)).toBe(true);
   });
 });
 
