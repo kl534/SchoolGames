@@ -7,6 +7,8 @@ import {
   HemisphereLight,
   MathUtils,
   PCFShadowMap,
+  Raycaster,
+  Vector2,
   Vector3,
   type Object3D,
 } from 'three';
@@ -28,18 +30,20 @@ import { BALL_R, createBall, flightPoint, flightSeconds } from './ball';
 import { createTravel, type Travel } from './travel';
 import { HOLES, surfaceAt, type Hole } from './course';
 import {
-  devAim,
+  devBigMap,
   devCam,
   devClubPlan,
   devHoleState,
   devHolesOk,
   devIntroAt,
+  devPlace,
   devQuality,
   devShadows,
-  devSide,
+  devScatter,
   devSkipIntro,
   devStart,
   devSwing,
+  devTarget,
   type DevCam,
 } from './dev';
 import { createCaddie } from './caddie';
@@ -47,7 +51,7 @@ import { createGolfer, type GolfMove } from './golfer';
 import { createGuide } from './guide';
 import { buildHole, CUP_AID_RANGE, SKY, type HoleScene } from './hole';
 import { createSky } from './sky';
-import { createHud, SURFACE_NAMES, windChip, type Bands, type CardCell } from './hud';
+import { createHud, SURFACE_NAMES, type Bands, type CardCell } from './hud';
 import {
   afterShot,
   callKindFor,
@@ -71,16 +75,21 @@ import {
   type HoleState,
 } from './rules';
 import {
-  AIM_MAX,
   AIM_STEP,
+  clampTarget,
+  DIST_STEP,
   finishShot,
-  holedOutcome,
   isPutt,
   planShot,
+  predictRest,
+  PUTT_DIST_STEP,
+  reachFor,
   resolveShot,
+  suggestTarget,
   type Outcome,
   type Plan,
   type Result,
+  type XZ,
 } from './shot';
 import { timingFor } from './swing';
 import {
@@ -90,6 +99,7 @@ import {
   followView,
   introView,
   landView,
+  placeView,
   type CamView,
   type Vec,
 } from './views';
@@ -116,8 +126,6 @@ const SKIP_INTRO_AFTER = 0.3;
 const FAST_AFTER = 0.3;
 /** A holed ball takes this long to drop out of sight in the cup, seconds. */
 const HOLE_DROP_FOR = 0.15;
-/** Degrees of aim for each pixel of a sideways drag. */
-const DEG_PER_PX = 0.12;
 
 type Phase =
   | 'preview'
@@ -132,7 +140,7 @@ type Phase =
   | 'over'
   | 'done';
 
-type ViewKind = 'intro' | 'aim' | 'ask' | 'follow' | 'land';
+type ViewKind = 'intro' | 'aim' | 'place' | 'ask' | 'follow' | 'land';
 
 const lerpVec = (a: Vec, b: Vec, t: number): Vec => ({
   x: MathUtils.lerp(a.x, b.x, t),
@@ -211,8 +219,19 @@ function run(session: GameSession): void {
   let hole: Hole = HOLES[0];
   let hstate: HoleState = startHole(hole);
   let scores: number[] = [];
-  let aimDeg = 0;
-  let plan: Plan = devClubPlan(planShot(hole, hstate.at, hstate.lie, aimDeg), hstate.lie);
+  /** Where the player wants the ring (the plan clamps it to the limits). */
+  let ringWant: XZ = { ...hole.pin };
+  /** A dev address's ring spot for the first shot. */
+  let devWant: XZ | null = null;
+  let plan: Plan = devClubPlan(planShot(hole, hstate.at, hstate.lie, ringWant), hstate.lie);
+  /** Where a perfect shot with the plan comes to rest. */
+  let restNow: Result = predictRest(hole, plan);
+  /** A finger is down on the picture placing the ring; where it is (px). */
+  let holding = false;
+  let finger = { x: 0, y: 0 };
+  const raycaster = new Raycaster();
+  /** `?bigmap=1`: the big map opens once, with the first aim. */
+  let bigPending = devBigMap();
   let devPending = true;
   let fact: Fact | undefined;
   let options: string[] = [];
@@ -309,6 +328,14 @@ function run(session: GameSession): void {
     };
   };
 
+  /** Where the predicted rest is, for fitting the view (none when it holes out or hits a tree). */
+  const restPoint = (): XZ | undefined =>
+    restNow.kind === 'rest' && restNow.tree === undefined
+      ? restNow.at
+      : restNow.kind === 'water'
+        ? restNow.splash
+        : undefined;
+
   const buildView = (kind: ViewKind): CamView => {
     const dev = devCam();
     if (dev && kind !== 'intro') return devCamView(dev);
@@ -322,9 +349,11 @@ function run(session: GameSession): void {
           devIntroAt() ?? (gameTime - introAt) / SWEEP_FOR,
         );
       case 'aim':
-        return aimView(plan, hole, golferAt(), viewW, viewH, bands.aim);
+        return aimView(plan, hole, golferAt(), viewW, viewH, bands.aim, restPoint());
+      case 'place':
+        return placeView(plan, hole, golferAt(), viewW, viewH, bands.aim, reachFor(hstate.lie));
       case 'ask':
-        return aimView(plan, hole, golferAt(), viewW, viewH, bands.ask);
+        return aimView(plan, hole, golferAt(), viewW, viewH, bands.ask, restPoint());
       case 'follow':
         return followView(ballPos, plan.dir, isPutt(plan), viewW, viewH, bands.play);
       case 'land':
@@ -409,7 +438,7 @@ function run(session: GameSession): void {
   };
 
   const makePlan = (): Plan =>
-    devClubPlan(planShot(hole, hstate.at, hstate.lie, aimDeg), hstate.lie);
+    devClubPlan(planShot(hole, hstate.at, hstate.lie, ringWant), hstate.lie);
 
   const placeGolfer = () => {
     golfer.setClub(plan.club);
@@ -422,25 +451,35 @@ function run(session: GameSession): void {
     holeScene?.setCupAid(hstate.lie === 'green' || toPin <= CUP_AID_RANGE);
   };
 
-  /** Plans the shot from the current aim and shows the ring, the chips and the map. */
+  /** Plans the shot from the wanted ring spot and shows the ring, the chips and the maps. */
   const refreshAim = () => {
     plan = makePlan();
-    aimDeg = plan.aimDeg;
+    ringWant = { ...plan.landing };
     const over = surfaceAt(hole, plan.landing.x, plan.landing.z);
-    guide.update(plan, over);
+    restNow = predictRest(hole, plan);
+    const treeStop = restNow.kind === 'rest' && restNow.tree !== undefined;
+    guide.update(plan, over, restNow, treeStop);
     const putt = isPutt(plan);
     const toPin = Math.hypot(hole.pin.x - hstate.at.x, hole.pin.z - hstate.at.z);
     hud.renderChips(
       {
-        club: putt ? 'Putter' : `${plan.club.name} · ${Math.round(plan.carry)} yd`,
+        club: `${putt ? 'Putter' : plan.club.name} · ${Math.round(plan.carry)} yd`,
         surface: SURFACE_NAMES[over],
-        wind: windChip(hole, putt),
         pin: `Pin ${Math.round(toPin)} yd`,
       },
       putt,
     );
-    hud.renderMap(hole, hstate.at, plan.landing);
+    hud.renderMap(hole, hstate.at, { at: plan.landing, r: plan.ringR, over });
+    if (hud.bigMapOpen) hud.showBigMap(hole, hstate.at, plan, restNow, hstate.lie);
     placeGolfer();
+  };
+
+  /** Puts the ring (as near as the limits allow) at `want`; the camera follows unless a finger holds it. */
+  const moveRing = (want: XZ) => {
+    if (phase !== 'aim') return;
+    ringWant = want;
+    refreshAim();
+    if (goal === 'aim') retarget(0.15);
   };
 
   // ---------- Speech ----------
@@ -466,7 +505,8 @@ function run(session: GameSession): void {
     scene.add(holeScene.object);
     const first = devPending;
     hstate = first ? devHoleState(hole) : startHole(hole);
-    aimDeg = (first ? devAim(hole, hstate) : null) ?? 0;
+    devWant = first ? devTarget(hole, hstate) : null;
+    ringWant = clampTarget(hole, hstate.at, hstate.lie, hole.pin);
     const skipIntro = first && devSkipIntro();
     devPending = false;
     const thisTurn = ++turn;
@@ -505,6 +545,9 @@ function run(session: GameSession): void {
 
   const beginAim = (seconds: number) => {
     phase = 'aim';
+    // Each shot starts on the smart suggestion (a dev address may place the first one).
+    ringWant = devWant ?? suggestTarget(hole, hstate.at, hstate.lie);
+    devWant = null;
     hud.hideBanner();
     hud.showQuestion(false);
     guide.setVisible(true);
@@ -517,7 +560,11 @@ function run(session: GameSession): void {
     hud.showControls(true);
     hud.showMap(true);
     setGolf('address');
-    goTo('aim', seconds);
+    goTo(devPlace() ? 'place' : 'aim', seconds);
+    if (bigPending) {
+      bigPending = false;
+      hud.showBigMap(hole, hstate.at, plan, restNow, hstate.lie);
+    }
   };
 
   // ---------- Asking ----------
@@ -541,6 +588,8 @@ function run(session: GameSession): void {
     hud.hidePill();
     hud.showControls(false);
     hud.showMap(false);
+    hud.hideBigMap();
+    holding = false;
     const thisTurn = ++turn;
     fact = feed.take();
     options = answerOptions(session.topic, fact, 4);
@@ -617,25 +666,22 @@ function run(session: GameSession): void {
     // A dev address may force the next shot's quality, whatever the answer.
     const forced = forcedQuality;
     forcedQuality = null;
-    const strikeRight = forced ? forced !== 'duff' : right;
-    const strikeUsed = forced === 'perfect' ? 0 : forced === 'wobbly' ? clockTotal * 0.6 : used;
-    const side = devSide() || (Math.random() < 0.5 ? -1 : 1);
-    outcome = resolveShot(plan, strikeRight, strikeUsed, clockTotal, side);
+    const strikeRight = forced ? forced !== 'miss' : right;
+    const strikeUsed = forced === 'perfect' ? 0 : forced === 'close' ? clockTotal * 0.6 : used;
+    const angle = devScatter() ?? Math.random() * 2 * Math.PI;
+    outcome = resolveShot(plan, strikeRight, strikeUsed, clockTotal, angle, Math.random());
     result = finishShot(hole, plan, outcome);
     afterHole = afterShot(hstate, hole, result);
     missed = !right;
-    // A holed shot is drawn flying to the pin, since the cup is drawn much smaller than the holing radius.
-    flightOutcome = result.kind === 'holed' ? holedOutcome(outcome, hole.pin) : outcome;
     if (result.kind === 'rest' && result.tree !== undefined) {
       // A ball that hits a tree stops flying and drops there.
+      flightOutcome = outcome;
       travel = null;
       flightDur = flightSeconds(plan, flightOutcome) * result.tree;
     } else {
-      // Otherwise it lands short, hops and rolls to where it rests.
-      const end = result.kind === 'rest' ? result.at : flightOutcome.end;
-      const surface =
-        result.kind === 'holed' ? 'green' : result.kind === 'rest' ? result.surface : null;
-      travel = createTravel(plan, { ...flightOutcome, end }, surface);
+      // Otherwise it touches down (inside the rough wall), hops and rolls to where it rests.
+      flightOutcome = { ...outcome, land: result.land };
+      travel = createTravel(plan, flightOutcome, result, hole.pin);
       flightDur = travel.seconds;
     }
 
@@ -722,7 +768,7 @@ function run(session: GameSession): void {
     } else {
       ball.place({ x: result.at.x, y: BALL_R, z: result.at.z }, result.surface);
     }
-    if (result.kind === 'water' || outcome.quality === 'duff') sfx.miss();
+    if (result.kind === 'water' || outcome.quality === 'miss') sfx.miss();
     else if (result.kind === 'holed') sfx.cheer();
     else sfx.tick();
     ballPos = { x: hstate.at.x, y: 0, z: hstate.at.z };
@@ -740,10 +786,10 @@ function run(session: GameSession): void {
     resultAt = gameTime;
     const call = shotCall(callKindFor(result, outcome.quality, isPutt(plan)));
     const holed = result.kind === 'holed';
-    hud.showBanner(call, '', holed ? 'good' : outcome.quality === 'duff' ? 'miss' : 'info', 'aim');
+    hud.showBanner(call, '', holed ? 'good' : outcome.quality === 'miss' ? 'miss' : 'info', 'aim');
     hud.showPill(`${pillFor(result)} · Shot ${hstate.strokes}`);
     after(PILL_FOR, () => hud.hidePill());
-    if (outcome.quality === 'duff' || result.kind === 'water') setGolf('groan');
+    if (outcome.quality === 'miss' || result.kind === 'water') setGolf('groan');
     else if (holed || (result.kind === 'rest' && result.surface === 'green' && !isPutt(plan))) {
       setGolf('cheer');
     } else setGolf('follow');
@@ -782,9 +828,7 @@ function run(session: GameSession): void {
       showHoleCall();
       return;
     }
-    // Back to the aim from the new lie.
-    aimDeg = 0;
-    plan = makePlan();
+    // Back to the aim from the new lie (the ring starts on a fresh suggestion).
     ball.setVisible(true);
     ball.splash(null);
     splashAt = -1;
@@ -911,6 +955,8 @@ function run(session: GameSession): void {
     missed = false;
     splashAt = -1;
     forcedQuality = devQuality();
+    holding = false;
+    hud.hideBigMap();
     const start = withPreview || devPending ? devStart() : { hole: 0, scores: [] };
     scores = start.scores;
     hud.setCardBig(false);
@@ -948,14 +994,56 @@ function run(session: GameSession): void {
 
   // ---------- Input ----------
   const swingNow = () => {
-    if (phase === 'aim') ask();
+    if (phase === 'aim' && !hud.bigMapOpen) ask();
   };
 
+  /** Turns the ring round the ball by `deg` (positive is right on screen), keeping its distance. */
   const nudge = (deg: number) => {
     if (phase !== 'aim') return;
-    aimDeg = Math.min(Math.max(aimDeg + deg, -AIM_MAX), AIM_MAX);
-    refreshAim();
-    retarget(0.15);
+    const dir = plan.dir - deg * (Math.PI / 180);
+    moveRing({
+      x: plan.from.x + plan.carry * Math.sin(dir),
+      z: plan.from.z + plan.carry * Math.cos(dir),
+    });
+  };
+
+  /** Moves the ring farther (positive) or shorter along the same line. */
+  const nudgeDist = (sign: 1 | -1) => {
+    if (phase !== 'aim') return;
+    const step = isPutt(plan) ? PUTT_DIST_STEP : DIST_STEP;
+    const d = Math.max(plan.carry + sign * step, 0);
+    moveRing({
+      x: plan.from.x + d * Math.sin(plan.dir),
+      z: plan.from.z + d * Math.cos(plan.dir),
+    });
+  };
+
+  /** The ground point under the finger: the ray from the camera, or (above the horizon) the reach along it. */
+  const placeFromFinger = () => {
+    const box = ctx.renderer.domElement.getBoundingClientRect();
+    const ndc = new Vector2(
+      ((finger.x - box.left) / Math.max(box.width, 1)) * 2 - 1,
+      -(((finger.y - box.top) / Math.max(box.height, 1)) * 2 - 1),
+    );
+    raycaster.setFromCamera(ndc, camera);
+    const { origin, direction } = raycaster.ray;
+    if (direction.y < -1e-4) {
+      const t = -origin.y / direction.y;
+      moveRing({ x: origin.x + direction.x * t, z: origin.z + direction.z * t });
+    } else {
+      const len = Math.hypot(direction.x, direction.z) || 1;
+      const reach = reachFor(hstate.lie);
+      moveRing({
+        x: plan.from.x + (direction.x / len) * reach,
+        z: plan.from.z + (direction.z / len) * reach,
+      });
+    }
+  };
+
+  const letGo = () => {
+    if (!holding) return;
+    holding = false;
+    if (phase === 'aim') goTo('aim', 0.35);
   };
 
   const skip = () => {
@@ -994,6 +1082,13 @@ function run(session: GameSession): void {
   press(hud.swing, swingNow);
   press(hud.nudgeLeft, () => nudge(-AIM_STEP));
   press(hud.nudgeRight, () => nudge(AIM_STEP));
+  press(hud.farther, () => nudgeDist(1));
+  press(hud.shorter, () => nudgeDist(-1));
+  hud.onMapPlace(moveRing);
+  hud.onMapTap(() => {
+    if (phase !== 'aim' || hud.bigMapOpen) return;
+    hud.showBigMap(hole, hstate.at, plan, restNow, hstate.lie);
+  });
   hud.hear.addEventListener('click', () => {
     unlockAudio();
     if (!fact || phase !== 'ask') return;
@@ -1005,19 +1100,23 @@ function run(session: GameSession): void {
     });
   });
 
-  // Dragging sideways turns the aim.
+  // A finger on the picture puts the ring where it touches; the camera rises while it is down.
   const stopPointer = createPointerInput(ctx.renderer.domElement, {
-    onDragStart: () => unlockAudio(),
-    onDrag: (state) => {
+    onDragStart: (state) => {
+      unlockAudio();
       if (phase !== 'aim') return;
-      const before = aimDeg;
-      aimDeg = Math.min(Math.max(aimDeg + state.dx * DEG_PER_PX, -AIM_MAX), AIM_MAX);
-      if (aimDeg === before) return;
-      refreshAim();
-      retarget(0.08);
+      holding = true;
+      finger = { x: state.x, y: state.y };
+      placeFromFinger();
+      goTo('place', 0.25);
     },
+    onDrag: (state) => {
+      finger = { x: state.x, y: state.y };
+    },
+    onDragEnd: letGo,
     onTap: skip,
   });
+  window.addEventListener('pointercancel', letGo);
 
   const onKey = (e: KeyboardEvent) => {
     if (pause.isPaused) return;
@@ -1043,6 +1142,12 @@ function run(session: GameSession): void {
     } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
       e.preventDefault();
       nudge(AIM_STEP);
+    } else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+      e.preventDefault();
+      nudgeDist(1);
+    } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+      e.preventDefault();
+      nudgeDist(-1);
     }
   };
   window.addEventListener('keydown', onKey);
@@ -1055,6 +1160,8 @@ function run(session: GameSession): void {
     timers.update(delta);
     if (moveT < 1) moveT = Math.min(1, moveT + delta / Math.max(moveDur, 1e-3));
 
+    // The ring follows the finger even while the camera is still rising.
+    if (holding && phase === 'aim') placeFromFinger();
     updateAsk(delta);
     updateSwing();
     updateFlight(delta);
@@ -1088,6 +1195,7 @@ function run(session: GameSession): void {
   window.addEventListener('pagehide', () => {
     stopSpeaking();
     window.removeEventListener('keydown', onKey);
+    window.removeEventListener('pointercancel', letGo);
     stopPointer();
     tapFlow.dispose();
     unpress.forEach((fn) => fn());

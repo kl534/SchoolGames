@@ -1,7 +1,6 @@
 import { PerspectiveCamera, Vector3 } from 'three';
 import { centreX, type Hole } from './course';
-import { ringRadius } from './guide';
-import type { Plan } from './shot';
+import type { Plan, XZ } from './shot';
 
 export interface Vec {
   x: number;
@@ -153,7 +152,11 @@ export const PIN_IN_VIEW = 120;
 
 const forward = (dir: number) => ({ x: Math.sin(dir), z: Math.cos(dir) });
 
-/** Behind the ball, looking at the ring (and the pin when it is close). */
+/** The higher "place" view, held while a finger is down on the picture: behind and above the ball. */
+export const PLACE_BEHIND = 14;
+export const PLACE_UP = 16;
+
+/** Behind the ball, looking at the ring, where it should stop (and the pin when it is close). */
 export function aimView(
   plan: Plan,
   hole: Hole,
@@ -161,10 +164,11 @@ export function aimView(
   width: number,
   height: number,
   band: PlayBand,
+  rest?: XZ,
 ): CamView {
   const f = forward(plan.dir);
   const cam = { x: plan.from.x - f.x * AIM_BEHIND, y: AIM_UP, z: plan.from.z - f.z * AIM_BEHIND };
-  const r = ringRadius(plan.carry);
+  const r = plan.ringR;
   const side = { x: Math.cos(plan.dir), z: -Math.sin(plan.dir) };
   const keys: Vec[] = [
     { x: plan.landing.x - side.x * r, y: 0, z: plan.landing.z - side.z * r },
@@ -176,10 +180,39 @@ export function aimView(
     { x: golfer.x, y: 2.1, z: golfer.z },
     { x: golfer.x, y: width / Math.max(height, 1) > 1.2 ? 0.9 : 0.1, z: golfer.z },
   ];
+  if (rest) keys.push({ x: rest.x, y: 0, z: rest.z });
   const toPin = Math.hypot(hole.pin.x - plan.from.x, hole.pin.z - plan.from.z);
   if (toPin <= PIN_IN_VIEW) {
     keys.push({ x: hole.pin.x, y: 0, z: hole.pin.z }, { x: hole.pin.x, y: 2.4, z: hole.pin.z });
   }
+  return fitView(cam, keys, width, height, band);
+}
+
+/**
+ * Higher and further back than the aim view, so the whole reach of the club is in sight while a
+ * finger places the ring: the ball, the far end of the reach (`reach` yd along the line) and the ring.
+ */
+export function placeView(
+  plan: Plan,
+  _hole: Hole,
+  golfer: Vec,
+  width: number,
+  height: number,
+  band: PlayBand,
+  reach: number,
+): CamView {
+  const f = forward(plan.dir);
+  const cam = {
+    x: plan.from.x - f.x * PLACE_BEHIND,
+    y: PLACE_UP,
+    z: plan.from.z - f.z * PLACE_BEHIND,
+  };
+  const keys: Vec[] = [
+    { x: plan.from.x, y: 0, z: plan.from.z },
+    { x: plan.from.x + f.x * reach, y: 0, z: plan.from.z + f.z * reach },
+    { x: plan.landing.x, y: 0, z: plan.landing.z },
+    { x: golfer.x, y: 0.1, z: golfer.z },
+  ];
   return fitView(cam, keys, width, height, band);
 }
 
