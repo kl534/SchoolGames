@@ -49,6 +49,9 @@ const SMASH_PASS_Y = 0.45;
 /** The softest and hardest any shot is hit, when a spot can't be reached in its kind's range. */
 const SLOWEST = 3.5;
 const FASTEST = 18;
+/** The bounce before the wall lands at least this far out from its face (m), so it never reads
+ *  as a second wall hit (a bounce right in the corner sounds and looks like one). */
+export const MIN_BOUNCE_FROM_WALL = 0.02;
 /** Where a missed ball goes: past everyone and off the right side. */
 export const PAST = { x: 4.8 };
 /** The side lines of the court: a missed ball never lands outside them. */
@@ -195,6 +198,7 @@ function tryShot(from: Vec, to: Vec, h: number, vy: number): Flown | null {
   const f = fly(launch(from, h, a, vy), to.x);
   const wallAt = f.hits.indexOf('wall');
   if (wallAt !== 1 || f.hits[0] !== 'floor') return null;
+  if (f.segments[0].to.x - (WALL_X + BALL_R) < MIN_BOUNCE_FROM_WALL) return null;
   if (f.hits[f.hits.length - 1] !== 'stop') return null;
   if (f.hits.length - wallAt - 2 > 1) return null;
   return f;

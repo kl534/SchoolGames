@@ -103,6 +103,7 @@ import {
   timeAtX,
   velocityAt,
   WALL_X,
+  MIN_BOUNCE_FROM_WALL,
   type Shot,
   type Vec,
 } from '../src/games/hitting-handballs/shots';
@@ -861,6 +862,22 @@ describe('hitting handballs grabby', () => {
         }
       }
     }
+  });
+
+  it('a throw from right by the wall never bounces in the corner', () => {
+    // This spot once bounced 0.000001 m from the wall, which read (and sounded) as two wall hits.
+    const hand = { x: -2.6988686120668537, y: 0.8239485919013664, z: -0.8 };
+    const ours = { x: 2.2015263174394737, y: 1.0686500736617528, z: 0.6 };
+    check(hand, ours);
+    const shot = planShot('smash', hand, ours, WINNER_WALL_Y, true);
+    expect(
+      contacts(shot)
+        .map((c) => c.what)
+        .slice(0, 2),
+    ).toEqual(['floor', 'wall']);
+    expect(shot.segments[0].to.x - (WALL_X + BALL_R)).toBeGreaterThanOrEqual(
+      MIN_BOUNCE_FROM_WALL - 1e-9,
+    );
   });
 
   it('the throw works for random spots', () => {
