@@ -172,3 +172,36 @@ describe('the ball travelling to where it rests', () => {
     expect(lastStep).toBeLessThan(0.05);
   });
 });
+
+describe('a duff travelling', () => {
+  it('skips low, hops once a little, slows evenly and rests where it lands', () => {
+    const plan = planShot(hole, { x: 0, z: 0 }, 'tee', { x: 0, z: 150 });
+    const outcome = resolveShot(plan, false, 4, 10, Math.PI, 1);
+    expect(outcome.quality).toBe('duff');
+    const result = finishShot(hole, plan, outcome);
+    if (result.kind !== 'rest') throw new Error('a duff on the tee rests');
+    const travel = createTravel(plan, { ...outcome, land: result.land }, result, hole.pin);
+    expect(travel.seconds).toBeCloseTo(flightSeconds(plan, outcome), 9);
+    expect(travel.seconds).toBeCloseTo(0.5 + 10 / 12, 9);
+    let top = 0;
+    let prev = travel.at(0);
+    let lastStep = Infinity;
+    for (let i = 1; i <= 80; i++) {
+      const p = travel.at((travel.seconds * i) / 80);
+      top = Math.max(top, p.y - BALL_R);
+      const step = dist(p, prev);
+      expect(step).toBeLessThanOrEqual(lastStep + 1e-9);
+      lastStep = step;
+      prev = p;
+    }
+    expect(top).toBeCloseTo(0.35, 2);
+    expect(prev.x).toBeCloseTo(result.at.x, 9);
+    expect(prev.z).toBeCloseTo(result.at.z, 9);
+    expect(prev.y).toBe(BALL_R);
+    // After the skip there is one small hop of 0.08 yd and nothing else.
+    const late = Array.from({ length: 60 }, (_, i) =>
+      travel.at(travel.seconds * (0.4 + (0.6 * i) / 59)),
+    );
+    expect(Math.max(...late.map((p) => p.y - BALL_R))).toBeLessThanOrEqual(0.08 + 1e-9);
+  });
+});

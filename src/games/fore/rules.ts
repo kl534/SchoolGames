@@ -71,6 +71,13 @@ export function relText(rel: number): string {
   return rel > 0 ? `+${rel}` : `-${-rel}`;
 }
 
+/** The Total cell and its label: `E`, `+3`, `-4` (ASCII hyphen). */
+export const toParLabel = relText;
+
+/** Which colour the Total cell gets. */
+export const toParTone = (rel: number): 'under' | 'even' | 'over' =>
+  rel < 0 ? 'under' : rel > 0 ? 'over' : 'even';
+
 /** The high score store only keeps bigger-is-better numbers, so a round is kept as 100 - rel. */
 export const storedFor = (rel: number): number => 100 - rel;
 export const relFromStored = (stored: number): number => 100 - stored;
@@ -84,15 +91,7 @@ export function roundOutcome(total: number, rel: number): string {
 // ---------- Spoken lines ----------
 
 export type CallKind =
-  | 'fairway'
-  | 'rough'
-  | 'sand'
-  | 'green'
-  | 'water'
-  | 'holed'
-  | 'puttGood'
-  | 'puttMiss'
-  | 'offTarget';
+  'fairway' | 'rough' | 'sand' | 'green' | 'water' | 'holed' | 'puttGood' | 'puttMiss' | 'duff';
 
 const SHOT_CALLS: Record<CallKind, string> = {
   fairway: 'Fairway!',
@@ -103,7 +102,7 @@ const SHOT_CALLS: Record<CallKind, string> = {
   holed: 'In the hole!',
   puttGood: 'Nice putt.',
   puttMiss: 'Missed it.',
-  offTarget: 'Off target.',
+  duff: 'Duffed it.',
 };
 
 export const shotCall = (kind: CallKind): string => SHOT_CALLS[kind];
@@ -113,9 +112,7 @@ export function callKindFor(result: Result, quality: Quality, putt: boolean): Ca
   if (result.kind === 'holed') return 'holed';
   if (putt) return quality === 'miss' ? 'puttMiss' : 'puttGood';
   if (result.kind === 'water') return 'water';
-  if (quality === 'miss' && (result.surface === 'fairway' || result.surface === 'green')) {
-    return 'offTarget';
-  }
+  if (quality === 'duff') return 'duff';
   return result.surface === 'tree' ? 'rough' : result.surface;
 }
 
@@ -147,7 +144,7 @@ export function reactionFor(
   name: string | null,
   how: { quality?: Quality; putt?: boolean } = {},
 ): Reaction {
-  if (result.kind === 'water' || how.quality === 'miss') return 'groan';
+  if (result.kind === 'water' || how.quality === 'miss' || how.quality === 'duff') return 'groan';
   if (name) {
     if (name === 'Par') return result.kind === 'holed' ? 'cheer' : 'idle';
     const bad = ['Bogey', 'Double bogey', 'Triple bogey', 'Pick up'];

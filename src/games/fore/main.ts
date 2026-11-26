@@ -98,6 +98,7 @@ import {
   predictRest,
   PUTT_DIST_STEP,
   reachFor,
+  duffAngleFor,
   resolveShot,
   suggestTarget,
   type Outcome,
@@ -660,6 +661,7 @@ function run(session: GameSession): void {
   };
 
   // ---------- Showing the game ----------
+  const pars = HOLES.map((h) => h.par);
   const renderCard = () => {
     const cells: CardCell[] = HOLES.map((h, i) => ({
       par: h.par,
@@ -671,7 +673,7 @@ function run(session: GameSession): void {
             : null,
       current: i === holeIndex && scores.length <= i,
     }));
-    hud.renderCard(cells);
+    hud.renderCard(cells, totalVsPar(scores, pars));
   };
 
   const setGolf = (move: GolfMove) => {
@@ -909,7 +911,14 @@ function run(session: GameSession): void {
     forcedQuality = null;
     const strikeRight = forced ? forced !== 'miss' : right;
     const strikeUsed = forced === 'perfect' ? 0 : forced === 'close' ? clockTotal * 0.6 : used;
-    const angle = devScatter() ?? Math.random() * 2 * Math.PI;
+    // A duff's side angle is a dev number of degrees, or random; other shots scatter all round.
+    const scatter = devScatter();
+    const angle =
+      scatter === null
+        ? Math.random() * 2 * Math.PI
+        : isPutt(plan) || strikeRight
+          ? scatter
+          : duffAngleFor(scatter / (Math.PI / 180));
     outcome = resolveShot(plan, strikeRight, strikeUsed, clockTotal, angle, Math.random());
     result = finishShot(hole, plan, outcome);
     afterHole = afterShot(hstate, hole, result);
@@ -994,8 +1003,8 @@ function run(session: GameSession): void {
     ballPos = p;
     const g = ground(p.x, p.z);
     ball.place(p, 'rough', g);
-    // Putts roll along the green: no tracer.
-    if (!isPutt(plan)) ball.trail(gameTime, p, g);
+    // Putts roll along the green and a duff just skips: no tracer.
+    if (!isPutt(plan) && flightOutcome.quality !== 'duff') ball.trail(gameTime, p, g);
     if (u >= 1) land();
   };
 
@@ -1019,7 +1028,8 @@ function run(session: GameSession): void {
     } else {
       putBall({ x: result.at.x, y: BALL_R, z: result.at.z }, result.surface);
     }
-    if (result.kind === 'water' || outcome.quality === 'miss') sfx.miss();
+    if (result.kind === 'water' || outcome.quality === 'miss' || outcome.quality === 'duff')
+      sfx.miss();
     else if (result.kind === 'holed') sfx.cheer();
     else sfx.tick();
     ballPos = { x: hstate.at.x, y: 0, z: hstate.at.z };
@@ -1037,10 +1047,11 @@ function run(session: GameSession): void {
     resultAt = gameTime;
     const call = shotCall(callKindFor(result, outcome.quality, isPutt(plan)));
     const holed = result.kind === 'holed';
-    hud.showBanner(call, '', holed ? 'good' : outcome.quality === 'miss' ? 'miss' : 'info', 'aim');
+    const isBad = outcome.quality === 'miss' || outcome.quality === 'duff';
+    hud.showBanner(call, '', holed ? 'good' : isBad ? 'miss' : 'info', 'aim');
     hud.showPill(`${pillFor(result)} · Shot ${hstate.strokes}`);
     after(PILL_FOR, () => hud.hidePill());
-    if (outcome.quality === 'miss' || result.kind === 'water') setGolf('groan');
+    if (isBad || result.kind === 'water') setGolf('groan');
     else if (holed || (result.kind === 'rest' && result.surface === 'green' && !isPutt(plan))) {
       setGolf('cheer');
     } else setGolf('follow');
@@ -1132,7 +1143,6 @@ function run(session: GameSession): void {
 
   // ---------- The end ----------
   const roundTotals = () => {
-    const pars = HOLES.map((h) => h.par);
     const rel = totalVsPar(scores, pars);
     const strokes = scores.reduce((s, n) => s + n, 0);
     return { rel, strokes };

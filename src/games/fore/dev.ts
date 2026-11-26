@@ -1,7 +1,8 @@
 /**
  * Dev-only hooks for checking every state by eye. They compile away in production builds.
  *
- * - `?hole=N` starts at hole N (1 to 9), with the card filled in as if the earlier holes were par.
+ * - `?hole=N` starts at hole N (1 to 9), with the card filled in as if the earlier holes were par
+ *   (`?card=<n>` moves the total, see below).
  * - `?lie=green|sand|rough|tee|water` starts that hole with the ball in that lie near the pin
  *   (12 yd on the green, 20 yd otherwise). `sand` uses the hole's first bunker when it has one;
  *   `water` stands 100 yd short of the first pond with the ring on its centre (the ring turns red).
@@ -12,8 +13,11 @@
  * - `?strokes=N` presets the strokes already taken on the hole (to check the cap).
  * - `?scatter=<deg>` is the direction a miss or a slow right answer lands off the ring (0 straight
  *   on, 90 to the right on screen); absent is random.
- * - `?quality=perfect|close|miss` forces the next shot's quality, whatever the answer (`close` is
- *   a right answer at 60 % of the clock).
+ * - `?quality=perfect|close|miss|duff` forces the next shot's quality, whatever the answer (`close`
+ *   is a right answer at 60 % of the clock; `miss` and `duff` are a wrong answer: a duff off the
+ *   green, a mis-hit putt on it). `?scatter=<deg>` also sets a duff's side angle (within 15).
+ * - `?card=<n>` (with `hole`) fills the earlier holes so the Total cell reads that many over par
+ *   (negative is under).
  * - `?bigmap=1` opens the big map once the aim view is up.
  * - `?place=1` holds the higher "place" camera view (as if a finger were down on the picture).
  * - `?intro=1` keeps the hole intro (the flyover) even with `hole`, `lie` or `strokes`.
@@ -60,7 +64,25 @@ export function devStart(): DevStart {
   if (!import.meta.env.DEV) return { hole: 0, scores: [] };
   const n = Number(params().get('hole'));
   const hole = Number.isInteger(n) && n >= 1 && n <= HOLES.length ? n - 1 : 0;
-  return { hole, scores: HOLES.slice(0, hole).map((h) => h.par) };
+  const pars = HOLES.slice(0, hole).map((h) => h.par);
+  return { hole, scores: devCard(pars, Number(params().get('card') || 0)) };
+}
+
+/**
+ * Scores for the holes with these pars that add up to `total` against par: one stroke off each
+ * hole in turn (round and round) until the total is met; never fewer than one stroke on a hole.
+ */
+export function devCard(pars: readonly number[], total: number): number[] {
+  const scores = [...pars];
+  if (!Number.isInteger(total) || scores.length === 0) return scores;
+  const step = Math.sign(total);
+  for (let left = Math.abs(total), i = 0; left > 0 && i < 1000; i++) {
+    const k = i % scores.length;
+    if (step < 0 && scores[k] <= 1) continue;
+    scores[k] += step;
+    left--;
+  }
+  return scores;
 }
 
 const RAD = Math.PI / 180;
@@ -170,10 +192,11 @@ export function devScatter(): number | null {
   return Number.isFinite(deg) ? deg * RAD : null;
 }
 
-/** The quality every shot gets, if the address forces one. */
+/** The quality every shot gets, if the address forces one (`duff` is `miss`: a wrong answer). */
 export function devQuality(): Quality | null {
   if (!import.meta.env.DEV) return null;
   const quality = params().get('quality');
+  if (quality === 'duff') return 'miss';
   return quality === 'perfect' || quality === 'close' || quality === 'miss' ? quality : null;
 }
 

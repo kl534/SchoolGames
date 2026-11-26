@@ -355,6 +355,7 @@ export function createBall(glow = 1): Ball {
 export function flightSeconds(plan: Plan, outcome: Outcome): number {
   const d = Math.hypot(outcome.land.x - plan.from.x, outcome.land.z - plan.from.z);
   if (isPutt(plan)) return Math.max(d / PUTT_SPEED, 0.4);
+  if (outcome.quality === 'duff') return 0.5 + d / 12;
   return 0.9 + plan.carry / 120;
 }
 

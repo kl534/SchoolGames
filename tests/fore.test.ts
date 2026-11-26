@@ -16,13 +16,19 @@ import {
   clampTarget,
   clubFor,
   CUP_R,
+  DUFF_ANGLE,
+  DUFF_MAX,
+  DUFF_MIN,
+  duffAngleFor,
   finishShot,
   MIN_PUTT,
   MIN_SHOT,
-  MISS_FLOOR,
   pathAt,
+  PIN_CLEAR,
   planShot,
   predictRest,
+  PUTT_MISS_MAX,
+  PUTT_MISS_MIN,
   reachFor,
   resolveShot,
   ringRadius,
@@ -53,10 +59,13 @@ import {
   startHole,
   STROKE_CAP,
   storedFor,
+  toParLabel,
+  toParTone,
   totalVsPar,
   vsPar,
   type HoleState,
 } from '../src/games/fore/rules';
+import { devCard } from '../src/games/fore/dev';
 import { bigMapSpan, bigMapWorld, cornerMapWorld } from '../src/games/fore/hud';
 import { VOICE_LINES } from '../src/games/fore/voice';
 
@@ -256,7 +265,7 @@ describe('planShot', () => {
   it('has the documented shape', () => {
     const p: Plan = planShot(h, from, 'tee', h.pin);
     expect(Object.keys(p).sort()).toEqual(
-      ['carry', 'club', 'dir', 'from', 'landing', 'ringR'].sort(),
+      ['carry', 'club', 'dir', 'from', 'landing', 'pin', 'ringR'].sort(),
     );
   });
 });
@@ -291,45 +300,127 @@ describe('resolveShot', () => {
     expect(right.land.z).toBeCloseTo(plan.landing.z, 9);
   });
 
-  it('a wrong answer lands 15 to 30 % of the carry away, never under 2.2 yd', () => {
-    const lo = resolveShot(plan, false, 3, 10, 1, 0);
-    const hi = resolveShot(plan, false, 3, 10, 1, 1);
-    expect(lo.quality).toBe('miss');
-    expect(off(lo)).toBeCloseTo(0.15 * plan.carry, 9);
-    expect(off(hi)).toBeCloseTo(0.3 * plan.carry, 9);
-    const short = planShot(h, { x: 0, z: 0 }, 'tee', { x: 0, z: 10 });
-    const o = resolveShot(short, false, 3, 10, 1, 0);
-    expect(
-      Math.hypot(o.land.x - short.landing.x, o.land.z - short.landing.z),
-    ).toBeGreaterThanOrEqual(MISS_FLOOR);
-    expect(MISS_FLOOR).toBeCloseTo(2.2, 9);
+  it('a wrong answer off the green is a duff of 3 to 10 yd', () => {
+    const lo = resolveShot(plan, false, 3, 10, Math.PI, 0);
+    const hi = resolveShot(plan, false, 3, 10, Math.PI, 1);
+    expect(lo.quality).toBe('duff');
+    expect(Math.hypot(lo.land.x, lo.land.z)).toBeCloseTo(DUFF_MIN, 9);
+    expect(Math.hypot(hi.land.x, hi.land.z)).toBeCloseTo(DUFF_MAX, 9);
+    expect(lo.land.x).toBeCloseTo(0, 9);
   });
 
-  it('a right answer is always inside the ring and a wrong one always outside it', () => {
-    for (let i = 0; i < 500; i++) {
-      const want = { x: (Math.random() - 0.5) * 100, z: 10 + Math.random() * 230 };
-      const p = planShot(h, { x: 0, z: 0 }, 'tee', want);
-      const used = Math.random() * 12;
-      const angle = Math.random() * 2 * Math.PI;
-      const u = Math.random();
-      const right = resolveShot(p, true, used, 10, angle, u);
-      const wrong = resolveShot(p, false, used, 10, angle, u);
-      const dr = Math.hypot(right.land.x - p.landing.x, right.land.z - p.landing.z);
-      const dw = Math.hypot(wrong.land.x - p.landing.x, wrong.land.z - p.landing.z);
-      expect(dr).toBeLessThan(p.ringR);
-      expect(dw).toBeGreaterThan(p.ringR);
-      expect(dw).toBeGreaterThanOrEqual(MISS_FLOOR - 1e-9);
+  it('a duff turns up to 15 degrees, positive to the right on screen (-x)', () => {
+    const right = resolveShot(plan, false, 3, 10, 2 * Math.PI, 1);
+    expect(right.land.x).toBeCloseTo(-DUFF_MAX * Math.sin(DUFF_ANGLE * (Math.PI / 180)), 9);
+    const left = resolveShot(plan, false, 3, 10, 0, 1);
+    expect(left.land.x).toBeGreaterThan(0);
+    const dev = resolveShot(plan, false, 3, 10, duffAngleFor(40), 1);
+    expect(dev.land.x).toBeCloseTo(right.land.x, 9);
+    expect(resolveShot(plan, false, 3, 10, duffAngleFor(0), 1).land.x).toBeCloseTo(0, 9);
+  });
+
+  it('every wrong answer off the green duffs 3 to 10 yd within 15 degrees and clear of the pin', () => {
+    for (let i = 0; i < runs(2000, 200); i++) {
+      const h = HOLES[i % HOLES.length];
+      const from = { x: centreX(h, 0) + (Math.random() - 0.5) * 20, z: Math.random() * h.length };
+      const want = { x: from.x + (Math.random() - 0.5) * 200, z: from.z + Math.random() * 250 };
+      // Some starts are right beside the pin, to reach the pull-back.
+      const near =
+        i % 4 === 0
+          ? { x: h.pin.x + (Math.random() - 0.5) * 6, z: h.pin.z - 2 - Math.random() * 12 }
+          : from;
+      const lie = i % 4 === 0 ? 'fairway' : i % 3 === 0 ? 'rough' : 'fairway';
+      const p = planShot(h, near, lie, i % 4 === 0 ? h.pin : want);
+      const o = resolveShot(
+        p,
+        false,
+        Math.random() * 12,
+        10,
+        Math.random() * 2 * Math.PI,
+        Math.random(),
+      );
+      expect(o.quality).toBe('duff');
+      const dx = o.land.x - p.from.x;
+      const dz = o.land.z - p.from.z;
+      const travel = Math.hypot(dx, dz);
+      const pulled = travel < DUFF_MIN - 1e-9;
+      expect(travel).toBeLessThanOrEqual(DUFF_MAX + 1e-9);
+      if (!pulled) expect(travel).toBeGreaterThanOrEqual(DUFF_MIN - 1e-9);
+      if (travel > 1e-9) {
+        let turn = Math.atan2(dx, dz) - p.dir;
+        turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+        expect(Math.abs(turn)).toBeLessThanOrEqual(DUFF_ANGLE * (Math.PI / 180) + 1e-9);
+      }
+      const away = Math.hypot(o.land.x - h.pin.x, o.land.z - h.pin.z);
+      const startAway = Math.hypot(p.from.x - h.pin.x, p.from.z - h.pin.z);
+      if (startAway >= PIN_CLEAR) expect(away).toBeGreaterThanOrEqual(PIN_CLEAR - 1e-6);
     }
   });
 
-  it('a wrong putt is never holed', () => {
-    for (let i = 0; i < 500; i++) {
+  it('a duff headed at the pin is pulled back to exactly PIN_CLEAR away', () => {
+    const at = { x: 0, z: h.length - 8 };
+    const p = planShot(h, at, 'fairway', h.pin);
+    const o = resolveShot(p, false, 3, 10, Math.PI, 1);
+    expect(Math.hypot(o.land.x - h.pin.x, o.land.z - h.pin.z)).toBeCloseTo(PIN_CLEAR, 6);
+  });
+
+  it('a wrong putt stops 20 to 40 % of the way, never holed', () => {
+    for (let i = 0; i < runs(2000, 200); i++) {
       const d = 2 + Math.random() * 13;
       const at = { x: 0, z: h.length - d };
       const p = planShot(h, at, 'green', h.pin);
+      const u = Math.random();
+      const o = resolveShot(p, false, 3, 10, Math.random() * 2 * Math.PI, u);
+      expect(o.quality).toBe('miss');
+      const travel = Math.hypot(o.land.x - at.x, o.land.z - at.z);
+      const want = p.carry * (PUTT_MISS_MIN + u * (PUTT_MISS_MAX - PUTT_MISS_MIN));
+      expect(travel).toBeLessThanOrEqual(want + 1e-9);
+      if (d - PIN_CLEAR >= want) expect(travel).toBeCloseTo(want, 9);
+      expect(Math.hypot(o.land.x - h.pin.x, o.land.z - h.pin.z)).toBeGreaterThanOrEqual(
+        PIN_CLEAR - 1e-9,
+      );
+      expect(finishShot(h, p, o).kind).not.toBe('holed');
+    }
+  });
+
+  it('a wrong answer is never holed, on or off the green', () => {
+    for (let i = 0; i < runs(1000, 100); i++) {
+      const lie = i % 2 ? 'green' : 'fairway';
+      const d = 2 + Math.random() * 13;
+      const at = { x: (Math.random() - 0.5) * 4, z: h.length - d };
+      const p = planShot(h, at, lie, h.pin);
       const o = resolveShot(p, false, 3, 10, Math.random() * 2 * Math.PI, Math.random());
       expect(finishShot(h, p, o).kind).not.toBe('holed');
     }
+  });
+});
+
+describe('a duff rests where it lands', () => {
+  const flat = HOLES[0];
+  it('does not roll on', () => {
+    const plan = planShot(flat, { x: 0, z: 100 }, 'fairway', { x: 0, z: 200 });
+    const land = { x: 0, z: 107 };
+    expect(finishShot(flat, plan, { quality: 'duff', land })).toMatchObject({
+      kind: 'rest',
+      land,
+      at: land,
+      surface: 'fairway',
+    });
+    expect(finishShot(flat, plan, { quality: 'perfect', land }).kind === 'rest').toBe(true);
+  });
+
+  it('still finds sand and water', () => {
+    const sandy: Hole = {
+      ...flat,
+      hazards: [{ kind: 'sand', at: { x: 0, z: 107, rx: 3, rz: 3 } }],
+    };
+    const plan = planShot(sandy, { x: 0, z: 100 }, 'fairway', { x: 0, z: 200 });
+    expect(finishShot(sandy, plan, { quality: 'duff', land: { x: 0, z: 107 } })).toMatchObject({
+      kind: 'rest',
+      surface: 'sand',
+    });
+    const wet: Hole = { ...flat, hazards: [{ kind: 'water', at: { x: 0, z: 107, rx: 3, rz: 3 } }] };
+    expect(finishShot(wet, plan, { quality: 'duff', land: { x: 0, z: 107 } }).kind).toBe('water');
   });
 });
 
@@ -453,14 +544,25 @@ describe('rollFrom and finishShot', () => {
     expect(r).toMatchObject({ kind: 'rest', land: { x: ROUGH_HALF, z: 200 } });
   });
 
-  it('pathAt flies to the ring and bends late to where it touches down, as high for every quality', () => {
+  it('pathAt flies to the ring and bends late to where it touches down', () => {
     const plan = planShot(flat, { x: 0, z: 0 }, 'tee', { x: 0, z: 150 });
-    const miss = resolveShot(plan, false, 5, 10, Math.PI / 2, 0.5);
-    expect(pathAt(plan, miss, 0)).toMatchObject({ x: 0, z: 0, h: 0 });
-    const end = pathAt(plan, miss, 1);
-    expect(end.x).toBeCloseTo(miss.land.x, 9);
-    expect(end.z).toBeCloseTo(miss.land.z, 9);
-    expect(pathAt(plan, miss, 0.5).h).toBeCloseTo(plan.club.apex * plan.carry, 9);
+    const close = resolveShot(plan, true, 10, 10, Math.PI / 2, 0.5);
+    expect(pathAt(plan, close, 0)).toMatchObject({ x: 0, z: 0, h: 0 });
+    const end = pathAt(plan, close, 1);
+    expect(end.x).toBeCloseTo(close.land.x, 9);
+    expect(end.z).toBeCloseTo(close.land.z, 9);
+    expect(pathAt(plan, close, 0.5).h).toBeCloseTo(plan.club.apex * plan.carry, 9);
+  });
+
+  it('pathAt skips a duff low over the first 45 % and then stays on the ground', () => {
+    const plan = planShot(flat, { x: 0, z: 0 }, 'tee', { x: 0, z: 150 });
+    const duff = resolveShot(plan, false, 5, 10, Math.PI, 0.5);
+    expect(pathAt(plan, duff, 0.225).h).toBeCloseTo(0.35, 9);
+    expect(pathAt(plan, duff, 0.6).h).toBe(0);
+    const end = pathAt(plan, duff, 1);
+    expect(end.z).toBeCloseTo(duff.land.z, 9);
+    for (let t = 0; t <= 1; t += 0.05)
+      expect(pathAt(plan, duff, t).h).toBeLessThanOrEqual(0.35 + 1e-9);
   });
 
   it('predictRest is a perfect shot to the ring', () => {
@@ -697,7 +799,7 @@ describe('voice lines', () => {
       'In the hole!',
       'Nice putt.',
       'Missed it.',
-      'Off target.',
+      'Duffed it.',
       'Hole in one!',
       'Albatross!',
       'Eagle!',
@@ -733,7 +835,7 @@ describe('voice lines', () => {
       })),
     ] as const;
     for (const result of results) {
-      for (const quality of ['perfect', 'close', 'miss'] as const) {
+      for (const quality of ['perfect', 'close', 'miss', 'duff'] as const) {
         for (const putt of [false, true]) {
           const line = shotCall(callKindFor(result, quality, putt));
           expect(VOICE_LINES).toContain(line);
@@ -755,26 +857,42 @@ describe('voice lines', () => {
         drop: { x: 0, z: 0 },
       }),
     ).toBe('Water +1');
-    expect(VOICE_LINES).toContain('Off target.');
-    expect(VOICE_LINES).not.toContain('Duffed it.');
+    expect(VOICE_LINES).toContain('Duffed it.');
+    expect(VOICE_LINES).not.toContain('Off target.');
   });
 });
 
 describe('calls after a shot', () => {
   const rest = (surface: 'fairway' | 'green' | 'rough' | 'sand') =>
     ({ kind: 'rest', land: { x: 0, z: 0 }, at: { x: 0, z: 0 }, surface }) as const;
-  it('name the shot by where it landed, or "Off target." when a miss still finds the short grass', () => {
+  it('name the shot by where it landed, or "Duffed it." for a duff that is not in the water', () => {
     expect(shotCall(callKindFor(rest('fairway'), 'perfect', false))).toBe('Fairway!');
     expect(shotCall(callKindFor(rest('fairway'), 'close', false))).toBe('Fairway!');
-    expect(shotCall(callKindFor(rest('fairway'), 'miss', false))).toBe('Off target.');
-    expect(shotCall(callKindFor(rest('green'), 'miss', false))).toBe('Off target.');
-    expect(shotCall(callKindFor(rest('rough'), 'miss', false))).toBe('In the rough.');
-    expect(shotCall(callKindFor(rest('sand'), 'miss', false))).toBe('Bunker.');
+    for (const surface of ['fairway', 'rough', 'sand'] as const) {
+      expect(shotCall(callKindFor(rest(surface), 'duff', false))).toBe('Duffed it.');
+    }
+    const wet: Result = {
+      kind: 'water',
+      land: { x: 0, z: 0 },
+      splash: { x: 0, z: 0 },
+      drop: { x: 0, z: 0 },
+    };
+    expect(shotCall(callKindFor(wet, 'duff', false))).toBe('Splash!');
     expect(shotCall(callKindFor(rest('fairway'), 'perfect', true))).toBe('Nice putt.');
     expect(shotCall(callKindFor(rest('green'), 'miss', true))).toBe('Missed it.');
-    expect(shotCall(callKindFor({ kind: 'holed', land: { x: 0, z: 0 } }, 'miss', false))).toBe(
+    expect(shotCall(callKindFor({ kind: 'holed', land: { x: 0, z: 0 } }, 'duff', false))).toBe(
       'In the hole!',
     );
+    expect(reactionFor(rest('rough'), null, { quality: 'duff' })).toBe('groan');
+  });
+
+  it('the Total cell: label and tone', () => {
+    expect(toParLabel(0)).toBe('E');
+    expect(toParLabel(-4)).toBe('-4');
+    expect(toParLabel(3)).toBe('+3');
+    expect(toParTone(-1)).toBe('under');
+    expect(toParTone(0)).toBe('even');
+    expect(toParTone(2)).toBe('over');
   });
 });
 
@@ -961,5 +1079,15 @@ describe('the big map', () => {
     const p = cornerMapWorld(HOLES[0], { w: 84, h: 150 }, 42, 75);
     expect(p.x).toBeCloseTo(0, 9);
     expect(p.z).toBeCloseTo(170, 9);
+  });
+});
+
+describe('devCard', () => {
+  it('fills the earlier holes so the total is as asked', () => {
+    const pars = HOLES.slice(0, 5).map((h) => h.par);
+    for (const total of [-4, 0, 3, 8, -9]) {
+      expect(totalVsPar(devCard(pars, total), pars)).toBe(total);
+    }
+    expect(devCard([], 3)).toEqual([]);
   });
 });

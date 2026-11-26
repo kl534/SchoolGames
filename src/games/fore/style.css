@@ -33,7 +33,7 @@
   z-index: 10;
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: repeat(9, 1fr);
+  grid-template-columns: repeat(10, 1fr);
   gap: 3px;
   padding: 4px;
   border-radius: 12px;
@@ -77,6 +77,46 @@
   font-weight: 900;
   line-height: 20px;
   font-variant-numeric: tabular-nums;
+}
+
+.fg-tot {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.fg-tot .fg-fn {
+  color: #ffd166;
+  white-space: nowrap;
+}
+
+.fg-tot-short {
+  display: none;
+}
+
+.fg-tot .fg-s {
+  color: #ffffff;
+}
+
+.fg-tot .fg-s[data-tone='under'] {
+  color: #ff6b6b;
+}
+
+.fg-tot .fg-s[data-tone='over'] {
+  color: #9fb3c8;
+}
+
+.fg-card.big .fg-tot {
+  display: none;
+}
+
+@media (max-width: 419px) {
+  .fg-tot-long {
+    display: none;
+  }
+
+  .fg-tot-short {
+    display: inline;
+  }
 }
 
 .fg-total {
