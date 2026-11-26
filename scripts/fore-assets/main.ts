@@ -110,7 +110,7 @@ async function main() {
   const part = async (key: string) => download(sand[key]['1k'].jpg.url);
   save(
     'turf/sand_color.webp',
-    await webp(await evened(await part('Diffuse'), 235), 1024, 80),
+    await webp(await evened(await part('Diffuse'), 190), 1024, 80),
     sandUrl,
     cc0,
   );
