@@ -12,6 +12,11 @@ export interface SceneContext {
   camera: PerspectiveCamera;
   /** Registers a per-frame callback; returns an unsubscribe function. */
   onUpdate(callback: UpdateCallback): () => void;
+  /**
+   * Replaces the frame's `renderer.render(scene, camera)` with `fn` (a post-processing composer's
+   * render); pass null to go back to the plain render.
+   */
+  setRender(fn: (() => void) | null): void;
   start(): void;
   stop(): void;
   dispose(): void;
@@ -58,6 +63,7 @@ export function createScene(container: HTMLElement, options: SceneOptions = {}):
   observer.observe(container);
   window.addEventListener('orientationchange', resize);
 
+  let customRender: (() => void) | null = null;
   let running = false;
   let lastTime = 0;
   let elapsed = 0;
@@ -68,13 +74,17 @@ export function createScene(container: HTMLElement, options: SceneOptions = {}):
     lastTime = time;
     elapsed += delta;
     callbacks.forEach((cb) => cb(delta, elapsed));
-    renderer.render(scene, camera);
+    if (customRender) customRender();
+    else renderer.render(scene, camera);
   };
 
   return {
     renderer,
     scene,
     camera,
+    setRender(fn) {
+      customRender = fn;
+    },
     onUpdate(callback) {
       callbacks.add(callback);
       return () => callbacks.delete(callback);
