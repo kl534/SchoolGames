@@ -14,8 +14,6 @@ import {
   PlaneGeometry,
   SphereGeometry,
   TorusGeometry,
-  Quaternion,
-  Vector3,
   type Material,
 } from 'three';
 import { Kit } from './kit';
@@ -313,20 +311,15 @@ export function createCat(initial: CatLook): Cat {
   creamMat.color.setHex(0xfff4e6);
   creamMat.setRim(creamMat.color);
   kit.materials.push(creamMat);
-  const irisRing = [
-    new MeshStandardMaterial({ roughness: 0.4 }),
-    new MeshStandardMaterial({ roughness: 0.4 }),
+  // The lower part of each iris is lighter (a soft glow), the pupils a deep flat dark and the
+  // glints pure white, so the eyes read as big, round and sparkly rather than glassy.
+  const irisLight = [
+    new MeshStandardMaterial({ roughness: 0.5 }),
+    new MeshStandardMaterial({ roughness: 0.5 }),
   ];
-  kit.materials.push(...irisRing);
-  const corneaMat = new MeshStandardMaterial({
-    color: 0xffffff,
-    roughness: 0.05,
-    metalness: 0,
-    transparent: true,
-    opacity: 0.18,
-    depthWrite: false,
-  });
-  kit.materials.push(corneaMat);
+  const pupilMat = new MeshBasicMaterial({ color: 0x140b1c });
+  const glintMat = new MeshBasicMaterial({ color: 0xffffff });
+  kit.materials.push(...irisLight, pupilMat, glintMat);
   const white = kit.lit(0xffffff, 0.4);
   const ink = kit.lit(0x1b1226, 0.5);
   const pink = kit.lit(0xf6a5b8, 0.7);
@@ -433,17 +426,6 @@ export function createCat(initial: CatLook): Cat {
     blush.position.set(Math.cos(a) * 0.255, -0.06, Math.sin(a) * 0.27);
     blush.rotation.y = -a;
   }
-  // Cheek tufts: two per side, fur pointing back and out.
-  const up = new Vector3(0, 1, 0);
-  for (const side of [-1, 1]) {
-    for (const a of [0.5, 0.9]) {
-      const dir = new Vector3(-Math.cos(a), -0.15, side * Math.sin(a)).normalize();
-      const base = new Vector3(0.12, -0.11, side * 0.25);
-      const tuft = kit.mesh(new ConeGeometry(0.035, 0.11, 8), headMat, head);
-      tuft.position.copy(base).addScaledVector(dir, 0.045);
-      tuft.quaternion.copy(new Quaternion().setFromUnitVectors(up, dir));
-    }
-  }
   const ears: Group[] = [];
   for (const z of [-0.15, 0.15]) {
     const ear = new Group();
@@ -469,22 +451,21 @@ export function createCat(initial: CatLook): Cat {
     eye.rotation.y = -a;
     head.add(eye);
     eyeGroups.push(eye);
-    const rim = sphere(0.1, 0.3, 1.12, 0.9, ink, eye);
+    const rim = sphere(0.097, 0.3, 1.08, 0.9, ink, eye);
     // The near eye (side 1, z > 0) is `eyes`, the far one `eyes2`.
-    const iris = sphere(0.09, 0.34, 1.1, 0.86, side === 1 ? eyeMat : eyeMat2, eye);
+    const iris = sphere(0.09, 0.34, 1.05, 0.86, side === 1 ? eyeMat : eyeMat2, eye);
     iris.position.x = 0.006;
-    // A darker ring just behind the iris, and a glassy dome over it that catches the light.
-    const ring = sphere(0.09 * 1.06, 0.34, 1.1, 0.86, irisRing[side === 1 ? 0 : 1], eye);
-    ring.position.x = 0.002;
-    const cornea = sphere(0.09 * 1.05, 0.34, 1.1, 0.86, corneaMat, eye);
-    cornea.position.x = 0.006 + 0.012;
-    const pupil = sphere(0.062, 0.34, 1.1, 0.8, ink, eye);
-    pupil.position.set(0.022, -0.006, 0);
-    const glint = sphere(0.027, 0.5, 1, 1, white, eye);
-    glint.position.set(0.04, 0.045, 0.022);
-    const glint2 = sphere(0.012, 0.5, 1, 1, white, eye);
-    glint2.position.set(0.04, -0.035, -0.024);
-    eyeParts.push(rim, ring, iris, cornea, pupil, glint, glint2);
+    // A lighter crescent across the bottom of the iris, under the pupil.
+    const glow = sphere(0.05, 0.1, 0.42, 0.7, irisLight[side === 1 ? 0 : 1], eye);
+    glow.position.set(0.027, -0.046, 0);
+    const pupil = sphere(0.058, 0.34, 1.08, 0.84, pupilMat, eye);
+    pupil.position.set(0.024, 0.006, 0);
+    const glint = sphere(0.033, 0.5, 1, 1, glintMat, eye);
+    glint.position.set(0.046, 0.042, 0.02);
+    const glint2 = sphere(0.015, 0.5, 1, 1, glintMat, eye);
+    glint2.position.set(0.046, -0.03, -0.022);
+    eyeParts.push(rim, iris, glow, pupil, glint, glint2);
+    for (const m of [rim, iris, glow, pupil, glint, glint2]) m.userData.noOutline = true;
     const cross = new Group();
     cross.position.x = 0.03;
     for (const r of [Math.PI / 4, -Math.PI / 4]) {
@@ -820,8 +801,8 @@ export function createCat(initial: CatLook): Cat {
     mask.visible = pointsOn;
     eyeMat.color.setHex(look.eyes);
     eyeMat2.color.setHex(look.eyes2 ?? look.eyes);
-    irisRing[0].color.copy(eyeMat.color).multiplyScalar(0.55);
-    irisRing[1].color.copy(eyeMat2.color).multiplyScalar(0.55);
+    irisLight[0].color.copy(eyeMat.color).lerp(new Color(0xffffff), 0.3);
+    irisLight[1].color.copy(eyeMat2.color).lerp(new Color(0xffffff), 0.3);
     noseMat.color.setHex(look.nose);
     stripeMat.color.setHex(look.stripes ?? look.fur);
     stripes.forEach((s) => (s.visible = look.stripes !== null));

@@ -81,6 +81,8 @@ export function setOutlineView(width: number, height: number, ratio: number): vo
 function outlined(mesh: Mesh): boolean {
   const material = mesh.material as Material | Material[];
   if (Array.isArray(material)) return false;
+  // Small face parts (the eyes) draw their own rims; a hull round them reads as a jagged ring.
+  if (mesh.userData.noOutline) return false;
   if (material.transparent || material instanceof MeshBasicMaterial || material.side === DoubleSide)
     return false;
   const geometry = mesh.geometry;
