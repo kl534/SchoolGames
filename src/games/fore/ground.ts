@@ -13,6 +13,7 @@ import {
   MeshStandardMaterial,
   RGBAFormat,
   RepeatWrapping,
+  ShaderChunk,
   SRGBColorSpace,
   Vector2,
   Vector3,
@@ -22,6 +23,7 @@ import {
   type WebGLProgramParametersWithUniforms,
 } from 'three';
 import type { CSM } from 'three/addons/csm/CSM.js';
+import * as CSMShaderModule from 'three/addons/csm/CSMShader.js';
 import { seededRandom } from '../../shared/random';
 import { NO_ASSETS, type ForeAssets } from './assets';
 import { centreX, type Ellipse, type Hole } from './course';
@@ -312,6 +314,31 @@ export function litTree(csm: CSM | null, root: Object3D): void {
     if (!material) return;
     (Array.isArray(material) ? material : [material]).forEach((m) => litMaterial(csm, m));
   });
+}
+
+/**
+ * Gives every tier the lights chunk the cascaded shadow map swaps in for the whole page.
+ *
+ * Why: the CSM addon replaces three's `lights_fragment_begin` with a copy older than three's own,
+ * which has since gained the multiple-scattering boost for rough surfaces (the `dfg` lookup and
+ * `multiScatteringCompensation`). The boost lifts every rough lit surface, so lawn, bark and
+ * trousers rendered lighter and hazier on the tiers without the cascaded map (medium, low) than
+ * on high, at the same material colours. High's look is the one we tuned, so the other tiers use
+ * the same chunk. Returns what undoes it (the CSM's own swap is never undone by the addon).
+ */
+export function useCascadedLightChunk(): () => void {
+  // The types only declare the shape; the module's value is the object.
+  const { CSMShader } = CSMShaderModule as unknown as {
+    CSMShader: { lights_fragment_begin: string; lights_pars_begin: string };
+  };
+  const begin = ShaderChunk.lights_fragment_begin;
+  const pars = ShaderChunk.lights_pars_begin;
+  ShaderChunk.lights_fragment_begin = CSMShader.lights_fragment_begin;
+  ShaderChunk.lights_pars_begin = CSMShader.lights_pars_begin;
+  return () => {
+    ShaderChunk.lights_fragment_begin = begin;
+    ShaderChunk.lights_pars_begin = pars;
+  };
 }
 
 /** Forgets a material the CSM was given (call before disposing it). */

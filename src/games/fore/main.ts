@@ -58,7 +58,7 @@ import { createGuide } from './guide';
 import { buildHole, CUP_AID_RANGE, SKY, type HoleScene } from './hole';
 import { createSky, type Sky } from './sky';
 import { disposeForeAssets, loadForeAssets, NO_ASSETS, type ForeAssets } from './assets';
-import { FALLBACK_LOOK, litTree, type Look } from './ground';
+import { FALLBACK_LOOK, litTree, useCascadedLightChunk, type Look } from './ground';
 import { createBlades } from './grass';
 import { createPost, type Post } from './post';
 import { adaptGfx, gfxSettings, pickGfx, sunSetup, type DeviceInfo, type Gfx } from './quality';
@@ -265,6 +265,8 @@ function run(session: GameSession): void {
       sun.shadow.normalBias = 0.02;
     }
   }
+  // One lights chunk on every tier, so medium and low colour like high (see the function).
+  const restoreLights = useCascadedLightChunk();
   let fill: HemisphereLight | null = null;
   let envTarget: WebGLRenderTarget | null = null;
   let sky: Sky | null = null;
@@ -1477,6 +1479,7 @@ function run(session: GameSession): void {
     window.removeEventListener('orientationchange', sizeRenderer);
     post?.dispose();
     csm?.remove();
+    restoreLights();
     csm?.dispose();
     envTarget?.dispose();
     fill?.dispose();
