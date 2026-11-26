@@ -76,8 +76,8 @@ function profileSlab(
 
 function sandcastle(): Prop {
   return prop((kit, root) => {
-    const sand = kit.lit(0xe6cf93, 0.95);
-    const dark = kit.lit(0xc9ae6c, 0.95);
+    const sand = kit.stone(0xe6cf93);
+    const dark = kit.stone(0xc9ae6c);
     const parts: { g: Group; x: number; rest: number; spin: number }[] = [];
     const tower = (x: number, w: number, h: number, flag: boolean, rest: number, spin: number) => {
       const g = new Group();
@@ -103,7 +103,7 @@ function sandcastle(): Prop {
     bucket.position.set(6, 3.2, -0.2);
     root.add(bucket);
     kit.mesh(
-      new CylinderGeometry(0.17, 0.27, 0.34, 14),
+      new CylinderGeometry(0.17, 0.27, 0.34, 24),
       kit.lit(0x3f8fd8, 0.5),
       bucket,
       0,
@@ -157,13 +157,13 @@ function crab(): Prop {
       const claw = new Group();
       claw.position.set(s * 0.95, 1.1, 0);
       arm.add(claw);
-      const upper = kit.mesh(new SphereGeometry(0.32, 12, 8), shell, claw);
+      const upper = kit.mesh(new SphereGeometry(0.32, 28, 20), shell, claw);
       upper.scale.set(0.8, 1.2, 0.6);
       const jaw = new Group();
       jaw.position.set(0, 0.1, 0);
       claw.add(jaw);
       kit
-        .mesh(new SphereGeometry(0.28, 12, 8), kit.lit(0xc03a1a, 0.5), jaw, 0, 0.25, 0)
+        .mesh(new SphereGeometry(0.28, 28, 20), kit.lit(0xc03a1a, 0.5), jaw, 0, 0.25, 0)
         .scale.set(0.5, 1.2, 0.5);
       return { arm, jaw, s };
     });
@@ -225,8 +225,8 @@ function log(): Prop {
   return prop((kit, root) => {
     const g = new Group();
     root.add(g);
-    const bark = kit.lit(0x7a5230, 0.95);
-    const ring = kit.lit(0xd9b27a, 0.8);
+    const bark = kit.wood(0x7a5230);
+    const ring = kit.wood(0xd9b27a);
     const body = cyl(kit, LOG_R, LOG_R, 1.4, bark, g);
     body.rotation.x = Math.PI / 2;
     for (const [r, c] of [
@@ -348,8 +348,8 @@ function ice(): Prop {
 
 function cactus(): Prop {
   return prop((kit, root) => {
-    const green = kit.lit(0x3e9a4a, 0.8);
-    const dark = kit.lit(0x2f7a3a, 0.8);
+    const green = kit.foliage(0x3e9a4a);
+    const dark = kit.foliage(0x2f7a3a);
     const white = kit.lit(0xfff6d8, 0.6);
     const tube = (x0: number, y0: number, x1: number, y1: number, r: number, z: number) => {
       const len = Math.hypot(x1 - x0, y1 - y0);
@@ -451,7 +451,7 @@ function dune(): Prop {
 
 function boxes(): Prop {
   return prop((kit, root) => {
-    const metal = kit.lit(0xb8c4d6, 0.35);
+    const metal = kit.metal(0xb8c4d6);
     const stripe = kit.lit(0xf2c230, 0.5);
     const glow = kit.basic(0x5ce1ff);
     const items = FLOAT_BOXES.map(() => {
@@ -475,7 +475,7 @@ function boxes(): Prop {
 
 function lasers(): Prop {
   return prop((kit, root) => {
-    const steel = kit.lit(0x6a7488, 0.4);
+    const steel = kit.metal(0x6a7488);
     for (const x of [4.9, 7.7]) kit.box(0.3, 3.8, 0.3, steel, root, x, 1.9, -0.6);
     kit.box(3.1, 0.3, 0.3, steel, root, 6.3, 3.75, -0.4);
     const red = kit.basic(0xff2a2a);
@@ -508,7 +508,7 @@ function lasers(): Prop {
 
 function airlock(): Prop {
   return prop((kit, root) => {
-    const slabMat = kit.lit(0xd9dde6, 0.4);
+    const slabMat = kit.metal(0xd9dde6);
     const stripe = kit.lit(0xe0504a, 0.5);
     kit.box(3.2, 0.6, 1.4, kit.lit(0x4a5470, 0.5), root, 6.1, 4.1, -0.2);
     kit.box(0.3, 3.8, 0.3, kit.lit(0x4a5470, 0.5), root, 4.6, 1.9, -0.9);
@@ -528,7 +528,7 @@ function airlock(): Prop {
     kit.geometries.push(bubble.geometry);
     bubble.visible = false;
     root.add(bubble);
-    const metal = kit.lit(0xb8c4d6, 0.4);
+    const metal = kit.metal(0xb8c4d6);
     for (const [x, y, z] of [
       [8.9, 0.45, -1.0],
       [9.8, 0.45, -1.0],

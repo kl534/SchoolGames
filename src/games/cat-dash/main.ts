@@ -1,13 +1,5 @@
 import './style.css';
-import {
-  Group,
-  MathUtils,
-  Mesh,
-  MeshStandardMaterial,
-  SphereGeometry,
-  ConeGeometry,
-  Vector3,
-} from 'three';
+import { MathUtils, Vector3 } from 'three';
 import { pressAnswers } from '../../shared/answers';
 import { preloadCatSounds, sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
 import { createFactFeed, type FactFeed } from '../../shared/feed';
@@ -51,6 +43,7 @@ import {
   type PlaceId,
 } from './places';
 import { showCatPicker, type CatPicker } from './picker';
+import { createFishSet, fishBob, fishSpin } from './fish';
 import { createPropPool } from './props/pool';
 import {
   FIRST_PLACE,
@@ -185,29 +178,22 @@ function run(session: GameSession, dev: DevOptions | null): void {
       cores: hints.hardwareConcurrency,
       memoryGb: hints.deviceMemory,
     });
+  const fishSet = createFishSet(QUALITY_SETTINGS[quality].outlines);
   const applyQuality = (q: Quality) => {
     quality = q;
     look.setQuality(q);
     cat.outline.setVisible(QUALITY_SETTINGS[q].outlines);
     world.setShadows(QUALITY_SETTINGS[q].decorShadows);
+    props.setOutlines(QUALITY_SETTINGS[q].outlines);
+    fishSet.setOutlines(QUALITY_SETTINGS[q].outlines);
   };
   applyQuality(quality);
   const governor = !dev?.quality && !lab && !doorLab ? createGovernor(quality) : null;
 
   // Fish treats on the straights: small orange fish with a blue tail.
-  const fishBody = new SphereGeometry(0.28, 12, 8);
-  const fishTail = new ConeGeometry(0.2, 0.34, 6);
-  const fishMaterial = new MeshStandardMaterial({ color: 0xff9f1c, roughness: 0.4 });
-  const tailMaterial = new MeshStandardMaterial({ color: 0x3f8fd8, roughness: 0.4 });
   const CAT_CHEST = 1.0;
   const fish = Array.from({ length: 16 }, () => {
-    const group = new Group();
-    const body = new Mesh(fishBody, fishMaterial);
-    body.scale.set(1.4, 0.8, 0.6);
-    const tail = new Mesh(fishTail, tailMaterial);
-    tail.position.x = -0.42;
-    tail.rotation.z = Math.PI / 2;
-    group.add(body, tail);
+    const group = fishSet.make();
     group.visible = false;
     scene.add(group);
     return group;
@@ -1054,8 +1040,8 @@ function run(session: GameSession, dev: DevOptions | null): void {
         }
         continue;
       }
-      f.position.y = FISH_Y + (f.userData.arc as number) + Math.sin(time * 3 + f.position.x) * 0.12;
-      f.rotation.z = Math.sin(time * 4 + f.position.x) * 0.25;
+      f.position.y = FISH_Y + (f.userData.arc as number) + fishBob(time + f.position.x);
+      f.rotation.y = fishSpin(time + f.position.x * 0.3);
       if (f.position.x < camX - fit.viewW * 0.4) f.visible = false;
       else if (grabbing && phase !== 'sprint' && f.position.x >= catX - 0.3) f.userData.grab = true;
     }
@@ -1384,10 +1370,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
     doorway?.dispose();
     world.dispose();
     look.dispose();
-    fishBody.dispose();
-    fishTail.dispose();
-    fishMaterial.dispose();
-    tailMaterial.dispose();
+    fishSet.dispose();
     ctx.dispose();
   });
 }

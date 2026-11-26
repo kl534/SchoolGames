@@ -7,6 +7,7 @@
  */
 import { ConeGeometry, CylinderGeometry, Group, type Mesh } from 'three';
 import type { Kit, Prop } from '../kit';
+import { furMaterial } from '../cat-materials';
 import {
   ICE,
   NECK,
@@ -23,6 +24,15 @@ import {
   type Point,
 } from '../moves/zoo';
 import { cyl, hash, makeProp as prop, sphere } from './parts';
+
+/** A fur material (soft rim of light) for an animal's skin; the kit disposes it. */
+function skin(kit: Kit, color: number, roughness: number) {
+  const m = furMaterial({ roughness });
+  m.color.setHex(color);
+  m.setRim(m.color);
+  kit.materials.push(m);
+  return m;
+}
 
 /** Puts a cylinder (made along y) between two points of the xy plane. */
 function between(m: Mesh, a: Point, b: Point, z: number) {
@@ -42,8 +52,8 @@ function eye(kit: Kit, parent: Group, x: number, y: number, z: number, r = 0.13)
 
 function elephant(): Prop {
   return prop((kit, root) => {
-    const grey = kit.lit(0x9aa6b2, 0.7);
-    const dark = kit.lit(0x7f8b98, 0.75);
+    const grey = skin(kit, 0x9aa6b2, 0.7);
+    const dark = skin(kit, 0x7f8b98, 0.75);
     const pink = kit.lit(0xf0a8b4, 0.6);
     const ivory = kit.lit(0xfff3d6, 0.4);
     // Body and head.
@@ -53,7 +63,7 @@ function elephant(): Prop {
     for (const x of [6.1, 8.3]) {
       for (const z of [-0.6, 0.55]) {
         cyl(kit, 0.4, 0.42, 1.5, grey, root, x, 0.75, z);
-        kit.mesh(new CylinderGeometry(0.43, 0.43, 0.14, 14), dark, root, x, 0.07, z);
+        kit.mesh(new CylinderGeometry(0.43, 0.43, 0.14, 24), dark, root, x, 0.07, z);
       }
     }
     // Tail with a tuft.
@@ -80,7 +90,7 @@ function elephant(): Prop {
     // The trunk: six tapering segments with a round joint each, posed every frame.
     const segs = Array.from({ length: TRUNK.count }, (_, i) => {
       const r = 0.34 - i * 0.03;
-      const cylMesh = kit.mesh(new CylinderGeometry(r * 0.92, r, 1, 12), grey, root);
+      const cylMesh = kit.mesh(new CylinderGeometry(r * 0.92, r, 1, 24), grey, root);
       const joint = sphere(kit, r, grey, root);
       return { cylMesh, joint };
     });
@@ -119,15 +129,15 @@ function elephant(): Prop {
 
 function giraffe(): Prop {
   return prop((kit, root) => {
-    const gold = kit.lit(0xf2c14a, 0.7);
-    const spot = kit.lit(0xa8662a, 0.8);
-    const dark = kit.lit(0x5a3a1a, 0.7);
+    const gold = skin(kit, 0xf2c14a, 0.7);
+    const spot = skin(kit, 0xa8662a, 0.8);
+    const dark = skin(kit, 0x5a3a1a, 0.7);
     // Body, hump and four long legs, a pair on each side of the cat's lane.
     sphere(kit, 1, gold, root, 7.6, 2.8, -0.1).scale.set(1.5, 0.8, 0.65);
     for (const x of [6.5, 8.7]) {
       for (const z of [-0.5, 0.5]) {
         cyl(kit, 0.2, 0.22, 2.2, gold, root, x, 1.1, z);
-        kit.mesh(new CylinderGeometry(0.24, 0.24, 0.16, 12), dark, root, x, 0.08, z);
+        kit.mesh(new CylinderGeometry(0.24, 0.24, 0.16, 24), dark, root, x, 0.08, z);
       }
     }
     // Spots on the near flank.
@@ -147,7 +157,7 @@ function giraffe(): Prop {
       const r = 0.34 - i * 0.025;
       const g = new Group();
       root.add(g);
-      const tube = kit.mesh(new CylinderGeometry(r * 0.9, r, 1, 12), gold, g);
+      const tube = kit.mesh(new CylinderGeometry(r * 0.9, r, 1, 24), gold, g);
       sphere(kit, r, gold, g, 0, NECK.seg / 2, 0);
       sphere(kit, 0.13, spot, g, 0, 0, r * 0.95).scale.z = 0.25;
       return { g, tube };
@@ -166,7 +176,7 @@ function giraffe(): Prop {
     eye(kit, head, 0.08, 0.14, 0.31, 0.12);
     sphere(kit, 0.1, spot, head, 0.2, 0.0, 0.3).scale.z = 0.3;
     // The tongue: from the mouth towards the cat's lane, when it licks.
-    const tongue = kit.mesh(new CylinderGeometry(0.1, 0.1, 1, 10), kit.lit(0xf06a8c, 0.4), root);
+    const tongue = kit.mesh(new CylinderGeometry(0.1, 0.1, 1, 24), kit.lit(0xf06a8c, 0.4), root);
     const tongueTip = sphere(kit, 0.12, kit.lit(0xf06a8c, 0.4), root);
     return (outcome, variant, t) => {
       const psi = neckBend(outcome, variant, t);

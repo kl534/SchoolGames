@@ -38,7 +38,7 @@ function wheel(kit: Kit, parent: Group, r: number, mat: Material, x: number, y: 
   const g = new Group();
   g.position.set(x, y, z);
   parent.add(g);
-  const disc = kit.mesh(new CylinderGeometry(r, r, 0.1, 14), mat, g);
+  const disc = kit.mesh(new CylinderGeometry(r, r, 0.1, 24), mat, g);
   disc.rotation.x = Math.PI / 2;
   kit.box(r * 1.6, 0.05, 0.14, kit.lit(0xf2f2f2, 0.5), g, 0, 0, 0);
   return g;
@@ -49,8 +49,8 @@ function wheel(kit: Kit, parent: Group, r: number, mat: Material, x: number, y: 
 function toyTrain(): Prop {
   return prop((kit, root) => {
     // The little track.
-    const rail = kit.lit(0x6b6f78, 0.4);
-    const sleeper = kit.lit(0x8a5a2a, 0.9);
+    const rail = kit.metal(0x6b6f78);
+    const sleeper = kit.wood(0x8a5a2a);
     kit.box(9.4, 0.04, 0.1, rail, root, 7.6, 0.1, 0.0);
     kit.box(9.4, 0.04, 0.1, rail, root, 7.6, 0.1, 0.6);
     for (let i = 0; i < 18; i++) kit.box(0.14, 0.05, 0.9, sleeper, root, 3.2 + i * 0.52, 0.04, 0.3);
@@ -74,10 +74,10 @@ function toyTrain(): Prop {
     kit.box(0.6, 0.3, 0.6, kit.lit(0xf2c230, 0.5), train, 1.7, 1.15, 0);
     kit.box(0.4, 0.3, 0.6, kit.lit(0x9b59b6, 0.5), train, 1.9, 1.15, 0.1);
     kit.box(0.35, 0.06, 0.06, black, train, 0.85, 0.35, 0);
-    const engine = kit.lit(0x5cb85c, 0.45);
+    const engine = kit.metal(0x5cb85c);
     kit.box(1.1, 0.75, 0.9, kit.lit(0xf2c230, 0.5), train, 3.5, 0.575, 0);
     kit.box(1.2, 0.08, 1.0, kit.lit(0x8a6a10, 0.5), train, 3.5, 0.97, 0);
-    kit.mesh(new CylinderGeometry(0.4, 0.4, 1.5, 16), engine, train, 4.4, 0.65, 0).rotation.z =
+    kit.mesh(new CylinderGeometry(0.4, 0.4, 1.5, 24), engine, train, 4.4, 0.65, 0).rotation.z =
       Math.PI / 2;
     cyl(kit, 0.18, 0.12, 0.5, kit.lit(0xd8402e, 0.5), train, 4.7, 1.2, 0);
     sphere(kit, 0.1, kit.lit(0xf2c230, 0.4), train, 5.15, 0.65, 0);
@@ -179,7 +179,7 @@ function ballPit(): Prop {
     for (const s of [-1, 1]) kit.box(0.14, 1.0, 1.6, blue, root, 6.5 + s * 2.6, 0.5, -0.1);
     kit.box(5.0, 0.16, 0.16, white, root, 6.5, 0.45, 0.78);
     // About 30 balls in 5 colours: shared geometry, one material per colour.
-    const geometry = new SphereGeometry(0.32, 14, 10);
+    const geometry = new SphereGeometry(0.32, 28, 20);
     kit.geometries.push(geometry);
     const mats = [0xe0504a, 0xf2c230, 0x3f8fd8, 0x5cb85c, 0xff7ab8].map((c) => kit.lit(c, 0.3));
     const balls: { mesh: Mesh; y: number }[] = [];
@@ -209,11 +209,11 @@ function ballPit(): Prop {
 
 function cannon(): Prop {
   return prop((kit, root) => {
-    const wood = kit.lit(0x8a5a2a, 0.85);
-    const iron = kit.lit(0x2e3036, 0.4);
-    const rope = kit.lit(0xd9b877, 0.9);
+    const wood = kit.wood(0x8a5a2a);
+    const iron = kit.metal(0x2e3036);
+    const rope = kit.fabric(0xd9b877);
     // A coil of rope on the deck (the cat lands in it when shot out).
-    const coil = kit.lit(0xd9b877, 0.9);
+    const coil = kit.fabric(0xd9b877);
     for (const r of [0.55, 0.38]) {
       kit.mesh(new TorusGeometry(r, 0.12, 8, 18), coil, root, 10.2, 0.14, 0.1).rotation.x =
         Math.PI / 2;
@@ -261,8 +261,8 @@ function cannon(): Prop {
 
 function rigging(): Prop {
   return prop((kit, root) => {
-    const wood = kit.lit(0x8a5a2a, 0.85);
-    const rope = kit.lit(0xd9b877, 0.9);
+    const wood = kit.wood(0x8a5a2a);
+    const rope = kit.fabric(0xd9b877);
     // The mast, its yard (the spar the sail hangs from) and a flag on top.
     cyl(kit, 0.17, 0.2, 5.8, wood, root, 6.6, 2.9, -0.9);
     kit.box(4.2, 0.14, 0.14, wood, root, 8.1, 5.0, -0.9);
@@ -309,9 +309,9 @@ function rigging(): Prop {
 
 function chest(): Prop {
   return prop((kit, root) => {
-    const wood = kit.lit(0x8a4f22, 0.8);
-    const dark = kit.lit(0x4a2a12, 0.9);
-    const gold = kit.lit(0xf2c230, 0.3);
+    const wood = kit.wood(0x8a4f22);
+    const dark = kit.wood(0x4a2a12);
+    const gold = kit.metal(0xf2c230);
     // The body, with gold bands and a lock.
     kit.box(2.0, 0.9, 1.1, wood, root, 6.0, 0.45, -0.2);
     for (const x of [5.2, 6.8]) kit.box(0.14, 0.92, 1.14, gold, root, x, 0.45, -0.2);
