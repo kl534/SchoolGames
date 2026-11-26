@@ -55,6 +55,16 @@ const webp = (input: Buffer, size: number, quality: number, grey = false) => {
   return s.webp({ quality }).toBuffer();
 };
 
+/**
+ * Scales each channel so the picture's average is `mean` (0..255): the material colour in the game
+ * is then the turf's average colour, and the photo only adds the variation around it.
+ */
+async function evened(input: Buffer, mean: number): Promise<Buffer> {
+  const { channels } = await sharp(input).stats();
+  const k = channels.slice(0, 3).map((c) => mean / c.mean);
+  return sharp(input).removeAlpha().linear(k, [0, 0, 0]).toBuffer();
+}
+
 async function ambientCg(id: string, res: string) {
   const url = `https://ambientcg.com/get?file=${id}_${res}-JPG.zip`;
   const dir = mkdtempSync(join(work, `${id}-`));
@@ -84,7 +94,12 @@ async function main() {
   // Grass: colour, GL normal and roughness (roughness kept as one grey channel).
   const grass = await ambientCg('Grass004', '2K');
   const grassUrl = 'https://ambientcg.com/a/Grass004';
-  save('turf/grass_color.webp', await webp(grass('Color'), 2048, 78), grassUrl, cc0);
+  save(
+    'turf/grass_color.webp',
+    await webp(await evened(grass('Color'), 235), 2048, 78),
+    grassUrl,
+    cc0,
+  );
   save('turf/grass_normal.webp', await webp(grass('NormalGL'), 2048, 80), grassUrl, cc0);
   save('turf/grass_rough.webp', await webp(grass('Roughness'), 1024, 70, true), grassUrl, cc0);
 
@@ -93,7 +108,12 @@ async function main() {
     await polyhaven<Record<string, Record<string, Record<string, PolyFile>>>>('coast_sand_01');
   const sandUrl = 'https://polyhaven.com/a/coast_sand_01';
   const part = async (key: string) => download(sand[key]['1k'].jpg.url);
-  save('turf/sand_color.webp', await webp(await part('Diffuse'), 1024, 80), sandUrl, cc0);
+  save(
+    'turf/sand_color.webp',
+    await webp(await evened(await part('Diffuse'), 235), 1024, 80),
+    sandUrl,
+    cc0,
+  );
   save('turf/sand_normal.webp', await webp(await part('nor_gl'), 1024, 80), sandUrl, cc0);
   save('turf/sand_rough.webp', await webp(await part('Rough'), 1024, 70, true), sandUrl, cc0);
 
