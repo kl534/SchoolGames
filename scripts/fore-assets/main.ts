@@ -27,7 +27,7 @@ async function download(url: string): Promise<Buffer> {
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       return Buffer.from(await res.arrayBuffer());
     } catch (err) {
-      if (attempt === 3) throw new Error(`Could not download ${url}: ${String(err)}`);
+      if (attempt === 3) throw new Error(`Could not download ${url}`, { cause: err });
       await new Promise((r) => setTimeout(r, 2000 * 2 ** attempt));
     }
   }
@@ -37,7 +37,7 @@ async function download(url: string): Promise<Buffer> {
 interface PolyFile {
   url: string;
 }
-async function polyhaven(id: string): Promise<Record<string, any>> {
+async function polyhaven<T>(id: string): Promise<T> {
   return JSON.parse((await download(`https://api.polyhaven.com/files/${id}`)).toString());
 }
 
@@ -67,7 +67,10 @@ async function main() {
   const cc0 = 'CC0 1.0';
 
   // Sky: the 1k HDR lights the scene as it is; the tonemapped picture is the dome.
-  const sky = await polyhaven('kloofendal_48d_partly_cloudy_puresky');
+  const sky = await polyhaven<{
+    hdri: Record<string, { hdr: PolyFile }>;
+    tonemapped: PolyFile;
+  }>('kloofendal_48d_partly_cloudy_puresky');
   const hdr = await download(sky.hdri['1k'].hdr.url);
   save('sky_env.hdr', hdr, 'https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky', cc0);
   const bg = await download(sky.tonemapped.url);
@@ -86,9 +89,10 @@ async function main() {
   save('turf/grass_rough.webp', await webp(grass('Roughness'), 1024, 70, true), grassUrl, cc0);
 
   // Sand.
-  const sand = await polyhaven('coast_sand_01');
+  const sand =
+    await polyhaven<Record<string, Record<string, Record<string, PolyFile>>>>('coast_sand_01');
   const sandUrl = 'https://polyhaven.com/a/coast_sand_01';
-  const part = async (key: string) => download((sand[key]['1k'].jpg as PolyFile).url);
+  const part = async (key: string) => download(sand[key]['1k'].jpg.url);
   save('turf/sand_color.webp', await webp(await part('Diffuse'), 1024, 80), sandUrl, cc0);
   save('turf/sand_normal.webp', await webp(await part('nor_gl'), 1024, 80), sandUrl, cc0);
   save('turf/sand_rough.webp', await webp(await part('Rough'), 1024, 70, true), sandUrl, cc0);
