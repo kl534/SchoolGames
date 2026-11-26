@@ -36,7 +36,7 @@ export const TREE_BOUNDS: Record<Species, { height: number; radius: number }> = 
 };
 
 /** The card count the tiers are tuned for; fewer cards are drawn bigger. */
-const REFERENCE_CARDS = 420;
+const REFERENCE_CARDS = 520;
 const SPECIES_SEED: Record<Species, number> = { oak: 100, pine: 200, birch: 300 };
 
 const add = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
@@ -85,8 +85,8 @@ const spinToward = (n: V3, want: V3): number => {
 };
 
 /** Card size for `n` cards: the fewer there are, the bigger each is (to keep the crown full). */
-const cardSize = (base: number, n: number) =>
-  base * Math.min(Math.max((REFERENCE_CARDS / Math.max(n, 1)) ** 0.35, 0.9), 2);
+const cardSize = (base: number, n: number, max = 2.2) =>
+  Math.min(base * Math.min(Math.max((REFERENCE_CARDS / Math.max(n, 1)) ** 0.35, 0.9), 2), max);
 
 /** A limb and its two forks (each fork two shorter limbs), kept inside `limit`. */
 function limb(
@@ -130,6 +130,8 @@ interface Crown {
   /** Semi-axes of the ellipsoid the cards live in. */
   axes: V3;
   card: number;
+  /** The biggest card size (yards). */
+  max?: number;
 }
 
 /**
@@ -138,7 +140,7 @@ interface Crown {
  */
 function crownCards(rand: Random, crown: Crown, tips: readonly V3[], n: number, tipShare: number) {
   const cards: Card[] = [];
-  const size = cardSize(crown.card, n);
+  const size = cardSize(crown.card, n, crown.max ?? 2.2);
   const ax = Math.max(crown.axes[0] - size * 0.62, 0.3);
   const ay = Math.max(crown.axes[1] - size * 0.62, 0.3);
   const az = Math.max(crown.axes[2] - size * 0.62, 0.3);
@@ -154,7 +156,7 @@ function crownCards(rand: Random, crown: Crown, tips: readonly V3[], n: number, 
       at = q > 1 ? [cx + (p[0] - cx) / q, cy + (p[1] - cy) / q, cz + (p[2] - cz) / q] : p;
     } else {
       const d = onSphere(rand);
-      const f = 0.55 + 0.45 * Math.sqrt(rand());
+      const f = 0.45 + 0.55 * Math.sqrt(rand());
       at = [cx + d[0] * ax * f, cy + d[1] * ay * f, cz + d[2] * az * f];
     }
     const out = norm([
@@ -162,7 +164,9 @@ function crownCards(rand: Random, crown: Crown, tips: readonly V3[], n: number, 
       ((at[1] - cy) / (ay * ay)) * 0.6,
       (at[2] - cz) / (az * az),
     ]);
-    const normal = norm(add(out, scale(onSphere(rand), 0.35)));
+    // The card's plane faces any which way (edge-on cards at the rim would thin the crown); the
+    // light still takes the crown-outward direction (see `lightNormal` in trees.ts).
+    const normal = norm(add(out, scale(onSphere(rand), 1.1)));
     cards.push({
       at,
       normal,
@@ -177,14 +181,14 @@ function crownCards(rand: Random, crown: Crown, tips: readonly V3[], n: number, 
 function growOak(rand: Random, n: number): TreeShape {
   const { height: H, radius: R } = TREE_BOUNDS.oak;
   const segments: Segment[] = [];
-  const topY = H * range(rand, 0.37, 0.41);
+  const topY = H * range(rand, 0.3, 0.33);
   const lean = range(rand, 0, Math.PI * 2);
   const bow = range(rand, 0.1, 0.35);
   const trunk: V3[] = [0, 1, 2, 3].map((i) => {
     const t = i / 3;
     return [Math.cos(lean) * bow * t * t, topY * t, Math.sin(lean) * bow * t * t] as V3;
   });
-  const radii = [0.5, 0.42, 0.35, 0.3];
+  const radii = [0.44, 0.38, 0.33, 0.28];
   for (let i = 0; i < 3; i++) {
     segments.push({ from: trunk[i], to: trunk[i + 1], r0: radii[i], r1: radii[i + 1] });
   }
@@ -202,8 +206,8 @@ function growOak(rand: Random, n: number): TreeShape {
     const start = trunk[3];
     limb(rand, start, direction(tilt, a), range(rand, 2.6, 3.6), 0.24, 2, out, limit);
   }
-  const crown: Crown = { centre: [0, H * 0.68, 0], axes: [R, H * 0.32, R], card: 1.5 };
-  return { segments, cards: crownCards(rand, crown, out.tips, n, 0.4) };
+  const crown: Crown = { centre: [0, H * 0.645, 0], axes: [R, H * 0.355, R], card: 1.7, max: 2.3 };
+  return { segments, cards: crownCards(rand, crown, out.tips, n, 0.25) };
 }
 
 function growBirch(rand: Random, n: number): TreeShape {
@@ -243,7 +247,7 @@ function growBirch(rand: Random, n: number): TreeShape {
       limit,
     );
   }
-  const crown: Crown = { centre: [0, H * 0.7, 0], axes: [R, H * 0.3, R], card: 1.1 };
+  const crown: Crown = { centre: [0, H * 0.7, 0], axes: [R, H * 0.3, R], card: 1.5, max: 2 };
   return { segments, cards: crownCards(rand, crown, out.tips, n, 0.6) };
 }
 
@@ -260,7 +264,7 @@ function growPine(rand: Random, n: number): TreeShape {
     segments.push({ from: trunk[i], to: trunk[i + 1], r0: radii[i], r1: radii[i + 1] });
   }
   // Whorls of drooping branches, shorter towards the top.
-  const whorls = 8 + Math.floor(rand() * 4);
+  const whorls = 11 + Math.floor(rand() * 4);
   interface Branch {
     from: V3;
     to: V3;
@@ -270,8 +274,8 @@ function growPine(rand: Random, n: number): TreeShape {
   const branches: Branch[] = [];
   for (let w = 0; w < whorls; w++) {
     const t = w / (whorls - 1);
-    const y = H * (0.17 + 0.77 * t);
-    const count = Math.max(4, Math.round(6 - 2 * t));
+    const y = H * (0.07 + 0.88 * t);
+    const count = Math.max(5, Math.round(7 - 2 * t));
     const turn = rand() * Math.PI * 2;
     for (let b = 0; b < count; b++) {
       const a = turn + (b / count) * Math.PI * 2 + range(rand, -0.2, 0.2);
@@ -285,7 +289,7 @@ function growPine(rand: Random, n: number): TreeShape {
   }
   // Needle cards along the branches, in proportion to their length.
   const total = branches.reduce((s, b) => s + b.length, 0);
-  const size = cardSize(1.75, n);
+  const size = cardSize(2.1, n, 2.5);
   const cards: Card[] = [];
   let carry = 0;
   for (const br of branches) {
@@ -300,7 +304,12 @@ function growPine(rand: Random, n: number): TreeShape {
         br.to[2] * f,
       ];
       const radial: V3 = [Math.cos(br.azimuth), 0, Math.sin(br.azimuth)];
-      const normal = norm(add(add(scale(radial, 0.4), [0, 0.9, 0]), scale(onSphere(rand), 0.12)));
+      const normal = norm(
+        add(
+          add(scale(radial, cards.length % 2 ? 0.9 : 0.4), [0, cards.length % 2 ? 0.5 : 0.9, 0]),
+          scale(onSphere(rand), 0.12),
+        ),
+      );
       cards.push({
         at,
         normal,
@@ -316,7 +325,12 @@ function growPine(rand: Random, n: number): TreeShape {
     const br = branches[Math.floor(rand() * branches.length)];
     const f = range(rand, 0.35, 0.9);
     const radial: V3 = [Math.cos(br.azimuth), 0, Math.sin(br.azimuth)];
-    const normal = norm(add(add(scale(radial, 0.4), [0, 0.9, 0]), scale(onSphere(rand), 0.12)));
+    const normal = norm(
+      add(
+        add(scale(radial, cards.length % 2 ? 0.9 : 0.4), [0, cards.length % 2 ? 0.5 : 0.9, 0]),
+        scale(onSphere(rand), 0.12),
+      ),
+    );
     cards.push({
       at: [
         br.to[0] * f,

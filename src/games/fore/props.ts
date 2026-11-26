@@ -57,18 +57,17 @@ function clubhouseParts(): { geometry: BufferGeometry; material: Material }[] {
   const half = wide / 2;
   const floor = 0.5;
   const wallH = storey * 2;
-  const walls: BufferGeometry[] = [
-    box(wide + 0.4, 3, long + 0.4, 0, -1, 0),
-    box(wide, wallH, long, 0, floor + wallH / 2, 0),
-  ];
-  // Roof: pitched at 30 degrees over the short span, with a 0.8 yd overhang.
-  const span = half + 0.8;
+  const walls: BufferGeometry[] = [box(wide, wallH, long, 0, floor + wallH / 2, 0)];
+  const plinth = box(wide + 0.5, 3, long + 0.5, 0, -1, 0);
+  // Roof: pitched at 30 degrees over the short span, with a 0.6 yd overhang.
+  const overhang = 0.6;
+  const span = half + overhang;
   const slope = span / Math.cos(Math.PI / 6);
   const ridge = floor + wallH + half * Math.tan(Math.PI / 6);
   const roof: BufferGeometry[] = [];
   for (const side of [-1, 1]) {
     roof.push(
-      new PlaneGeometry(slope, long + 1.6)
+      new PlaneGeometry(slope, long + overhang * 2)
         .rotateX(-Math.PI / 2)
         .rotateZ(-side * (Math.PI / 6))
         .translate(side * (slope / 2) * Math.cos(Math.PI / 6), ridge - (slope / 2) * 0.5, 0),
@@ -89,11 +88,16 @@ function clubhouseParts(): { geometry: BufferGeometry; material: Material }[] {
   }
   // Windows: six per storey on each long side; the door sits between the middle two below.
   const glass: BufferGeometry[] = [];
+  const frames: BufferGeometry[] = [];
   for (const face of [-1, 1]) {
     for (let storeyNo = 0; storeyNo < 2; storeyNo++) {
       const y = floor + storey * (storeyNo + 0.55);
       for (let i = 0; i < 6; i++) {
-        glass.push(box(0.14, 1.7, 1.5, face * (half + 0.03), y, -12.5 + i * 5));
+        const z = -12.5 + i * 5;
+        glass.push(box(0.14, 1.7, 1.5, face * (half + 0.03), y, z));
+        // A white frame round the glass and a sill under it.
+        frames.push(box(0.1, 2.0, 1.85, face * (half + 0.01), y, z));
+        frames.push(box(0.42, 0.1, 2.05, face * (half + 0.14), y - 1.02, z));
       }
     }
   }
@@ -104,9 +108,23 @@ function clubhouseParts(): { geometry: BufferGeometry; material: Material }[] {
   ];
   for (const z of [-2.7, -0.9, 0.9, 2.7])
     trim.push(box(0.22, 3.2, 0.22, half + 2.8, floor + 1.9, z));
+  // The chimney: brick, through the roof on the long side behind the porch, with a cap.
+  const chimneyX = -3;
+  const chimneyBase = ridge - Math.abs(chimneyX) * Math.tan(Math.PI / 6) - 1;
+  const chimney = [
+    box(1.3, 4.6, 1.3, chimneyX, chimneyBase + 2.3, 8),
+    box(1.7, 0.2, 1.7, chimneyX, chimneyBase + 4.7, 8),
+  ];
   const door = box(0.14, 2.2, 1.6, half + 0.04, floor + 1.1, 0);
+  const white = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 });
   return [
     { geometry: merge(walls), material: new MeshStandardMaterial({ color: WALL, roughness: 0.9 }) },
+    { geometry: plinth, material: new MeshStandardMaterial({ color: 0x6b6862, roughness: 0.95 }) },
+    { geometry: merge(frames), material: white },
+    {
+      geometry: merge(chimney),
+      material: new MeshStandardMaterial({ color: 0x8a5645, roughness: 0.95 }),
+    },
     {
       geometry: merge(roof),
       material: new MeshStandardMaterial({ color: ROOF, roughness: 0.8, side: DoubleSide }),
@@ -120,10 +138,7 @@ function clubhouseParts(): { geometry: BufferGeometry; material: Material }[] {
         envMapIntensity: 1.3,
       }),
     },
-    {
-      geometry: merge(trim),
-      material: new MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 }),
-    },
+    { geometry: merge(trim), material: white },
     { geometry: door, material: new MeshStandardMaterial({ color: 0x4a3322, roughness: 0.7 }) },
   ];
 }
@@ -222,9 +237,15 @@ export function buildProps(h: Hole, look: Look = FALLBACK_LOOK): Props {
     for (const g of [...white, ...canopy, ...tyres]) g.dispose();
     add(
       pad,
-      box(7, 1.2, 9, CLUBHOUSE.wide / 2 + 6, -0.55, -7.2),
+      box(7, 1.2, 9, CLUBHOUSE.wide / 2 + 6, -0.57, -7.2),
       new MeshStandardMaterial({ color: 0xc4c2ba, roughness: 0.9 }),
     );
+    // The pad follows the ground under it (its top is flush), not the building's floor.
+    const cx = CLUBHOUSE.wide / 2 + 6;
+    const cz = -7.2;
+    const wx = site.x + cx * Math.cos(site.yaw) + cz * Math.sin(site.yaw);
+    const wz = site.z - cx * Math.sin(site.yaw) + cz * Math.cos(site.yaw);
+    pad.position.y = groundY(h, wx, wz) - house.position.y;
     house.add(pad);
     object.add(house);
   }

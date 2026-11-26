@@ -13,6 +13,8 @@ import {
   placeScenery,
   LINE_CLEAR,
   LOW_MIN_OFF,
+  WOODS_FROM,
+  WOODS_TO,
 } from '../src/games/fore/scenery';
 import { finishShot, planShot, resolveShot, TREE_HEIGHT } from '../src/games/fore/shot';
 import { treeBounds, treeScale } from '../src/games/fore/trees';
@@ -69,13 +71,27 @@ describe('scenery placement', () => {
   });
 });
 
+describe('woods line', () => {
+  it('stands 100 to 170 yd off the line or behind the green, 7 to 10 yd apart, on every hole', () => {
+    for (const h of HOLES) {
+      const woods = placeScenery(h).woods;
+      expect(woods.length).toBeGreaterThan(100);
+      for (const t of woods) {
+        const beyond = t.z >= h.length + 90;
+        expect(beyond || off(h, t) >= WOODS_FROM - 8).toBe(true);
+        expect(beyond || off(h, t) <= WOODS_TO).toBe(true);
+      }
+    }
+  });
+});
+
 describe('clubhouse clearance', () => {
   it('drops every tree, bush, rock and flower within 30 yd of a clubhouse', () => {
     for (const h of HOLES) {
       const house = clubhouseSite(h);
       if (!house) continue;
       const s = placeScenery(h);
-      for (const p of [...s.trees, ...s.bushes, ...s.rocks, ...s.flowers]) {
+      for (const p of [...s.trees, ...s.woods, ...s.bushes, ...s.rocks, ...s.flowers]) {
         expect(Math.hypot(p.x - house.x, p.z - house.z)).toBeGreaterThanOrEqual(CLUBHOUSE_CLEAR);
       }
     }
@@ -168,7 +184,7 @@ describe('hole build', () => {
   it('keeps each tier inside its draw budget (high 220 meshes, low 120)', () => {
     const budget: Record<Gfx, number> = { low: 120, medium: 220, high: 220 };
     // Leaf cards and bark are many small triangles; each tier gets a share.
-    const triangleBudget: Record<Gfx, number> = { low: 250_000, medium: 350_000, high: 500_000 };
+    const triangleBudget: Record<Gfx, number> = { low: 250_000, medium: 450_000, high: 650_000 };
     for (const gfx of ['low', 'medium', 'high'] as const) {
       for (const h of HOLES) {
         const hole = buildHole(h, look(gfx));

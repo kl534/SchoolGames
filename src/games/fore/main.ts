@@ -362,8 +362,13 @@ function run(session: GameSession): void {
       scene.environmentIntensity = 1;
       scene.environmentRotation.set(0, yaw, 0);
       const [r, g, b] = picture.horizon;
+      // A bright haze: the exposure takes a quarter off, so the colour is lifted to match.
       scene.fog = new Fog(
-        new Color().setRGB(Math.min(r, 1), Math.min(g, 1), Math.min(b, 1)),
+        new Color().setRGB(
+          Math.min(r / EXPOSURE, 1),
+          Math.min(g / EXPOSURE, 1),
+          Math.min(b / EXPOSURE, 1),
+        ),
         260,
         1500,
       );
@@ -372,7 +377,7 @@ function run(session: GameSession): void {
       fill = new HemisphereLight(0xdff0ff, 0x5e8a46, 0.4);
       scene.add(fill);
     }
-    sky = createSky(picture, yaw);
+    sky = createSky(picture, yaw, scene.fog ? (scene.fog as Fog).color : undefined);
     scene.add(sky.object);
     look = makeLook();
     assetsReady = true;

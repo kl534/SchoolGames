@@ -85,6 +85,8 @@ export interface TreePlacement {
   yaw: number;
   /** Draw a soft dark blob on the ground (default true). */
   blob?: boolean;
+  /** Share of the tier's leaf cards (and only the trunk and main limbs) it gets: woods trees use 1/3. */
+  share?: number;
 }
 
 export interface TreeLayer {
@@ -169,6 +171,7 @@ export function leafGeometry(
   cards: readonly Card[],
   shade: (card: Card) => number,
   seed = 1,
+  lightNormal: (card: Card) => readonly [number, number, number] = (c) => c.normal,
 ): BufferGeometry {
   const rand = seededRandom(seed);
   const positions = new Float32Array(cards.length * 12);
@@ -188,11 +191,12 @@ export function leafGeometry(
     const col = c.tile % 2;
     const row = Math.floor(c.tile / 2);
     const k = Math.min(Math.max(shade(c) * (0.92 + 0.16 * rand()), 0), 1.2);
+    const light = lightNormal(c);
     corners.forEach(([sx, sy], j) => {
       const o = (i * 4 + j) * 3;
       for (let d = 0; d < 3; d++) {
         positions[o + d] = c.at[d] + right[d] * sx * h + up[d] * sy * h;
-        normals[o + d] = c.normal[d];
+        normals[o + d] = light[d];
         colours[o + d] = k;
       }
       uvs[(i * 4 + j) * 2] = col * 0.5 + (sx + 1) * 0.25;
@@ -217,6 +221,19 @@ const crownShade = (species: Species) => (c: Card) => {
   const out = Math.min(Math.hypot(c.at[0], c.at[2]) / radius, 1);
   const lit = species === 'pine' ? 0.5 + 0.5 * up : 0.45 + 0.3 * up + 0.35 * out;
   return Math.min(lit, 1.05);
+};
+/** The direction the light takes on a card: out from the middle of the crown, so it looks round. */
+const CROWN_MIDDLE: Record<Species, number> = { oak: 0.645, pine: 0.5, birch: 0.7 };
+const lightNormal = (species: Species) => {
+  const mid = TREE_BOUNDS[species].height * CROWN_MIDDLE[species];
+  const squash = species === 'pine' ? 1.6 : 0.6;
+  return (c: Card): [number, number, number] => {
+    const x = c.at[0];
+    const y = (c.at[1] - mid) * squash + (species === 'pine' ? 0.8 : 0);
+    const z = c.at[2];
+    const l = Math.hypot(x, y, z) || 1;
+    return [x / l, y / l, z / l];
+  };
 };
 const bushShade = (c: Card) => {
   const up = Math.min(Math.max(c.at[1] / BUSH_BOUNDS.height, 0), 1);
@@ -275,7 +292,7 @@ export function buildTreeLayer(
       map,
       color: trees ? LEAF_TINT[species] : CROWN_COLOURS[species],
       vertexColors: true,
-      alphaTest: 0.5,
+      alphaTest: 0.4,
       alphaToCoverage: msaa,
       side: DoubleSide,
       roughness: 0.8,
@@ -344,19 +361,30 @@ export function buildTreeLayer(
   for (const species of Object.keys(TREE_BOUNDS) as Species[]) {
     const ofSpecies = list.filter((t) => t.species === species);
     if (ofSpecies.length === 0) continue;
-    const cards = Math.round(look.settings.treeLeafCards * (species === 'pine' ? 0.6 : 1));
     const bark = barkMaterial(species);
     const leaves = leafMaterial(species);
-    for (let variant = 0; variant < VARIANTS; variant++) {
-      const mine = ofSpecies.filter((t) => variantOf(t) === variant);
-      if (mine.length === 0) continue;
-      const shape = growTree(species, variant as 0 | 1 | 2, cards);
-      const trunkGeometry = barkGeometry(shape.segments);
-      const crownGeometry = leafGeometry(shape.cards, crownShade(species), variant + 1);
-      geometries.push(trunkGeometry, crownGeometry);
-      const size = (t: TreePlacement) => treeScale(species, t.r, t.height);
-      place(new InstancedMesh(trunkGeometry, bark, mine.length), mine, size, tintOf, false);
-      place(new InstancedMesh(crownGeometry, leaves, mine.length), mine, size, tintOf, true);
+    for (const share of [...new Set(ofSpecies.map((t) => t.share ?? 1))]) {
+      const cards = Math.round(
+        look.settings.treeLeafCards * (species === 'pine' ? 0.6 : 1) * share,
+      );
+      for (let variant = 0; variant < VARIANTS; variant++) {
+        const mine = ofSpecies.filter((t) => (t.share ?? 1) === share && variantOf(t) === variant);
+        if (mine.length === 0) continue;
+        const shape = growTree(species, variant as 0 | 1 | 2, cards);
+        // A far tree keeps only its trunk and main limbs.
+        const wood = share < 1 ? shape.segments.filter((s) => s.r0 >= 0.15) : shape.segments;
+        const trunkGeometry = barkGeometry(wood);
+        const crownGeometry = leafGeometry(
+          shape.cards,
+          crownShade(species),
+          variant + 1,
+          lightNormal(species),
+        );
+        geometries.push(trunkGeometry, crownGeometry);
+        const size = (t: TreePlacement) => treeScale(species, t.r, t.height);
+        place(new InstancedMesh(trunkGeometry, bark, mine.length), mine, size, tintOf, false);
+        place(new InstancedMesh(crownGeometry, leaves, mine.length), mine, size, tintOf, true);
+      }
     }
   }
 

@@ -65,11 +65,11 @@ describe('growTree', () => {
     }
   });
 
-  it('gives the species their own look: oak trunk to 40%, straight pine, narrow birch', () => {
+  it('gives the species their own look: oak trunk to 30%, straight pine, narrow birch', () => {
     const oak = growTree('oak', 0, 420);
     const trunkTop = Math.max(...oak.segments.slice(0, 3).map((s) => s.to[1]));
-    expect(trunkTop / treeBounds('oak').height).toBeGreaterThan(0.36);
-    expect(trunkTop / treeBounds('oak').height).toBeLessThan(0.42);
+    expect(trunkTop / treeBounds('oak').height).toBeGreaterThan(0.28);
+    expect(trunkTop / treeBounds('oak').height).toBeLessThan(0.36);
     const pine = growTree('pine', 0, 252);
     const top = pine.segments.slice(0, 4).at(-1)!.to;
     expect(Math.hypot(top[0], top[2])).toBeLessThan(0.2);

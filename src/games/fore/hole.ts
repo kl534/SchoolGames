@@ -432,6 +432,9 @@ export function buildHole(h: Hole, look: Look = FALLBACK_LOOK): HoleScene {
   // Trees: the gameplay trees (oak and pine in turn, exactly as tall as the flight check says),
   // then the scenery trees (a share of them on the lower tiers). Bushes, rocks and flowers are
   // instanced too. Everything stands on the ground's height.
+  // Park trees spread wider than the old cartoon crowns: a full, rounded oak.
+  const fuller = (t: { species: 'pine' | 'oak' | 'birch'; r: number }) =>
+    t.r * (t.species === 'oak' ? 1.3 : t.species === 'birch' ? 1.2 : 1.1);
   const share = look.settings.sceneryShare;
   const keep = (i: number) => (i * 0.6180339887) % 1 < share;
   const placements: TreePlacement[] = h.trees.map((tr, i) => ({
@@ -444,7 +447,13 @@ export function buildHole(h: Hole, look: Look = FALLBACK_LOOK): HoleScene {
     yaw: rand() * Math.PI * 2,
   }));
   scenery.trees.forEach((t, i) => {
-    if (keep(i)) placements.push({ ...t, y: groundY(h, t.x, t.z) });
+    if (keep(i)) placements.push({ ...t, r: fuller(t), y: groundY(h, t.x, t.z) });
+  });
+  // The woods line: far trees with a third of the cards.
+  scenery.woods.forEach((t, i) => {
+    if (keep(i)) {
+      placements.push({ ...t, r: fuller(t), y: groundY(h, t.x, t.z), share: 0.33, blob: false });
+    }
   });
   // Bushes are leaf cards like the trees' crowns, standing right on the ground.
   scenery.bushes

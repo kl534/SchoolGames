@@ -187,9 +187,9 @@ async function leafAtlas(rgba: Buffer, seed: number): Promise<Buffer> {
   const tiles: Piece[][] = [];
   for (let t = 0; t < 4; t++) {
     const pieces: Piece[] = [];
-    for (let k = 0; k < 18; k++) {
+    for (let k = 0; k < 30; k++) {
       const leaf = leaves[Math.floor(rand() * leaves.length)];
-      const scale = 0.32 + rand() * 0.14;
+      const scale = 0.36 + rand() * 0.14;
       const angle = rand() * 360;
       const resized = await sharp(leaf.image)
         .resize(Math.round(leaf.w * scale), Math.round(leaf.h * scale))
@@ -198,7 +198,7 @@ async function leafAtlas(rgba: Buffer, seed: number): Promise<Buffer> {
         .toBuffer();
       const m = await sharp(resized).metadata();
       const a = rand() * Math.PI * 2;
-      const d = Math.sqrt(rand()) * 150;
+      const d = Math.sqrt(rand()) * 165;
       pieces.push({
         image: resized,
         left: Math.round(256 + Math.cos(a) * d - m.width! / 2),
@@ -340,7 +340,14 @@ async function main() {
   const pineLeaves = await ambientCg('LeafSet019', '1K');
   save(
     'trees/leaves_pine.webp',
-    await needleAtlas(await withOpacity(pineLeaves('Color'), pineLeaves('Opacity'))),
+    await needleAtlas(
+      await withOpacity(
+        await sharp(pineLeaves('Color'))
+          .modulate({ brightness: 1.15, saturation: 1.1, hue: -10 })
+          .toBuffer(),
+        pineLeaves('Opacity'),
+      ),
+    ),
     'https://ambientcg.com/a/LeafSet019 (needle branches laid into four tiles)',
     cc0,
   );

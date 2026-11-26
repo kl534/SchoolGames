@@ -11,6 +11,7 @@ import {
   PlaneGeometry,
   ShaderMaterial,
   SphereGeometry,
+  Vector3,
   type Material,
 } from 'three';
 import { seededRandom } from '../../shared/random';
@@ -21,6 +22,8 @@ import { buildTreeLayer, type TreePlacement } from './trees';
 
 export const HORIZON = 0xcfe9ff;
 const ZENITH = 0x3f95e8;
+/** The zenith of the photo dome: a clear sky blue, as it should look on screen (about #6fa8dc) before the exposure. */
+const ZENITH_SKY = 0x6fa8dc;
 const DOME_R = 600;
 const BIRDS = 4;
 
@@ -31,10 +34,22 @@ export interface Sky {
   dispose(): void;
 }
 
-/** The dome that shows the photo sky: each pixel looks up the picture along its own direction. */
-function photoDome(sky: SkyAssets, yaw: number, gain: number): ShaderMaterial {
+/**
+ * The dome that shows the photo sky, graded: each pixel looks up the picture along its own
+ * direction, and the picture only says where the clouds are (its colours are dull). The sky is a
+ * clear blue from the hazy horizon to the zenith, the clouds are white. `boost` undoes the
+ * renderer's exposure, so the colours on screen are the ones asked for.
+ */
+function photoDome(sky: SkyAssets, yaw: number, horizon: Color): ShaderMaterial {
+  // The renderer's exposure is 0.75: lift the zenith so it ends up the colour asked for.
+  const zenith = new Color(ZENITH_SKY).multiplyScalar(1 / 0.75);
   return new ShaderMaterial({
-    uniforms: { map: { value: sky.dome }, yaw: { value: yaw }, gain: { value: gain } },
+    uniforms: {
+      map: { value: sky.dome },
+      yaw: { value: yaw },
+      zenith: { value: new Vector3(zenith.r, zenith.g, zenith.b) },
+      horizon: { value: new Vector3(horizon.r, horizon.g, horizon.b) },
+    },
     vertexShader: `
       varying vec3 vDir;
       void main() {
@@ -44,7 +59,8 @@ function photoDome(sky: SkyAssets, yaw: number, gain: number): ShaderMaterial {
     fragmentShader: `
       uniform sampler2D map;
       uniform float yaw;
-      uniform float gain;
+      uniform vec3 zenith;
+      uniform vec3 horizon;
       varying vec3 vDir;
       void main() {
         vec3 d = normalize(vDir);
@@ -52,7 +68,16 @@ function photoDome(sky: SkyAssets, yaw: number, gain: number): ShaderMaterial {
         float s = sin(yaw);
         vec3 r = vec3(d.x * c + d.z * s, d.y, -d.x * s + d.z * c);
         vec2 uv = vec2(atan(r.z, r.x) * 0.15915494 + 0.5, asin(clamp(r.y, -1.0, 1.0)) * 0.31830989 + 0.5);
-        gl_FragColor = vec4(texture2D(map, uv).rgb * gain, 1.0);
+        vec3 tex = texture2D(map, uv).rgb;
+        float luma = dot(tex, vec3(0.2126, 0.7152, 0.0722));
+        float e = clamp(d.y, 0.0, 1.0);
+        vec3 blue = mix(horizon, zenith, pow(e, 0.4));
+        // Clouds are the bright, grey-white parts of the picture.
+        float cloud = smoothstep(0.26, 0.5, luma);
+        vec3 white = vec3(1.0, 1.0, 1.0) * mix(1.0, 1.4, smoothstep(0.3, 0.75, luma));
+        white = mix(horizon, white, smoothstep(0.0, 0.22, e));
+        vec3 col = mix(blue, white, cloud * smoothstep(0.0, 0.1, e));
+        gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,
@@ -67,7 +92,11 @@ function photoDome(sky: SkyAssets, yaw: number, gain: number): ShaderMaterial {
  * The sky: the photo dome turned by `yaw` (the same turn as the scene's environment, so the sun in
  * the picture is where the light comes from), or a plain gradient dome when the picture is missing.
  */
-export function createSky(sky: SkyAssets | null = null, yaw = 0): Sky {
+export function createSky(
+  sky: SkyAssets | null = null,
+  yaw = 0,
+  horizon: Color = new Color(HORIZON),
+): Sky {
   const object = new Group();
   const rand = seededRandom(5);
   const geometries: BufferGeometry[] = [];
@@ -76,7 +105,7 @@ export function createSky(sky: SkyAssets | null = null, yaw = 0): Sky {
   const dome = new SphereGeometry(DOME_R, 48, 28);
   let domeMaterial: Material;
   if (sky) {
-    domeMaterial = photoDome(sky, yaw, 1);
+    domeMaterial = photoDome(sky, yaw, horizon);
   } else {
     // Horizon colour at and below the horizon up to the zenith colour.
     const pos = dome.getAttribute('position');
@@ -178,16 +207,13 @@ interface Ridge {
 /** Height of a ridge at (u along, v across), both 0..1: a rolling crest with a smooth foot. */
 function ridgeHeight(r: Ridge, u: number, v: number): number {
   const wave =
-    0.55 +
-    0.3 * Math.sin(u * 17 + r.seed) +
-    0.25 * Math.sin(u * 41 + v * 5 + r.seed * 2.3) +
-    0.1 * Math.sin(u * 83 + v * 11 - r.seed);
+    0.6 + 0.28 * Math.sin(u * 13 + r.seed) + 0.16 * Math.sin(u * 27 + v * 3 + r.seed * 2.3);
   const foot = Math.sin(Math.PI * v) ** 1.1 * Math.sin(Math.PI * u) ** 0.4;
   return Math.max(0, r.peak * wave * foot);
 }
 
-const NEAR = new Color(0x4d8a45);
-const HAZE = new Color(0x8fb5a0);
+const NEAR = new Color(0x6a8f55);
+const HAZE = new Color(0xa9c4b8);
 
 export interface Hills {
   object: Group;
@@ -235,7 +261,7 @@ export function buildHills(h: Hole, look: Look = FALLBACK_LOOK): Hills {
   material.vertexColors = true;
   const pines: TreePlacement[] = [];
   for (const r of ridges) {
-    const g = new PlaneGeometry(r.len, r.depth, 24, 6);
+    const g = new PlaneGeometry(r.len, r.depth, Math.round(r.len / 10), 28);
     const pos = g.getAttribute('position');
     const colours: number[] = [];
     const tint = new Color();
@@ -262,7 +288,7 @@ export function buildHills(h: Hole, look: Look = FALLBACK_LOOK): Hills {
     object.add(ridge);
     // Pines along the crest nearest the course.
     if (r.alongZ) {
-      for (let along = 0.02; along < 0.98; along += 0.016) {
+      for (let along = 0.02; along < 0.98; along += 0.024) {
         const u = along + (rand() - 0.5) * 0.01;
         const v = r.x < 0 ? 0.28 + rand() * 0.12 : 0.72 - rand() * 0.12;
         const y = ridgeHeight(r, u, v);
@@ -277,6 +303,7 @@ export function buildHills(h: Hole, look: Look = FALLBACK_LOOK): Hills {
           height: 24 + rand() * 10,
           yaw: rand() * 6.28,
           blob: false,
+          share: 0.3,
         });
       }
     }
