@@ -77,6 +77,8 @@ export interface Plan {
   landing: XZ;
   /** `ringRadius(carry, putt)`. */
   ringR: number;
+  /** The pin of the hole (a duff or a mis-hit putt never stops on it). */
+  pin: XZ;
 }
 
 export const ringRadius = (carry: number, putt: boolean): number =>
@@ -116,6 +118,7 @@ export function planShot(h: Hole, from: XZ, lie: Lie, want: XZ): Plan {
     dir: Math.atan2(landing.x - from.x, landing.z - from.z),
     landing,
     ringR: ringRadius(carry, club.id === 'putter'),
+    pin: { ...h.pin },
   };
 }
 
@@ -123,7 +126,7 @@ export const isPutt = (plan: Plan): boolean => plan.club.id === 'putter';
 
 // ---------- How well it was struck ----------
 
-export type Quality = 'perfect' | 'close' | 'miss';
+export type Quality = 'perfect' | 'close' | 'miss' | 'duff'; // 'miss' is putts only
 
 export interface Outcome {
   quality: Quality;
@@ -133,19 +136,32 @@ export interface Outcome {
 
 /** A right answer within this share of the clock lands dead centre. */
 export const DEAD_CENTRE_SHARE = 0.25;
-/** A miss lands this share of the distance away (15 to 30 %). */
-export const MISS_MIN = 0.15;
-export const MISS_MAX = 0.3;
 /** A putt ends this close to the pin or less is holed (a generous "gimme"). */
 export const CUP_R = 1.2;
-/** A miss is never closer than this, yards. */
-export const MISS_FLOOR = CUP_R + 1;
+/** A duff travels this far, yards (3 to 10), within DUFF_ANGLE degrees of the aim line. */
+export const DUFF_MIN = 3;
+export const DUFF_MAX = 10;
+export const DUFF_ANGLE = 15;
+/** The highest the ball skips on a duff, yards. */
+export const DUFF_APEX = 0.35;
+/** The share of the way a duff is skipping before it is on the ground. */
+export const DUFF_SKIP = 0.45;
+/** A wrong putt stops this share of the way to the ring (20 to 40 %). */
+export const PUTT_MISS_MIN = 0.2;
+export const PUTT_MISS_MAX = 0.4;
+/** A duff or mis-hit putt stops at least this far from the pin. */
+export const PIN_CLEAR = CUP_R + 0.5;
+
+/** The `angle` for `resolveShot` that gives a duff this side angle (degrees, clamped to the limit). */
+export const duffAngleFor = (deg: number): number =>
+  (Math.min(Math.max(deg, -DUFF_ANGLE), DUFF_ANGLE) / DUFF_ANGLE + 1) * Math.PI;
 
 /**
- * `angle` is a random 0..2pi (0 = straight on, pi/2 = to the right on screen) and `u` a random 0..1,
- * both passed in so tests are exact. A right answer lands inside the ring (dead centre when quick,
- * towards the edge as the clock runs out); a wrong one or a time-out lands 15 to 30 % of the
- * distance away (and always outside the ring).
+ * `angle` is a random 0..2pi and `u` a random 0..1, both passed in so tests are exact. A right
+ * answer lands inside the ring (dead centre when quick, towards the edge as the clock runs out).
+ * A wrong answer or a time-out off the green is a duff: the ball goes 3 to 10 yd, within 15
+ * degrees of the aim line (`angle` spans -15 to +15, positive = right on screen). On the green it
+ * is a mis-hit putt that stops 20 to 40 % of the way. Neither ever ends within PIN_CLEAR of the pin.
  */
 export function resolveShot(
   plan: Plan,
@@ -155,27 +171,63 @@ export function resolveShot(
   angle: number,
   u: number,
 ): Outcome {
-  const { landing, carry, dir, ringR } = plan;
+  const { landing, dir, ringR } = plan;
+  const ahead = { x: Math.sin(dir), z: Math.cos(dir) };
+  if (!right) {
+    return isPutt(plan) ? missedPutt(plan, u) : duffed(plan, angle, u);
+  }
   let quality: Quality = 'perfect';
   let off = 0;
-  if (!right) {
-    quality = 'miss';
-    const share = MISS_MIN + u * (MISS_MAX - MISS_MIN);
-    off = Math.max(MISS_FLOOR, ringR * 1.1, carry * share);
-  } else if (used > DEAD_CENTRE_SHARE * clock) {
+  if (used > DEAD_CENTRE_SHARE * clock) {
     quality = 'close';
     const slow = (used - DEAD_CENTRE_SHARE * clock) / ((1 - DEAD_CENTRE_SHARE) * clock);
     off = ringR * Math.min(1, slow) * 0.95;
   }
   if (off === 0) return { quality, land: { ...landing } };
   // Screen-right is -x when dir = 0.
-  const ahead = { x: Math.sin(dir), z: Math.cos(dir) };
   const side = { x: -Math.cos(dir), z: Math.sin(dir) };
   const a = Math.cos(angle) * off;
   const b = Math.sin(angle) * off;
   return {
     quality,
     land: { x: landing.x + ahead.x * a + side.x * b, z: landing.z + ahead.z * a + side.z * b },
+  };
+}
+
+/** Where along the ray from `from` (heading `heading`) a point `want` yards out may be, pin clear. */
+function pinClear(from: XZ, heading: number, want: number, pin: XZ): number {
+  const dx = Math.sin(heading);
+  const dz = Math.cos(heading);
+  const px = pin.x - from.x;
+  const pz = pin.z - from.z;
+  const along = px * dx + pz * dz;
+  const perp2 = px * px + pz * pz - along * along;
+  const hit = PIN_CLEAR * PIN_CLEAR - perp2;
+  if (hit <= 0) return want; // the line never gets that close
+  const first = along - Math.sqrt(hit);
+  return want > first ? Math.max(0, first) : want;
+}
+
+function duffed(plan: Plan, angle: number, u: number): Outcome {
+  const d = DUFF_MIN + u * (DUFF_MAX - DUFF_MIN);
+  const side = ((angle / (2 * Math.PI)) * 2 - 1) * DUFF_ANGLE;
+  // Screen-right is the way that turns towards -x.
+  const heading = plan.dir - side * RAD;
+  const far = pinClear(plan.from, heading, d, plan.pin);
+  return {
+    quality: 'duff',
+    land: { x: plan.from.x + far * Math.sin(heading), z: plan.from.z + far * Math.cos(heading) },
+  };
+}
+
+function missedPutt(plan: Plan, u: number): Outcome {
+  const { from, dir, carry } = plan;
+  const t = carry * (PUTT_MISS_MIN + u * (PUTT_MISS_MAX - PUTT_MISS_MIN));
+  const along = (plan.pin.x - from.x) * Math.sin(dir) + (plan.pin.z - from.z) * Math.cos(dir);
+  const stop = Math.min(t, Math.max(0, along - PIN_CLEAR));
+  return {
+    quality: 'miss',
+    land: { x: from.x + stop * Math.sin(dir), z: from.z + stop * Math.cos(dir) },
   };
 }
 
@@ -257,6 +309,15 @@ export function pathAt(
       z: from.z + (outcome.land.z - from.z) * u,
     };
   }
+  if (outcome.quality === 'duff') {
+    // A topped ball: straight at where it stops, skipping once over the first part of the way.
+    const v = Math.min(u / DUFF_SKIP, 1);
+    return {
+      x: from.x + (outcome.land.x - from.x) * u,
+      h: 4 * DUFF_APEX * v * (1 - v),
+      z: from.z + (outcome.land.z - from.z) * u,
+    };
+  }
   const bend = { x: outcome.land.x - landing.x, z: outcome.land.z - landing.z };
   return {
     x: from.x + (landing.x - from.x) * u + bend.x * u * u,
@@ -317,7 +378,9 @@ export function finishShot(h: Hole, plan: Plan, outcome: Outcome): Result {
   if (surfaceAt(h, land.x, land.z) === 'water') {
     return { kind: 'water', land, splash: land, drop: dropFor(h, plan.from, land) };
   }
-  const rest = isPutt(plan) ? land : clampEnd(h, rollFrom(h, plan, land));
+  // A putt or a duff rests where it lands (a duff's 3 to 10 yd already include the dribble).
+  const rest =
+    isPutt(plan) || outcome.quality === 'duff' ? land : clampEnd(h, rollFrom(h, plan, land));
   if (Math.hypot(rest.x - h.pin.x, rest.z - h.pin.z) <= CUP_R) return { kind: 'holed', land };
   const surface = surfaceAt(h, rest.x, rest.z);
   if (surface === 'water')

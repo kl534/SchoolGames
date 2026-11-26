@@ -5,7 +5,15 @@
  */
 import { BALL_R, flightPoint, flightSeconds } from './ball';
 import type { Surface } from './course';
-import { isPutt, type Outcome, type Plan, type Result, type XZ } from './shot';
+import {
+  DUFF_APEX,
+  DUFF_SKIP,
+  isPutt,
+  type Outcome,
+  type Plan,
+  type Result,
+  type XZ,
+} from './shot';
 
 export interface Travel {
   /** From the club meeting the ball to it coming to rest, seconds. */
@@ -96,6 +104,8 @@ function flatTravel(plan: Plan, outcome: Outcome, result: Result, pin: XZ): Trav
     };
   }
 
+  if (outcome.quality === 'duff') return duffTravel(plan, end);
+
   const flight = flightSeconds(plan, outcome);
   const roll = Math.hypot(end.x - land.x, end.z - land.z);
   const straight = (): Travel => ({
@@ -147,6 +157,36 @@ function flatTravel(plan: Plan, outcome: Outcome, result: Result, pin: XZ): Trav
         }
       }
       return { x: land.x + dx * s, y: BALL_R + h, z: land.z + dz * s };
+    },
+  };
+}
+
+/** The one small hop a duff takes after its skip, yards, and where it is (share of the way). */
+export const DUFF_HOP = 0.08;
+const HOP_FROM = DUFF_SKIP + 0.05;
+const HOP_TO = DUFF_SKIP + 0.3;
+
+/** A topped ball: a low skip, one small hop, then it slows evenly to rest at `end`. */
+function duffTravel(plan: Plan, end: XZ): Travel {
+  const { from } = plan;
+  const d = Math.hypot(end.x - from.x, end.z - from.z);
+  const seconds = 0.5 + d / 12;
+  return {
+    seconds,
+    airSeconds: seconds * DUFF_SKIP,
+    roll: 0,
+    at(t) {
+      const u = Math.min(Math.max(t / seconds, 0), 1);
+      const s = 1 - (1 - u) * (1 - u); // quickest off the club, dead still at the end
+      let h = 0;
+      if (s < DUFF_SKIP) {
+        const v = s / DUFF_SKIP;
+        h = 4 * DUFF_APEX * v * (1 - v);
+      } else if (s > HOP_FROM && s < HOP_TO) {
+        const v = (s - HOP_FROM) / (HOP_TO - HOP_FROM);
+        h = 4 * DUFF_HOP * v * (1 - v);
+      }
+      return { x: from.x + (end.x - from.x) * s, y: BALL_R + h, z: from.z + (end.z - from.z) * s };
     },
   };
 }
