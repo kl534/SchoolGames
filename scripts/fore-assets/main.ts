@@ -4,11 +4,12 @@
  * players never need the network: run `npm run fore-assets` only to rebuild them.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp, { type OverlayOptions } from 'sharp';
+import { buildPeople, PEOPLE_SOURCE } from './people';
 
 const OUT = resolve(dirname(fileURLToPath(import.meta.url)), '../../public/fore');
 const work = mkdtempSync(join(tmpdir(), 'fore-assets-'));
@@ -275,7 +276,35 @@ async function needleAtlas(rgba: Buffer): Promise<Buffer> {
   return flatAtlas(1024, tiles, { r: 40, g: 78, b: 45 });
 }
 
+/** The rows of the credits table already on disk, so a partial run keeps the others. */
+function existingCredits(): Credit[] {
+  const path = join(OUT, 'CREDITS.md');
+  if (!existsSync(path)) return [];
+  return readFileSync(path, 'utf8')
+    .split('\n')
+    .map((line) => /^\|\s*`([^`]+)`\s*\|\s*(.*?)\s*\|\s*(.*?)\s*\|$/.exec(line))
+    .filter((m): m is RegExpExecArray => m !== null && m[1] !== 'CREDITS.md')
+    .map((m) => ({ file: m[1], source: m[2], licence: m[3] }));
+}
+
+/** The people (from the owner's unzipped pack in `assets-src/`, so they run on their own too). */
+async function people() {
+  if (!existsSync(PEOPLE_SOURCE)) {
+    console.warn(`${PEOPLE_SOURCE} is missing: keeping the people files as they are.`);
+    credits.push(...existingCredits().filter((c) => c.file.startsWith('people/')));
+    return;
+  }
+  await buildPeople({ out: OUT, work, save, download, polyhaven });
+}
+
 async function main() {
+  const onlyPeople = process.argv.includes('people');
+  if (onlyPeople) {
+    credits.push(...existingCredits().filter((c) => !c.file.startsWith('people/')));
+    await people();
+    writeCredits();
+    return;
+  }
   const cc0 = 'CC0 1.0';
 
   // Sky: the 1k HDR lights the scene as it is; the tonemapped picture is the dome.
@@ -352,6 +381,11 @@ async function main() {
     cc0,
   );
 
+  await people();
+  writeCredits();
+}
+
+function writeCredits() {
   const rows = credits.map((c) => `| \`${c.file}\` | ${c.source} | ${c.licence} |`);
   const text = [
     '# Fore! asset credits',
