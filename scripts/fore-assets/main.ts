@@ -101,7 +101,6 @@ async function main() {
     cc0,
   );
   save('turf/grass_normal.webp', await webp(grass('NormalGL'), 2048, 80), grassUrl, cc0);
-  save('turf/grass_rough.webp', await webp(grass('Roughness'), 1024, 70, true), grassUrl, cc0);
 
   // Sand.
   const sand =

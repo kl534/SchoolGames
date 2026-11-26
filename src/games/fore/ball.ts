@@ -207,7 +207,7 @@ export function createBall(glow = 1): Ball {
     toneMapped: false,
     transparent: true,
   });
-  trailMaterial.color.multiplyScalar(glow * (glow > 1 ? 1.6 : 1));
+  trailMaterial.color.multiplyScalar(glow > 1 ? 4 : 1);
   const trailLine = new Line2(trailGeometry, trailMaterial);
   trailLine.frustumCulled = false;
   trailLine.visible = false;

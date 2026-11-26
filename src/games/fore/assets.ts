@@ -29,7 +29,8 @@ export interface SkyAssets {
 export interface TurfAssets {
   color: Texture;
   normal: Texture;
-  rough: Texture;
+  /** Null for the grass: its roughness is just the material's. */
+  rough: Texture | null;
 }
 
 export interface ForeAssets {
@@ -62,7 +63,7 @@ export async function loadForeAssets(
 ): Promise<ForeAssets> {
   const failed: string[] = [];
   let done = 0;
-  const total = 9;
+  const total = 8;
   const tick = () => onProgress?.(Math.min(++done / total, 1));
   const textures = new TextureLoader();
   const tex = async (file: string, srgb: boolean) => {
@@ -107,7 +108,7 @@ export async function loadForeAssets(
     group('grass', async () => ({
       color: await tex('turf/grass_color.webp', true),
       normal: await tex('turf/grass_normal.webp', false),
-      rough: await tex('turf/grass_rough.webp', false),
+      rough: null,
     })),
     group('sand', async () => ({
       color: await tex('turf/sand_color.webp', true),
@@ -130,7 +131,6 @@ export function disposeForeAssets(a: ForeAssets): void {
     a.sky?.dome,
     a.grass?.color,
     a.grass?.normal,
-    a.grass?.rough,
     a.sand?.color,
     a.sand?.normal,
     a.sand?.rough,

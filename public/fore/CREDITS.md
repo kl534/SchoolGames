@@ -9,7 +9,6 @@ Every file under `public/fore/` is listed here. Rebuild them with `npm run fore-
 | `sky_bg.webp` | https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky (tonemapped JPG, resized) | CC0 1.0 |
 | `turf/grass_color.webp` | https://ambientcg.com/a/Grass004 | CC0 1.0 |
 | `turf/grass_normal.webp` | https://ambientcg.com/a/Grass004 | CC0 1.0 |
-| `turf/grass_rough.webp` | https://ambientcg.com/a/Grass004 | CC0 1.0 |
 | `turf/sand_color.webp` | https://polyhaven.com/a/coast_sand_01 | CC0 1.0 |
 | `turf/sand_normal.webp` | https://polyhaven.com/a/coast_sand_01 | CC0 1.0 |
 | `turf/sand_rough.webp` | https://polyhaven.com/a/coast_sand_01 | CC0 1.0 |

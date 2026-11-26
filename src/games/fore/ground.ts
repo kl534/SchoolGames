@@ -434,7 +434,7 @@ export function turfMaterial(
           ? plain.green
           : plain.grass,
     normalMap: grass ? grass.normal : null,
-    roughnessMap: grass ? grass.rough : null,
+    // No roughness map: the photo's is glossy at grazing angles and veils the lawn in sky.
     metalness: 0,
   });
   material.normalScale = new Vector2(spec.normal, spec.normal);

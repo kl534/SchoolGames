@@ -24,6 +24,12 @@ export const DOF_APERTURE = 0.0006;
 export const DOF_MAXBLUR = 0.008;
 export const DOF_EASE_SECONDS = 0.3;
 
+/**
+ * Bloom starts at this brightness (linear, before exposure). The doc's 0.92 veils every sunlit
+ * lawn under this sun, so only the tracer and sun glints, which are brighter, bloom.
+ */
+export const BLOOM_THRESHOLD = 1.6;
+
 export interface Post {
   /** Renders one frame through the chain. */
   render(delta: number): void;
@@ -61,7 +67,7 @@ export function createPost(
   }
   let bloom: UnrealBloomPass | null = null;
   if (s.bloom) {
-    bloom = new UnrealBloomPass(new Vector2(width, height), 0.25, 0.4, 0.92);
+    bloom = new UnrealBloomPass(new Vector2(width, height), 0.25, 0.4, BLOOM_THRESHOLD);
     composer.addPass(bloom);
   }
   let bokeh: BokehPass | null = null;

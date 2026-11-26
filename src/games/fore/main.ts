@@ -201,6 +201,8 @@ function deviceInfo(renderer: WebGLRenderer): DeviceInfo {
 
 /** AgX at 1.0 washes the grass out under this sun; a little lower keeps the greens. */
 const EXPOSURE = 0.75;
+/** The sun's intensity (the cascaded map's lights add up to the same). */
+const SUN_PLAIN = 3.2;
 
 /** Frames of the first aim that are timed to decide whether to step the quality down. */
 const SAMPLE_FRAMES = 120;
@@ -230,7 +232,7 @@ function run(session: GameSession): void {
   // Light: the sun (its direction is fixed once the sky picture is read) and, on the high tier,
   // its cascaded shadow map. Without the picture a faint hemisphere light fills the shade.
   const sunDir = new Vector3(...sunSetup(null).dir);
-  const sun = new DirectionalLight(0xfff1dc, 3.2);
+  const sun = new DirectionalLight(0xfff1dc, SUN_PLAIN);
   const single = shadows && pageSettings.shadows === 'single';
   let csm: CSM | null = null;
   if (shadows && pageSettings.shadows === 'cascaded') {
