@@ -22,10 +22,11 @@ export interface Caddie {
 /** A standing figure with the golf bag at his feet, who cheers or groans after a shot. */
 export function createCaddie(): Caddie {
   const person = createPerson({
-    shirt: 0x3a7bd5,
-    pants: 0xc9b78a,
+    // A deep green polo and charcoal trousers: clearly clothes, nothing near the skin tone.
+    shirt: 0x1f7a4d,
+    pants: 0x3c414c,
     hat: 'cap',
-    hatColor: 0x3a7bd5,
+    hatColor: 0xf4f4f4,
     trousers: true,
     shoe: 0x4a3f33,
     height: 1.9,

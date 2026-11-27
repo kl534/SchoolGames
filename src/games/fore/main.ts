@@ -7,6 +7,9 @@ import {
   HemisphereLight,
   MathUtils,
   PCFShadowMap,
+  type Material,
+  type Mesh,
+  type Texture,
   Vector3,
   type Object3D,
 } from 'three';
@@ -47,6 +50,7 @@ import { createGolfer, type GolfMove } from './golfer';
 import { createGuide } from './guide';
 import { buildHole, CUP_AID_RANGE, SKY, type HoleScene } from './hole';
 import { createSky } from './sky';
+import { nextFrame, takeLoading } from './loading';
 import { createHud, SURFACE_NAMES, windChip, type Bands, type CardCell } from './hud';
 import {
   afterShot,
@@ -188,7 +192,19 @@ function run(session: GameSession): void {
       else if ((o as { isMesh?: boolean }).isMesh) o.castShadow = shadows;
     });
   }
+  /** Every hole is built once, behind the loading screen, and kept: only one is shown. */
+  const holeScenes: (HoleScene | null)[] = HOLES.map(() => null);
   let holeScene: HoleScene | null = null;
+  const sceneForHole = (index: number): HoleScene => {
+    let built = holeScenes[index];
+    if (!built) {
+      built = buildHole(HOLES[index]);
+      built.object.visible = false;
+      scene.add(built.object);
+      holeScenes[index] = built;
+    }
+    return built;
+  };
 
   // ---------- HUD ----------
   const hud = createHud();
@@ -461,9 +477,9 @@ function run(session: GameSession): void {
   const startHoleAt = (index: number) => {
     holeIndex = index;
     hole = HOLES[index];
-    holeScene?.dispose();
-    holeScene = buildHole(hole);
-    scene.add(holeScene.object);
+    if (holeScene) holeScene.object.visible = false;
+    holeScene = sceneForHole(index);
+    holeScene.object.visible = true;
     const first = devPending;
     hstate = first ? devHoleState(hole) : startHole(hole);
     aimDeg = (first ? devAim(hole, hstate) : null) ?? 0;
@@ -1081,11 +1097,63 @@ function run(session: GameSession): void {
     applyCamera();
   });
 
+  /**
+   * The slow work, done once behind the loading screen so play never stalls: build all nine holes,
+   * then compile every shader and upload every texture (hidden things too, like the aim ring, the
+   * splash and the other holes) and draw one frame, which also makes the shadow map.
+   */
+  const warmUp = async () => {
+    const loading = takeLoading();
+    const steps = HOLES.length + 2;
+    loading.progress(0.5 / steps);
+    await nextFrame();
+    for (let i = 0; i < HOLES.length; i++) {
+      sceneForHole(i);
+      loading.progress((i + 1) / steps);
+      await nextFrame();
+    }
+    placeGolfer();
+    applyCamera();
+    const hidden: Object3D[] = [];
+    scene.traverse((o) => {
+      if (!o.visible) {
+        hidden.push(o);
+        o.visible = true;
+      }
+    });
+    const textures = new Set<Texture>();
+    scene.traverse((o) => {
+      const material = (o as Mesh).material as Material | Material[] | undefined;
+      for (const m of [material ?? []].flat()) {
+        const map = (m as { map?: Texture | null }).map;
+        if (map) textures.add(map);
+      }
+    });
+    try {
+      await ctx.renderer.compileAsync(scene, camera);
+    } catch {
+      // A browser without parallel compiling still compiles in the render below.
+    }
+    loading.progress((HOLES.length + 1) / steps);
+    await nextFrame();
+    textures.forEach((t) => ctx.renderer.initTexture(t));
+    ctx.renderer.render(scene, camera);
+    hidden.forEach((o) => (o.visible = false));
+    loading.progress(1);
+    await nextFrame();
+    loading.done();
+  };
+
+  let disposed = false;
   layout(true);
-  ctx.start();
-  startGame(true);
+  void warmUp().then(() => {
+    if (disposed) return;
+    ctx.start();
+    startGame(true);
+  });
 
   window.addEventListener('pagehide', () => {
+    disposed = true;
     stopSpeaking();
     window.removeEventListener('keydown', onKey);
     stopPointer();
@@ -1094,7 +1162,7 @@ function run(session: GameSession): void {
     pause.dispose();
     mute.dispose();
     hud.dispose();
-    holeScene?.dispose();
+    holeScenes.forEach((h) => h?.dispose());
     sky.dispose();
     ctx.dispose();
   });

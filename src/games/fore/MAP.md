@@ -4,12 +4,13 @@ Nine holes of real golf: each shot is one question. A club is picked from the di
 
 ## Files
 
-- `main.ts`: the game loop, learning loop, aiming input and wiring of everything below
+- `main.ts`: the game loop, learning loop, aiming input and wiring of everything below; `warmUp` builds all nine holes once (kept, only one shown) and compiles every shader behind the loading screen, so play never stalls
+- `loading.ts`: the loading screen (plain HTML in `index.html`, so it shows while the scripts download): its bar and fade (`takeLoading`, `nextFrame`)
 - `course.ts`: the nine holes, hazards and what is under a point (`HOLES`, `Hole`, `surfaceAt`, `centreX`, `FAIRWAY_HALF`, `GREEN_R`)
 - `shot.ts`: clubs, the planned shot, how it was struck and where the ball ends (`clubFor`, `planShot`, `resolveShot`, `finishShot`, `treeHit`, `pathAt`, `TREE_HEIGHT`, `Plan`, `Outcome`, `Result`)
 - `rules.ts`: pure golf scoring, the stored score and the announcer's lines (`afterShot`, `holeScore`, `holeOver`, `nameFor`, `storedFor`, `shotCall`, `holeCall`, `holeIntro`, `allCallLines`, `reactionFor`)
 - `voice.ts`: every spoken line that is not a fact (`VOICE_LINES`)
-- `hole.ts`: one hole as lit meshes: textured rough, striped fairway, green with fringe and apron, bunkers with lip and rim, ponds with shore, reeds and ripples, cart path, tee with furniture, 150 and 100 yd markers, trees, bushes, rocks, flowers, hills, true-size cup with its flash ring, and flag (`buildHole`, `CUP_VISUAL_R`, `SKY`)
+- `hole.ts`: one hole as lit meshes: textured rough, striped fairway, green with fringe and apron, bunkers with lip and rim, ponds with shore, reeds and ripples, cart path, tee with furniture, 150 and 100 yd markers, trees, bushes, rocks, flowers, hills, true-size cup with its flash ring, and flag; `main.ts` builds every hole once and keeps it (`buildHole`, `CUP_VISUAL_R`, `SKY`)
 - `scenery.ts`: pure, seeded placement of the scenery trees, bushes, rocks and flowers and of the cart path for a hole (`placeScenery`, `cartPath`, `LINE_CLEAR`); gameplay trees stay in `course.ts`
 - `trees.ts`: pine, oak and birch geometry (merged, vertex coloured) drawn as instances with blob shadows (`buildTreeLayer`, `treeBounds`, `treeScale`)
 - `ground.ts`: the shared grass, stripe, green and sand textures (`DataTexture`s) and flat geometry helpers (`groundTextures`, `ribbon`, `ellipseRing`, `strip`)
