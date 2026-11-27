@@ -18,11 +18,12 @@ A side-view endless run: pick one of ten cats, then run through places (house: l
 - `moves/extra.ts`: the 6 farm (`hay`, `scarecrow`, `chickens`) and jungle (`vine`, `stones`, `mud`) obstacles' moves and shared motions (`vineSwing`, `hayTip`, `armDrop`, `henScatter`)
 - `moves/toys-pirates.ts`: the 6 toy store (`toy-train`, `blocks`, `ball-pit`) and pirate ship (`cannon`, `rigging`, `chest`) obstacles' moves and shared motions (`trainX`, `towerTopple`, `ballBounce`, `cannonRecoil`, `sailFlap`, `ropeSwing`, `lidAngle`, `coinSpray`, ...)
 - `moves/zoo.ts`: the 3 zoo obstacles' (`elephant`, `giraffe`, `penguins`) 12 moves and shared motions (`trunkCurl`, `trunkJoints`, `earFlap`, `neckBend`, `neckJoints`, `giraffeHead`, `headTop`, `tongueOut`, `penguinPose`)
-- `kit.ts`: prop-building helpers that remember what to dispose (`Kit`, `Prop`): bevelled boxes (`Kit.box`, plain under `BEVEL_MIN`) and the painted materials `wood`, `fabric`, `foliage`, `metal`, `stone`
+- `kit.ts`: prop-building helpers that remember what to dispose (`Kit`, `Prop`): bevelled boxes (`Kit.box`, plain under `BEVEL_MIN`, one bevel segment under `BEVEL_FINE`), the painted materials `wood`, `fabric`, `foliage`, `metal`, `stone`, and `castShadows` (solid parts at least `SHADOW_MIN` across cast real shadows)
+- `merge.ts`: static batching: `mergeStatic` bakes a decor tile's or the ground's plain opaque meshes into one mesh per material (see-through, hidden and mirrored ones stay as they are), so a tile is a few draw calls
 - `textures.ts`: the canvas painters for material grain, floors, walls, backdrops and fades (`paintGrain`, `paintFloor`, `paintWall`, `paintBackdrop`, `paintFade`); all tile seamlessly and need no three.js
 - `cat.ts`: the cat rig and its poses, faces, coats and hats (`createCat`), with its ink outline (`cat.outline`)
 - `cat-materials.ts`: the fur material with a rim of light (`furMaterial`)
-- `quality.ts`: pure quality tiers (`high`, `medium`, `low`), the starting tier (`initialQuality`) and the governor that steps down when fps is under 45 (`createGovernor`)
+- `quality.ts`: pure quality tiers (`high`, `medium`, `low`, and `lowest`, which draws fewer pixels than the screen and no antialiasing, for the slowest Chromebooks), the starting tier (`initialQuality`) and the governor that steps down when fps is under 45, counting frames slower than 10 fps too (`createGovernor`)
 - `lighting.ts`: pure light and haze of each place (`lightFor`)
 - `render.ts`: tone mapping, environment sheen, key light with its cast shadow, fill light, haze and pixel ratio (`createLook`)
 - `outline.ts`: inverted-hull ink outlines (`addOutline`, `setOutlineView`)
@@ -55,13 +56,17 @@ A side-view endless run: pick one of ten cats, then run through places (house: l
 
 - The meow (three kitten meows at random), yowl and hiss are real CC0 cat recordings in `public/sfx/cat/` (sources in its `SOURCES.md`), played by `sfx` in `src/shared/audio.ts` (`CAT_CLIPS`); `main.ts` preloads them with `preloadCatSounds()`. Until they load the synthesised ones play. The purr is still synthesised.
 
+## Performance
+
+- The target is a Lenovo 500e-class Chromebook (Celeron, Intel UHD, 1366x768). Decor never moves, so `world.ts` merges each tile with `mergeStatic`; keep new decor static (an animated decor part needs `userData` set, which keeps it out of the merge). Only the cat, the props and the fish are separate meshes.
+
 ## Dev hooks
 
 - `?cat=<orange|black|tuxedo|calico|grey-tabby|british-shorthair|siamese|white|ginger-white|tortoiseshell>`: skip the picker with that cat. `?lives=1|2|3`.
 - `?place=<id>`: start in that place (`living-room`, `kitchen`, `bathroom`, `bedroom`, `backyard`, `park`, `street`, `rooftops`, `farm`, `grocery`, `library`, `fish-market`, `construction`, `beach`, `snowy-forest`, `desert`, `space-station`, `jungle`, `toy-store`, `pirate-ship`, `zoo`). `?places=a,b`: the places come in this order, then repeat. `?obstacle=<id>`: every obstacle is that one (its place is used).
 - `?lab=<obstacle>:<clear|fail>:<0|1>`: move lab, loops one move with the HUD hidden. `&at=<seconds>` freezes it there (prop and effects included).
 - `?door=<place>&at=<0..2.4>`: the doorway into that place frozen at that time (0 door in view, 1.2 iris closed, 1.55 open again, 2.4 banner).
-- `?quality=high|medium|low`: fixes the quality tier (no saved tier, no automatic step down). The tier is otherwise saved per device under `cd-quality`.
+- `?quality=high|medium|low|lowest`: fixes the quality tier (no saved tier, no automatic step down). The tier is otherwise saved per device under `cd-quality`.
 - Example: `npm run shots -- "cat-dash?lab=couch:clear:0&at=0.9" "cat-dash?door=kitchen&at=1.2"`
 
 ## Where changes go

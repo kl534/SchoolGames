@@ -2,9 +2,9 @@
  * One built prop per obstacle of the current place and the next; a place's props are disposed
  * when it is left.
  */
-import { MeshBasicMaterial, type Mesh } from 'three';
+import type { Mesh } from 'three';
 import type { ObstacleId } from '../places';
-import type { Prop } from '../kit';
+import { castShadows, type Prop } from '../kit';
 import { addOutline, OUTLINE_PROP_PX, type Outline } from '../outline';
 import { HOUSE_PROPS } from './house';
 import { TOWN_PROPS } from './town';
@@ -33,15 +33,11 @@ export interface PropPool {
   dispose(): void;
 }
 
-/** Props cast and receive real shadows (not glass, glow or other see-through bits). */
+/** Props cast and receive real shadows (not glass, glow, other see-through bits or specks). */
 function castAndReceive(prop: Prop): void {
+  castShadows(prop.object);
   prop.object.traverse((o) => {
-    const mesh = o as Mesh;
-    if (!mesh.isMesh) return;
-    const m = mesh.material as { transparent?: boolean };
-    const solid = !m.transparent && !(mesh.material instanceof MeshBasicMaterial);
-    mesh.castShadow = solid;
-    mesh.receiveShadow = true;
+    if ((o as Mesh).isMesh) o.receiveShadow = true;
   });
 }
 

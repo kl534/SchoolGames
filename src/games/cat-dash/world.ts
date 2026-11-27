@@ -21,6 +21,7 @@ import {
   type Scene,
   type Texture,
 } from 'three';
+import { mergeStatic } from './merge';
 import { Kit } from './kit';
 import type { Fit } from './layout';
 import { lightFor } from './lighting';
@@ -467,9 +468,12 @@ export function createWorld(scene: Scene): World {
       background = gradient(look.sky[0], look.sky[1]);
       scene.background = background ?? new Color(look.sky[1]);
       ground = buildGround(place, next);
+      next.geometries.push(...mergeStatic(ground));
       root.add(ground);
       tiles = Array.from({ length: TILES }, () => {
         const tile = buildScenery(place, next);
+        // The decor never moves within its tile: one draw call per material.
+        next.geometries.push(...mergeStatic(tile));
         root.add(tile);
         return tile;
       });

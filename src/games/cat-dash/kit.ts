@@ -15,6 +15,7 @@ import {
   type Material,
   type Object3D,
   RepeatWrapping,
+  Vector3,
 } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { GRAIN_SIZE, paintGrain, type GrainKind } from './textures';
@@ -23,6 +24,40 @@ import { GRAIN_SIZE, paintGrain, type GrainKind } from './textures';
 const GRAIN_UNITS = 1.5;
 /** Boxes thinner than this stay plain boxes; thicker ones get rounded edges. */
 export const BEVEL_MIN = 0.1;
+/**
+ * Boxes thinner than this round their edges with one segment, not two: the bevel is a couple of
+ * pixels wide there, so the second segment can't be seen but almost triples the triangles (a shelf
+ * of books is most of the library's triangles).
+ */
+export const BEVEL_FINE = 0.3;
+
+/**
+ * Parts smaller than this across (in world units) cast no real shadow: in the shadow map they are
+ * a texel or two, a speck nobody sees, but each would still cost a draw call every frame.
+ */
+export const SHADOW_MIN = 0.1;
+
+const scratch = new Vector3();
+
+/**
+ * Sets `castShadow` on every mesh under `root`: solid ones (not see-through, not unlit) that are at
+ * least `SHADOW_MIN` across. Call it once the parts are in place.
+ */
+export function castShadows(root: Object3D): void {
+  root.updateMatrixWorld(true);
+  root.traverse((o) => {
+    const mesh = o as Mesh;
+    if (!mesh.isMesh) return;
+    const m = mesh.material as Material;
+    const solid = !m.transparent && !(m instanceof MeshBasicMaterial);
+    if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();
+    const radius = mesh.geometry.boundingSphere?.radius ?? 0;
+    mesh.getWorldScale(scratch);
+    const across =
+      2 * radius * Math.max(Math.abs(scratch.x), Math.abs(scratch.y), Math.abs(scratch.z));
+    mesh.castShadow = solid && across >= SHADOW_MIN;
+  });
+}
 
 /** Surface look of each grain: roughness and metalness of its material. */
 const GRAIN_LOOK: Record<GrainKind, { roughness: number; metalness: number }> = {
@@ -138,7 +173,13 @@ export class Kit {
       const least = Math.min(w, h, d);
       geometry =
         least >= BEVEL_MIN
-          ? new RoundedBoxGeometry(w, h, d, 2, Math.min(0.08, 0.18 * least))
+          ? new RoundedBoxGeometry(
+              w,
+              h,
+              d,
+              least < BEVEL_FINE ? 1 : 2,
+              Math.min(0.08, 0.18 * least),
+            )
           : new BoxGeometry(w, h, d);
       scaleBoxUvs(geometry, w, h, d);
       this.boxes.set(key, geometry);
