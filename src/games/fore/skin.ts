@@ -42,13 +42,13 @@ export const GOLFER_OUTFIT: Outfit = {
   accentOn: true,
 };
 export const CADDIE_OUTFIT: Outfit = {
-  shirt: 0x2f5a3a,
+  // A plain green polo (no bib over it: a flat white panel on the chest read as a corset).
+  shirt: 0x1f7a4d,
   // Charcoal: khaki read as bare legs next to the skin.
   trousers: 0x3c414c,
   shoes: 0x4a3f33,
-  accent: 0xf4f4f4,
-  accentOn: true,
-  bib: true,
+  accent: 0x1f7a4d,
+  accentOn: false,
 };
 
 export interface SkinOptions {
