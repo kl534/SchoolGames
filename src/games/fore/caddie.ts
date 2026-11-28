@@ -32,10 +32,11 @@ export interface Caddie {
 /** A standing figure with the golf bag at his feet, who cheers or groans after a shot. */
 export function createCaddie(): Caddie {
   const person = createPerson({
-    shirt: 0x3a7bd5,
-    pants: 0xc9b78a,
+    // A deep green polo and charcoal trousers: clearly clothes, nothing near the skin tone.
+    shirt: 0x1f7a4d,
+    pants: 0x3c414c,
     hat: 'cap',
-    hatColor: 0x3a7bd5,
+    hatColor: 0xf4f4f4,
     trousers: true,
     shoe: 0x4a3f33,
     height: 1.9,
@@ -124,11 +125,12 @@ export function createCaddie(): Caddie {
       skinned?.dispose();
       skinned = null;
       if (!people) return;
-      skinned = createSkinnedPerson(people.caddie, person, {
+      // The male body, as the golfer's (the female one is only for the gallery).
+      skinned = createSkinnedPerson(people.golfer, person, {
         outfit: CADDIE_OUTFIT,
         accent: 'bib',
         cap: 0x2f5a3a,
-        hair: [{ style: 'Hair_Buns', colour: 0x3a2616 }],
+        hair: [{ style: 'Hair_Buzzed', colour: 0x3a2616 }],
         hairSource: people.hair,
         weave: people.weave,
         height: 1.9,

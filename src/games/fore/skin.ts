@@ -20,6 +20,7 @@ import {
   type BufferGeometry,
   type Material,
   type Object3D,
+  type SkinnedMesh,
   type Texture,
 } from 'three';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
@@ -42,7 +43,8 @@ export const GOLFER_OUTFIT: Outfit = {
 };
 export const CADDIE_OUTFIT: Outfit = {
   shirt: 0x2f5a3a,
-  trousers: 0xb9a46f,
+  // Charcoal: khaki read as bare legs next to the skin.
+  trousers: 0x3c414c,
   shoes: 0x4a3f33,
   accent: 0xf4f4f4,
   accentOn: true,
@@ -106,14 +108,33 @@ interface Template {
   standing: number;
   accent: Accent;
 }
-const templates = new WeakMap<Object3D, Template>();
+/** Per loaded body, one template per accent (the golfer's model is also the caddie's). */
+const templates = new WeakMap<Object3D, Map<Accent, Template>>();
 
 function prepare(source: ModelSource, accent: Accent): Template {
-  const known = templates.get(source.scene);
+  let byAccent = templates.get(source.scene);
+  const known = byAccent?.get(accent);
   if (known) return known;
-  const scene = source.scene;
-  scene.updateMatrixWorld(true);
-  slimBody(scene);
+  if (!byAccent) {
+    byAccent = new Map();
+    templates.set(source.scene, byAccent);
+  }
+  const other = byAccent.values().next().value;
+  let scene: Object3D;
+  if (other) {
+    // The body is already slimmed for the other accent: a copy with its own geometry, so each
+    // keeps its own region weights.
+    scene = cloneSkinned(other.scene);
+    scene.traverse((o) => {
+      const mesh = o as SkinnedMesh;
+      if (mesh.isSkinnedMesh) mesh.geometry = mesh.geometry.clone();
+    });
+    scene.updateMatrixWorld(true);
+  } else {
+    scene = source.scene;
+    scene.updateMatrixWorld(true);
+    slimBody(scene);
+  }
   const { meshes, bones } = bonesOf(scene);
   const rest = new Map<string, Vector3>();
   for (const [name, bone] of bones)
@@ -133,7 +154,7 @@ function prepare(source: ModelSource, accent: Accent): Template {
   }
   const standing = box ? box.max.y - box.min.y + CAP_RISE : 1.85;
   const made = { scene, standing, accent };
-  templates.set(source.scene, made);
+  byAccent.set(accent, made);
   return made;
 }
 

@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { Mesh, Vector3, type Object3D } from 'three';
+import { Mesh, Vector3, type Object3D, type SkinnedMesh } from 'three';
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -181,6 +181,37 @@ describe('the caddie with the model', () => {
         }
       }
     }
+  });
+
+  it("wears the golfer's (male) body, with its own bib weights, while the golfer keeps his glove", () => {
+    const g = createGolfer();
+    g.setModel(people);
+    const c = createCaddie();
+    c.setModel(people);
+    // The body is the biggest skinned mesh.
+    const body = (root: Object3D): SkinnedMesh => {
+      const meshes: SkinnedMesh[] = [];
+      root.traverse((o) => {
+        if ((o as SkinnedMesh).isSkinnedMesh) meshes.push(o as SkinnedMesh);
+      });
+      const size = (m: SkinnedMesh) => m.geometry.getAttribute('position').count;
+      return meshes.reduce((a, b) => (size(b) > size(a) ? b : a));
+    };
+    const male = body(people.golfer.scene).geometry.getAttribute('position').count;
+    const female = body(people.caddie.scene).geometry.getAttribute('position').count;
+    const golferBody = body(g.skin!.root).geometry;
+    const caddieBody = body(c.skin!.root).geometry;
+    expect(caddieBody.getAttribute('position').count).toBe(male);
+    expect(male).not.toBe(female);
+    expect(caddieBody).not.toBe(golferBody);
+    const accentSum = (geometry: typeof golferBody) => {
+      const region = geometry.getAttribute('aRegion');
+      let sum = 0;
+      for (let i = 0; i < region.count; i++) sum += region.getW(i);
+      return sum;
+    };
+    // Each copy carries its own accent: the bib on the caddie, the glove on the golfer.
+    expect(Math.abs(accentSum(caddieBody) - accentSum(golferBody))).toBeGreaterThan(100);
   });
 
   it('keeps both feet down while it cheers', () => {

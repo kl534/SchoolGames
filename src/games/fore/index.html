@@ -19,10 +19,83 @@
         position: fixed;
         inset: 0;
       }
+      /* The loading screen is plain HTML so it shows before any script has downloaded. */
+      .fg-loading {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        background: linear-gradient(#8fd0ff, #cfe9ff 55%, #6fb853 55%, #5f9a45);
+        font-family:
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        color: #0c1c18;
+        transition: opacity 0.35s;
+      }
+      .fg-loading.fg-loading-done {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .fg-loading h1 {
+        margin: 0;
+        font-size: clamp(40px, 12vw, 84px);
+        color: #fff;
+        text-shadow: 0 3px 0 #2b6a3a;
+      }
+      .fg-loading-ball {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 35% 30%, #fff 40%, #d8dde3);
+        box-shadow: 0 4px 0 rgba(0, 0, 0, 0.15);
+        animation: fg-hop 0.7s ease-in-out infinite alternate;
+      }
+      @keyframes fg-hop {
+        from {
+          transform: translateY(0);
+        }
+        to {
+          transform: translateY(-28px);
+        }
+      }
+      .fg-loading-bar {
+        width: min(70vw, 360px);
+        height: 14px;
+        border-radius: 7px;
+        background: rgba(12, 28, 24, 0.35);
+        overflow: hidden;
+      }
+      .fg-loading-fill {
+        height: 100%;
+        width: 4%;
+        border-radius: 7px;
+        background: #fff;
+        transition: width 0.2s;
+      }
+      .fg-loading p {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 700;
+        color: #fff;
+        text-shadow: 0 2px 0 #2b6a3a;
+      }
     </style>
   </head>
   <body>
     <div id="game"></div>
+    <div class="fg-loading" id="fg-loading" role="progressbar" aria-label="Loading the course">
+      <h1>Fore!</h1>
+      <div class="fg-loading-ball"></div>
+      <div class="fg-loading-bar"><div class="fg-loading-fill"></div></div>
+      <p>Getting the course ready…</p>
+    </div>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

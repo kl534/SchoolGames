@@ -39,6 +39,9 @@ const smooth = (a: number, b: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 
+/** The shoulder joint's distance from the middle on the body the bib was tuned on. */
+const BIB_SHOULDER = 0.129;
+
 /**
  * Per-vertex region weights as a 4-component attribute (shirt, trousers, shoes, accent). `bones`
  * are the skeleton's bones in order, `rest` the bind-pose positions of the upper arms and elbows
@@ -56,6 +59,11 @@ export function regionAttribute(
   const out = new Float32Array(pos.count * 4);
   const axis = new Vector3();
   const v = new Vector3();
+  // The bib's side edges scale with the shoulders, so it fits a broad body as well as a narrow one
+  // (tuned on the female body, shoulder joint 0.129 out: edges 0.1 to 0.16).
+  const shoulder = Math.abs(rest.get('upperarm_l')?.x ?? BIB_SHOULDER);
+  const bibIn = (0.1 / BIB_SHOULDER) * shoulder;
+  const bibOut = (0.16 / BIB_SHOULDER) * shoulder;
   for (let i = 0; i < pos.count; i++) {
     let shirt = 0;
     let trousers = 0;
@@ -69,7 +77,7 @@ export function regionAttribute(
       if (/^(spine_0[123]|clavicle_[lr])$/.test(name)) {
         shirt += w;
         if (accent === 'bib' && /^spine_0[23]$/.test(name))
-          acc += w * (1 - smooth(0.1, 0.16, Math.abs(v.x)));
+          acc += w * (1 - smooth(bibIn, bibOut, Math.abs(v.x)));
       } else if (/^upperarm_[lr]$/.test(name)) {
         const from = rest.get(name);
         const to = rest.get(name.replace('upperarm', 'lowerarm'));

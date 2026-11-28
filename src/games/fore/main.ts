@@ -10,6 +10,9 @@ import {
   PMREMGenerator,
   Raycaster,
   Vector2,
+  type Material,
+  type Mesh,
+  type Texture,
   Vector3,
   type Object3D,
   type WebGLRenderer,
@@ -59,6 +62,7 @@ import { createGolfer, type GolfMove } from './golfer';
 import { createGuide } from './guide';
 import { buildHole, CUP_AID_RANGE, SKY, type HoleScene } from './hole';
 import { createSky, type Sky } from './sky';
+import { nextFrame, takeLoading } from './loading';
 import { disposeForeAssets, loadForeAssets, NO_ASSETS, type ForeAssets } from './assets';
 import { FALLBACK_LOOK, litTree, useCascadedLightChunk, type Look } from './ground';
 import { createBlades } from './grass';
@@ -397,8 +401,16 @@ function run(session: GameSession): void {
     afterAssets?.();
     afterAssets = null;
   };
-  // Start loading now, while the preview is read; Start waits for it (with a bar) if it must.
-  loadForeAssets(Math.min(8, renderer.capabilities.getMaxAnisotropy()), (f) => bar?.update(f))
+  // The loading screen covers the first half of its bar with the pictures, then `warmUp` builds
+  // the holes and compiles the shaders under the rest.
+  const loading = takeLoading();
+  const assetsLoaded = loadForeAssets(
+    Math.min(8, renderer.capabilities.getMaxAnisotropy()),
+    (f) => {
+      bar?.update(f);
+      loading.progress(f * 0.5);
+    },
+  )
     .then(applyAssets)
     .catch(() => applyAssets(NO_ASSETS));
   const whenAssets = (go: () => void) => {
@@ -412,7 +424,29 @@ function run(session: GameSession): void {
   // Timing the first aim decides whether a slow device steps down a tier.
   const samples: number[] = [];
   let sampled = forcedGfx !== null;
+  /**
+   * Every hole is built once, behind the loading screen, and kept: only one is shown. A step down
+   * in quality changes the look, so the kept holes go and are built again as they are reached.
+   */
+  const holeScenes = new Map<number, HoleScene>();
+  let holesLook: Look | null = null;
   let holeScene: HoleScene | null = null;
+  const sceneForHole = (index: number): HoleScene => {
+    if (holesLook !== look) {
+      // The hole in play stays until the next one replaces it (see `startHoleAt`).
+      holeScenes.forEach((h) => h !== holeScene && h.dispose());
+      holeScenes.clear();
+      holesLook = look;
+    }
+    let built = holeScenes.get(index);
+    if (!built) {
+      built = buildHole(HOLES[index], look);
+      built.object.visible = false;
+      scene.add(built.object);
+      holeScenes.set(index, built);
+    }
+    return built;
+  };
 
   // ---------- HUD ----------
   const hud = createHud();
@@ -743,9 +777,13 @@ function run(session: GameSession): void {
   const startHoleAt = (index: number) => {
     holeIndex = index;
     hole = HOLES[index];
-    holeScene?.dispose();
-    holeScene = buildHole(hole, look);
-    scene.add(holeScene.object);
+    const previous = holeScene;
+    holeScene = sceneForHole(index);
+    if (previous && previous !== holeScene) {
+      previous.object.visible = false;
+      if (![...holeScenes.values()].includes(previous)) previous.dispose();
+    }
+    holeScene.object.visible = true;
     const first = devPending;
     hstate = first ? devHoleState(hole) : startHole(hole);
     devWant = first ? devTarget(hole, hstate) : null;
@@ -1491,11 +1529,67 @@ function run(session: GameSession): void {
     watchFrames(delta);
   });
 
+  /**
+   * The slow work, done once behind the loading screen so play never stalls: build all nine holes,
+   * then compile every shader and upload every texture (hidden things too, like the aim ring, the
+   * splash and the other holes) and draw one frame, which also makes the shadow map.
+   */
+  const warmUp = async () => {
+    await assetsLoaded;
+    const steps = HOLES.length + 2;
+    const at = (step: number) => loading.progress(0.5 + (0.5 * step) / steps);
+    at(0.5);
+    await nextFrame();
+    for (let i = 0; i < HOLES.length; i++) {
+      sceneForHole(i);
+      at(i + 1);
+      await nextFrame();
+    }
+    placeGolfer();
+    applyCamera();
+    followLight();
+    const hidden: Object3D[] = [];
+    scene.traverse((o) => {
+      if (!o.visible) {
+        hidden.push(o);
+        o.visible = true;
+      }
+    });
+    const textures = new Set<Texture>();
+    scene.traverse((o) => {
+      const material = (o as Mesh).material as Material | Material[] | undefined;
+      for (const m of [material ?? []].flat()) {
+        const map = (m as { map?: Texture | null }).map;
+        if (map) textures.add(map);
+      }
+    });
+    try {
+      await ctx.renderer.compileAsync(scene, camera);
+    } catch {
+      // A browser without parallel compiling still compiles in the render below.
+    }
+    at(HOLES.length + 1);
+    await nextFrame();
+    textures.forEach((t) => ctx.renderer.initTexture(t));
+    // Through the effects chain when there is one, so its passes compile too.
+    if (post) post.render(frameDelta);
+    else ctx.renderer.render(scene, camera);
+    hidden.forEach((o) => (o.visible = false));
+    loading.progress(1);
+    await nextFrame();
+    loading.done();
+  };
+
+  let disposed = false;
   layout(true);
-  ctx.start();
-  startGame(true);
+  void warmUp().then(() => {
+    if (disposed) return;
+    ctx.start();
+    startGame(true);
+  });
 
   window.addEventListener('pagehide', () => {
+    disposed = true;
     stopSpeaking();
     window.removeEventListener('keydown', onKey);
     window.removeEventListener('pointercancel', letGo);
@@ -1505,7 +1599,8 @@ function run(session: GameSession): void {
     pause.dispose();
     mute.dispose();
     hud.dispose();
-    holeScene?.dispose();
+    holeScenes.forEach((h) => h.dispose());
+    if (holeScene && ![...holeScenes.values()].includes(holeScene)) holeScene.dispose();
     blades.dispose();
     sky?.dispose();
     resizeWatcher.disconnect();
