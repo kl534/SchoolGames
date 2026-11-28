@@ -145,7 +145,8 @@ describe('grass', () => {
       expect(bladeSpots(h, at, 3000, k + 1)).toEqual(spots);
     }
     expect(total).toBeGreaterThan(0);
-  });
+    // The full sweep takes about 2 s on a fast machine, so a busy CI runner needs more than 5 s.
+  }, 30_000);
 
   it('puts the tufts 66 to 140 yd off the line, and none by a clubhouse', () => {
     for (const h of HOLES) {
