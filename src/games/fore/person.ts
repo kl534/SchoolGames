@@ -52,6 +52,8 @@ export interface PersonStyle {
   height?: number;
   /** Long trousers with a belt, instead of shorts. */
   trousers?: boolean;
+  /** A plain shirt hanging straight over the waist, hiding the belt (no tucked-in waist). */
+  untucked?: boolean;
   /** The colour of a glove on the left hand. */
   glove?: number;
 }
@@ -272,6 +274,11 @@ export function createPerson(style: PersonStyle): Person {
   if (style.trousers) {
     const strap = mesh(new CylinderGeometry(0.153, 0.153, 0.035, 18), belt, torso, 0, 0.07);
     strap.scale.set(1.45, 1, 0.87);
+  }
+  if (style.untucked) {
+    // A straight hem from the chest down over the belt, so the waist doesn't pinch in.
+    const hem = mesh(new CylinderGeometry(0.156, 0.158, 0.28, 18), shirt, torso, 0, 0.18);
+    hem.scale.set(1.45, 1, 0.87);
   }
   // A short, thick neck: the big head sits almost on the shoulders.
   mesh(new CylinderGeometry(0.065, 0.075, 0.1, 12), skin, torso, 0, 0.6);
