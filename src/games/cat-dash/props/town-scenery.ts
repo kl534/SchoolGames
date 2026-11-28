@@ -20,13 +20,13 @@ const hash = (n: number) => {
 function tree(kit: Kit, tile: Group, x: number, scale = 1, z = -1.9, leaf = 0x3e9a4a) {
   kit.mesh(
     new CylinderGeometry(0.35 * scale, 0.5 * scale, 3.2 * scale, 10),
-    kit.lit(0x7a5230, 0.9),
+    kit.wood(0x7a5230),
     tile,
     x,
     1.6 * scale,
     z,
   );
-  const mat = kit.lit(leaf, 0.85);
+  const mat = kit.foliage(leaf);
   for (const [dx, dy, r] of [
     [0, 4.2, 1.7],
     [-1.1, 3.6, 1.2],
@@ -38,22 +38,21 @@ function tree(kit: Kit, tile: Group, x: number, scale = 1, z = -1.9, leaf = 0x3e
 }
 
 function lamppost(kit: Kit, tile: Group, x: number, z = -1.6) {
-  const dark = kit.lit(0x33363c, 0.5);
+  const dark = kit.metal(0x33363c);
   kit.mesh(new CylinderGeometry(0.1, 0.14, 5.4, 8), dark, tile, x, 2.7, z);
   kit.box(0.7, 0.14, 0.14, dark, tile, x + 0.3, 5.45, z);
   kit.mesh(new SphereGeometry(0.28, 12, 10), kit.basic(0xfff3b0), tile, x + 0.6, 5.3, z);
 }
 
 function bench(kit: Kit, tile: Group, x: number, z = -1.5) {
-  const wood = kit.lit(0xa56b3a, 0.8);
+  const wood = kit.wood(0xa56b3a);
   kit.box(2.2, 0.14, 0.7, wood, tile, x, 1.0, z);
   kit.box(2.2, 0.8, 0.12, wood, tile, x, 1.55, z - 0.3);
-  for (const dx of [-0.9, 0.9])
-    kit.box(0.12, 1.0, 0.6, kit.lit(0x33363c, 0.5), tile, x + dx, 0.5, z);
+  for (const dx of [-0.9, 0.9]) kit.box(0.12, 1.0, 0.6, kit.metal(0x33363c), tile, x + dx, 0.5, z);
 }
 
 function bush(kit: Kit, tile: Group, x: number, r: number, color = 0x3e9a4a, z = -1.8) {
-  const mat = kit.lit(color, 0.9);
+  const mat = kit.foliage(color);
   for (const [dx, dr] of [
     [-0.6, 0.8],
     [0, 1],
@@ -74,8 +73,8 @@ function building(
   lit = 0xbfe4ff,
   z = Z,
 ) {
-  kit.box(w, h, 0.5, kit.lit(color, 0.9), tile, x, h / 2, z - 0.25);
-  kit.box(w + 0.3, 0.3, 0.7, kit.lit(color ^ 0x202020, 0.8), tile, x, h + 0.1, z - 0.2);
+  kit.box(w, h, 0.5, kit.stone(color), tile, x, h / 2, z - 0.25);
+  kit.box(w + 0.3, 0.3, 0.7, kit.stone(color ^ 0x202020), tile, x, h + 0.1, z - 0.2);
   const glass = kit.basic(lit);
   for (let wx = -w / 2 + 1; wx < w / 2 - 0.5; wx += 1.6) {
     for (let wy = 3.2; wy < h - 1; wy += 2) {
@@ -86,39 +85,39 @@ function building(
 
 const backyard: Decor = (kit, tile, look) => {
   // A tall wooden fence and a hedge along the back.
-  const plank = kit.lit(0xc9a77a, 0.9);
+  const plank = kit.wood(0xc9a77a);
   for (let i = 0; i < 48; i++) kit.box(0.46, 5.4, 0.1, plank, tile, i * 0.5 + 0.25, 2.7, Z - 0.2);
-  kit.box(24, 0.2, 0.2, kit.lit(0xa88658, 0.9), tile, 12, 4.2, Z - 0.1);
-  kit.box(24, 0.2, 0.2, kit.lit(0xa88658, 0.9), tile, 12, 1.2, Z - 0.1);
-  const hedge = kit.lit(look.wall, 0.95);
+  kit.box(24, 0.2, 0.2, kit.wood(0xa88658), tile, 12, 4.2, Z - 0.1);
+  kit.box(24, 0.2, 0.2, kit.wood(0xa88658), tile, 12, 1.2, Z - 0.1);
+  const hedge = kit.foliage(look.wall);
   for (let x = 1; x < 24; x += 2.2) {
     kit.mesh(new SphereGeometry(1.2, 12, 9), hedge, tile, x, 0.9, -2.2).scale.y = 0.8;
   }
   tree(kit, tile, 2.2, 1.1, -2.0);
   tree(kit, tile, 18.5, 0.9, -2.0, 0x4aa84a);
   // A doghouse.
-  kit.box(2.2, 1.6, 1.6, kit.lit(0xc0623a, 0.8), tile, 11.5, 0.8, -1.7);
-  const roof = kit.box(2.8, 0.14, 1.9, kit.lit(0x7a3b2a, 0.8), tile, 11.1, 2.0, -1.7);
+  kit.box(2.2, 1.6, 1.6, kit.wood(0xc0623a), tile, 11.5, 0.8, -1.7);
+  const roof = kit.box(2.8, 0.14, 1.9, kit.wood(0x7a3b2a), tile, 11.1, 2.0, -1.7);
   roof.rotation.z = 0.5;
-  const roof2 = kit.box(2.8, 0.14, 1.9, kit.lit(0x7a3b2a, 0.8), tile, 11.9, 2.0, -1.7);
+  const roof2 = kit.box(2.8, 0.14, 1.9, kit.wood(0x7a3b2a), tile, 11.9, 2.0, -1.7);
   roof2.rotation.z = -0.5;
   kit.box(0.9, 1.0, 0.08, kit.lit(0x2a1d14), tile, 11.5, 0.5, -0.88);
   // A barbecue and a gnome.
-  kit.mesh(new SphereGeometry(0.7, 14, 10), kit.lit(0x2a2a2e, 0.4), tile, 19.5, 1.5, -1.6);
-  kit.box(0.1, 1.2, 0.1, kit.lit(0x555555), tile, 19.5, 0.6, -1.6);
+  kit.mesh(new SphereGeometry(0.7, 14, 10), kit.metal(0x2a2a2e), tile, 19.5, 1.5, -1.6);
+  kit.box(0.1, 1.2, 0.1, kit.metal(0x555555), tile, 19.5, 0.6, -1.6);
   kit.mesh(new CylinderGeometry(0.01, 0.3, 0.6, 10), kit.lit(0xe0504a, 0.7), tile, 15.5, 1.1, -1.3);
   kit.mesh(new SphereGeometry(0.22, 10, 8), kit.lit(0xf2c9a0, 0.7), tile, 15.5, 0.68, -1.3);
   kit.box(0.4, 0.5, 0.3, kit.lit(0x3f8fd8, 0.8), tile, 15.5, 0.25, -1.3);
   // Flower pots.
   for (const x of [6.2, 7.0, 14]) {
-    kit.mesh(new CylinderGeometry(0.3, 0.22, 0.5, 10), kit.lit(0xc0623a, 0.8), tile, x, 0.25, -1.4);
+    kit.mesh(new CylinderGeometry(0.3, 0.22, 0.5, 10), kit.stone(0xc0623a), tile, x, 0.25, -1.4);
     kit.mesh(new SphereGeometry(0.3, 10, 8), kit.lit(0xff6f91, 0.7), tile, x, 0.75, -1.4);
   }
 };
 
 const park: Decor = (kit, tile, look) => {
   // Rolling hills of bushes along the back, and a row of trees.
-  const bushes = kit.lit(look.wall, 0.95);
+  const bushes = kit.foliage(look.wall);
   for (let x = 0; x < 24; x += 2.6) {
     kit.mesh(new SphereGeometry(1.8, 12, 9), bushes, tile, x + hash(x) * 0.8, 0.5, -2.4).scale.y =
       0.7;
@@ -130,14 +129,14 @@ const park: Decor = (kit, tile, look) => {
   lamppost(kit, tile, 6);
   bench(kit, tile, 13);
   // A picnic blanket with a basket, and some bushes.
-  kit.box(3.4, 0.04, 2.0, kit.lit(0xe0504a, 0.95), tile, 20, 0.03, -0.2);
-  kit.box(1.7, 0.05, 1.0, kit.lit(0xffffff, 0.95), tile, 20, 0.04, -0.2);
-  kit.box(0.7, 0.45, 0.5, kit.lit(0xc9a15a, 0.9), tile, 20.4, 0.28, -0.2);
+  kit.box(3.4, 0.04, 2.0, kit.fabric(0xe0504a), tile, 20, 0.03, -0.2);
+  kit.box(1.7, 0.05, 1.0, kit.fabric(0xffffff), tile, 20, 0.04, -0.2);
+  kit.box(0.7, 0.45, 0.5, kit.wood(0xc9a15a), tile, 20.4, 0.28, -0.2);
   bush(kit, tile, 11, 0.8, 0x2f8a46);
   bush(kit, tile, 3.8, 0.7, 0x4aa84a);
   // A sign.
-  kit.box(0.14, 1.8, 0.14, kit.lit(0x7a5230, 0.9), tile, 15, 0.9, -1.4);
-  kit.box(1.4, 0.7, 0.1, kit.lit(0x3f8fd8, 0.6), tile, 15, 2.0, -1.4);
+  kit.box(0.14, 1.8, 0.14, kit.wood(0x7a5230), tile, 15, 0.9, -1.4);
+  kit.box(1.4, 0.7, 0.1, kit.wood(0x3f8fd8), tile, 15, 2.0, -1.4);
 };
 
 const street: Decor = (kit, tile) => {
@@ -146,14 +145,14 @@ const street: Decor = (kit, tile) => {
   building(kit, tile, 17, 6, 8, 0x9db4c9);
   building(kit, tile, 22.8, 4, 10.5, 0xe0c27a, 0xbfe4ff);
   // Doors and an awning on the shops.
-  kit.box(1.4, 2.4, 0.1, kit.lit(0x6b4526, 0.7), tile, 3.5, 1.2, Z + 0.05);
-  kit.box(3.2, 0.4, 0.9, kit.lit(0xe0504a, 0.7), tile, 10.5, 3.0, Z + 0.4);
-  kit.box(1.6, 2.4, 0.1, kit.lit(0x3d5a80, 0.7), tile, 10.5, 1.2, Z + 0.05);
+  kit.box(1.4, 2.4, 0.1, kit.wood(0x6b4526), tile, 3.5, 1.2, Z + 0.05);
+  kit.box(3.2, 0.4, 0.9, kit.fabric(0xe0504a), tile, 10.5, 3.0, Z + 0.4);
+  kit.box(1.6, 2.4, 0.1, kit.wood(0x3d5a80), tile, 10.5, 1.2, Z + 0.05);
   lamppost(kit, tile, 7.2);
   lamppost(kit, tile, 20);
   bench(kit, tile, 14.2);
   // A bus-stop sign.
-  kit.box(0.1, 3.2, 0.1, kit.lit(0x555555), tile, 1.2, 1.6, -1.4);
+  kit.box(0.1, 3.2, 0.1, kit.metal(0x555555), tile, 1.2, 1.6, -1.4);
   kit.mesh(
     new CylinderGeometry(0.5, 0.5, 0.08, 16),
     kit.lit(0x3f8fd8, 0.5),
@@ -163,7 +162,7 @@ const street: Decor = (kit, tile) => {
     -1.4,
   ).rotation.x = Math.PI / 2;
   // The kerb.
-  kit.box(24, 0.2, 0.3, kit.lit(0xb4b6bc, 0.8), tile, 12, 0.1, -2.1);
+  kit.box(24, 0.2, 0.3, kit.stone(0xb4b6bc), tile, 12, 0.1, -2.1);
 };
 
 const rooftops: Decor = (kit, tile, look) => {
@@ -174,23 +173,16 @@ const rooftops: Decor = (kit, tile, look) => {
     const h = 5.5 + hash(i + 3) * 4.5;
     building(kit, tile, 2 + i * 4.2, w, h, dusk[i % dusk.length], 0xffd27a, Z - 0.6);
   }
-  const wood = kit.lit(0x7a5230, 0.9);
+  const wood = kit.wood(0x7a5230);
   kit.mesh(new CylinderGeometry(1.1, 1.1, 1.8, 14), wood, tile, 10, 12.6, -2.4);
   kit.mesh(new CylinderGeometry(0.1, 0.1, 3, 6), wood, tile, 9.3, 10.4, -2.4);
   kit.mesh(new CylinderGeometry(0.1, 0.1, 3, 6), wood, tile, 10.7, 10.4, -2.4);
   // A low wall along the back edge of the roof, vents and a satellite dish.
-  kit.box(24, 1.0, 0.5, kit.lit(look.wall, 0.9), tile, 12, 0.5, -2.0);
-  kit.box(24, 0.16, 0.7, kit.lit(look.trim, 0.8), tile, 12, 1.08, -2.0);
+  kit.box(24, 1.0, 0.5, kit.stone(look.wall), tile, 12, 0.5, -2.0);
+  kit.box(24, 0.16, 0.7, kit.stone(look.trim), tile, 12, 1.08, -2.0);
   for (const x of [2.5, 13.5, 21]) {
-    kit.mesh(new CylinderGeometry(0.4, 0.5, 1.0, 10), kit.lit(0x888e98, 0.5), tile, x, 0.6, -1.5);
-    kit.mesh(
-      new CylinderGeometry(0.55, 0.4, 0.15, 10),
-      kit.lit(0x6f7580, 0.5),
-      tile,
-      x,
-      1.15,
-      -1.5,
-    );
+    kit.mesh(new CylinderGeometry(0.4, 0.5, 1.0, 10), kit.metal(0x888e98), tile, x, 0.6, -1.5);
+    kit.mesh(new CylinderGeometry(0.55, 0.4, 0.15, 10), kit.metal(0x6f7580), tile, x, 1.15, -1.5);
   }
   kit.mesh(
     new SphereGeometry(0.8, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2),
@@ -200,7 +192,7 @@ const rooftops: Decor = (kit, tile, look) => {
     1.4,
     -1.5,
   ).rotation.x = -0.9;
-  kit.box(0.1, 1.2, 0.1, kit.lit(0x555555), tile, 18, 0.6, -1.5);
+  kit.box(0.1, 1.2, 0.1, kit.metal(0x555555), tile, 18, 0.6, -1.5);
 };
 
 export const TOWN_SCENERY: Record<

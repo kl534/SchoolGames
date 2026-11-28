@@ -21,6 +21,8 @@ import {
   type Pose,
 } from './person';
 import { BALL_R } from './ball';
+import type { PeopleAssets } from './assets';
+import { createSkinnedPerson, GOLFER_OUTFIT, type Skinned } from './skin';
 import {
   SWING_TIMING,
   swingFrame,
@@ -41,8 +43,15 @@ export interface Golfer {
   /** At his feet, unscaled: its yaw faces his chest along the ball line (see `stand`). */
   root: Group;
   person: Person;
+  /** The realistic model, once `setModel` has put it on. */
+  readonly skin: Skinned | null;
   /** Picks the club in his hands (its model, length, stance and how the swing is fitted to it). */
   setClub(club: ClubSpec): void;
+  /**
+   * Puts the realistic model on the rig (which stays as its hidden driver); null brings the rig
+   * back. Does nothing twice for the same assets.
+   */
+  setModel(people: PeopleAssets | null, shadows?: boolean): void;
   /** Poses the golfer `t` seconds into a move. */
   play(move: GolfMove, t: number, delta: number): void;
   /**
@@ -50,7 +59,13 @@ export interface Golfer {
    * left, his feet line `reach` for the club from the ball. `dir` is the shot direction (radians
    * from +z towards +x).
    */
-  stand(ball: { x: number; z: number }, dir: number, clubId: string): void;
+  /** `ground` is the ground's height under a point: his feet stand on it (a bunker is below grade). */
+  stand(
+    ball: { x: number; z: number },
+    dir: number,
+    clubId: string,
+    ground?: (x: number, z: number) => number,
+  ): void;
   dispose(): void;
 }
 
@@ -549,6 +564,9 @@ export function createGolfer(): Golfer {
 
   let ikWeight = 1;
   let ikGoal = 1;
+  let skinned: Skinned | null = null;
+  const shaftWorld = new Vector3();
+  const shiftLocal = new Vector3();
 
   /** Solves one arm's two bones to the hand; leaves the elbow in `elbow` and the bone turns in q. */
   const solveArm = (
@@ -658,6 +676,9 @@ export function createGolfer(): Golfer {
   const golfer: Golfer = {
     root,
     person,
+    get skin() {
+      return skinned;
+    },
     setClub: attachClub,
     play(move, t, delta) {
       if (move !== last) {
@@ -734,15 +755,46 @@ export function createGolfer(): Golfer {
         model.group.position.copy(pHold);
         model.group.quaternion.copy(qHoldClub);
       }
+      if (skinned) {
+        // The shaft points from the hands to the head: the club's -y, turned into the world.
+        root.getWorldQuaternion(qRoot);
+        shaftWorld.set(0, -1, 0).applyQuaternion(model.group.quaternion).applyQuaternion(qRoot);
+        skinned.update(shaftWorld, ikGoal === 1 || wgt > 0 ? wgt * wgt * (3 - 2 * wgt) : 0);
+        // The model's hands reach the rig's all but at the finish; the club goes with them.
+        model.group.position.add(
+          shiftLocal.copy(skinned.clubShift).applyQuaternion(qRoot.invert()),
+        );
+        model.group.updateMatrixWorld(true);
+      }
     },
-    stand(ball, dir, id) {
+    setModel(people, shadows = false) {
+      skinned?.dispose();
+      skinned = null;
+      if (!people) return;
+      skinned = createSkinnedPerson(people.golfer, person, {
+        outfit: GOLFER_OUTFIT,
+        accent: 'glove',
+        cap: 0xf4f4f4,
+        hair: [{ style: 'Hair_SimpleParted', colour: 0x6b4a2c }],
+        hairSource: people.hair,
+        weave: people.weave,
+        height: 2,
+        face: true,
+      });
+      skinned.setShadows(shadows);
+      golfer.play('address', 0, 0);
+    },
+    stand(ball, dir, id, ground = () => 0) {
       const reach = reachFor(id);
       // His chest faces along (-cos dir, sin dir): the ball line is in front of him, the target on his left.
       const forward = { x: -Math.cos(dir), z: Math.sin(dir) };
       root.rotation.y = dir - Math.PI / 2;
-      root.position.set(ball.x - forward.x * reach, 0, ball.z - forward.z * reach);
+      const x = ball.x - forward.x * reach;
+      const z = ball.z - forward.z * reach;
+      root.position.set(x, ground(x, z), z);
     },
     dispose() {
+      skinned?.dispose();
       model.dispose();
     },
   };

@@ -1,18 +1,24 @@
 import './style.css';
 import {
-  ACESFilmicToneMapping,
+  NeutralToneMapping,
   Color,
   DirectionalLight,
   Fog,
   HemisphereLight,
   MathUtils,
-  PCFShadowMap,
+  PCFSoftShadowMap,
+  PMREMGenerator,
+  Raycaster,
+  Vector2,
   type Material,
   type Mesh,
   type Texture,
   Vector3,
   type Object3D,
+  type WebGLRenderer,
+  type WebGLRenderTarget,
 } from 'three';
+import { CSM } from 'three/addons/csm/CSM.js';
 import { pressAnswers } from '../../shared/answers';
 import { sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
 import { createFactFeed, type FactFeed } from '../../shared/feed';
@@ -20,6 +26,7 @@ import { createPointerInput, onPress } from '../../shared/input';
 import { showPreview } from '../../shared/preview';
 import { showResults } from '../../shared/results';
 import { starsFor } from '../../shared/round';
+import { createProgressBar, type ProgressBar } from '../../shared/assets';
 import { createScene } from '../../shared/scene';
 import { startGameSession, type GameSession } from '../../shared/session';
 import { createTapFlow } from '../../shared/tapflow';
@@ -31,27 +38,38 @@ import { BALL_R, createBall, flightPoint, flightSeconds } from './ball';
 import { createTravel, type Travel } from './travel';
 import { HOLES, surfaceAt, type Hole } from './course';
 import {
-  devAim,
+  devBigMap,
   devCam,
+  devClap,
   devClubPlan,
+  devGfx,
   devHoleState,
   devHolesOk,
   devIntroAt,
+  devPlace,
   devQuality,
   devShadows,
-  devSide,
+  devScatter,
   devSkipIntro,
   devStart,
   devSwing,
+  devTarget,
   type DevCam,
 } from './dev';
 import { createCaddie } from './caddie';
+import { ROPE_R, shouldClap } from './gallery';
 import { createGolfer, type GolfMove } from './golfer';
 import { createGuide } from './guide';
 import { buildHole, CUP_AID_RANGE, SKY, type HoleScene } from './hole';
-import { createSky } from './sky';
+import { createSky, type Sky } from './sky';
 import { nextFrame, takeLoading } from './loading';
-import { createHud, SURFACE_NAMES, windChip, type Bands, type CardCell } from './hud';
+import { disposeForeAssets, loadForeAssets, NO_ASSETS, type ForeAssets } from './assets';
+import { FALLBACK_LOOK, litTree, useCascadedLightChunk, type Look } from './ground';
+import { createBlades } from './grass';
+import { createPost, type Post } from './post';
+import { adaptGfx, gfxSettings, pickGfx, sunSetup, type DeviceInfo, type Gfx } from './quality';
+import { groundY } from './terrain';
+import { createHud, SURFACE_NAMES, type Bands, type CardCell } from './hud';
 import {
   afterShot,
   callKindFor,
@@ -75,16 +93,22 @@ import {
   type HoleState,
 } from './rules';
 import {
-  AIM_MAX,
   AIM_STEP,
+  clampTarget,
+  DIST_STEP,
   finishShot,
-  holedOutcome,
   isPutt,
   planShot,
+  predictRest,
+  PUTT_DIST_STEP,
+  reachFor,
+  duffAngleFor,
   resolveShot,
+  suggestTarget,
   type Outcome,
   type Plan,
   type Result,
+  type XZ,
 } from './shot';
 import { timingFor } from './swing';
 import {
@@ -94,6 +118,7 @@ import {
   followView,
   introView,
   landView,
+  placeView,
   type CamView,
   type Vec,
 } from './views';
@@ -120,8 +145,6 @@ const SKIP_INTRO_AFTER = 0.3;
 const FAST_AFTER = 0.3;
 /** A holed ball takes this long to drop out of sight in the cup, seconds. */
 const HOLE_DROP_FOR = 0.15;
-/** Degrees of aim for each pixel of a sideways drag. */
-const DEG_PER_PX = 0.12;
 
 type Phase =
   | 'preview'
@@ -136,7 +159,7 @@ type Phase =
   | 'over'
   | 'done';
 
-type ViewKind = 'intro' | 'aim' | 'ask' | 'follow' | 'land';
+type ViewKind = 'intro' | 'aim' | 'place' | 'ask' | 'follow' | 'land';
 
 const lerpVec = (a: Vec, b: Vec, t: number): Vec => ({
   x: MathUtils.lerp(a.x, b.x, t),
@@ -146,41 +169,143 @@ const lerpVec = (a: Vec, b: Vec, t: number): Vec => ({
 
 const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 
+/** localStorage key for the quality tier a slow device was stepped down to. */
+const GFX_KEY = 'fore.gfx';
+
+function readSavedGfx(): Gfx | null {
+  try {
+    const saved = localStorage.getItem(GFX_KEY);
+    return saved === 'low' || saved === 'medium' || saved === 'high' ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveGfx(gfx: Gfx): void {
+  try {
+    localStorage.setItem(GFX_KEY, gfx);
+  } catch {
+    // Private mode or blocked storage: the tier is just picked again next time.
+  }
+}
+
+/** What the picker needs to know about this device. */
+function deviceInfo(renderer: WebGLRenderer): DeviceInfo {
+  let gpu = '';
+  try {
+    const gl = renderer.getContext();
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    if (ext) gpu = String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) ?? '');
+  } catch {
+    gpu = '';
+  }
+  return {
+    gpu,
+    cores: navigator.hardwareConcurrency ?? 0,
+    minSide: Math.min(window.screen.width, window.screen.height),
+    mobile: /Android|iPhone|iPad|Mobile/.test(navigator.userAgent) || navigator.maxTouchPoints > 1,
+  };
+}
+
+/** Neutral tone mapping keeps the greens (AgX turned every lawn grey); a little under 1 keeps the sunlit grass from clipping. */
+const EXPOSURE = 0.75;
+/** The sun's intensity (the cascaded map's lights add up to the same). */
+const SUN_PLAIN = 3.2;
+
+/** Frames of the first aim that are timed to decide whether to step the quality down. */
+const SAMPLE_FRAMES = 120;
+
 function run(session: GameSession): void {
   const container = document.getElementById('game');
   if (!container) throw new Error('Missing #game container');
 
   // ---------- Scene ----------
   const ctx = createScene(container, { fov: 40, near: 0.5, far: 900 });
-  const { scene, camera } = ctx;
+  const { scene, camera, renderer } = ctx;
   scene.background = new Color(SKY);
-  scene.fog = new Fog(0xcfe9ff, 320, 820);
-  scene.add(new HemisphereLight(0xdff0ff, 0x5e8a46, 1.6));
-  const sun = new DirectionalLight(0xfff0d0, 2.4);
-  scene.add(sun, sun.target);
-  const sky = createSky();
-  scene.add(sky.object);
-  ctx.renderer.toneMapping = ACESFilmicToneMapping;
-  ctx.renderer.toneMappingExposure = 0.9;
-  // One shadow map for the people and the flag; its box (14 x 14 yd) follows the golfer.
-  const shadows = devShadows();
-  if (shadows) {
-    ctx.renderer.shadowMap.enabled = true;
-    ctx.renderer.shadowMap.type = PCFShadowMap;
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
-    const box = sun.shadow.camera;
-    box.left = box.bottom = -7;
-    box.right = box.top = 7;
-    box.near = 1;
-    box.far = 160;
-    sun.shadow.bias = -0.0005;
-    sun.shadow.normalBias = 0.03;
+  scene.fog = new Fog(SKY, 260, 1500);
+  renderer.toneMapping = NeutralToneMapping;
+  renderer.toneMappingExposure = EXPOSURE;
+
+  // Quality: the dev address, else the tier saved after a slow run, else a guess from the device.
+  const forcedGfx = devGfx();
+  let gfx: Gfx = forcedGfx ?? readSavedGfx() ?? pickGfx(deviceInfo(renderer));
+  let settings = gfxSettings(gfx);
+  // The shadow map is fixed for the page (a step down changes the rest at the next hole).
+  const pageSettings = settings;
+  const shadows = devShadows() && settings.shadows !== 'none';
+  renderer.shadowMap.enabled = shadows;
+  renderer.shadowMap.type = PCFSoftShadowMap;
+
+  // Light: the sun (its direction is fixed once the sky picture is read) and, on the high tier,
+  // its cascaded shadow map. Without the picture a faint hemisphere light fills the shade.
+  const sunDir = new Vector3(...sunSetup(null).dir);
+  const sun = new DirectionalLight(0xfff1dc, SUN_PLAIN);
+  const single = shadows && pageSettings.shadows === 'single';
+  let csm: CSM | null = null;
+  if (shadows && pageSettings.shadows === 'cascaded') {
+    csm = new CSM({
+      camera,
+      parent: scene,
+      cascades: pageSettings.cascades,
+      maxFar: pageSettings.shadowFar,
+      shadowMapSize: pageSettings.shadowSize,
+      shadowBias: -0.0003,
+      lightDirection: sunDir.clone().negate(),
+      lightIntensity: 3.2,
+    });
+    csm.lights.forEach((l) => {
+      l.color.set(0xfff1dc);
+      l.shadow.normalBias = 0.02;
+    });
+  } else {
+    scene.add(sun, sun.target);
+    if (single) {
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(pageSettings.shadowSize, pageSettings.shadowSize);
+      const box = sun.shadow.camera;
+      box.left = box.bottom = -30;
+      box.right = box.top = 30;
+      box.near = 1;
+      box.far = 220;
+      sun.shadow.bias = -0.0003;
+      sun.shadow.normalBias = 0.02;
+    }
   }
-  const ball = createBall();
+  // One lights chunk on every tier, so medium and low colour like high (see the function).
+  const restoreLights = useCascadedLightChunk();
+  let fill: HemisphereLight | null = null;
+  let envTarget: WebGLRenderTarget | null = null;
+  let sky: Sky | null = null;
+  let assets: ForeAssets = NO_ASSETS;
+  /** What a hole is built with: the tier, the pictures, the shadow map. */
+  const makeLook = (): Look => ({
+    settings,
+    assets,
+    csm,
+    sun: sunDir,
+    shadows,
+  });
+  let look: Look = FALLBACK_LOOK;
+
+  // The aids and the tracer are brighter when a tone-mapping post pass follows.
+  const glow = settings.post ? 1.5 : 1;
+  const ball = createBall(glow);
   scene.add(ball.object);
-  const guide = createGuide();
+  const guide = createGuide(glow);
   scene.add(guide.object);
+  // Close grass blades round the ball, regrown for each shot.
+  const blades = createBlades(settings.blades);
+  scene.add(blades.object);
+  let bladeKey = '';
+  const growBlades = () => {
+    const key = `${holeIndex}:${hstate.at.x.toFixed(2)},${hstate.at.z.toFixed(2)}`;
+    if (key === bladeKey) return;
+    bladeKey = key;
+    const seed =
+      holeIndex * 7919 + Math.round(hstate.at.x * 100) * 31 + Math.round(hstate.at.z * 100);
+    blades.rebuild(hole, hstate.at, seed);
+  };
   const golfer = createGolfer();
   scene.add(golfer.root);
   const caddie = createCaddie();
@@ -192,16 +317,133 @@ function run(session: GameSession): void {
       else if ((o as { isMesh?: boolean }).isMesh) o.castShadow = shadows;
     });
   }
-  /** Every hole is built once, behind the loading screen, and kept: only one is shown. */
-  const holeScenes: (HoleScene | null)[] = HOLES.map(() => null);
+  litTree(csm, scene);
+
+  // The effects chain (medium and high): the pass settings follow the tier, so a step down
+  // rebuilds it at once.
+  let post: Post | null = null;
+  let frameDelta = 0.016;
+  const sizeRenderer = () => {
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, settings.pixelRatio));
+    const buffer = renderer.getDrawingBufferSize(new Vector2());
+    ball.setResolution(buffer.x, buffer.y);
+    post?.setSize(w, h);
+  };
+  const buildPost = () => {
+    post?.dispose();
+    post = null;
+    ctx.setRender(null);
+    sizeRenderer();
+    if (!settings.post) return;
+    post = createPost(
+      renderer,
+      scene,
+      camera,
+      settings,
+      Math.max(container.clientWidth, 1),
+      Math.max(container.clientHeight, 1),
+    );
+    ctx.setRender(() => post?.render(frameDelta));
+  };
+  buildPost();
+  // After the shared scene's own resize, so this tier's pixel ratio wins.
+  const resizeWatcher = new ResizeObserver(sizeRenderer);
+  resizeWatcher.observe(container);
+  window.addEventListener('orientationchange', sizeRenderer);
+
+  // Everything the loaded pictures change: the sky and what it lights, the fog, the look.
+  let assetsReady = false;
+  let bar: ProgressBar | null = null;
+  let afterAssets: (() => void) | null = null;
+  const applyAssets = (loaded: ForeAssets) => {
+    assets = loaded;
+    const picture = loaded.sky;
+    const { dir, yaw } = sunSetup(picture?.sun ?? null);
+    sunDir.set(...dir);
+    csm?.lightDirection.copy(sunDir).negate();
+    if (picture) {
+      const pmrem = new PMREMGenerator(renderer);
+      envTarget = pmrem.fromEquirectangular(picture.hdr);
+      pmrem.dispose();
+      scene.environment = envTarget.texture;
+      scene.environmentIntensity = 1;
+      scene.environmentRotation.set(0, yaw, 0);
+      const [r, g, b] = picture.horizon;
+      // A bright haze: the exposure takes a quarter off, so the colour is lifted to match.
+      scene.fog = new Fog(
+        new Color().setRGB(
+          Math.min(r / EXPOSURE, 1),
+          Math.min(g / EXPOSURE, 1),
+          Math.min(b / EXPOSURE, 1),
+        ),
+        260,
+        1500,
+      );
+      scene.background = scene.fog.color;
+    } else {
+      fill = new HemisphereLight(0xdff0ff, 0x5e8a46, 0.4);
+      scene.add(fill);
+    }
+    sky = createSky(picture, yaw, scene.fog ? (scene.fog as Fog).color : undefined);
+    scene.add(sky.object);
+    look = makeLook();
+    // The realistic people take over from the rig, which keeps driving them (and falls back to
+    // being seen if the models did not load).
+    golfer.setModel(loaded.people, shadows);
+    caddie.setModel(loaded.people, shadows);
+    litTree(csm, golfer.root);
+    litTree(csm, caddie.root);
+    assetsReady = true;
+    bar?.remove();
+    bar = null;
+    afterAssets?.();
+    afterAssets = null;
+  };
+  // The loading screen covers the first half of its bar with the pictures, then `warmUp` builds
+  // the holes and compiles the shaders under the rest.
+  const loading = takeLoading();
+  const assetsLoaded = loadForeAssets(
+    Math.min(8, renderer.capabilities.getMaxAnisotropy()),
+    (f) => {
+      bar?.update(f);
+      loading.progress(f * 0.5);
+    },
+  )
+    .then(applyAssets)
+    .catch(() => applyAssets(NO_ASSETS));
+  const whenAssets = (go: () => void) => {
+    if (assetsReady) {
+      go();
+      return;
+    }
+    bar ??= createProgressBar(document.body);
+    afterAssets = go;
+  };
+  // Timing the first aim decides whether a slow device steps down a tier.
+  const samples: number[] = [];
+  let sampled = forcedGfx !== null;
+  /**
+   * Every hole is built once, behind the loading screen, and kept: only one is shown. A step down
+   * in quality changes the look, so the kept holes go and are built again as they are reached.
+   */
+  const holeScenes = new Map<number, HoleScene>();
+  let holesLook: Look | null = null;
   let holeScene: HoleScene | null = null;
   const sceneForHole = (index: number): HoleScene => {
-    let built = holeScenes[index];
+    if (holesLook !== look) {
+      // The hole in play stays until the next one replaces it (see `startHoleAt`).
+      holeScenes.forEach((h) => h !== holeScene && h.dispose());
+      holeScenes.clear();
+      holesLook = look;
+    }
+    let built = holeScenes.get(index);
     if (!built) {
-      built = buildHole(HOLES[index]);
+      built = buildHole(HOLES[index], look);
       built.object.visible = false;
       scene.add(built.object);
-      holeScenes[index] = built;
+      holeScenes.set(index, built);
     }
     return built;
   };
@@ -225,10 +467,31 @@ function run(session: GameSession): void {
   let bestAtStart = session.highScore();
   let holeIndex = 0;
   let hole: Hole = HOLES[0];
+  /** The ground's height under a point of this hole (below grade in a bunker). */
+  const ground = (x: number, z: number) => groundY(hole, x, z);
+  /** Puts the ball at rest (or in flight) at `p`, whose y is its height above the flat ground. */
+  const putBall = (
+    p: { x: number; y: number; z: number },
+    lie?: Parameters<typeof ball.place>[1],
+  ) => {
+    const g = ground(p.x, p.z);
+    ball.place({ x: p.x, y: p.y + g, z: p.z }, lie, g);
+  };
   let hstate: HoleState = startHole(hole);
   let scores: number[] = [];
-  let aimDeg = 0;
-  let plan: Plan = devClubPlan(planShot(hole, hstate.at, hstate.lie, aimDeg), hstate.lie);
+  /** Where the player wants the ring (the plan clamps it to the limits). */
+  let ringWant: XZ = { ...hole.pin };
+  /** A dev address's ring spot for the first shot. */
+  let devWant: XZ | null = null;
+  let plan: Plan = devClubPlan(planShot(hole, hstate.at, hstate.lie, ringWant), hstate.lie);
+  /** Where a perfect shot with the plan comes to rest. */
+  let restNow: Result = predictRest(hole, plan);
+  /** A finger is down on the picture placing the ring; where it is (px). */
+  let holding = false;
+  let finger = { x: 0, y: 0 };
+  const raycaster = new Raycaster();
+  /** `?bigmap=1`: the big map opens once, with the first aim. */
+  let bigPending = devBigMap();
   let devPending = true;
   let fact: Fact | undefined;
   let options: string[] = [];
@@ -307,6 +570,23 @@ function run(session: GameSession): void {
     const line = { x: Math.sin(plan.dir), z: Math.cos(plan.dir) };
     const ballAt = hstate.at;
     const eye = (x: number, z: number): Vec => ({ x, y: 1.2, z });
+    const crowd = holeScene?.gallery;
+    if (cam === 'crowd' && crowd) {
+      // Inside the rope, facing the spectators from 9 yd.
+      const d = { x: Math.sin(crowd.centre), z: Math.cos(crowd.centre) };
+      const at = (r: number, y: number): Vec => ({
+        x: hole.pin.x + d.x * r,
+        y,
+        z: hole.pin.z + d.z * r,
+      });
+      return {
+        pos: at(ROPE_R - 9, 1.5),
+        look: at(ROPE_R + 3.5, 1.1),
+        fov: 45,
+        shift: centreShift(viewH, bands.aim),
+        shiftX: centreShiftX(viewW, bands.aim),
+      };
+    }
     const [pos, look]: [Vec, Vec] =
       cam === 'face'
         ? [eye(g.x + chest.x * 5, g.z + chest.z * 5), { x: g.x, y: 1, z: g.z }]
@@ -325,6 +605,14 @@ function run(session: GameSession): void {
     };
   };
 
+  /** Where the predicted rest is, for fitting the view (none when it holes out or hits a tree). */
+  const restPoint = (): XZ | undefined =>
+    restNow.kind === 'rest' && restNow.tree === undefined
+      ? restNow.at
+      : restNow.kind === 'water'
+        ? restNow.splash
+        : undefined;
+
   const buildView = (kind: ViewKind): CamView => {
     const dev = devCam();
     if (dev && kind !== 'intro') return devCamView(dev);
@@ -338,9 +626,11 @@ function run(session: GameSession): void {
           devIntroAt() ?? (gameTime - introAt) / SWEEP_FOR,
         );
       case 'aim':
-        return aimView(plan, hole, golferAt(), viewW, viewH, bands.aim);
+        return aimView(plan, hole, golferAt(), viewW, viewH, bands.aim, restPoint());
+      case 'place':
+        return placeView(plan, hole, golferAt(), viewW, viewH, bands.aim, reachFor(hstate.lie));
       case 'ask':
-        return aimView(plan, hole, golferAt(), viewW, viewH, bands.ask);
+        return aimView(plan, hole, golferAt(), viewW, viewH, bands.ask, restPoint());
       case 'follow':
         return followView(ballPos, plan.dir, isPutt(plan), viewW, viewH, bands.play);
       case 'land':
@@ -405,6 +695,7 @@ function run(session: GameSession): void {
   };
 
   // ---------- Showing the game ----------
+  const pars = HOLES.map((h) => h.par);
   const renderCard = () => {
     const cells: CardCell[] = HOLES.map((h, i) => ({
       par: h.par,
@@ -416,7 +707,7 @@ function run(session: GameSession): void {
             : null,
       current: i === holeIndex && scores.length <= i,
     }));
-    hud.renderCard(cells);
+    hud.renderCard(cells, totalVsPar(scores, pars));
   };
 
   const setGolf = (move: GolfMove) => {
@@ -425,38 +716,47 @@ function run(session: GameSession): void {
   };
 
   const makePlan = (): Plan =>
-    devClubPlan(planShot(hole, hstate.at, hstate.lie, aimDeg), hstate.lie);
+    devClubPlan(planShot(hole, hstate.at, hstate.lie, ringWant), hstate.lie);
 
   const placeGolfer = () => {
+    growBlades();
     golfer.setClub(plan.club);
-    golfer.stand(hstate.at, plan.dir, plan.club.id);
-    sun.target.position.copy(golfer.root.position);
-    sun.position.set(golfer.root.position.x + 36, 72, golfer.root.position.z - 30);
-    caddie.stand(golfer.root.position, plan.dir);
+    golfer.stand(hstate.at, plan.dir, plan.club.id, ground);
+    caddie.stand(golfer.root.position, plan.dir, ground);
     // The flash ring around the cup shows on the green and when the pin is near.
     const toPin = Math.hypot(hole.pin.x - hstate.at.x, hole.pin.z - hstate.at.z);
     holeScene?.setCupAid(hstate.lie === 'green' || toPin <= CUP_AID_RANGE);
   };
 
-  /** Plans the shot from the current aim and shows the ring, the chips and the map. */
+  /** Plans the shot from the wanted ring spot and shows the ring, the chips and the maps. */
   const refreshAim = () => {
     plan = makePlan();
-    aimDeg = plan.aimDeg;
+    ringWant = { ...plan.landing };
     const over = surfaceAt(hole, plan.landing.x, plan.landing.z);
-    guide.update(plan, over);
+    restNow = predictRest(hole, plan);
+    const treeStop = restNow.kind === 'rest' && restNow.tree !== undefined;
+    guide.update(plan, over, restNow, treeStop, ground);
     const putt = isPutt(plan);
     const toPin = Math.hypot(hole.pin.x - hstate.at.x, hole.pin.z - hstate.at.z);
     hud.renderChips(
       {
-        club: putt ? 'Putter' : `${plan.club.name} · ${Math.round(plan.carry)} yd`,
+        club: `${putt ? 'Putter' : plan.club.name} · ${Math.round(plan.carry)} yd`,
         surface: SURFACE_NAMES[over],
-        wind: windChip(hole, putt),
         pin: `Pin ${Math.round(toPin)} yd`,
       },
       putt,
     );
-    hud.renderMap(hole, hstate.at, plan.landing);
+    hud.renderMap(hole, hstate.at, { at: plan.landing, r: plan.ringR, over });
+    if (hud.bigMapOpen) hud.showBigMap(hole, hstate.at, plan, restNow, hstate.lie);
     placeGolfer();
+  };
+
+  /** Puts the ring (as near as the limits allow) at `want`; the camera follows unless a finger holds it. */
+  const moveRing = (want: XZ) => {
+    if (phase !== 'aim') return;
+    ringWant = want;
+    refreshAim();
+    if (goal === 'aim') retarget(0.15);
   };
 
   // ---------- Speech ----------
@@ -477,12 +777,17 @@ function run(session: GameSession): void {
   const startHoleAt = (index: number) => {
     holeIndex = index;
     hole = HOLES[index];
-    if (holeScene) holeScene.object.visible = false;
+    const previous = holeScene;
     holeScene = sceneForHole(index);
+    if (previous && previous !== holeScene) {
+      previous.object.visible = false;
+      if (![...holeScenes.values()].includes(previous)) previous.dispose();
+    }
     holeScene.object.visible = true;
     const first = devPending;
     hstate = first ? devHoleState(hole) : startHole(hole);
-    aimDeg = (first ? devAim(hole, hstate) : null) ?? 0;
+    devWant = first ? devTarget(hole, hstate) : null;
+    ringWant = clampTarget(hole, hstate.at, hstate.lie, hole.pin);
     const skipIntro = first && devSkipIntro();
     devPending = false;
     const thisTurn = ++turn;
@@ -498,7 +803,7 @@ function run(session: GameSession): void {
     placeGolfer();
     ball.setVisible(true);
     ball.splash(null);
-    ball.place({ x: hstate.at.x, y: BALL_R, z: hstate.at.z }, hstate.lie);
+    putBall({ x: hstate.at.x, y: BALL_R, z: hstate.at.z }, hstate.lie);
     hud.renderMap(hole, hstate.at, null);
     renderCard();
     setGolf('address');
@@ -521,19 +826,26 @@ function run(session: GameSession): void {
 
   const beginAim = (seconds: number) => {
     phase = 'aim';
+    // Each shot starts on the smart suggestion (a dev address may place the first one).
+    ringWant = devWant ?? suggestTarget(hole, hstate.at, hstate.lie);
+    devWant = null;
     hud.hideBanner();
     hud.showQuestion(false);
     guide.setVisible(true);
     ball.setVisible(true);
     ball.splash(null);
-    ball.place({ x: hstate.at.x, y: BALL_R, z: hstate.at.z }, hstate.lie);
+    putBall({ x: hstate.at.x, y: BALL_R, z: hstate.at.z }, hstate.lie);
     ball.setAddress(true);
     refreshAim();
     renderCard();
     hud.showControls(true);
     hud.showMap(true);
     setGolf('address');
-    goTo('aim', seconds);
+    goTo(devPlace() ? 'place' : 'aim', seconds);
+    if (bigPending) {
+      bigPending = false;
+      hud.showBigMap(hole, hstate.at, plan, restNow, hstate.lie);
+    }
   };
 
   // ---------- Asking ----------
@@ -557,6 +869,8 @@ function run(session: GameSession): void {
     hud.hidePill();
     hud.showControls(false);
     hud.showMap(false);
+    hud.hideBigMap();
+    holding = false;
     const thisTurn = ++turn;
     fact = feed.take();
     options = answerOptions(session.topic, fact, 4);
@@ -633,25 +947,29 @@ function run(session: GameSession): void {
     // A dev address may force the next shot's quality, whatever the answer.
     const forced = forcedQuality;
     forcedQuality = null;
-    const strikeRight = forced ? forced !== 'duff' : right;
-    const strikeUsed = forced === 'perfect' ? 0 : forced === 'wobbly' ? clockTotal * 0.6 : used;
-    const side = devSide() || (Math.random() < 0.5 ? -1 : 1);
-    outcome = resolveShot(plan, strikeRight, strikeUsed, clockTotal, side);
+    const strikeRight = forced ? forced !== 'miss' : right;
+    const strikeUsed = forced === 'perfect' ? 0 : forced === 'close' ? clockTotal * 0.6 : used;
+    // A duff's side angle is a dev number of degrees, or random; other shots scatter all round.
+    const scatter = devScatter();
+    const angle =
+      scatter === null
+        ? Math.random() * 2 * Math.PI
+        : isPutt(plan) || strikeRight
+          ? scatter
+          : duffAngleFor(scatter / (Math.PI / 180));
+    outcome = resolveShot(plan, strikeRight, strikeUsed, clockTotal, angle, Math.random());
     result = finishShot(hole, plan, outcome);
     afterHole = afterShot(hstate, hole, result);
     missed = !right;
-    // A holed shot is drawn flying to the pin, since the cup is drawn much smaller than the holing radius.
-    flightOutcome = result.kind === 'holed' ? holedOutcome(outcome, hole.pin) : outcome;
     if (result.kind === 'rest' && result.tree !== undefined) {
       // A ball that hits a tree stops flying and drops there.
+      flightOutcome = outcome;
       travel = null;
       flightDur = flightSeconds(plan, flightOutcome) * result.tree;
     } else {
-      // Otherwise it lands short, hops and rolls to where it rests.
-      const end = result.kind === 'rest' ? result.at : flightOutcome.end;
-      const surface =
-        result.kind === 'holed' ? 'green' : result.kind === 'rest' ? result.surface : null;
-      travel = createTravel(plan, { ...flightOutcome, end }, surface);
+      // Otherwise it touches down (inside the rough wall), hops and rolls to where it rests.
+      flightOutcome = { ...outcome, land: result.land };
+      travel = createTravel(plan, flightOutcome, result, hole.pin, ground);
       flightDur = travel.seconds;
     }
 
@@ -686,6 +1004,7 @@ function run(session: GameSession): void {
     swingAt = gameTime;
     flightT = 0;
     ballPos = { x: plan.from.x, y: BALL_R, z: plan.from.z };
+    ball.clearTrail();
     ball.setAddress(false);
     setGolf('swing');
     goTo('follow', 0.6);
@@ -698,7 +1017,12 @@ function run(session: GameSession): void {
       sfx.kick();
       // The club throws up grass or sand where it meets the ground (the putter just rolls it).
       if (!isPutt(plan)) {
-        ball.puff(hstate.lie === 'sand' ? 'sand' : 'grass', plan.from, gameTime, plan.dir);
+        ball.puff(
+          hstate.lie === 'sand' ? 'sand' : 'grass',
+          { ...plan.from, y: ground(plan.from.x, plan.from.z) },
+          gameTime,
+          plan.dir,
+        );
       }
       phase = 'flight';
       flightT = 0;
@@ -712,10 +1036,13 @@ function run(session: GameSession): void {
     const u = flightT / flightDur;
     // A ball that hits a tree stops flying at that point of its path.
     const stop = result?.kind === 'rest' ? (result.tree ?? 1) : 1;
-    const p = travel ? travel.at(flightT) : flightPoint(plan, flightOutcome, Math.min(u, 1) * stop);
+    const flown = flightPoint(plan, flightOutcome, Math.min(u, 1) * stop);
+    const p = travel ? travel.at(flightT) : { ...flown, y: flown.y + ground(flown.x, flown.z) };
     ballPos = p;
-    ball.place(p, 'rough');
-    ball.trail(gameTime, p);
+    const g = ground(p.x, p.z);
+    ball.place(p, 'rough', g);
+    // Putts roll along the green and a duff just skips: no tracer.
+    if (!isPutt(plan) && flightOutcome.quality !== 'duff') ball.trail(gameTime, p, g);
     if (u >= 1) land();
   };
 
@@ -724,21 +1051,23 @@ function run(session: GameSession): void {
     if (phase !== 'flight' && phase !== 'swing') return;
     if (!outcome || !result) return;
     phase = 'landed';
+    ball.endTrail(gameTime);
     hstate = afterHole;
     // The golfer and the caddie walk up to the ball, so their reactions are in the landing view.
     placeGolfer();
     if (result.kind === 'holed') {
       // The ball drops into the cup (see the loop) and then goes.
-      ball.place({ x: hole.pin.x, y: BALL_R, z: hole.pin.z }, 'green');
+      putBall({ x: hole.pin.x, y: BALL_R, z: hole.pin.z }, 'green');
       holeDropAt = gameTime;
     } else if (result.kind === 'water') {
       ball.setVisible(false);
       splashAt = gameTime;
       ball.splash(result.splash, 0);
     } else {
-      ball.place({ x: result.at.x, y: BALL_R, z: result.at.z }, result.surface);
+      putBall({ x: result.at.x, y: BALL_R, z: result.at.z }, result.surface);
     }
-    if (result.kind === 'water' || outcome.quality === 'duff') sfx.miss();
+    if (result.kind === 'water' || outcome.quality === 'miss' || outcome.quality === 'duff')
+      sfx.miss();
     else if (result.kind === 'holed') sfx.cheer();
     else sfx.tick();
     ballPos = { x: hstate.at.x, y: 0, z: hstate.at.z };
@@ -756,13 +1085,16 @@ function run(session: GameSession): void {
     resultAt = gameTime;
     const call = shotCall(callKindFor(result, outcome.quality, isPutt(plan)));
     const holed = result.kind === 'holed';
-    hud.showBanner(call, '', holed ? 'good' : outcome.quality === 'duff' ? 'miss' : 'info', 'aim');
+    const isBad = outcome.quality === 'miss' || outcome.quality === 'duff';
+    hud.showBanner(call, '', holed ? 'good' : isBad ? 'miss' : 'info', 'aim');
     hud.showPill(`${pillFor(result)} · Shot ${hstate.strokes}`);
     after(PILL_FOR, () => hud.hidePill());
-    if (outcome.quality === 'duff' || result.kind === 'water') setGolf('groan');
+    if (isBad || result.kind === 'water') setGolf('groan');
     else if (holed || (result.kind === 'rest' && result.surface === 'green' && !isPutt(plan))) {
       setGolf('cheer');
     } else setGolf('follow');
+    // The gallery applauds a holed ball or one that stops beside the pin.
+    if (shouldClap(result, hole.pin)) holeScene?.gallery?.clap(gameTime);
     // The caddie reacts to the shot, or to the hole when this shot ends it.
     caddie.react(
       reactionFor(
@@ -798,9 +1130,7 @@ function run(session: GameSession): void {
       showHoleCall();
       return;
     }
-    // Back to the aim from the new lie.
-    aimDeg = 0;
-    plan = makePlan();
+    // Back to the aim from the new lie (the ring starts on a fresh suggestion).
     ball.setVisible(true);
     ball.splash(null);
     splashAt = -1;
@@ -851,7 +1181,6 @@ function run(session: GameSession): void {
 
   // ---------- The end ----------
   const roundTotals = () => {
-    const pars = HOLES.map((h) => h.par);
     const rel = totalVsPar(scores, pars);
     const strokes = scores.reduce((s, n) => s + n, 0);
     return { rel, strokes };
@@ -927,6 +1256,8 @@ function run(session: GameSession): void {
     missed = false;
     splashAt = -1;
     forcedQuality = devQuality();
+    holding = false;
+    hud.hideBigMap();
     const start = withPreview || devPending ? devStart() : { hole: 0, scores: [] };
     scores = start.scores;
     hud.setCardBig(false);
@@ -958,20 +1289,62 @@ function run(session: GameSession): void {
     showPreview({
       topic: session.topic,
       facts: feed.peek(10),
-      onDone: () => startHoleAt(start.hole),
+      onDone: () => whenAssets(() => startHoleAt(start.hole)),
     });
   };
 
   // ---------- Input ----------
   const swingNow = () => {
-    if (phase === 'aim') ask();
+    if (phase === 'aim' && !hud.bigMapOpen) ask();
   };
 
+  /** Turns the ring round the ball by `deg` (positive is right on screen), keeping its distance. */
   const nudge = (deg: number) => {
     if (phase !== 'aim') return;
-    aimDeg = Math.min(Math.max(aimDeg + deg, -AIM_MAX), AIM_MAX);
-    refreshAim();
-    retarget(0.15);
+    const dir = plan.dir - deg * (Math.PI / 180);
+    moveRing({
+      x: plan.from.x + plan.carry * Math.sin(dir),
+      z: plan.from.z + plan.carry * Math.cos(dir),
+    });
+  };
+
+  /** Moves the ring farther (positive) or shorter along the same line. */
+  const nudgeDist = (sign: 1 | -1) => {
+    if (phase !== 'aim') return;
+    const step = isPutt(plan) ? PUTT_DIST_STEP : DIST_STEP;
+    const d = Math.max(plan.carry + sign * step, 0);
+    moveRing({
+      x: plan.from.x + d * Math.sin(plan.dir),
+      z: plan.from.z + d * Math.cos(plan.dir),
+    });
+  };
+
+  /** The ground point under the finger: the ray from the camera, or (above the horizon) the reach along it. */
+  const placeFromFinger = () => {
+    const box = ctx.renderer.domElement.getBoundingClientRect();
+    const ndc = new Vector2(
+      ((finger.x - box.left) / Math.max(box.width, 1)) * 2 - 1,
+      -(((finger.y - box.top) / Math.max(box.height, 1)) * 2 - 1),
+    );
+    raycaster.setFromCamera(ndc, camera);
+    const { origin, direction } = raycaster.ray;
+    if (direction.y < -1e-4) {
+      const t = -origin.y / direction.y;
+      moveRing({ x: origin.x + direction.x * t, z: origin.z + direction.z * t });
+    } else {
+      const len = Math.hypot(direction.x, direction.z) || 1;
+      const reach = reachFor(hstate.lie);
+      moveRing({
+        x: plan.from.x + (direction.x / len) * reach,
+        z: plan.from.z + (direction.z / len) * reach,
+      });
+    }
+  };
+
+  const letGo = () => {
+    if (!holding) return;
+    holding = false;
+    if (phase === 'aim') goTo('aim', 0.35);
   };
 
   const skip = () => {
@@ -1010,6 +1383,13 @@ function run(session: GameSession): void {
   press(hud.swing, swingNow);
   press(hud.nudgeLeft, () => nudge(-AIM_STEP));
   press(hud.nudgeRight, () => nudge(AIM_STEP));
+  press(hud.farther, () => nudgeDist(1));
+  press(hud.shorter, () => nudgeDist(-1));
+  hud.onMapPlace(moveRing);
+  hud.onMapTap(() => {
+    if (phase !== 'aim' || hud.bigMapOpen) return;
+    hud.showBigMap(hole, hstate.at, plan, restNow, hstate.lie);
+  });
   hud.hear.addEventListener('click', () => {
     unlockAudio();
     if (!fact || phase !== 'ask') return;
@@ -1021,19 +1401,23 @@ function run(session: GameSession): void {
     });
   });
 
-  // Dragging sideways turns the aim.
+  // A finger on the picture puts the ring where it touches; the camera rises while it is down.
   const stopPointer = createPointerInput(ctx.renderer.domElement, {
-    onDragStart: () => unlockAudio(),
-    onDrag: (state) => {
+    onDragStart: (state) => {
+      unlockAudio();
       if (phase !== 'aim') return;
-      const before = aimDeg;
-      aimDeg = Math.min(Math.max(aimDeg + state.dx * DEG_PER_PX, -AIM_MAX), AIM_MAX);
-      if (aimDeg === before) return;
-      refreshAim();
-      retarget(0.08);
+      holding = true;
+      finger = { x: state.x, y: state.y };
+      placeFromFinger();
+      goTo('place', 0.25);
     },
+    onDrag: (state) => {
+      finger = { x: state.x, y: state.y };
+    },
+    onDragEnd: letGo,
     onTap: skip,
   });
+  window.addEventListener('pointercancel', letGo);
 
   const onKey = (e: KeyboardEvent) => {
     if (pause.isPaused) return;
@@ -1059,9 +1443,49 @@ function run(session: GameSession): void {
     } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
       e.preventDefault();
       nudge(AIM_STEP);
+    } else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+      e.preventDefault();
+      nudgeDist(1);
+    } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+      e.preventDefault();
+      nudgeDist(-1);
     }
   };
   window.addEventListener('keydown', onKey);
+
+  // ---------- Light, depth of field and quality, once a frame ----------
+  const chest = new Vector3();
+  const focus = new Vector3();
+  const followLight = () => {
+    // The light and its shadow box follow what the camera looks at.
+    focus.set(cur.look.x, 0, cur.look.z);
+    if (csm) {
+      csm.update();
+      csm.updateFrustums();
+    } else {
+      sun.position.copy(focus).addScaledVector(sunDir, 100);
+      sun.target.position.copy(focus);
+    }
+    // Depth of field only while the swing is watched up close (never while aiming).
+    const close = phase === 'swing' || devCam() !== null;
+    chest.set(golfer.root.position.x, golfer.root.position.y + 1.2, golfer.root.position.z);
+    post?.setDof(close, camera.position.distanceTo(chest));
+  };
+  /** Times the first 120 frames of the first aim; a slow median drops the tier one step. */
+  const watchFrames = (delta: number) => {
+    if (sampled || phase !== 'aim') return;
+    samples.push(delta * 1000);
+    if (samples.length < SAMPLE_FRAMES) return;
+    sampled = true;
+    const median = [...samples].sort((a, b) => a - b)[SAMPLE_FRAMES / 2];
+    const next = adaptGfx(median, gfx);
+    if (next === gfx) return;
+    gfx = next;
+    settings = gfxSettings(gfx);
+    saveGfx(gfx);
+    buildPost();
+    look = makeLook();
+  };
 
   // ---------- Loop ----------
   ctx.onUpdate((delta) => {
@@ -1071,6 +1495,8 @@ function run(session: GameSession): void {
     timers.update(delta);
     if (moveT < 1) moveT = Math.min(1, moveT + delta / Math.max(moveDur, 1e-3));
 
+    // The ring follows the finger even while the camera is still rising.
+    if (holding && phase === 'aim') placeFromFinger();
     updateAsk(delta);
     updateSwing();
     updateFlight(delta);
@@ -1093,8 +1519,14 @@ function run(session: GameSession): void {
     else golfer.play(golfMove, gameTime - golfSince, delta);
     caddie.update(delta);
     holeScene?.update(gameTime);
-    sky.update(gameTime, camera.position, hole.length / 2);
+    if (devClap()) holeScene?.gallery?.clap(gameTime - 0.6);
+    holeScene?.gallery?.update(gameTime, camera.position);
+    blades.update(gameTime);
+    sky?.update(gameTime, camera.position, hole.length / 2);
     applyCamera();
+    frameDelta = delta;
+    followLight();
+    watchFrames(delta);
   });
 
   /**
@@ -1103,17 +1535,19 @@ function run(session: GameSession): void {
    * splash and the other holes) and draw one frame, which also makes the shadow map.
    */
   const warmUp = async () => {
-    const loading = takeLoading();
+    await assetsLoaded;
     const steps = HOLES.length + 2;
-    loading.progress(0.5 / steps);
+    const at = (step: number) => loading.progress(0.5 + (0.5 * step) / steps);
+    at(0.5);
     await nextFrame();
     for (let i = 0; i < HOLES.length; i++) {
       sceneForHole(i);
-      loading.progress((i + 1) / steps);
+      at(i + 1);
       await nextFrame();
     }
     placeGolfer();
     applyCamera();
+    followLight();
     const hidden: Object3D[] = [];
     scene.traverse((o) => {
       if (!o.visible) {
@@ -1134,10 +1568,12 @@ function run(session: GameSession): void {
     } catch {
       // A browser without parallel compiling still compiles in the render below.
     }
-    loading.progress((HOLES.length + 1) / steps);
+    at(HOLES.length + 1);
     await nextFrame();
     textures.forEach((t) => ctx.renderer.initTexture(t));
-    ctx.renderer.render(scene, camera);
+    // Through the effects chain when there is one, so its passes compile too.
+    if (post) post.render(frameDelta);
+    else ctx.renderer.render(scene, camera);
     hidden.forEach((o) => (o.visible = false));
     loading.progress(1);
     await nextFrame();
@@ -1156,14 +1592,26 @@ function run(session: GameSession): void {
     disposed = true;
     stopSpeaking();
     window.removeEventListener('keydown', onKey);
+    window.removeEventListener('pointercancel', letGo);
     stopPointer();
     tapFlow.dispose();
     unpress.forEach((fn) => fn());
     pause.dispose();
     mute.dispose();
     hud.dispose();
-    holeScenes.forEach((h) => h?.dispose());
-    sky.dispose();
+    holeScenes.forEach((h) => h.dispose());
+    if (holeScene && ![...holeScenes.values()].includes(holeScene)) holeScene.dispose();
+    blades.dispose();
+    sky?.dispose();
+    resizeWatcher.disconnect();
+    window.removeEventListener('orientationchange', sizeRenderer);
+    post?.dispose();
+    csm?.remove();
+    restoreLights();
+    csm?.dispose();
+    envTarget?.dispose();
+    fill?.dispose();
+    disposeForeAssets(assets);
     ctx.dispose();
   });
 }

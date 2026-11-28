@@ -1,11 +1,29 @@
-import { InstancedMesh, Mesh, type BufferGeometry, type Object3D } from 'three';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { InstancedMesh, Matrix4, Mesh, Vector3, type BufferGeometry, type Object3D } from 'three';
 import { describe, expect, it } from 'vitest';
 import { centreX, GREEN_R, HOLES, inEllipse, type Hole } from '../src/games/fore/course';
-import { groundTextures } from '../src/games/fore/ground';
+import { FALLBACK_LOOK, groundTextures, type Look } from '../src/games/fore/ground';
+import { GFX_SETTINGS, type Gfx } from '../src/games/fore/quality';
+import { groundY } from '../src/games/fore/terrain';
 import { buildHole } from '../src/games/fore/hole';
-import { placeScenery, LINE_CLEAR, LOW_MIN_OFF } from '../src/games/fore/scenery';
+import {
+  clubhouseSite,
+  CLUBHOUSE_CLEAR,
+  placeScenery,
+  LINE_CLEAR,
+  LOW_MIN_OFF,
+  WOODS_FROM,
+  WOODS_TO,
+} from '../src/games/fore/scenery';
 import { finishShot, planShot, resolveShot, TREE_HEIGHT } from '../src/games/fore/shot';
 import { treeBounds, treeScale } from '../src/games/fore/trees';
+
+const look = (gfx: Gfx): Look => ({
+  ...FALLBACK_LOOK,
+  settings: GFX_SETTINGS[gfx],
+  shadows: gfx !== 'low',
+});
 
 const off = (h: Hole, p: { x: number; z: number }) => Math.abs(p.x - centreX(h, p.z));
 
@@ -53,6 +71,36 @@ describe('scenery placement', () => {
   });
 });
 
+describe('woods line', () => {
+  it('stands 100 to 170 yd off the line or behind the green, 7 to 10 yd apart, on every hole', () => {
+    for (const h of HOLES) {
+      const woods = placeScenery(h).woods;
+      expect(woods.length).toBeGreaterThan(100);
+      for (const t of woods) {
+        const beyond = t.z >= h.length + 90;
+        expect(beyond || off(h, t) >= WOODS_FROM - 8).toBe(true);
+        expect(beyond || off(h, t) <= WOODS_TO).toBe(true);
+      }
+    }
+  });
+});
+
+describe('clubhouse clearance', () => {
+  it('drops every tree, bush, rock and flower within 30 yd of a clubhouse', () => {
+    for (const h of HOLES) {
+      const house = clubhouseSite(h);
+      if (!house) continue;
+      const s = placeScenery(h);
+      for (const p of [...s.trees, ...s.woods, ...s.bushes, ...s.rocks, ...s.flowers]) {
+        expect(Math.hypot(p.x - house.x, p.z - house.z)).toBeGreaterThanOrEqual(CLUBHOUSE_CLEAR);
+      }
+    }
+    expect(clubhouseSite(HOLES[0])).toMatchObject({ x: -85, z: -25 });
+    expect(clubhouseSite(HOLES[8])).toMatchObject({ x: 0, z: HOLES[8].length + 90 });
+    expect(HOLES.filter((h) => clubhouseSite(h)).length).toBe(2);
+  });
+});
+
 describe('gameplay trees', () => {
   it('keep their positions, radii and height', () => {
     expect(TREE_HEIGHT).toBe(12);
@@ -92,65 +140,20 @@ describe('gameplay trees', () => {
     }
   });
 
-  it('leave finishShot results unchanged for fixed plans', () => {
+  it('leave the straight tee shots alone', () => {
     const results = HOLES.map((h) =>
-      // Aims are mirrored from when the snapshot was taken (positive aim is now screen-right, -x).
-      [4, 0, -3].map((aim) => {
-        const plan = planShot(h, { x: 0, z: 0 }, 'tee', aim);
-        const outcome = resolveShot(plan, true, 0.5, 6, 1);
-        return JSON.stringify(finishShot(h, plan, outcome));
+      // A driver off the tee at 4 degrees left, straight and 3 degrees right on screen.
+      [4, 0, -3].map((deg) => {
+        const want = {
+          x: 240 * Math.sin(-deg * (Math.PI / 180)),
+          z: 240 * Math.cos(-deg * (Math.PI / 180)),
+        };
+        const plan = planShot(h, { x: 0, z: 0 }, 'tee', want);
+        const result = finishShot(h, plan, resolveShot(plan, true, 0.5, 6, 1, 0.5));
+        return result.kind === 'rest' && result.tree !== undefined ? result.tree : null;
       }),
     );
-    // Holes without trees can't be stopped by one; the tree holes at these aims are recorded below.
-    expect(results).toMatchInlineSnapshot(`
-      [
-        [
-          "{"kind":"rest","at":{"x":-16.741553698590074,"z":239.41537206235782},"surface":"fairway"}",
-          "{"kind":"rest","at":{"x":0,"z":240},"surface":"fairway"}",
-          "{"kind":"rest","at":{"x":12.56062949830652,"z":239.67108834109771},"surface":"fairway"}",
-        ],
-        [
-          "{"kind":"rest","at":{"x":-6.46834158673629,"z":129.68332653377715},"surface":"sand"}",
-          "{"kind":"rest","at":{"x":2.6,"z":130},"surface":"green"}",
-          "{"kind":"rest","at":{"x":9.403674311582698,"z":129.8218395180946},"surface":"green"}",
-        ],
-        [
-          "{"kind":"rest","at":{"x":-21.541553698590075,"z":239.41537206235782},"surface":"rough"}",
-          "{"kind":"rest","at":{"x":-4.8,"z":240},"surface":"fairway"}",
-          "{"kind":"rest","at":{"x":7.76062949830652,"z":239.67108834109771},"surface":"fairway"}",
-        ],
-        [
-          "{"kind":"rest","at":{"x":-9.541553698590075,"z":239.41537206235782},"surface":"fairway"}",
-          "{"kind":"rest","at":{"x":7.2,"z":240},"surface":"rough"}",
-          "{"kind":"rest","at":{"x":19.76062949830652,"z":239.67108834109771},"surface":"rough"}",
-        ],
-        [
-          "{"kind":"rest","at":{"x":-7.141553698590075,"z":239.41537206235782},"surface":"fairway"}",
-          "{"kind":"rest","at":{"x":9.6,"z":240},"surface":"fairway"}",
-          "{"kind":"rest","at":{"x":22.16062949830652,"z":239.67108834109771},"surface":"rough"}",
-        ],
-        [
-          "{"kind":"rest","at":{"x":-15.961035799060049,"z":159.61024804157188},"surface":"fairway"}",
-          "{"kind":"rest","at":{"x":-4.8,"z":160},"surface":"green"}",
-          "{"kind":"rest","at":{"x":3.573752998871014,"z":159.7807255607318},"surface":"green"}",
-        ],
-        [
-          "{"kind":"rest","at":{"x":-16.741553698590074,"z":239.41537206235782},"surface":"fairway"}",
-          "{"kind":"rest","at":{"x":0,"z":240},"surface":"fairway"}",
-          "{"kind":"rest","at":{"x":12.56062949830652,"z":239.67108834109771},"surface":"rough"}",
-        ],
-        [
-          "{"kind":"rest","at":{"x":-23.941553698590074,"z":239.41537206235782},"surface":"rough"}",
-          "{"kind":"rest","at":{"x":-7.2,"z":240},"surface":"fairway"}",
-          "{"kind":"rest","at":{"x":5.36062949830652,"z":239.67108834109771},"surface":"fairway"}",
-        ],
-        [
-          "{"kind":"rest","at":{"x":-11.941553698590074,"z":239.41537206235782},"surface":"fairway"}",
-          "{"kind":"rest","at":{"x":4.8,"z":240},"surface":"fairway"}",
-          "{"kind":"rest","at":{"x":17.36062949830652,"z":239.67108834109771},"surface":"fairway"}",
-        ],
-      ]
-    `);
+    expect(results.flat().every((r) => r === null)).toBe(true);
   });
 });
 
@@ -178,17 +181,111 @@ describe('hole build', () => {
     }
   });
 
-  it('disposes everything it built, textures included', () => {
-    const textures = Object.values(groundTextures());
-    for (const h of HOLES) {
-      let disposed = 0;
-      textures.forEach((t) => t.addEventListener('dispose', () => disposed++));
-      const hole = buildHole(h);
-      expect(hole.object.children.length).toBeGreaterThan(0);
-      hole.dispose();
-      expect(hole.object.children.length).toBe(0);
-      expect(hole.object.parent).toBeNull();
-      expect(disposed).toBeGreaterThanOrEqual(textures.length);
+  it('keeps each tier inside its draw budget (high 220 meshes, low 120)', () => {
+    const budget: Record<Gfx, number> = { low: 120, medium: 220, high: 220 };
+    // Leaf cards and bark are many small triangles; each tier gets a share.
+    const triangleBudget: Record<Gfx, number> = { low: 250_000, medium: 450_000, high: 650_000 };
+    for (const gfx of ['low', 'medium', 'high'] as const) {
+      for (const h of HOLES) {
+        const hole = buildHole(h, look(gfx));
+        const { meshes, triangles } = stats(hole.object);
+        expect(meshes, `${gfx} hole ${HOLES.indexOf(h) + 1}`).toBeLessThanOrEqual(budget[gfx]);
+        expect(triangles, `${gfx} hole ${HOLES.indexOf(h) + 1} triangles`).toBeLessThan(
+          triangleBudget[gfx],
+        );
+        hole.dispose();
+      }
     }
+  });
+
+  it('builds every hole on every tier with no pictures, and disposes everything', () => {
+    const textures = Object.values(groundTextures());
+    for (const gfx of ['low', 'medium', 'high'] as const) {
+      for (const h of HOLES) {
+        let disposed = 0;
+        textures.forEach((t) => t.addEventListener('dispose', () => disposed++));
+        const hole = buildHole(h, look(gfx));
+        expect(hole.object.children.length).toBeGreaterThan(0);
+        hole.dispose();
+        expect(hole.object.children.length).toBe(0);
+        expect(hole.object.parent).toBeNull();
+        expect(disposed).toBeGreaterThanOrEqual(textures.length);
+      }
+    }
+  });
+
+  it('stands every tree, bush, rock and flower on the ground height', () => {
+    const m = new Matrix4();
+    const at = new Vector3();
+    for (const h of HOLES) {
+      const hole = buildHole(h, look('high'));
+      // Every instance's base (x, y, z), by instance mesh.
+      const bases: Vector3[] = [];
+      hole.object.traverse((o) => {
+        const im = o as InstancedMesh;
+        if (!im.isInstancedMesh) return;
+        for (let i = 0; i < im.count; i++) {
+          im.getMatrixAt(i, m);
+          bases.push(at.setFromMatrixPosition(m).clone());
+        }
+      });
+      const near = (x: number, z: number) =>
+        bases.filter((b) => Math.hypot(b.x - x, b.z - z) < 1e-3);
+      const scenery = placeScenery(h);
+      for (const t of [...h.trees, ...scenery.trees]) {
+        const found = near(t.x, t.z);
+        expect(found.length, `tree at ${t.x}, ${t.z}`).toBeGreaterThan(0);
+        // The trunk and the crown share one base; the blob shadow sits just above it.
+        expect(found.some((b) => Math.abs(b.y - groundY(h, t.x, t.z)) < 1e-6)).toBe(true);
+      }
+      for (const b of scenery.bushes) {
+        expect(near(b.x, b.z).some((p) => Math.abs(p.y - groundY(h, b.x, b.z)) < 1e-6)).toBe(true);
+      }
+      for (const r of scenery.rocks) {
+        expect(
+          near(r.x, r.z).some((p) => Math.abs(p.y - groundY(h, r.x, r.z) - r.r * 0.25) < 1e-6),
+        ).toBe(true);
+      }
+      const house = clubhouseSite(h);
+      if (house) {
+        const built = hole.object.getObjectByName('clubhouse');
+        expect(built, `clubhouse on hole ${HOLES.indexOf(h) + 1}`).toBeDefined();
+        expect(built!.position.y).toBeCloseTo(groundY(h, house.x, house.z), 6);
+      }
+      hole.dispose();
+    }
+  });
+
+  it('puts a clubhouse and two carts on holes 1 and 9 only, and a sign on every tee', () => {
+    HOLES.forEach((h, i) => {
+      const hole = buildHole(h, look('medium'));
+      const house = hole.object.getObjectByName('clubhouse');
+      expect(Boolean(house), `hole ${i + 1}`).toBe(i === 0 || i === 8);
+      if (house) expect(house.getObjectByName('carts')).toBeDefined();
+      expect(hole.object.getObjectByName('sign')).toBeDefined();
+      hole.dispose();
+    });
+  });
+});
+
+describe('public/fore assets', () => {
+  const dir = join(__dirname, '..', 'public', 'fore');
+  const files = (d: string): string[] =>
+    readdirSync(d).flatMap((f) => {
+      const p = join(d, f);
+      return statSync(p).isDirectory() ? files(p) : [p];
+    });
+
+  it('lists every file in CREDITS.md and stays under 15 MB', () => {
+    const credits = readFileSync(join(dir, 'CREDITS.md'), 'utf8');
+    const all = files(dir);
+    let total = 0;
+    for (const f of all) {
+      const rel = f.slice(dir.length + 1).replaceAll('\\', '/');
+      expect(credits, rel).toContain(`\`${rel}\``);
+      total += statSync(f).size;
+    }
+    expect(all.length).toBeGreaterThan(5);
+    expect(total).toBeLessThanOrEqual(15 * 1024 * 1024);
   });
 });

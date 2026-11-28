@@ -18,7 +18,7 @@ const hash = (n: number) => {
 };
 
 function palm(kit: Kit, tile: Group, x: number, h: number, z = -1.7) {
-  const trunk = kit.lit(0x9a6a3c, 0.9);
+  const trunk = kit.wood(0x9a6a3c);
   for (let i = 0; i < 6; i++) {
     const y = (i + 0.5) * (h / 6);
     kit.mesh(
@@ -31,7 +31,7 @@ function palm(kit: Kit, tile: Group, x: number, h: number, z = -1.7) {
     );
   }
   const top = x + Math.sin(6 * 0.35) * 0.35;
-  const leaf = kit.lit(0x3e9a4a, 0.8);
+  const leaf = kit.foliage(0x3e9a4a);
   for (let i = 0; i < 7; i++) {
     const a = (i / 7) * Math.PI * 2;
     const l = kit.mesh(
@@ -45,7 +45,7 @@ function palm(kit: Kit, tile: Group, x: number, h: number, z = -1.7) {
     l.rotation.z = Math.cos(a) * -1.15;
     l.rotation.x = Math.sin(a) * 1.0;
   }
-  kit.mesh(new SphereGeometry(0.22, 8, 6), kit.lit(0x6b4a2b, 0.8), tile, top, h - 0.2, z + 0.15);
+  kit.mesh(new SphereGeometry(0.22, 8, 6), kit.wood(0x6b4a2b), tile, top, h - 0.2, z + 0.15);
 }
 
 const beach: Decor = (kit, tile) => {
@@ -62,15 +62,15 @@ const beach: Decor = (kit, tile) => {
       0.5 + hash(i + 4) * 2.2,
       -3.2,
     );
-  kit.box(0.08, 2.0, 0.08, kit.lit(0x6b4a2b, 0.8), tile, 17, 4.6, -3.2);
-  kit.box(1.1, 1.5, 0.04, kit.lit(0xffffff, 0.7), tile, 17.5, 4.7, -3.2);
+  kit.box(0.08, 2.0, 0.08, kit.wood(0x6b4a2b), tile, 17, 4.6, -3.2);
+  kit.box(1.1, 1.5, 0.04, kit.fabric(0xffffff), tile, 17.5, 4.7, -3.2);
   kit.box(1.8, 0.35, 0.3, kit.lit(0xe0504a, 0.6), tile, 17, 3.55, -3.2);
   palm(kit, tile, 2.6, 5.2);
   palm(kit, tile, 21.5, 4.4, -1.9);
   // An umbrella with a towel, a beach ball and some shells.
-  kit.box(0.08, 3.2, 0.08, kit.lit(0xffffff, 0.6), tile, 13, 1.6, -1.5);
-  kit.mesh(new ConeGeometry(1.8, 0.9, 10), kit.lit(0xe0504a, 0.6), tile, 13, 3.35, -1.5);
-  kit.box(2.2, 0.04, 1.0, kit.lit(0xf2c230, 0.8), tile, 11.8, 0.03, -1.2);
+  kit.box(0.08, 3.2, 0.08, kit.metal(0xffffff), tile, 13, 1.6, -1.5);
+  kit.mesh(new ConeGeometry(1.8, 0.9, 10), kit.fabric(0xe0504a), tile, 13, 3.35, -1.5);
+  kit.box(2.2, 0.04, 1.0, kit.fabric(0xf2c230), tile, 11.8, 0.03, -1.2);
   kit.mesh(new SphereGeometry(0.4, 14, 10), kit.lit(0x3f8fd8, 0.5), tile, 15.6, 0.4, -1.0);
   kit.mesh(new SphereGeometry(0.14, 8, 6), kit.lit(0xff6f91, 0.5), tile, 15.6, 0.62, -0.62);
   for (const x of [6.2, 8.8, 19.2])
@@ -82,13 +82,13 @@ const beach: Decor = (kit, tile) => {
 function pine(kit: Kit, tile: Group, x: number, s: number, z: number) {
   kit.mesh(
     new CylinderGeometry(0.2 * s, 0.28 * s, 1.2 * s, 8),
-    kit.lit(0x6a4a2a, 0.9),
+    kit.wood(0x6a4a2a),
     tile,
     x,
     0.6 * s,
     z,
   );
-  const green = kit.lit(0x2f6a4a, 0.85);
+  const green = kit.foliage(0x2f6a4a);
   const snow = kit.lit(0xffffff, 0.9);
   for (let i = 0; i < 4; i++) {
     const r = (1.6 - i * 0.32) * s;
@@ -134,8 +134,8 @@ const snowyForest: Decor = (kit, tile) => {
   for (const dx of [-0.1, 0.1])
     kit.mesh(new SphereGeometry(0.04, 6, 5), kit.lit(0x111111), tile, 13 + dx + 0.12, 2.5, -1.08);
   // A signpost and a few snow drifts.
-  kit.box(0.14, 2.0, 0.14, kit.lit(0x7a5230, 0.9), tile, 7, 1.0, -1.3);
-  kit.box(1.2, 0.5, 0.08, kit.lit(0xb98a5e, 0.8), tile, 7.3, 1.9, -1.3);
+  kit.box(0.14, 2.0, 0.14, kit.wood(0x7a5230), tile, 7, 1.0, -1.3);
+  kit.box(1.2, 0.5, 0.08, kit.wood(0xb98a5e), tile, 7.3, 1.9, -1.3);
   for (const x of [2.5, 9.6, 16.6, 22.6])
     kit.mesh(new SphereGeometry(0.8, 12, 8), white, tile, x, 0.1, -1.2).scale.set(1.6, 0.45, 1);
 };
@@ -149,7 +149,7 @@ function mesa(kit: Kit, tile: Group, x: number, w: number, h: number, z: number)
       w * k,
       h / n + 0.02,
       1.8,
-      kit.lit(bands[i % bands.length], 0.95),
+      kit.stone(bands[i % bands.length]),
       tile,
       x,
       (i + 0.5) * (h / n),
@@ -164,13 +164,13 @@ const desert: Decor = (kit, tile, look) => {
   mesa(kit, tile, 13.5, 6.5, 8.5, -3.2);
   mesa(kit, tile, 21.5, 4, 5, -3.0);
   // Small background cacti, rocks and a cow skull on a post.
-  const green = kit.lit(0x3e9a4a, 0.85);
+  const green = kit.foliage(0x3e9a4a);
   for (const x of [8.4, 18.2]) {
     kit.mesh(new CylinderGeometry(0.28, 0.3, 2.4, 8), green, tile, x, 1.2, -2.0);
     kit.mesh(new CylinderGeometry(0.16, 0.16, 0.9, 8), green, tile, x - 0.5, 1.7, -2.0);
     kit.mesh(new CylinderGeometry(0.16, 0.16, 0.8, 8), green, tile, x + 0.5, 1.4, -2.0);
   }
-  const rock = kit.lit(0xb08a5a, 0.95);
+  const rock = kit.stone(0xb08a5a);
   for (const [x, r] of [
     [6, 0.5],
     [11.4, 0.7],
@@ -178,7 +178,7 @@ const desert: Decor = (kit, tile, look) => {
     [23, 0.55],
   ] as const)
     kit.mesh(new SphereGeometry(r, 10, 8), rock, tile, x, r * 0.5, -1.2).scale.set(1.3, 0.8, 1);
-  kit.box(0.14, 1.8, 0.14, kit.lit(0x7a5230, 0.9), tile, 15, 0.9, -1.3);
+  kit.box(0.14, 1.8, 0.14, kit.wood(0x7a5230), tile, 15, 0.9, -1.3);
   kit
     .mesh(new SphereGeometry(0.34, 10, 8), kit.lit(0xf2ead8, 0.8), tile, 15, 1.95, -1.3)
     .scale.set(1.2, 0.8, 0.7);
@@ -193,21 +193,13 @@ const desert: Decor = (kit, tile, look) => {
     ).rotation.z = -s * 1.2;
   // A dry bush.
   for (let i = 0; i < 6; i++)
-    kit.box(
-      0.05,
-      0.7,
-      0.05,
-      kit.lit(0x8a6a3a, 0.9),
-      tile,
-      20 + (i - 3) * 0.1,
-      0.35,
-      -1.0,
-    ).rotation.z = (i - 3) * 0.25;
+    kit.box(0.05, 0.7, 0.05, kit.wood(0x8a6a3a), tile, 20 + (i - 3) * 0.1, 0.35, -1.0).rotation.z =
+      (i - 3) * 0.25;
 };
 
 const spaceStation: Decor = (kit, tile) => {
   // A big round window onto the stars and a planet, framed in metal.
-  const frame = kit.lit(0x8aa0c8, 0.4);
+  const frame = kit.metal(0x8aa0c8);
   kit.mesh(new CylinderGeometry(2.4, 2.4, 0.2, 32), frame, tile, 12, 5.4, Z).rotation.x =
     Math.PI / 2;
   kit.mesh(
@@ -244,12 +236,12 @@ const spaceStation: Decor = (kit, tile) => {
     )
     .scale.set(0.8, 0.9, 1);
   // Pipes along the wall, and two control panels with blinking-looking lights.
-  const pipe = kit.lit(0x9aa5ad, 0.4);
+  const pipe = kit.metal(0x9aa5ad);
   for (const y of [1.6, 7.6])
     kit.mesh(new CylinderGeometry(0.16, 0.16, 24, 10), pipe, tile, 12, y, Z + 0.3).rotation.z =
       Math.PI / 2;
   for (const x of [3.8, 19.6]) {
-    kit.box(3.2, 2.2, 0.5, kit.lit(0x39425a, 0.5), tile, x, 1.9, Z + 0.4);
+    kit.box(3.2, 2.2, 0.5, kit.metal(0x39425a), tile, x, 1.9, Z + 0.4);
     kit.box(2.6, 1.0, 0.04, kit.basic(0x5ce1ff), tile, x, 2.4, Z + 0.68);
     for (let i = 0; i < 6; i++)
       kit.mesh(
@@ -262,8 +254,8 @@ const spaceStation: Decor = (kit, tile) => {
       );
   }
   // A pod door and hazard stripes.
-  kit.box(2.2, 3.4, 0.3, kit.lit(0x6a7488, 0.4), tile, 7.8, 1.7, Z + 0.3);
-  kit.box(1.6, 2.8, 0.06, kit.lit(0x39425a, 0.4), tile, 7.8, 1.7, Z + 0.48);
+  kit.box(2.2, 3.4, 0.3, kit.metal(0x6a7488), tile, 7.8, 1.7, Z + 0.3);
+  kit.box(1.6, 2.8, 0.06, kit.metal(0x39425a), tile, 7.8, 1.7, Z + 0.48);
   for (let i = 0; i < 12; i++)
     kit.box(
       0.5,
@@ -277,7 +269,7 @@ const spaceStation: Decor = (kit, tile) => {
     );
   // Cables hanging from the ceiling.
   for (const x of [1.4, 9.6, 15.4, 22.4])
-    kit.box(0.08, 3.6, 0.08, kit.lit(0x222833, 0.6), tile, x, 7.2, Z + 0.5);
+    kit.box(0.08, 3.6, 0.08, kit.metal(0x222833), tile, x, 7.2, Z + 0.5);
 };
 
 export const ADVENTURE_SCENERY: Record<

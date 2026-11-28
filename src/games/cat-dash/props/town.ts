@@ -45,7 +45,7 @@ function prop(setup: (kit: Kit, root: Group) => Pose): Prop {
 }
 
 const sphere = (kit: Kit, r: number, mat: Material, parent: Group, x = 0, y = 0, z = 0) =>
-  kit.mesh(new SphereGeometry(r, 16, 12), mat, parent, x, y, z);
+  kit.mesh(new SphereGeometry(r, 28, 20), mat, parent, x, y, z);
 const cyl = (
   kit: Kit,
   rt: number,
@@ -56,7 +56,7 @@ const cyl = (
   x = 0,
   y = 0,
   z = 0,
-) => kit.mesh(new CylinderGeometry(rt, rb, h, 16), mat, parent, x, y, z);
+) => kit.mesh(new CylinderGeometry(rt, rb, h, 24), mat, parent, x, y, z);
 
 /** A tidy pseudo-random number from an index. */
 const hash = (n: number) => {
@@ -86,8 +86,8 @@ const WOOD = 0x9a6a3c;
 
 function fence(): Prop {
   return prop((kit, root) => {
-    const board = kit.lit(0xf3ead8, 0.8);
-    const rail = kit.lit(0xd9c9a8, 0.8);
+    const board = kit.wood(0xf3ead8);
+    const rail = kit.wood(0xd9c9a8);
     for (let i = 0; i < 8; i++) {
       kit.box(0.45, 3, 0.12, board, root, 4.25 + i * 0.5, 1.5, 0.1);
       const tip = kit.box(0.32, 0.32, 0.12, board, root, 4.25 + i * 0.5, 3.0, 0.1);
@@ -102,7 +102,7 @@ function fence(): Prop {
 
 function sprinkler(): Prop {
   return prop((kit, root) => {
-    const metal = kit.lit(0x4d8fe0, 0.4);
+    const metal = kit.metal(0x4d8fe0);
     cyl(kit, 0.3, 0.4, 0.2, kit.lit(0x888888, 0.5), root, 6, 0.1, 0.2);
     sphere(kit, 0.28, metal, root, 6, 0.28, 0.2);
     const water = kit.glass(0x7fd0ff, 0.55);
@@ -131,8 +131,8 @@ function sprinkler(): Prop {
 
 function flowers(): Prop {
   return prop((kit, root) => {
-    kit.box(4, 0.3, 1.2, kit.lit(0x6b4a2b, 1), root, 6, 0.15, -0.3);
-    const stem = kit.lit(0x3e9a4a, 0.8);
+    kit.box(4, 0.3, 1.2, kit.wood(0x6b4a2b), root, 6, 0.15, -0.3);
+    const stem = kit.foliage(0x3e9a4a);
     const colors = [0xff6f91, 0xf2d34a, 0xffffff, 0xb36bff, 0xff9f43];
     for (let i = 0; i < 18; i++) {
       const x = 4.1 + (i % 9) * 0.45 + hash(i) * 0.1;
@@ -143,7 +143,7 @@ function flowers(): Prop {
       sphere(kit, 0.07, kit.lit(0xf2b134, 0.6), root, x, 0.3 + h, z + 0.12);
     }
     // Stepping stones across the front of the bed.
-    const stone = kit.lit(0xb8b8b0, 0.9);
+    const stone = kit.stone(0xb8b8b0);
     for (const x of [4.4, 5.6, 6.8, 8.0]) cyl(kit, 0.4, 0.45, 0.12, stone, root, x, 0.06, 0.4);
     const bee = new Group();
     bee.visible = false;
@@ -172,12 +172,11 @@ function flowers(): Prop {
 
 function slide(): Prop {
   return prop((kit, root) => {
-    const blue = kit.lit(0x3f8fd8, 0.6);
+    const blue = kit.metal(0x3f8fd8);
     const yellow = kit.lit(0xf2c14a, 0.5);
     // The ladder, the platform and the legs.
     for (const z of [-0.4, 0.4]) kit.box(0.1, 3.4, 0.1, blue, root, 3.3, 1.7, z);
-    for (let y = 0.4; y < 3.3; y += 0.5)
-      kit.box(0.08, 0.08, 0.8, kit.lit(WOOD, 0.8), root, 3.3, y, 0);
+    for (let y = 0.4; y < 3.3; y += 0.5) kit.box(0.08, 0.08, 0.8, kit.wood(WOOD), root, 3.3, y, 0);
     kit.box(1.6, 0.18, 1.2, yellow, root, 4.2, 3.3, 0);
     for (const z of [-0.5, 0.5]) kit.box(0.12, 3.3, 0.12, blue, root, 4.8, 1.65, z);
     for (const z of [-0.55, 0.55]) kit.box(1.6, 0.8, 0.08, blue, root, 4.2, 3.8, z);
@@ -191,7 +190,7 @@ function slide(): Prop {
       rail.rotation.z = Math.atan2(dy, dx);
     }
     // The sandbox past the end of the slide.
-    kit.box(2.6, 0.3, 1.8, kit.lit(WOOD, 0.8), root, 10.6, 0.15, 0.1);
+    kit.box(2.6, 0.3, 1.8, kit.wood(WOOD), root, 10.6, 0.15, 0.1);
     kit.box(2.3, 0.2, 1.5, kit.lit(0xe6cf93, 1), root, 10.6, 0.22, 0.1);
     return () => {};
   });
@@ -200,7 +199,7 @@ function slide(): Prop {
 function pond(): Prop {
   return prop((kit, root) => {
     kit.box(5.6, 0.06, 2.6, kit.glass(0x4fb3e8, 0.85), root, 6.25, 0.03, 0.2);
-    const rock = kit.lit(0x9a9a92, 0.9);
+    const rock = kit.stone(0x9a9a92);
     for (let i = 0; i < 9; i++) {
       sphere(
         kit,
@@ -212,7 +211,7 @@ function pond(): Prop {
         -1.0 - hash(i + 2) * 0.2,
       );
     }
-    const stone = kit.lit(0xb8b8b0, 0.9);
+    const stone = kit.stone(0xb8b8b0);
     for (const x of [4.4, 5.6, 6.8]) cyl(kit, 0.4, 0.45, 0.35, stone, root, x, 0.175, 0.2);
     // The lily pad.
     const pad = new Group();
@@ -227,7 +226,7 @@ function pond(): Prop {
     sphere(kit, 0.55, yellow, duck, 0, 0, 0).scale.set(1.2, 0.9, 0.9);
     sphere(kit, 0.3, yellow, duck, 0.6, 0.5, 0);
     const beak = kit.mesh(
-      new CylinderGeometry(0.02, 0.12, 0.28, 8),
+      new CylinderGeometry(0.02, 0.12, 0.28, 24),
       kit.lit(0xff9f1c),
       duck,
       0.95,
@@ -249,7 +248,7 @@ function pond(): Prop {
 
 function swings(): Prop {
   return prop((kit, root) => {
-    const metal = kit.lit(0xd9534f, 0.5);
+    const metal = kit.metal(0xd9534f);
     kit.box(5.0, 0.2, 0.2, metal, root, 5.9, SWING.y + 0.1, 0);
     for (const [x, s] of [
       [3.4, -1],
@@ -259,7 +258,7 @@ function swings(): Prop {
         beam(kit, metal, root, [x + s * 0.5, 0], [x, SWING.y + 0.1], 0.18, z);
     }
     const seatMat = kit.lit(0xf2c14a, 0.6);
-    const chain = kit.lit(0x888888, 0.4);
+    const chain = kit.metal(0x888888);
     const makeSeat = (pivotX: number) => {
       const pivot = new Group();
       pivot.position.set(pivotX, SWING.y, 0);
@@ -282,8 +281,8 @@ function swings(): Prop {
 
 function mailbox(): Prop {
   return prop((kit, root) => {
-    const blue = kit.lit(0x3f6fd8, 0.5);
-    kit.box(0.28, 1.7, 0.28, kit.lit(WOOD, 0.8), root, 5.5, 0.85, 0);
+    const blue = kit.metal(0x3f6fd8);
+    kit.box(0.28, 1.7, 0.28, kit.wood(WOOD), root, 5.5, 0.85, 0);
     const body = cyl(kit, 0.5, 0.5, 1.8, blue, root, 5.5, 2.15, 0);
     body.rotation.z = Math.PI / 2;
     kit.box(1.8, 0.45, 0.95, blue, root, 5.5, 1.95, 0);
@@ -307,7 +306,7 @@ function trashCan(): Prop {
   return prop((kit, root) => {
     const can = new Group();
     root.add(can);
-    const metal = kit.lit(0x9aa5ad, 0.4);
+    const metal = kit.metal(0x9aa5ad);
     cyl(kit, CAN_R, CAN_R, 1.3, metal, can).rotation.x = Math.PI / 2;
     for (const z of [0.66, -0.66]) {
       cyl(kit, CAN_R * 1.04, CAN_R * 1.04, 0.1, kit.lit(0x6f7b83, 0.4), can, 0, 0, z).rotation.x =
@@ -379,9 +378,9 @@ function hopscotch(): Prop {
 
 function chimney(): Prop {
   return prop((kit, root) => {
-    const brick = kit.lit(0xb5543a, 0.9);
+    const brick = kit.stone(0xb5543a);
     kit.box(2, 4.5, 1.2, brick, root, 5.6, 2.25, -0.2);
-    const mortar = kit.lit(0xe8d6c4, 0.9);
+    const mortar = kit.stone(0xe8d6c4);
     for (let y = 0.5; y < 4.4; y += 0.5) kit.box(2.02, 0.05, 1.22, mortar, root, 5.6, y, -0.2);
     for (let y = 0.25, row = 0; y < 4.4; y += 0.5, row++) {
       for (let x = row % 2 ? 4.9 : 5.3; x < 6.5; x += 0.8)
@@ -424,16 +423,16 @@ function roofGap(): Prop {
     awning.position.set(5.8, 0.12, 0.1);
     root.add(awning);
     for (let i = 0; i < 6; i++) {
-      kit.box(0.4, 0.1, 1.4, kit.lit(i % 2 ? 0xffffff : 0xe0504a, 0.7), awning, -1 + i * 0.4, 0, 0);
+      kit.box(0.4, 0.1, 1.4, kit.fabric(i % 2 ? 0xffffff : 0xe0504a), awning, -1 + i * 0.4, 0, 0);
     }
     // The taller building: a ledge the cat jumps to.
-    kit.box(2.0, 1.6, 1.8, kit.lit(0x8a8f99, 0.9), root, 8.6, 0.8, -0.9);
-    kit.box(2.2, 0.16, 2.0, kit.lit(0x6f737d, 0.7), root, 8.6, 1.68, -0.9);
+    kit.box(2.0, 1.6, 1.8, kit.stone(0x8a8f99), root, 8.6, 0.8, -0.9);
+    kit.box(2.2, 0.16, 2.0, kit.stone(0x6f737d), root, 8.6, 1.68, -0.9);
     // The antenna on the near edge.
     const antenna = new Group();
     antenna.position.set(4.2, 0, 0);
     root.add(antenna);
-    const metal = kit.lit(0x666666, 0.4);
+    const metal = kit.metal(0x666666);
     kit.box(0.1, 3.4, 0.1, metal, antenna, 0, 1.7, 0);
     for (const [y, w] of [
       [3.3, 1.2],
@@ -453,7 +452,7 @@ function roofGap(): Prop {
 
 function clothesline(): Prop {
   return prop((kit, root) => {
-    const metal = kit.lit(0x666666, 0.4);
+    const metal = kit.metal(0x666666);
     for (const x of [4.0, 8.0]) {
       kit.box(0.14, 3.6, 0.14, metal, root, x, 1.8, 0);
       kit.box(0.5, 0.1, 0.1, metal, root, x, 3.55, 0);
@@ -466,11 +465,11 @@ function clothesline(): Prop {
     const sock = new Group();
     sock.position.set(-1.8, 0, 0);
     line.add(sock);
-    kit.box(0.28, 0.6, 0.1, kit.lit(0xe0504a, 0.9), sock, 0, -0.3, 0);
-    kit.box(0.28, 0.14, 0.12, kit.lit(0xffffff, 0.9), sock, 0, -0.04, 0);
-    const shirt = kit.box(0.8, 0.8, 0.06, kit.lit(0x4d8fe0, 0.9), line, -0.9, -0.4, 0);
+    kit.box(0.28, 0.6, 0.1, kit.fabric(0xe0504a), sock, 0, -0.3, 0);
+    kit.box(0.28, 0.14, 0.12, kit.fabric(0xffffff), sock, 0, -0.04, 0);
+    const shirt = kit.box(0.8, 0.8, 0.06, kit.fabric(0x4d8fe0), line, -0.9, -0.4, 0);
     void shirt;
-    const sheet = kit.box(1.1, 1.0, 0.05, kit.lit(0xffffff, 0.9), line, -2.9, -0.5, 0);
+    const sheet = kit.box(1.1, 1.0, 0.05, kit.fabric(0xffffff), line, -2.9, -0.5, 0);
     return (outcome, variant, t) => {
       line.rotation.z = snapAngle(outcome, variant, t);
       sheet.visible = !(outcome === 'fail' && variant === 1 && t > SNAP_AT + 0.1);

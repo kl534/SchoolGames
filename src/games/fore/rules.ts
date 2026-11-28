@@ -71,6 +71,13 @@ export function relText(rel: number): string {
   return rel > 0 ? `+${rel}` : `-${-rel}`;
 }
 
+/** The Total cell and its label: `E`, `+3`, `-4` (ASCII hyphen). */
+export const toParLabel = relText;
+
+/** Which colour the Total cell gets. */
+export const toParTone = (rel: number): 'under' | 'even' | 'over' =>
+  rel < 0 ? 'under' : rel > 0 ? 'over' : 'even';
+
 /** The high score store only keeps bigger-is-better numbers, so a round is kept as 100 - rel. */
 export const storedFor = (rel: number): number => 100 - rel;
 export const relFromStored = (stored: number): number => 100 - stored;
@@ -103,9 +110,9 @@ export const shotCall = (kind: CallKind): string => SHOT_CALLS[kind];
 /** Which call a finished shot gets. */
 export function callKindFor(result: Result, quality: Quality, putt: boolean): CallKind {
   if (result.kind === 'holed') return 'holed';
-  if (quality === 'duff') return putt ? 'puttMiss' : 'duff';
-  if (putt) return 'puttGood';
+  if (putt) return quality === 'miss' ? 'puttMiss' : 'puttGood';
   if (result.kind === 'water') return 'water';
+  if (quality === 'duff') return 'duff';
   return result.surface === 'tree' ? 'rough' : result.surface;
 }
 
@@ -129,7 +136,7 @@ export type Reaction = 'idle' | 'cheer' | 'groan';
 
 /**
  * What the caddie does after a shot. `name` is the `nameFor` of the hole when this shot ended it
- * (else null). A hole in the water or a duff groans; holing out, a birdie or better, or a full
+ * (else null). A shot in the water or a miss groans; holing out, a birdie or better, or a full
  * shot onto the green cheers; a bogey or worse groans; anything else is nothing special.
  */
 export function reactionFor(
@@ -137,7 +144,7 @@ export function reactionFor(
   name: string | null,
   how: { quality?: Quality; putt?: boolean } = {},
 ): Reaction {
-  if (result.kind === 'water' || how.quality === 'duff') return 'groan';
+  if (result.kind === 'water' || how.quality === 'miss' || how.quality === 'duff') return 'groan';
   if (name) {
     if (name === 'Par') return result.kind === 'holed' ? 'cheer' : 'idle';
     const bad = ['Bogey', 'Double bogey', 'Triple bogey', 'Pick up'];

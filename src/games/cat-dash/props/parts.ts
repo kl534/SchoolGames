@@ -32,7 +32,7 @@ export const sphere = (
   x = 0,
   y = 0,
   z = 0,
-): Mesh => kit.mesh(new SphereGeometry(r, 16, 12), mat, parent, x, y, z);
+): Mesh => kit.mesh(new SphereGeometry(r, 28, 20), mat, parent, x, y, z);
 
 export const cyl = (
   kit: Kit,
@@ -44,7 +44,7 @@ export const cyl = (
   x = 0,
   y = 0,
   z = 0,
-): Mesh => kit.mesh(new CylinderGeometry(rt, rb, h, 16), mat, parent, x, y, z);
+): Mesh => kit.mesh(new CylinderGeometry(rt, rb, h, 24), mat, parent, x, y, z);
 
 /** A tidy pseudo-random number from an index. */
 export const hash = (n: number) => {

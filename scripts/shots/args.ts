@@ -15,6 +15,8 @@ export interface ShotOptions {
   targets: string[];
   sizes: Size[];
   start: boolean;
+  /** Shoot the sizes one after another (heavy pages starve each other on a software renderer). */
+  serial: boolean;
   steps: Step[];
   script?: string;
   wait: number;
@@ -66,6 +68,7 @@ export function parseShotArgs(argv: string[]): ShotOptions {
     targets: [],
     sizes: parseSizes('all'),
     start: false,
+    serial: false,
     steps: [],
     wait: 2500,
     out: '.shots',
@@ -79,6 +82,8 @@ export function parseShotArgs(argv: string[]): ShotOptions {
     const arg = argv[i];
     if (arg === '--start') {
       options.start = true;
+    } else if (arg === '--serial') {
+      options.serial = true;
     } else if (arg === '--sizes') {
       options.sizes = parseSizes(value(i++, arg));
     } else if (arg === '--steps') {

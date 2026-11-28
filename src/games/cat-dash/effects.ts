@@ -54,24 +54,32 @@ const fragmentShader = /* glsl */ `
   varying float vShape;
   varying float vSpin;
   void main() {
-    vec2 p = gl_PointCoord - 0.5;
+    vec2 q = gl_PointCoord - 0.5;
+    vec2 p = q;
     float c = cos(vSpin);
     float s = sin(vSpin);
     p = vec2(c * p.x - s * p.y, s * p.x + c * p.y);
     float a;
+    vec3 rgb = vTint.rgb;
     if (vShape < 0.5) {
-      a = 1.0 - smoothstep(0.32, 0.5, length(p));
+      // A soft puff, a little lighter on top.
+      a = 1.0 - smoothstep(0.15, 0.5, length(q));
+      rgb *= 0.85 + 0.3 * (0.5 - q.y);
     } else if (vShape < 1.5) {
       // A five-pointed star.
       float ang = atan(p.y, p.x);
       float r = length(p);
       float k = 0.24 + 0.26 * pow(abs(cos(2.5 * ang + 1.2566)), 1.5);
       a = 1.0 - smoothstep(k - 0.04, k, r);
+      // A glow halo round the star.
+      a = min(1.0, a + 0.35 * exp(-r * 8.0));
     } else {
-      a = 1.0 - step(0.4, max(abs(p.x), abs(p.y)));
+      // A square with rounded corners.
+      float d = length(max(abs(p) - 0.3, 0.0)) - 0.1;
+      a = 1.0 - smoothstep(-0.01, 0.01, d);
     }
     if (a * vTint.a < 0.02) discard;
-    gl_FragColor = vec4(vTint.rgb, vTint.a * a);
+    gl_FragColor = vec4(rgb, vTint.a * a);
   }
 `;
 
@@ -90,6 +98,14 @@ interface Spec {
   shape: number;
   /** Extra sideways kick for the burst. */
   kick?: number;
+  /** Fades out slowly like smoke, `(1 - age)^1.5`, instead of linearly over the last third. */
+  soft?: boolean;
+}
+
+/** How much of a particle's alpha is left at age `u` (0 to 1): a quick fade-in, then the fade-out. */
+export function fadeAlpha(u: number, soft: boolean): number {
+  const fadeIn = Math.min(1, u * 12);
+  return fadeIn * (soft ? Math.pow(Math.max(1 - u, 0), 1.5) : Math.min(1, (1 - u) * 3));
 }
 
 const SPECS: Record<EffectKind | 'spark', Spec> = {
@@ -105,6 +121,7 @@ const SPECS: Record<EffectKind | 'spark', Spec> = {
     colors: [0xd9c9a8, 0xcbb994, 0xe6dcc3],
     alpha: 0.75,
     shape: SHAPE_CIRCLE,
+    soft: true,
   },
   splash: {
     count: 16,
@@ -209,6 +226,7 @@ const SPECS: Record<EffectKind | 'spark', Spec> = {
     colors: [0xffffff, 0xf2f2f7],
     alpha: 0.85,
     shape: SHAPE_CIRCLE,
+    soft: true,
   },
 };
 
@@ -251,6 +269,7 @@ export function createEffects(): Effects {
   const orbitY = new Float32Array(n);
   const orbitPhase = new Float32Array(n);
   const orbiting = new Uint8Array(n);
+  const softFade = new Uint8Array(n);
 
   let next = 0;
   let alive = 0;
@@ -299,6 +318,7 @@ export function createEffects(): Effects {
     gravity[i] = spec.gravity;
     drag[i] = spec.drag;
     alpha0[i] = spec.alpha;
+    softFade[i] = spec.soft ? 1 : 0;
     shape[i] = spec.shape;
     spin[i] = Math.random() * 6.28;
     spinRate[i] = spec.shape === SHAPE_CIRCLE ? 0 : random(-8, 8);
@@ -389,7 +409,7 @@ export function createEffects(): Effects {
         tint[i * 4 + 1] = rgb[i * 3 + 1];
         tint[i * 4 + 2] = rgb[i * 3 + 2];
         // Fade in a touch, out for the last stretch.
-        tint[i * 4 + 3] = alpha0[i] * Math.min(1, u * 12) * Math.min(1, (1 - u) * 3);
+        tint[i * 4 + 3] = alpha0[i] * fadeAlpha(u, softFade[i] === 1);
       }
       void any;
       (geometry.getAttribute('position') as BufferAttribute).needsUpdate = true;

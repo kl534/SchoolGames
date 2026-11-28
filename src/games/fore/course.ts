@@ -21,10 +21,6 @@ export interface Hole {
   bend: number;
   /** z = length, x = 0 (the bend is 0 at the pin). */
   pin: { x: number; z: number };
-  /** Yards of sideways drift per 100 yd of carry; + is toward +x. */
-  wind: number;
-  /** Yards of sideways break per 10 yd of putt; + is toward +x. */
-  slope: number;
   hazards: { kind: 'sand' | 'water'; at: Ellipse }[];
   /** Trees in the rough, 22 yd or more off the centre line; the ball can hit them in flight. */
   trees: { x: number; z: number; r: number }[];
@@ -41,8 +37,6 @@ const hole = (
   par: 3 | 4 | 5,
   length: number,
   bend: number,
-  wind: number,
-  slope: number,
   hazards: Hole['hazards'],
   trees: TreeSpec[] = [],
 ): Hole => ({
@@ -50,8 +44,6 @@ const hole = (
   length,
   bend,
   pin: { x: 0, z: length },
-  wind,
-  slope,
   hazards,
   trees: trees.map(([z, off, r]) => ({ x: bendAt(bend, length, z) + off, z, r })),
 });
@@ -71,14 +63,12 @@ const water = (x: number, z: number, rx: number, rz: number) => ({
 });
 
 export const HOLES: readonly Hole[] = [
-  hole(4, 340, 0, 0, 0, []),
-  hole(3, 140, 0, 2, 0.3, [sand(-10, 128, 9, 7)]),
+  hole(4, 340, 0, []),
+  hole(3, 140, 0, [sand(-10, 128, 9, 7)]),
   hole(
     4,
     360,
     14,
-    -2,
-    0,
     [sand(20, 230, 10, 14)],
     [
       [150, -28, 4],
@@ -86,14 +76,12 @@ export const HOLES: readonly Hole[] = [
       [290, 30, 4],
     ],
   ),
-  hole(5, 470, -12, 3, -0.3, [water(12, 340, 16, 12)]),
-  hole(4, 330, 0, 4, 0.4, [water(-14, 200, 10, 30)]),
+  hole(5, 470, -12, [water(12, 340, 16, 12)]),
+  hole(4, 330, 0, [water(-14, 200, 10, 30)]),
   hole(
     3,
     165,
     0,
-    -3,
-    -0.4,
     [water(0, 140, 22, 10)],
     [
       [60, -30, 4],
@@ -105,8 +93,6 @@ export const HOLES: readonly Hole[] = [
     4,
     380,
     -16,
-    0,
-    0.3,
     [sand(-24, 250, 8, 16), sand(8, 352, 9, 8)],
     [
       [120, 30, 4.5],
@@ -114,13 +100,11 @@ export const HOLES: readonly Hole[] = [
       [310, 28, 4],
     ],
   ),
-  hole(5, 490, 10, -3, 0, [sand(14, 250, 10, 14), water(-6, 400, 14, 10)]),
+  hole(5, 490, 10, [sand(14, 250, 10, 14), water(-6, 400, 14, 10)]),
   hole(
     4,
     350,
     0,
-    2,
-    -0.3,
     [sand(0, 320, 12, 8)],
     [
       [90, -28, 4],

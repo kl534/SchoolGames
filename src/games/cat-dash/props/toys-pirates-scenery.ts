@@ -27,7 +27,7 @@ const BRIGHT = [0xe0504a, 0xf2c230, 0x3f8fd8, 0x5cb85c, 0xff9f43, 0x9b59b6, 0xff
 
 /** A teddy bear sitting at (x, y) on a shelf (y is the shelf top). */
 function teddy(kit: Kit, tile: Group, x: number, y: number, colour: number, z: number) {
-  const fur = kit.lit(colour, 0.9);
+  const fur = kit.fabric(colour);
   kit.mesh(new SphereGeometry(0.42, 12, 10), fur, tile, x, y + 0.42, z);
   kit.mesh(new SphereGeometry(0.3, 12, 10), fur, tile, x, y + 1.0, z);
   for (const s of [-1, 1]) {
@@ -79,8 +79,8 @@ function rocket(kit: Kit, tile: Group, x: number, y: number, z: number) {
 
 /** A shelving unit `w` wide with two shelves of toys. */
 function shelf(kit: Kit, tile: Group, x: number, w: number, seed: number) {
-  const wood = kit.lit(0xc98a52, 0.7);
-  kit.box(w, 5.4, 0.5, kit.lit(0xa86a3a, 0.9), tile, x, 2.7, Z + 0.1);
+  const wood = kit.wood(0xc98a52);
+  kit.box(w, 5.4, 0.5, kit.wood(0xa86a3a), tile, x, 2.7, Z + 0.1);
   for (const y of [0.2, 2.4, 4.6]) kit.box(w, 0.14, 0.8, wood, tile, x, y, Z + 0.35);
   for (const s of [-1, 1])
     kit.box(0.14, 5.4, 0.8, wood, tile, x + (s * (w - 0.14)) / 2, 2.7, Z + 0.35);
@@ -143,9 +143,9 @@ const toyStore: Decor = (kit, tile) => {
 
 /** A palm tree with a leaning trunk. */
 function palm(kit: Kit, tile: Group, x: number, y: number, h: number, z: number) {
-  const trunk = kit.lit(0x8a6a3a, 0.9);
+  const trunk = kit.wood(0x8a6a3a);
   kit.mesh(new CylinderGeometry(0.1, 0.16, h, 8), trunk, tile, x, y + h / 2, z).rotation.z = 0.12;
-  const leaf = kit.lit(0x2f9a4a, 0.8);
+  const leaf = kit.foliage(0x2f9a4a);
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * Math.PI * 2;
     const m = kit.mesh(
@@ -182,17 +182,17 @@ const pirateShip: Decor = (kit, tile) => {
   palm(kit, tile, 18.2, 3.5, 2.6, WALL_Z + 0.3);
   palm(kit, tile, 19.6, 3.4, 1.9, WALL_Z + 0.3);
   // The ship's rail along the front of the deck: posts and a top rail.
-  const wood = kit.lit(0x7a4a26, 0.85);
-  const rail = kit.lit(0x95602f, 0.8);
+  const wood = kit.wood(0x7a4a26);
+  const rail = kit.wood(0x95602f);
   for (let i = 0; i < 25; i++) kit.box(0.2, 1.2, 0.2, wood, tile, i, 0.6, -2.4);
   kit.box(24, 0.18, 0.3, rail, tile, 12, 1.25, -2.4);
   kit.box(24, 0.1, 0.12, wood, tile, 12, 0.5, -2.4);
   // A tall mast with a furled sail and a black flag with a white cat face.
   const mx = 14;
-  kit.mesh(new CylinderGeometry(0.2, 0.28, 14, 10), kit.lit(0x6b4220, 0.85), tile, mx, 7, -2.6);
+  kit.mesh(new CylinderGeometry(0.2, 0.28, 14, 10), kit.wood(0x6b4220), tile, mx, 7, -2.6);
   kit.mesh(
     new CylinderGeometry(0.28, 0.28, 5, 10),
-    kit.lit(0xf1e6c8, 0.9),
+    kit.fabric(0xf1e6c8),
     tile,
     mx,
     9.5,
@@ -206,10 +206,10 @@ const pirateShip: Decor = (kit, tile) => {
     kit.mesh(new ConeGeometry(0.1, 0.2, 4), white, tile, mx + 1.0 + s * 0.17, 13.7, -2.55);
   // Barrels and a coil of rope along the rail.
   for (const x of [4, 20.5]) {
-    kit.mesh(new CylinderGeometry(0.5, 0.5, 1.0, 14), kit.lit(0x8a5a2a, 0.9), tile, x, 0.5, -1.9);
+    kit.mesh(new CylinderGeometry(0.5, 0.5, 1.0, 14), kit.wood(0x8a5a2a), tile, x, 0.5, -1.9);
     kit.mesh(
       new TorusGeometry(0.5, 0.04, 6, 16),
-      kit.lit(0x2e3036, 0.4),
+      kit.metal(0x2e3036),
       tile,
       x,
       0.75,

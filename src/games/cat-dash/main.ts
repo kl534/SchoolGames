@@ -1,13 +1,5 @@
 import './style.css';
-import {
-  Group,
-  MathUtils,
-  Mesh,
-  MeshStandardMaterial,
-  SphereGeometry,
-  ConeGeometry,
-  Vector3,
-} from 'three';
+import { MathUtils, Vector3 } from 'three';
 import { pressAnswers } from '../../shared/answers';
 import { preloadCatSounds, sfx, speak, stopSpeaking, unlockAudio } from '../../shared/audio';
 import { createFactFeed, type FactFeed } from '../../shared/feed';
@@ -51,6 +43,7 @@ import {
   type PlaceId,
 } from './places';
 import { showCatPicker, type CatPicker } from './picker';
+import { createFishSet, fishBob, fishSpin } from './fish';
 import { createPropPool } from './props/pool';
 import {
   FIRST_PLACE,
@@ -80,6 +73,14 @@ import {
   type Outcome,
   type Variant,
 } from './rules';
+import { createLook } from './render';
+import {
+  QUALITY_KEY,
+  QUALITY_SETTINGS,
+  createGovernor,
+  initialQuality,
+  type Quality,
+} from './quality';
 import { createWorld } from './world';
 
 const GAME_ID = 'cat-dash';
@@ -151,7 +152,28 @@ function run(session: GameSession, dev: DevOptions | null): void {
   let catId: CatId = dev?.cat ?? savedCat(getSetting(CAT_SETTING(playerId)));
 
   // ---------- Scene ----------
-  const ctx = createScene(container, { fov: FOV, near: 5, far: 400 });
+  // Quality tier: the saved one or one from the device's hints; it steps down when frames are slow.
+  const readSavedQuality = () => {
+    try {
+      return localStorage.getItem(QUALITY_KEY);
+    } catch {
+      return null;
+    }
+  };
+  const hints = navigator as Navigator & { deviceMemory?: number };
+  let quality: Quality =
+    dev?.quality ??
+    initialQuality({
+      saved: readSavedQuality(),
+      cores: hints.hardwareConcurrency,
+      memoryGb: hints.deviceMemory,
+    });
+  const ctx = createScene(container, {
+    fov: FOV,
+    near: 5,
+    far: 400,
+    antialias: QUALITY_SETTINGS[quality].antialias,
+  });
   const { scene, camera } = ctx;
   const world = createWorld(scene);
   const effects = createEffects();
@@ -159,21 +181,24 @@ function run(session: GameSession, dev: DevOptions | null): void {
   const props = createPropPool();
   const cat: Cat = createCat(CAT_LOOKS[catId]);
   scene.add(cat.object);
+  const look = createLook(ctx, world);
+
+  const fishSet = createFishSet(QUALITY_SETTINGS[quality].outlines);
+  const applyQuality = (q: Quality) => {
+    quality = q;
+    look.setQuality(q);
+    cat.outline.setVisible(QUALITY_SETTINGS[q].outlines);
+    world.setShadows(QUALITY_SETTINGS[q].decorShadows);
+    props.setOutlines(QUALITY_SETTINGS[q].outlines);
+    fishSet.setOutlines(QUALITY_SETTINGS[q].outlines);
+  };
+  applyQuality(quality);
+  const governor = !dev?.quality && !lab && !doorLab ? createGovernor(quality) : null;
 
   // Fish treats on the straights: small orange fish with a blue tail.
-  const fishBody = new SphereGeometry(0.28, 12, 8);
-  const fishTail = new ConeGeometry(0.2, 0.34, 6);
-  const fishMaterial = new MeshStandardMaterial({ color: 0xff9f1c, roughness: 0.4 });
-  const tailMaterial = new MeshStandardMaterial({ color: 0x3f8fd8, roughness: 0.4 });
   const CAT_CHEST = 1.0;
   const fish = Array.from({ length: 16 }, () => {
-    const group = new Group();
-    const body = new Mesh(fishBody, fishMaterial);
-    body.scale.set(1.4, 0.8, 0.6);
-    const tail = new Mesh(fishTail, tailMaterial);
-    tail.position.x = -0.42;
-    tail.rotation.z = Math.PI / 2;
-    group.add(body, tail);
+    const group = fishSet.make();
     group.visible = false;
     scene.add(group);
     return group;
@@ -386,6 +411,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
   const showPlaceScenery = (p: Place) => {
     place = p;
     world.setPlace(p);
+    look.setPlace(p);
     // Keep the props of this place and of the next, drop the rest.
     props.prune(PLACES.filter((q) => q.id === p.id || q.id === nextId).flatMap((q) => q.obstacles));
   };
@@ -1019,8 +1045,8 @@ function run(session: GameSession, dev: DevOptions | null): void {
         }
         continue;
       }
-      f.position.y = FISH_Y + (f.userData.arc as number) + Math.sin(time * 3 + f.position.x) * 0.12;
-      f.rotation.z = Math.sin(time * 4 + f.position.x) * 0.25;
+      f.position.y = FISH_Y + (f.userData.arc as number) + fishBob(time + f.position.x);
+      f.rotation.y = fishSpin(time + f.position.x * 0.3);
       if (f.position.x < camX - fit.viewW * 0.4) f.visible = false;
       else if (grabbing && phase !== 'sprint' && f.position.x >= catX - 0.3) f.userData.grab = true;
     }
@@ -1134,12 +1160,22 @@ function run(session: GameSession, dev: DevOptions | null): void {
     camera.position.set(camX + dx, fit.camY - camPan + dy, fit.distance);
     camera.lookAt(camX, fit.camY - camPan, 0);
     camera.updateMatrixWorld();
+    look.frame(camX, fit);
     effects.setScale(
       (ctx.renderer.getPixelRatio() * viewH) / (2 * Math.tan((camera.fov * Math.PI) / 360)),
     );
   };
 
   ctx.onUpdate((delta, elapsed) => {
+    const stepped = governor?.sample(delta);
+    if (stepped) {
+      applyQuality(stepped);
+      try {
+        localStorage.setItem(QUALITY_KEY, stepped);
+      } catch {
+        // No storage: the tier is just not remembered.
+      }
+    }
     layout();
     gameTime += delta;
     tapFlow.update(delta);
@@ -1169,7 +1205,7 @@ function run(session: GameSession, dev: DevOptions | null): void {
       if (l.item !== prop || phase === 'move') continue;
     }
     retireFar();
-    world.update(camX);
+    world.update(camX, fit);
     effects.update(delta);
     cat.update(delta, elapsed);
 
@@ -1338,10 +1374,8 @@ function run(session: GameSession, dev: DevOptions | null): void {
     props.dispose();
     doorway?.dispose();
     world.dispose();
-    fishBody.dispose();
-    fishTail.dispose();
-    fishMaterial.dispose();
-    tailMaterial.dispose();
+    look.dispose();
+    fishSet.dispose();
     ctx.dispose();
   });
 }

@@ -27,7 +27,7 @@ function windowAt(
   h: number,
   glass: number,
 ) {
-  const frame = kit.lit(0xffffff, 0.6);
+  const frame = kit.wood(0xffffff);
   kit.box(w + 0.5, h + 0.5, 0.12, frame, tile, x, y, Z);
   kit.box(w, h, 0.14, kit.basic(glass), tile, x, y, Z + 0.02);
   kit.box(0.14, h, 0.16, frame, tile, x, y, Z + 0.05);
@@ -44,16 +44,16 @@ function curtains(
   h: number,
   color: number,
 ) {
-  const mat = kit.lit(color, 0.95);
+  const mat = kit.fabric(color);
   for (const s of [-1, 1]) {
     const g = kit.box(w * 0.28, h + 0.8, 0.2, mat, tile, x + s * (w / 2 + 0.05), y - 0.1, Z + 0.22);
     g.rotation.z = s * 0.03;
   }
-  kit.box(w + 1.6, 0.14, 0.14, kit.lit(0x8a6a3a, 0.5), tile, x, y + h / 2 + 0.5, Z + 0.3);
+  kit.box(w + 1.6, 0.14, 0.14, kit.wood(0x8a6a3a), tile, x, y + h / 2 + 0.5, Z + 0.3);
 }
 
 function frameAt(kit: Kit, tile: Group, x: number, y: number, w: number, h: number, art: number) {
-  kit.box(w + 0.3, h + 0.3, 0.1, kit.lit(0x6b4526, 0.6), tile, x, y, Z);
+  kit.box(w + 0.3, h + 0.3, 0.1, kit.wood(0x6b4526), tile, x, y, Z);
   kit.box(w, h, 0.12, kit.basic(art), tile, x, y, Z + 0.02);
   kit.box(
     w * 0.5,
@@ -70,13 +70,13 @@ function frameAt(kit: Kit, tile: Group, x: number, y: number, w: number, h: numb
 function plant(kit: Kit, tile: Group, x: number, scale = 1) {
   kit.mesh(
     new CylinderGeometry(0.55 * scale, 0.4 * scale, 0.9 * scale, 12),
-    kit.lit(0xc0623a, 0.7),
+    kit.stone(0xc0623a),
     tile,
     x,
     0.45 * scale,
     -1.6,
   );
-  const leaf = kit.lit(0x3e9a4a, 0.8);
+  const leaf = kit.foliage(0x3e9a4a);
   for (let i = 0; i < 7; i++) {
     const a = (i / 7) * Math.PI * 2;
     const m = kit.mesh(
@@ -93,15 +93,15 @@ function plant(kit: Kit, tile: Group, x: number, scale = 1) {
 }
 
 function floorLamp(kit: Kit, tile: Group, x: number) {
-  const metal = kit.lit(0x555555, 0.4);
+  const metal = kit.metal(0x555555);
   kit.mesh(new CylinderGeometry(0.4, 0.4, 0.1, 12), metal, tile, x, 0.05, -1.7);
   kit.mesh(new CylinderGeometry(0.05, 0.05, 4.6, 8), metal, tile, x, 2.4, -1.7);
   kit.mesh(new CylinderGeometry(0.5, 0.9, 1.1, 14), kit.lit(0xfff0b8, 0.9), tile, x, 5.2, -1.7);
 }
 
 function rug(kit: Kit, tile: Group, x: number, w: number, color: number) {
-  const r = kit.box(w, 0.04, 2.6, kit.lit(color, 1), tile, x, 0.025, 0.0);
-  kit.box(w - 0.6, 0.05, 2.0, kit.lit(color ^ 0x202020, 1), tile, x, 0.03, 0);
+  const r = kit.box(w, 0.04, 2.6, kit.fabric(color), tile, x, 0.025, 0.0);
+  kit.box(w - 0.6, 0.05, 2.0, kit.fabric(color ^ 0x202020), tile, x, 0.03, 0);
   void r;
 }
 
@@ -131,23 +131,23 @@ const kitchen: Decor = (kit, tile) => {
   const white = kit.lit(0xf4f4f4, 0.4);
   // Fridge.
   kit.box(2.6, 6.2, 1.2, white, tile, 3, 3.1, -1.9);
-  kit.box(2.6, 0.06, 1.22, kit.lit(0x999999), tile, 3, 4.3, -1.9);
-  kit.box(0.12, 1.2, 0.12, kit.lit(0x999999), tile, 4.0, 5.2, -1.25);
-  kit.box(0.12, 1.6, 0.12, kit.lit(0x999999), tile, 4.0, 2.7, -1.25);
+  kit.box(2.6, 0.06, 1.22, kit.metal(0x999999), tile, 3, 4.3, -1.9);
+  kit.box(0.12, 1.2, 0.12, kit.metal(0x999999), tile, 4.0, 5.2, -1.25);
+  kit.box(0.12, 1.6, 0.12, kit.metal(0x999999), tile, 4.0, 2.7, -1.25);
   // Tiled splashback and wall cupboards.
   kit.box(22, 1.8, 0.1, kit.lit(0xffffff, 0.4), tile, 14, 3.1, Z);
   for (let i = 0; i < 22; i++)
     kit.box(0.04, 1.8, 0.12, kit.lit(0xcdd9d6), tile, 3.5 + i, 3.1, Z + 0.02);
-  const cup = kit.lit(0xf2d9a0, 0.7);
+  const cup = kit.wood(0xf2d9a0);
   for (const x of [8, 10.2, 12.4, 19, 21.2]) {
     kit.box(2.1, 2.0, 0.9, cup, tile, x, 6.2, Z + 0.45);
-    kit.box(0.08, 0.7, 0.1, kit.lit(0x555555), tile, x + 0.8, 5.7, Z + 0.95);
+    kit.box(0.08, 0.7, 0.1, kit.metal(0x555555), tile, x + 0.8, 5.7, Z + 0.95);
   }
   windowAt(kit, tile, 16, 5.4, 2.4, 2.6, 0x9ad4f5);
   curtains(kit, tile, 16, 5.4, 2.4, 2.6, 0xf2b134);
   // A hob and a pot on it.
-  kit.box(2.2, 0.9, 1.1, kit.lit(0x888888, 0.4), tile, 6.2, 0.45, -1.9);
-  kit.mesh(new CylinderGeometry(0.5, 0.45, 0.7, 14), kit.lit(0x9aa5ad, 0.4), tile, 6.2, 1.25, -1.9);
+  kit.box(2.2, 0.9, 1.1, kit.metal(0x888888), tile, 6.2, 0.45, -1.9);
+  kit.mesh(new CylinderGeometry(0.5, 0.45, 0.7, 14), kit.metal(0x9aa5ad), tile, 6.2, 1.25, -1.9);
 };
 
 const bathroom: Decor = (kit, tile, look) => {
@@ -184,10 +184,10 @@ const bedroom: Decor = (kit, tile) => {
     );
   // A poster and a bedside lamp.
   frameAt(kit, tile, 14, 6.2, 2.2, 3, 0xff6f91);
-  kit.box(1.4, 1.3, 1.0, kit.lit(0x8a5a33, 0.7), tile, 10, 0.65, -1.9);
+  kit.box(1.4, 1.3, 1.0, kit.wood(0x8a5a33), tile, 10, 0.65, -1.9);
   kit.mesh(new CylinderGeometry(0.3, 0.5, 0.6, 12), kit.lit(0xfff0b8, 0.9), tile, 10, 1.7, -1.9);
   // A toy box with a ball.
-  const box = kit.lit(0x4d8fe0, 0.7);
+  const box = kit.wood(0x4d8fe0);
   kit.box(2.2, 1.3, 1.3, box, tile, 19.5, 0.65, -1.7);
   kit.mesh(new SphereGeometry(0.42, 12, 10), kit.lit(0xe0504a, 0.5), tile, 20.4, 1.7, -1.7);
   kit.mesh(new SphereGeometry(0.35, 12, 10), kit.lit(0xf2c14a, 0.5), tile, 19.2, 1.65, -1.7);

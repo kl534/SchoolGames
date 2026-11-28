@@ -16,7 +16,9 @@ import {
   TorusGeometry,
   type Material,
 } from 'three';
-import { Kit } from './kit';
+import { Kit, castShadows } from './kit';
+import { furMaterial, type FurMaterial } from './cat-materials';
+import { OUTLINE_CAT_PX, addOutline, type Outline } from './outline';
 import type { CatLook } from './looks';
 import type { CatFace, CatFrame, CatPose, Coat, Hat } from './moves';
 
@@ -245,6 +247,8 @@ interface Leg {
 export interface Cat {
   /** Its origin is on the floor under the body. */
   object: Group;
+  /** The ink outline (hidden on the lowest quality tier). */
+  outline: Outline;
   setLook(look: CatLook): void;
   /** Poses the cat from a move's frame, `x0` being the obstacle's entry line. */
   apply(frame: CatFrame, x0: number, dt: number): void;
@@ -257,20 +261,32 @@ export interface Cat {
 
 export function createCat(initial: CatLook): Cat {
   const kit = new Kit();
-  const furMat = new MeshStandardMaterial({ roughness: 0.85, flatShading: false });
-  const bellyMat = new MeshStandardMaterial({ roughness: 0.85 });
-  const pawMat = new MeshStandardMaterial({ roughness: 0.85 });
-  const stripeMat = new MeshStandardMaterial({ roughness: 0.9 });
+  const furMat = furMaterial();
+  const bellyMat = furMaterial();
+  const pawMat = furMaterial();
+  const stripeMat = furMaterial();
   const eyeMat = new MeshStandardMaterial({ roughness: 0.3 });
   const eyeMat2 = new MeshStandardMaterial({ roughness: 0.3 });
   // Ears, tail and the face mask copy the fur colour, or take the Siamese points colour.
-  const earMat = new MeshStandardMaterial({ roughness: 0.85 });
-  const tailMat = new MeshStandardMaterial({ roughness: 0.85 });
-  const pointMat = new MeshStandardMaterial({ roughness: 0.85 });
+  const earMat = furMaterial();
+  const tailMat = furMaterial();
+  const pointMat = furMaterial();
   const noseMat = new MeshStandardMaterial({ roughness: 0.5 });
   const coatMat = new MeshStandardMaterial({ roughness: 1, transparent: true, opacity: 0.88 });
   // The head is fur or, under a coat, the coat's colour (so the eyes and nose stay in view).
-  const headMat = new MeshStandardMaterial({ roughness: 0.85 });
+  const headMat = furMaterial();
+  // The fur materials get a rim of light in a lighter shade of their own colour.
+  const rimMats: FurMaterial[] = [
+    furMat,
+    bellyMat,
+    pawMat,
+    stripeMat,
+    earMat,
+    tailMat,
+    pointMat,
+    headMat,
+  ];
+  const syncRims = () => rimMats.forEach((m) => m.setRim(m.color));
   kit.materials.push(
     furMat,
     bellyMat,
@@ -286,10 +302,24 @@ export function createCat(initial: CatLook): Cat {
     headMat,
   );
   const patchMats = [0, 1, 2, 3].map(() => {
-    const m = new MeshStandardMaterial({ roughness: 0.9 });
+    const m = furMaterial();
+    rimMats.push(m);
     kit.materials.push(m);
     return m;
   });
+  const creamMat = furMaterial();
+  creamMat.color.setHex(0xfff4e6);
+  creamMat.setRim(creamMat.color);
+  kit.materials.push(creamMat);
+  // The lower part of each iris is lighter (a soft glow), the pupils a deep flat dark and the
+  // glints pure white, so the eyes read as big, round and sparkly rather than glassy.
+  const irisLight = [
+    new MeshStandardMaterial({ roughness: 0.5 }),
+    new MeshStandardMaterial({ roughness: 0.5 }),
+  ];
+  const pupilMat = new MeshBasicMaterial({ color: 0x140b1c });
+  const glintMat = new MeshBasicMaterial({ color: 0xffffff });
+  kit.materials.push(...irisLight, pupilMat, glintMat);
   const white = kit.lit(0xffffff, 0.4);
   const ink = kit.lit(0x1b1226, 0.5);
   const pink = kit.lit(0xf6a5b8, 0.7);
@@ -302,8 +332,16 @@ export function createCat(initial: CatLook): Cat {
   });
   kit.materials.push(blushMat);
 
-  const sphere = (r: number, sx: number, sy: number, sz: number, mat: Material, parent: Group) => {
-    const m = kit.mesh(new SphereGeometry(r, 18, 14), mat, parent);
+  const sphere = (
+    r: number,
+    sx: number,
+    sy: number,
+    sz: number,
+    mat: Material,
+    parent: Group,
+    segments: [number, number] = [18, 14],
+  ) => {
+    const m = kit.mesh(new SphereGeometry(r, segments[0], segments[1]), mat, parent);
     m.scale.set(sx, sy, sz);
     return m;
   };
@@ -317,8 +355,8 @@ export function createCat(initial: CatLook): Cat {
   spin.add(rig);
 
   // ----- Body -----
-  const torso = sphere(1, TORSO[0], TORSO[1], TORSO[2], furMat, rig);
-  const belly = sphere(1, 0.42, 0.22, 0.31, bellyMat, rig);
+  const torso = sphere(1, TORSO[0], TORSO[1], TORSO[2], furMat, rig, [40, 30]);
+  const belly = sphere(1, 0.42, 0.22, 0.31, bellyMat, rig, [24, 18]);
   belly.position.set(0.08, -0.12, 0.05);
   const coatBody = sphere(1, 0.62, 0.42, 0.42, coatMat, rig);
   coatBody.visible = false;
@@ -340,17 +378,24 @@ export function createCat(initial: CatLook): Cat {
     return m;
   });
 
+  // Chest ruff: a fluffy bib under the head.
+  for (let i = 0; i < 5; i++) {
+    const t = i / 4;
+    const tuft = sphere(0.09, 1, 0.8, 0.7, bellyMat, rig);
+    tuft.position.set(0.4 + 0.07 * Math.sin(Math.PI * t), -0.12 + 0.2 * t, -0.14 + 0.28 * t);
+  }
+
   // ----- Head -----
   // A big round head turned towards the camera, so both eyes show.
   const head = new Group();
   head.scale.setScalar(HEAD_SCALE);
   head.rotation.y = -0.85;
   rig.add(head);
-  sphere(0.28, 1.04, 0.92, 1.08, headMat, head);
+  sphere(0.28, 1.04, 0.92, 1.08, headMat, head, [40, 30]);
   // Two cheek puffs under the nose.
   const cheeks: Mesh[] = [];
   for (const z of [-0.065, 0.065]) {
-    const puff = sphere(0.085, 0.85, 0.72, 1, bellyMat, head);
+    const puff = sphere(0.085, 0.85, 0.72, 1, bellyMat, head, [24, 18]);
     puff.position.set(0.215, -0.1, z);
     cheeks.push(puff);
   }
@@ -390,6 +435,9 @@ export function createCat(initial: CatLook): Cat {
     outer.scale.x = 0.55;
     const inner = kit.mesh(new ConeGeometry(0.075, 0.16, 16), pink, ear, 0.035, 0.1, 0);
     inner.scale.x = 0.3;
+    // A cream tuft inside the ear, from its base upward.
+    const tuft = kit.mesh(new ConeGeometry(0.03, 0.1, 8), creamMat, ear, 0.05, 0.07, 0);
+    tuft.scale.x = 0.6;
     ears.push(ear);
   }
   // Eyes: big and round, a coloured iris, a big pupil, two glints and an X for a dizzy face.
@@ -403,17 +451,21 @@ export function createCat(initial: CatLook): Cat {
     eye.rotation.y = -a;
     head.add(eye);
     eyeGroups.push(eye);
-    const rim = sphere(0.1, 0.3, 1.12, 0.9, ink, eye);
+    const rim = sphere(0.097, 0.3, 1.08, 0.9, ink, eye);
     // The near eye (side 1, z > 0) is `eyes`, the far one `eyes2`.
-    const iris = sphere(0.09, 0.34, 1.1, 0.86, side === 1 ? eyeMat : eyeMat2, eye);
+    const iris = sphere(0.09, 0.34, 1.05, 0.86, side === 1 ? eyeMat : eyeMat2, eye);
     iris.position.x = 0.006;
-    const pupil = sphere(0.062, 0.34, 1.1, 0.8, ink, eye);
-    pupil.position.set(0.022, -0.006, 0);
-    const glint = sphere(0.027, 0.5, 1, 1, white, eye);
-    glint.position.set(0.04, 0.045, 0.022);
-    const glint2 = sphere(0.012, 0.5, 1, 1, white, eye);
-    glint2.position.set(0.04, -0.035, -0.024);
-    eyeParts.push(rim, iris, pupil, glint, glint2);
+    // A lighter crescent across the bottom of the iris, under the pupil.
+    const glow = sphere(0.05, 0.1, 0.42, 0.7, irisLight[side === 1 ? 0 : 1], eye);
+    glow.position.set(0.027, -0.046, 0);
+    const pupil = sphere(0.058, 0.34, 1.08, 0.84, pupilMat, eye);
+    pupil.position.set(0.024, 0.006, 0);
+    const glint = sphere(0.033, 0.5, 1, 1, glintMat, eye);
+    glint.position.set(0.046, 0.042, 0.02);
+    const glint2 = sphere(0.015, 0.5, 1, 1, glintMat, eye);
+    glint2.position.set(0.046, -0.03, -0.022);
+    eyeParts.push(rim, iris, glow, pupil, glint, glint2);
+    for (const m of [rim, iris, glow, pupil, glint, glint2]) m.userData.noOutline = true;
     const cross = new Group();
     cross.position.x = 0.03;
     for (const r of [Math.PI / 4, -Math.PI / 4]) {
@@ -647,7 +699,8 @@ export function createCat(initial: CatLook): Cat {
   const tail: Group[] = [];
   let parent: Group = tailRoot;
   let tailPatch: Mesh | null = null;
-  const tailRadius = (i: number) => 0.072 - i * 0.002;
+  const tailRadius = (i: number) =>
+    0.078 + 0.018 * Math.sin((Math.PI * i) / (TAIL_SEGMENTS - 1)) - i * 0.002;
   for (let i = 0; i < TAIL_SEGMENTS; i++) {
     const seg = new Group();
     if (i > 0) seg.position.x = -SEGMENT;
@@ -664,7 +717,15 @@ export function createCat(initial: CatLook): Cat {
       0,
     );
     tube.rotation.z = Math.PI / 2;
-    if (i === TAIL_SEGMENTS - 1) sphere(r2 * 1.2, 1.3, 1, 1, tailMat, seg).position.x = -SEGMENT;
+    if (i === TAIL_SEGMENTS - 1) {
+      sphere(r2 * 1.2, 1.3, 1, 1, tailMat, seg).position.x = -SEGMENT;
+      // A tuft of three cones at the tip.
+      for (const spread of [-0.4, 0, 0.4]) {
+        const tuft = kit.mesh(new ConeGeometry(0.05, 0.14, 8), tailMat, seg);
+        tuft.rotation.z = Math.PI / 2 + spread;
+        tuft.position.set(-SEGMENT - 0.06 * Math.cos(spread), -0.06 * Math.sin(spread), 0);
+      }
+    }
     if (i === 2) {
       tailPatch = kit.mesh(
         new CylinderGeometry(r2 * 1.06, r * 1.06, SEGMENT * 1.3, 14),
@@ -705,6 +766,11 @@ export function createCat(initial: CatLook): Cat {
   spikes.visible = false;
   rig.add(spikes);
 
+  // Every solid mesh casts a shadow (the glass, blush and glow stay out of the shadow map, and so
+  // do specks like the eyes and nose).
+  castShadows(object);
+  const outline = addOutline(object, OUTLINE_CAT_PX);
+
   // ----- State -----
   let look: CatLook = initial;
   let pose: CatPose = 'run';
@@ -730,6 +796,8 @@ export function createCat(initial: CatLook): Cat {
     mask.visible = pointsOn;
     eyeMat.color.setHex(look.eyes);
     eyeMat2.color.setHex(look.eyes2 ?? look.eyes);
+    irisLight[0].color.copy(eyeMat.color).lerp(new Color(0xffffff), 0.3);
+    irisLight[1].color.copy(eyeMat2.color).lerp(new Color(0xffffff), 0.3);
     noseMat.color.setHex(look.nose);
     stripeMat.color.setHex(look.stripes ?? look.fur);
     stripes.forEach((s) => (s.visible = look.stripes !== null));
@@ -745,6 +813,7 @@ export function createCat(initial: CatLook): Cat {
     const tp = look.patches.find((p) => p.where === 'tail');
     if (tailPatch) tailPatch.visible = !!tp;
     if (tp) patchMats[3].color.setHex(tp.color);
+    syncRims();
   };
   paintFur();
 
@@ -778,6 +847,7 @@ export function createCat(initial: CatLook): Cat {
       earMat.color.copy(furMat.color);
     }
     torso.scale.set(TORSO[0] * bw, TORSO[1] * (wet ? 0.86 : 1), TORSO[2] * bw * (wet ? 0.86 : 1));
+    syncRims();
   };
 
   // The build: body width, head size, cheek puffs and ears.
@@ -860,6 +930,7 @@ export function createCat(initial: CatLook): Cat {
 
   return {
     object,
+    outline,
     setLook(next) {
       look = next;
       paintFur();
@@ -909,6 +980,7 @@ export function createCat(initial: CatLook): Cat {
       solve(elapsed);
     },
     dispose() {
+      outline.dispose();
       kit.dispose();
       object.removeFromParent();
     },

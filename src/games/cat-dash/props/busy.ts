@@ -69,8 +69,8 @@ function bookStack(kit: Kit, parent: Group, x: number, h: number, seed: number) 
 function crate(kit: Kit, parent: Group, w = 1.1, h = 1.2): Group {
   const g = new Group();
   parent.add(g);
-  const wood = kit.lit(0xc9a15a, 0.85);
-  const dark = kit.lit(0x8a6a38, 0.9);
+  const wood = kit.wood(0xc9a15a);
+  const dark = kit.wood(0x8a6a38);
   kit.box(w, 0.12, 0.7, dark, g, 0, 0.06, 0);
   for (const sz of [-1, 1]) {
     for (const y of [0.2, 0.55, 0.9]) {
@@ -101,8 +101,8 @@ function fishShape(kit: Kit, parent: Group, scale = 1, color = 0xb9c6d4): Group 
 
 function cart(): Prop {
   return prop((kit, root) => {
-    const steel = kit.lit(0xc9d1d8, 0.35);
-    const red = kit.lit(0xe0504a, 0.6);
+    const steel = kit.metal(0xc9d1d8);
+    const red = kit.metal(0xe0504a);
     const c = new Group();
     root.add(c);
     kit.box(2.0, 0.08, 0.8, steel, c, 0, 0.62, 0.1);
@@ -253,7 +253,7 @@ function ladder(): Prop {
     kit.box(14, 0.14, 0.14, kit.lit(0x5a3a24, 0.7), root, 6, 4.4, -0.9);
     const g = new Group();
     root.add(g);
-    const wood = kit.lit(0xb98a5e, 0.7);
+    const wood = kit.wood(0xb98a5e);
     for (const x of [-0.45, 0.45]) kit.box(0.12, 4.0, 0.14, wood, g, x, 2.0, 0);
     for (let y = 0.5; y < 4.0; y += 0.45) kit.box(0.9, 0.08, 0.1, wood, g, 0, y, 0);
     const wheels: Mesh[] = [];
@@ -276,7 +276,7 @@ function bookCart(): Prop {
   return prop((kit, root) => {
     const c = new Group();
     root.add(c);
-    const wood = kit.lit(0x8a5a3c, 0.7);
+    const wood = kit.wood(0x8a5a3c);
     kit.box(2.0, 0.1, 0.8, wood, c, 0, 0.5, 0);
     kit.box(2.0, 0.1, 0.8, wood, c, 0, 1.2, 0);
     kit.box(2.0, 0.1, 0.8, wood, c, 0, 1.9, 0);
@@ -391,8 +391,8 @@ function crates(): Prop {
 
 function barrels(): Prop {
   return prop((kit, root) => {
-    const blue = kit.lit(0x3f7fd8, 0.6);
-    const band = kit.lit(0x9aa5ad, 0.4);
+    const blue = kit.metal(0x3f7fd8);
+    const band = kit.metal(0x9aa5ad);
     const make = (x: number) => {
       const g = new Group();
       g.position.set(x, 0.75, 0.1);
@@ -441,10 +441,10 @@ function barrels(): Prop {
 
 function net(): Prop {
   return prop((kit, root) => {
-    const pole = kit.lit(0x8a6a38, 0.8);
+    const pole = kit.wood(0x8a6a38);
     for (const x of [4.7, 7.3]) kit.box(0.2, 3.5, 0.2, pole, root, x, 1.75, -0.5);
     kit.box(2.9, 0.18, 0.2, pole, root, 6, 3.45, -0.5);
-    const rope = kit.lit(0xe8d6a0, 0.9);
+    const rope = kit.fabric(0xe8d6a0);
     const curtain = new Group();
     root.add(curtain);
     for (let x = 5.1; x <= 6.95; x += 0.25) kit.box(0.04, 2.5, 0.04, rope, curtain, x, 2.2, -0.35);
@@ -452,7 +452,7 @@ function net(): Prop {
     for (let i = 0; i < 5; i++)
       sphere(kit, 0.12, kit.lit(0xe0504a, 0.6), curtain, 5.2 + i * 0.4, 0.9, -0.35);
     // The bag the cat is caught in (fail 0).
-    const bag = new Mesh(new SphereGeometry(0.9, 12, 8), kit.glass(0xe8d6a0, 0.5));
+    const bag = new Mesh(new SphereGeometry(0.9, 28, 20), kit.glass(0xe8d6a0, 0.5));
     kit.geometries.push(bag.geometry);
     bag.visible = false;
     root.add(bag);
@@ -502,7 +502,7 @@ function girder(): Prop {
       }
     }
     // Sandbags at the bottom of the pit.
-    const bag = kit.lit(0xc9b27c, 0.95);
+    const bag = kit.fabric(0xc9b27c);
     for (const [x, y] of [
       [5.5, 0.18],
       [6.4, 0.18],
@@ -511,7 +511,7 @@ function girder(): Prop {
       sphere(kit, 0.45, bag, root, x, y, -0.1).scale.set(1.1, 0.6, 0.8);
     }
     // Trestles behind the beam, and the beam itself.
-    const steel = kit.lit(0x4a6fa5, 0.45);
+    const steel = kit.metal(0x4a6fa5);
     for (const x of [4.3, 7.7]) kit.box(0.3, 1.5, 0.3, kit.lit(0xf2c230, 0.5), root, x, 0.75, -0.7);
     const g = new Group();
     g.position.set(BEAM.x, BEAM.y, 0);
@@ -528,8 +528,8 @@ function girder(): Prop {
 
 function mixer(): Prop {
   return prop((kit, root) => {
-    const orange = kit.lit(0xf2832e, 0.5);
-    const grey = kit.lit(0x6f7580, 0.5);
+    const orange = kit.metal(0xf2832e);
+    const grey = kit.metal(0x6f7580);
     // The frame and the wheels.
     kit.box(2.4, 0.2, 0.9, grey, root, 6, 0.35, 0);
     for (const x of [5.2, 6.8])
@@ -575,8 +575,8 @@ function mixer(): Prop {
 
 function craneHook(): Prop {
   return prop((kit, root) => {
-    const yellow = kit.lit(0xf2c230, 0.5);
-    const dark = kit.lit(0x3a3a40, 0.5);
+    const yellow = kit.metal(0xf2c230);
+    const dark = kit.metal(0x3a3a40);
     // The rail and its mast at the back.
     kit.box(10, 0.3, 0.3, yellow, root, 6, 5.35, -0.7);
     kit.box(0.4, 5.4, 0.4, yellow, root, 10.6, 2.7, -0.9);

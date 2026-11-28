@@ -1,5 +1,7 @@
 import { CylinderGeometry, Group, Mesh, MeshStandardMaterial } from 'three';
+import type { PeopleAssets } from './assets';
 import { createAnimator, createPerson, type Person } from './person';
+import { CADDIE_OUTFIT, createSkinnedPerson, type Skinned } from './skin';
 import type { Reaction } from './rules';
 
 /** How long a cheer or a groan lasts before the caddie stands easy again, seconds. */
@@ -8,15 +10,23 @@ export const REACTION_SECONDS = 1.3;
 export interface Caddie {
   root: Group;
   person: Person;
+  /** The realistic model, once `setModel` has put it on. */
+  readonly skin: Skinned | null;
   /** Starts a reaction now; `idle` does nothing. It ends by itself after REACTION_SECONDS. */
   react(reaction: Reaction): void;
+  /** Puts the realistic model on the rig (null brings the rig back). */
+  setModel(people: PeopleAssets | null, shadows?: boolean): void;
   /** Poses the caddie; call every frame with the frame time. */
   update(delta: number): void;
   /**
    * Stands 2 yd behind the golfer's back (away from the ball line) and 0.5 yd further along the
    * line, facing the same way as the golfer, who is side-on to a shot along `dir`.
    */
-  stand(golfer: { x: number; z: number }, dir: number): void;
+  stand(
+    golfer: { x: number; z: number },
+    dir: number,
+    ground?: (x: number, z: number) => number,
+  ): void;
 }
 
 /** A standing figure with the golf bag at his feet, who cheers or groans after a shot. */
@@ -58,6 +68,7 @@ export function createCaddie(): Caddie {
   bag.position.set(-0.45, 0, 0.05);
   root.add(bag);
 
+  let skinned: Skinned | null = null;
   let move: Reaction = 'idle';
   let since = 0;
   let now = 0;
@@ -66,6 +77,9 @@ export function createCaddie(): Caddie {
   return {
     root,
     person,
+    get skin() {
+      return skinned;
+    },
     react(reaction) {
       if (reaction === 'idle') return;
       move = reaction;
@@ -105,16 +119,32 @@ export function createCaddie(): Caddie {
             break;
         }
       });
+      skinned?.update();
     },
-    stand(golfer, dir) {
+    setModel(people, shadows = false) {
+      skinned?.dispose();
+      skinned = null;
+      if (!people) return;
+      // The male body, as the golfer's (the female one is only for the gallery).
+      skinned = createSkinnedPerson(people.golfer, person, {
+        outfit: CADDIE_OUTFIT,
+        accent: 'bib',
+        cap: 0x2f5a3a,
+        hair: [{ style: 'Hair_Buzzed', colour: 0x3a2616 }],
+        hairSource: people.hair,
+        weave: people.weave,
+        height: 1.9,
+        face: true,
+      });
+      skinned.setShadows(shadows);
+    },
+    stand(golfer, dir, ground = () => 0) {
       // The golfer faces (-cos dir, sin dir); his back is the other way.
       const back = { x: Math.cos(dir), z: -Math.sin(dir) };
       const along = { x: Math.sin(dir), z: Math.cos(dir) };
-      root.position.set(
-        golfer.x + back.x * 2 + along.x * 0.5,
-        0,
-        golfer.z + back.z * 2 + along.z * 0.5,
-      );
+      const x = golfer.x + back.x * 2 + along.x * 0.5;
+      const z = golfer.z + back.z * 2 + along.z * 0.5;
+      root.position.set(x, ground(x, z), z);
       root.rotation.y = dir - Math.PI / 2;
     },
   };

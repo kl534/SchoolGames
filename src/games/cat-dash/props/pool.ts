@@ -2,8 +2,10 @@
  * One built prop per obstacle of the current place and the next; a place's props are disposed
  * when it is left.
  */
+import type { Mesh } from 'three';
 import type { ObstacleId } from '../places';
-import type { Prop } from '../kit';
+import { castShadows, type Prop } from '../kit';
+import { addOutline, OUTLINE_PROP_PX, type Outline } from '../outline';
 import { HOUSE_PROPS } from './house';
 import { TOWN_PROPS } from './town';
 import { BUSY_PROPS } from './busy';
@@ -26,16 +28,37 @@ export interface PropPool {
   get(id: ObstacleId): Prop;
   /** Disposes every prop that is not in `keep`. */
   prune(keep: readonly ObstacleId[]): void;
+  /** Shows or hides every prop's ink outline (the quality tier); props built later follow it. */
+  setOutlines(on: boolean): void;
   dispose(): void;
 }
 
-export function createPropPool(): PropPool {
+/** Props cast and receive real shadows (not glass, glow, other see-through bits or specks). */
+function castAndReceive(prop: Prop): void {
+  castShadows(prop.object);
+  prop.object.traverse((o) => {
+    if ((o as Mesh).isMesh) o.receiveShadow = true;
+  });
+}
+
+export function createPropPool(outlines = true): PropPool {
   const built = new Map<ObstacleId, Prop>();
+  const inks = new Map<ObstacleId, Outline>();
+  let inkOn = outlines;
+  const drop = (id: ObstacleId, prop: Prop) => {
+    inks.get(id)?.dispose();
+    inks.delete(id);
+    prop.dispose();
+  };
   return {
     get(id) {
       let prop = built.get(id);
       if (!prop) {
         prop = PROP_BUILDERS[id]();
+        castAndReceive(prop);
+        const ink = addOutline(prop.object, OUTLINE_PROP_PX);
+        ink.setVisible(inkOn);
+        inks.set(id, ink);
         built.set(id, prop);
       }
       return prop;
@@ -43,12 +66,16 @@ export function createPropPool(): PropPool {
     prune(keep) {
       for (const [id, prop] of built) {
         if (keep.includes(id)) continue;
-        prop.dispose();
+        drop(id, prop);
         built.delete(id);
       }
     },
+    setOutlines(on) {
+      inkOn = on;
+      for (const ink of inks.values()) ink.setVisible(on);
+    },
     dispose() {
-      for (const prop of built.values()) prop.dispose();
+      for (const [id, prop] of built) drop(id, prop);
       built.clear();
     },
   };
