@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Fore!</title>
+    <style>html,body{background:#8fd0ff;height:100%;margin:0;overflow:hidden}#game{position:fixed;inset:0}.fg-loading{z-index:100;color:#0c1c18;background:linear-gradient(#8fd0ff,#cfe9ff 55%,#6fb853 55%,#5f9a45);flex-direction:column;justify-content:center;align-items:center;gap:18px;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;transition:opacity .35s;display:flex;position:fixed;inset:0}.fg-loading.fg-loading-done{opacity:0;pointer-events:none}.fg-loading h1{color:#fff;text-shadow:0 3px #2b6a3a;margin:0;font-size:clamp(40px,12vw,84px)}.fg-loading-ball{background:radial-gradient(circle at 35% 30%,#fff 40%,#d8dde3);border-radius:50%;width:34px;height:34px;animation:.7s ease-in-out infinite alternate fg-hop;box-shadow:0 4px #00000026}@keyframes fg-hop{0%{transform:translateY(0)}to{transform:translateY(-28px)}}.fg-loading-bar{background:#0c1c1859;border-radius:7px;width:min(70vw,360px);height:14px;overflow:hidden}.fg-loading-fill{background:#fff;border-radius:7px;width:4%;height:100%;transition:width .2s}.fg-loading p{color:#fff;text-shadow:0 2px #2b6a3a;margin:0;font-size:20px;font-weight:700}</style>
+    <script type="module" crossorigin src="/SchoolGames/assets/games/fore-qN_C_b71.js"></script>
+    <link rel="modulepreload" crossorigin href="/SchoolGames/assets/ui-BSf9Ds6y.js">
+    <link rel="modulepreload" crossorigin href="/SchoolGames/assets/session-BsH9hees.js">
+    <link rel="modulepreload" crossorigin href="/SchoolGames/assets/timers-C6jtOaCw.js">
+    <link rel="modulepreload" crossorigin href="/SchoolGames/assets/tapflow-DWF2RTy8.js">
+    <link rel="modulepreload" crossorigin href="/SchoolGames/assets/feed-C_pQ7Z_x.js">
+    <link rel="modulepreload" crossorigin href="/SchoolGames/assets/BufferGeometryUtils-CYEOIXFU.js">
+    <link rel="stylesheet" crossorigin href="/SchoolGames/assets/timers-D9AoLJNf.css">
+    <link rel="stylesheet" crossorigin href="/SchoolGames/assets/tapflow-Co41ZXOS.css">
+    <link rel="stylesheet" crossorigin href="/SchoolGames/assets/fore-DqCkNgf9.css">
+  </head>
+  <body>
+    <div id="game"></div>
+    <div class="fg-loading" id="fg-loading" role="progressbar" aria-label="Loading the course">
+      <h1>Fore!</h1>
+      <div class="fg-loading-ball"></div>
+      <div class="fg-loading-bar"><div class="fg-loading-fill"></div></div>
+      <p>Getting the course ready…</p>
+    </div>
+  </body>
+</html>
